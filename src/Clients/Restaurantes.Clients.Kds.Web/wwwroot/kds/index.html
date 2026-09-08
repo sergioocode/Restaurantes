@@ -1,0 +1,569 @@
+﻿<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KDS · Restaurantes</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; background: #111827; color: #f9fafb; }
+    body { margin: 0; padding: 2rem; }
+    main { max-width: 1100px; margin: auto; }
+    header, .controls, .order { background: #1f2937; border: 1px solid #374151; border-radius: 14px; }
+    header { padding: 1.4rem; margin-bottom: 1rem; }
+    h1, h2, p { margin-top: 0; }
+    .controls { display: flex; gap: .75rem; padding: 1rem; margin-bottom: 1rem; align-items: end; flex-wrap: wrap; }
+    .field { display: grid; gap: .35rem; flex: 1 1 320px; }
+    .field span { color: #d1d5db; font-size: .8rem; font-weight: 700; }
+    input, select { width: 100%; box-sizing: border-box; padding: .75rem; border-radius: 8px; border: 1px solid #4b5563; background: #111827; color: inherit; }
+    select:disabled { opacity: .6; }
+    button { padding: .75rem 1rem; border: 0; border-radius: 8px; background: #f97316; color: #111827; font-weight: 700; cursor: pointer; }
+    button.secondary { background: #374151; color: #f9fafb; }
+    button.danger { background: #b91c1c; color: #fff; }
+    button:disabled { cursor: wait; opacity: .6; }
+    .status { display: inline-flex; align-items: center; gap: .5rem; }
+    .identity { margin: .75rem 0 0; color: #9ca3af; }
+    .dot { width: .7rem; height: .7rem; border-radius: 50%; background: #ef4444; }
+    .connected .dot { background: #22c55e; }
+    #event { min-height: 1.5rem; color: #fdba74; }
+    #orders { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
+    .order { padding: 1rem; border-left: 5px solid #f97316; }
+    .order[data-status="InPreparation"] { border-left-color: #3b82f6; }
+    .order[data-status="Ready"] { border-left-color: #22c55e; }
+    .order h2 { display: flex; justify-content: space-between; gap: 1rem; }
+    .badge { font-size: .75rem; background: #166534; color: #dcfce7; border-radius: 999px; padding: .3rem .6rem; }
+    ul { padding-left: 1.25rem; margin-bottom: 0; }
+    small { color: #9ca3af; }
+    .actions { margin-top: 1rem; display: flex; gap: .5rem; justify-content: flex-end; flex-wrap: wrap; }
+    .actions button:disabled { cursor: wait; opacity: .6; }
+    .stations { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .75rem; }
+    .station { font-size: .75rem; padding: .25rem .5rem; border-radius: 999px; background: #374151; }
+    .kitchen-clock { white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .kitchen-clock.finished { background: #166534; }
+    .passes { display: grid; gap: .65rem; margin-top: 1rem; }
+    .pass { border: 1px solid #475569; border-radius: 10px; padding: .75rem; display: grid; gap: .45rem; }
+    .pass header { display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
+    .pass ul { margin: 0; }
+    .pass .actions { margin-top: .25rem; }
+    .empty { color: #9ca3af; grid-column: 1 / -1; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Kitchen Display System</h1>
+      <p>Pedidos enviados a cocina. RabbitMQ actualiza la proyección y SignalR refresca esta pantalla.</p>
+      <div id="connectionStatus" class="status"><span class="dot"></span><span>Inicia sesión</span></div>
+      <p id="identityStatus" class="identity"></p>
+    </header>
+
+    <form id="loginPanel" class="controls">
+      <label class="field"><span>Usuario</span><input id="username" autocomplete="username" value="kds.mad-centro"></label>
+      <label class="field"><span>Contraseña</span><input id="password" type="password" autocomplete="current-password" value="Kds-01-2026!"></label>
+      <button id="login" type="submit">Entrar</button>
+    </form>
+
+    <section id="monitorPanel" class="controls hidden">
+      <label class="field"><span>Local autorizado</span><select id="restaurantId" aria-label="Local autorizado"></select></label>
+      <label class="field"><span>Estación KDS</span><select id="stationCode" aria-label="Estación KDS" disabled></select></label>
+      <button id="logout" class="secondary" type="button">Salir</button>
+    </section>
+
+    <p id="event"></p>
+    <section id="orders"><p class="empty">Inicia sesión para cargar el monitor.</p></section>
+  </main>
+
+  <script type="module">
+    import { kitchenClock, formatKitchenDuration } from './kitchen-clock.js';
+    const separator = String.fromCharCode(30);
+    const sessionKey = 'restaurantes.kds.login';
+    const restaurantKey = 'restaurantes.kds.restaurant';
+    const apiBaseUrl = window.location.port === '5700' ? 'http://localhost:5001' : '';
+    const loginPanel = document.querySelector('#loginPanel');
+    const monitorPanel = document.querySelector('#monitorPanel');
+    const usernameInput = document.querySelector('#username');
+    const passwordInput = document.querySelector('#password');
+    const loginButton = document.querySelector('#login');
+    const logoutButton = document.querySelector('#logout');
+    const restaurantSelect = document.querySelector('#restaurantId');
+    const stationSelect = document.querySelector('#stationCode');
+    const status = document.querySelector('#connectionStatus');
+    const identityStatus = document.querySelector('#identityStatus');
+    const eventText = document.querySelector('#event');
+    const ordersElement = document.querySelector('#orders');
+    let login;
+    let restaurantAccesses = [];
+    let primaryStationCode = '';
+    let socket;
+    let connectionVersion = 0;
+    let handshakeComplete = false;
+
+    function setStatus(connected, text) {
+      status.classList.toggle('connected', connected);
+      status.querySelector('span:last-child').textContent = text;
+    }
+
+    function authorizationHeaders() {
+      return login?.accessToken ? { Authorization: 'Bearer ' + login.accessToken } : {};
+    }
+
+    async function apiFetch(path, options = {}) {
+      const headers = new Headers(options.headers || {});
+      for (const [name, value] of Object.entries(authorizationHeaders())) headers.set(name, value);
+      return fetch(apiBaseUrl + path, { ...options, headers });
+    }
+
+    async function loadOrders() {
+      if (!restaurantSelect.value || !stationSelect.value) return;
+      const query = new URLSearchParams({
+        restaurantId: restaurantSelect.value,
+        stationCode: stationSelect.value
+      });
+      const response = await apiFetch('/api/orders?' + query);
+      if (!response.ok) throw new Error('No se pudo consultar el KDS: HTTP ' + response.status);
+      const payload = await response.json();
+      const orders = Array.isArray(payload) ? payload : [payload];
+      ordersElement.replaceChildren();
+      if (!orders.length) {
+        ordersElement.innerHTML = '<p class="empty">No hay pedidos enviados a cocina.</p>';
+        return;
+      }
+      for (const order of orders) {
+        const article = document.createElement('article');
+        article.className = 'order';
+        article.dataset.status = order.status;
+        const title = document.createElement('h2');
+        const table = document.createElement('span');
+        table.textContent = order.serviceMode === 'DineIn'
+          ? order.tableLabel
+          : order.serviceMode === 'Bar' ? (order.tableLabel || 'Barra') : ('Para llevar · ' + (order.customerName || 'Sin nombre'));
+        const badge = document.createElement('span');
+        badge.className = 'badge';
+        badge.textContent = order.status + ' · v' + order.version;
+        title.append(table, badge);
+        const id = document.createElement('small');
+        id.textContent = order.id;
+        const age = document.createElement('small');
+        age.textContent = order.status === 'Ready' && order.readyAtUtc
+          ? ' · ' + elapsedLabel(order.readyAtUtc)
+          : '';
+        id.append(age);
+        const stations = document.createElement('div');
+        stations.className = 'stations';
+        for (const station of order.stations) {
+          const stationBadge = document.createElement('span');
+          stationBadge.className = 'station';
+          stationBadge.textContent = station.name + ': ' + station.status;
+          stations.append(stationBadge);
+        }
+        const list = document.createElement('ul');
+        for (const line of order.lines) {
+          const item = document.createElement('li');
+          item.textContent = line.quantity + ' × ' + line.productName + ' [' + line.categoryName + ']' + (line.notes ? ' — ' + line.notes : '');
+          list.append(item);
+        }
+        const action = nextAction(order);
+        const channel = document.createElement('div');
+        channel.className = 'stations';
+        const modeBadge = document.createElement('span');
+        modeBadge.className = 'station';
+        modeBadge.textContent = order.serviceMode === 'DineIn' ? 'Mesa' : order.serviceMode === 'Bar' ? 'Barra' : 'Para llevar';
+        const sourceBadge = document.createElement('span');
+        sourceBadge.className = 'station';
+        sourceBadge.textContent = 'Origen: ' + order.source;
+        channel.append(modeBadge, sourceBadge, renderKitchenClock(order, stationSelect.value));
+        if (Number.isInteger(order.guestCount) && order.guestCount > 0) {
+          const guests = document.createElement('span');
+          guests.className = 'station';
+          guests.textContent = '👥 ' + order.guestCount;
+          guests.title = order.guestCount + ' comensales';
+          guests.setAttribute('aria-label', guests.title);
+          channel.append(guests);
+        }
+        article.append(title, id, channel, stations, list);
+        if (stationSelect.value === primaryStationCode) {
+          article.append(renderChefPasses(order));
+        }
+        if (action || canRecover(order)) {
+          const actions = document.createElement('div');
+          actions.className = 'actions';
+          if (action) {
+            const actionButton = document.createElement('button');
+            actionButton.textContent = action.label;
+            actionButton.addEventListener('click', () => advanceOrder(order, action, actionButton));
+            actions.append(actionButton);
+          }
+          if (canRecover(order)) {
+            const deliverButton = document.createElement('button');
+            deliverButton.textContent = 'Entregado · resolver incidencia';
+            deliverButton.addEventListener('click', () => recoverDelivery(order, deliverButton));
+            const cancelButton = document.createElement('button');
+            cancelButton.className = 'danger';
+            cancelButton.textContent = 'Cancelar incidencia';
+            cancelButton.addEventListener('click', () => cancelIncident(order, cancelButton));
+            actions.append(deliverButton, cancelButton);
+          }
+          article.append(actions);
+        }
+        ordersElement.append(article);
+      }
+    }
+
+    function renderChefPasses(order) {
+      const container = document.createElement('div');
+      container.className = 'passes';
+      const controlled = order.stations
+        .filter(station => station.requiresPrimaryDispatch)
+        .sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name));
+      if (!controlled.length) {
+        const note = document.createElement('small');
+        note.textContent = 'Este pedido no contiene pases que requieran despacho del KDS principal.';
+        container.append(note);
+        return container;
+      }
+      for (const station of controlled) {
+        const pass = document.createElement('section');
+        pass.className = 'pass';
+        const header = document.createElement('header');
+        const name = document.createElement('strong');
+        name.textContent = station.name + ' · prioridad ' + station.priority;
+        const status = document.createElement('span');
+        status.className = 'station';
+        status.textContent = station.status;
+        header.append(name, status, renderKitchenClock(order, station.code));
+        const lines = document.createElement('ul');
+        for (const line of order.lines.filter(line => line.preparationStationCode === station.code)) {
+          const item = document.createElement('li');
+          item.textContent = line.quantity + ' × ' + line.productName;
+          lines.append(item);
+        }
+        pass.append(header, lines);
+        if (station.status === 'Ready') {
+          const blocked = controlled.some(other =>
+            other.priority < station.priority
+            && other.status !== 'Dispatched'
+            && other.status !== 'Cancelled'
+          );
+          if (blocked) {
+            const note = document.createElement('small');
+            note.textContent = 'Esperando el despacho de un pase anterior.';
+            pass.append(note);
+          } else {
+            const actions = document.createElement('div');
+            actions.className = 'actions';
+            const button = document.createElement('button');
+            button.textContent = 'Despachar ' + station.name;
+            button.addEventListener('click', () => advanceOrder(order, {
+              path: 'stations/' + encodeURIComponent(station.code) + '/dispatch',
+              label: button.textContent
+            }, button));
+            actions.append(button);
+            pass.append(actions);
+          }
+        }
+        container.append(pass);
+      }
+      return container;
+    }
+
+    function renderKitchenClock(order, stationCode) {
+      const badge = document.createElement('span');
+      badge.className = 'station kitchen-clock';
+      const clock = kitchenClock(order, stationCode === primaryStationCode ? 'CHEF' : stationCode);
+      if (!clock) {
+        badge.textContent = '⏱ —';
+        badge.title = 'Tiempo de cocina no disponible';
+        badge.setAttribute('aria-label', badge.title);
+        return badge;
+      }
+      badge.classList.toggle('finished', clock.end !== null);
+      badge.title = clock.end === null ? 'Tiempo desde el envío a cocina' : 'Tiempo de cocina hasta marcar listo';
+      if (clock.end === null) badge.dataset.kitchenStart = String(clock.start);
+      updateKitchenClock(badge, clock.start, clock.end);
+      return badge;
+    }
+
+    function updateKitchenClock(badge, start, end) {
+      const duration = formatKitchenDuration(start, end);
+      badge.textContent = '⏱ ' + duration;
+      badge.setAttribute('aria-label', badge.title + ': ' + duration);
+    }
+
+    function refreshKitchenClocks() {
+      if (document.hidden) return;
+      for (const badge of ordersElement.querySelectorAll('[data-kitchen-start]')) {
+        updateKitchenClock(badge, Number(badge.dataset.kitchenStart), null);
+      }
+    }
+
+    // One timer for all visible clocks; no HTTP calls or full-card rendering.
+    window.setInterval(refreshKitchenClocks, 1000);
+    document.addEventListener('visibilitychange', refreshKitchenClocks);
+    function elapsedLabel(value) {
+      const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
+      if (seconds < 60) return 'Listo hace menos de un minuto';
+      const minutes = Math.floor(seconds / 60);
+      if (minutes < 60) return 'Listo hace ' + minutes + ' min';
+      const hours = Math.floor(minutes / 60);
+      return 'Listo hace ' + hours + ' h ' + (minutes % 60) + ' min';
+    }
+
+    function canRecover(order) {
+      if (order.serviceMode !== 'Takeaway' || order.status !== 'Ready') return false;
+      const access = restaurantAccesses.find(item => item.restaurantId === restaurantSelect.value);
+      return Boolean(access?.permissions?.includes('orders.recover'));
+    }
+
+    function nextAction(order) {
+      const stationCode = stationSelect.value;
+      if (stationCode === primaryStationCode) {
+        return null;
+      }
+      const ticket = order.stations.find(station => station.code === stationCode);
+      if (!ticket) return null;
+      if (ticket.status === 'Pending') {
+        return { path: 'stations/' + encodeURIComponent(stationCode) + '/start-preparation', label: 'Iniciar ' + ticket.name };
+      }
+      if (ticket.status === 'InPreparation') {
+        return { path: 'stations/' + encodeURIComponent(stationCode) + '/ready', label: 'Marcar ' + ticket.name + ' listo' };
+      }
+      return null;
+    }
+
+    async function advanceOrder(order, action, actionButton) {
+      actionButton.disabled = true;
+      const destination = order.serviceMode === 'DineIn' ? order.tableLabel : order.serviceMode === 'Bar' ? (order.tableLabel || 'Barra') : ('Para llevar · ' + (order.customerName || 'Sin nombre'));
+      eventText.textContent = 'Enviando comando para ' + destination + '…';
+      try {
+        const response = await apiFetch('/api/orders/' + order.id + '/' + action.path, { method: 'POST' });
+        if (!response.ok) throw new Error('El comando fue rechazado: HTTP ' + response.status);
+        eventText.textContent = 'Comando aceptado; esperando la actualización en tiempo real…';
+      } catch (error) {
+        eventText.textContent = error.message;
+        actionButton.disabled = false;
+      }
+    }
+
+    async function recoverDelivery(order, button) {
+      if (!confirm('Confirma que el pedido de ' + (order.customerName || 'este cliente') + ' ya fue entregado.')) return;
+      await advanceOrder(order, { path: 'deliver', label: button.textContent }, button);
+    }
+
+    async function cancelIncident(order, button) {
+      const reason = prompt('Motivo de cancelación (quedará registrado):', 'Pedido de prueba o incidencia operativa');
+      if (!reason || reason.trim().length < 3) return;
+      if (!confirm('Esta acción devolverá el pago si existe y cancelará definitivamente el pedido. ¿Continuar?')) return;
+
+      button.disabled = true;
+      eventText.textContent = 'Resolviendo la incidencia y comprobando el pago…';
+      try {
+        const refund = await apiFetch('/api/payments/orders/' + order.id + '/refund', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason: reason.trim() })
+        });
+        if (!refund.ok && refund.status !== 404 && refund.status !== 409) {
+          throw new Error('No se pudo devolver el pago: HTTP ' + refund.status);
+        }
+
+        let cancelled = false;
+        for (let attempt = 0; attempt < 20 && !cancelled; attempt++) {
+          const response = await apiFetch('/api/orders/' + order.id + '/cancel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: reason.trim() })
+          });
+          if (response.ok) {
+            cancelled = true;
+            break;
+          }
+          if (response.status !== 409) {
+            throw new Error('No se pudo cancelar el pedido: HTTP ' + response.status);
+          }
+          await new Promise(resolve => setTimeout(resolve, 250));
+        }
+        if (!cancelled) throw new Error('La devolución aún no se ha proyectado. Reintenta en unos segundos.');
+        eventText.textContent = 'Pedido cancelado con trazabilidad; esperando actualización…';
+        await new Promise(resolve => setTimeout(resolve, 200));
+        await loadOrders();
+      } catch (error) {
+        eventText.textContent = error.message;
+        button.disabled = false;
+      }
+    }
+
+    function send(currentSocket, message) {
+      currentSocket.send(JSON.stringify(message) + separator);
+    }
+
+    function connect() {
+      if (!login || !restaurantSelect.value || !stationSelect.value) return;
+      const version = ++connectionVersion;
+      if (socket) socket.close();
+      handshakeComplete = false;
+      setStatus(false, 'Conectando…');
+      const hubOrigin = new URL(apiBaseUrl || location.origin);
+      const protocol = hubOrigin.protocol === 'https:' ? 'wss:' : 'ws:';
+      const token = encodeURIComponent(login.accessToken);
+      const currentSocket = new WebSocket(protocol + '//' + hubOrigin.host + '/hubs/kds?access_token=' + token);
+      socket = currentSocket;
+
+      currentSocket.addEventListener('open', () => send(currentSocket, { protocol: 'json', version: 1 }));
+      currentSocket.addEventListener('message', async event => {
+        if (version !== connectionVersion) return;
+        for (const frame of event.data.split(separator).filter(Boolean)) {
+          const message = JSON.parse(frame);
+          if (!handshakeComplete && message.type === undefined) {
+            handshakeComplete = true;
+            send(currentSocket, {
+              type: 1,
+              invocationId: 'join',
+              target: 'JoinStation',
+              arguments: [restaurantSelect.value, stationSelect.value]
+            });
+            continue;
+          }
+          if (message.type === 3 && message.invocationId === 'join') {
+            setStatus(true, 'Conectado a ' + stationSelect.options[stationSelect.selectedIndex].text);
+            await loadOrders();
+          }
+          if (message.type === 1 && message.target === 'OrderUpdated') {
+            const notification = message.arguments[0];
+            eventText.textContent = 'Actualización recibida: pedido ' + notification.orderId + ', ' + notification.status + ' v' + notification.version;
+            await new Promise(resolve => setTimeout(resolve, 150));
+            await loadOrders();
+          }
+        }
+      });
+      currentSocket.addEventListener('close', () => {
+        if (version !== connectionVersion) return;
+        setStatus(false, 'Desconectado; reintentando…');
+        window.setTimeout(() => { if (version === connectionVersion && login) connect(); }, 2000);
+      });
+      currentSocket.addEventListener('error', () => {
+        if (version === connectionVersion) setStatus(false, 'Error de conexión');
+      });
+    }
+
+    function addOption(select, value, text) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = text;
+      select.append(option);
+    }
+
+    async function loadStationsAndConnect() {
+      const restaurantId = restaurantSelect.value;
+      if (!restaurantId) return;
+      localStorage.setItem(restaurantKey, restaurantId);
+      stationSelect.disabled = true;
+      stationSelect.replaceChildren();
+      setStatus(false, 'Cargando estaciones…');
+      try {
+        const response = await apiFetch('/api/catalog/restaurants/' + restaurantId + '/stations');
+        if (!response.ok) throw new Error('No se pudieron cargar las estaciones KDS: HTTP ' + response.status);
+        const stations = await response.json();
+        const primary = stations.find(item => item.isActive && item.isPrimary);
+        primaryStationCode = primary ? 'CHEF' : '';
+        if (primary) addOption(stationSelect, 'CHEF', primary.code + ' · ' + primary.name);
+        for (const station of stations.filter(item => item.isActive && !item.isPrimary).sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name))) {
+          addOption(stationSelect, station.code, station.code + ' · ' + station.name);
+        }
+        const stationKey = 'restaurantes.kds.station.' + restaurantId;
+        const remembered = localStorage.getItem(stationKey);
+        stationSelect.value = Array.from(stationSelect.options).some(option => option.value === remembered)
+          ? remembered
+          : (primary ? 'CHEF' : (stationSelect.options[0]?.value || ''));
+        stationSelect.disabled = false;
+        eventText.textContent = '';
+        connect();
+      } catch (error) {
+        eventText.textContent = error.message;
+        setStatus(false, 'No se pudieron cargar las estaciones');
+      }
+    }
+
+    async function activateLogin(loginResponse) {
+      restaurantAccesses = Array.isArray(loginResponse.restaurants)
+        ? loginResponse.restaurants.filter(access => access.permissions.includes('kds.use'))
+        : [];
+      if (restaurantAccesses.length === 0) {
+        throw new Error('El usuario no tiene acceso KDS en ningún local.');
+      }
+      login = loginResponse;
+      sessionStorage.setItem(sessionKey, JSON.stringify(login));
+      loginPanel.classList.add('hidden');
+      monitorPanel.classList.remove('hidden');
+      identityStatus.textContent = login.user.displayName + ' · ' + login.user.username;
+      restaurantSelect.replaceChildren();
+      for (const access of restaurantAccesses) {
+        addOption(restaurantSelect, access.restaurantId, access.restaurantId + ' · ' + access.role);
+      }
+      const remembered = localStorage.getItem(restaurantKey);
+      if (restaurantAccesses.some(access => access.restaurantId === remembered)) restaurantSelect.value = remembered;
+      await loadStationsAndConnect();
+    }
+
+    async function doLogin(event) {
+      event.preventDefault();
+      loginButton.disabled = true;
+      eventText.textContent = '';
+      try {
+        const response = await fetch(apiBaseUrl + '/api/identity/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: usernameInput.value, password: passwordInput.value })
+        });
+        if (!response.ok) throw new Error('No se pudo iniciar sesión: HTTP ' + response.status);
+        await activateLogin(await response.json());
+        passwordInput.value = '';
+      } catch (error) {
+        eventText.textContent = error.message;
+        setStatus(false, 'Inicio de sesión rechazado');
+      } finally {
+        loginButton.disabled = false;
+      }
+    }
+
+    function logout() {
+      login = null;
+      restaurantAccesses = [];
+      sessionStorage.removeItem(sessionKey);
+      connectionVersion++;
+      if (socket) socket.close();
+      socket = null;
+      loginPanel.classList.remove('hidden');
+      monitorPanel.classList.add('hidden');
+      identityStatus.textContent = '';
+      eventText.textContent = '';
+      ordersElement.innerHTML = '<p class="empty">Inicia sesión para cargar el monitor.</p>';
+      setStatus(false, 'Inicia sesión');
+    }
+
+    loginPanel.addEventListener('submit', doLogin);
+    logoutButton.addEventListener('click', logout);
+    restaurantSelect.addEventListener('change', loadStationsAndConnect);
+    stationSelect.addEventListener('change', () => {
+      localStorage.setItem('restaurantes.kds.station.' + restaurantSelect.value, stationSelect.value);
+      eventText.textContent = '';
+      connect();
+    });
+
+    async function restoreLogin() {
+      const storedLogin = sessionStorage.getItem(sessionKey);
+      if (!storedLogin) return;
+      try { await activateLogin(JSON.parse(storedLogin)); }
+      catch (error) {
+        logout();
+        eventText.textContent = error.message;
+      }
+    }
+
+    restoreLogin();
+    window.setInterval(async () => {
+      if (!login || !restaurantSelect.value || !stationSelect.value) return;
+      try { await loadOrders(); } catch { /* SignalR mostrará el estado de conexión. */ }
+    }, 15000);
+  </script>
+</body>
+</html>

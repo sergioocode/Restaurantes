@@ -1,0 +1,46 @@
+﻿@paymentsUrl = http://localhost:5151
+@identityUrl = http://localhost:5106
+@orderId = 00000000-0000-0000-0000-000000000000
+@customerSessionId = 00000000-0000-0000-0000-000000000000
+@customerAccessToken = REEMPLAZAR_DESDE_DINING_QR
+
+### Obtener JWT con permiso de cobro
+# @name login
+POST {{identityUrl}}/api/identity/login
+Content-Type: application/json
+
+{
+  "username": "camarero1.mad-centro",
+  "password": "Camarero-01-1-2026!"
+}
+
+### Crea datos: sustituya orderId por un pedido entregado o cobrable
+POST {{paymentsUrl}}/api/payments/orders/{{orderId}}/capture
+Authorization: Bearer {{login.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "idempotencyKey": "22222222-2222-2222-2222-222222222222",
+  "method": "Card",
+  "externalReference": "HTTP-PAYMENT-01"
+}
+
+### Reembolsar el pago capturado
+POST {{paymentsUrl}}/api/payments/orders/{{orderId}}/refund
+Authorization: Bearer {{login.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "reason": "Prueba de reembolso desde Payments.Api.Write.http"
+}
+
+### Pago Online de cliente QR; puede responder 425 mientras RabbitMQ proyecta el pedido
+POST {{paymentsUrl}}/api/payments/orders/{{orderId}}/capture-customer-qr
+X-Customer-Session-Token: {{customerAccessToken}}
+Content-Type: application/json
+
+{
+  "idempotencyKey": "33333333-3333-3333-3333-333333333333",
+  "diningSessionId": "{{customerSessionId}}",
+  "externalReference": "HTTP-CUSTOMER-QR-01"
+}

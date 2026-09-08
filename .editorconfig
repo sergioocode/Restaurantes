@@ -1,0 +1,18 @@
+root = true
+
+# Default for text files.
+[*]
+end_of_line = crlf
+charset = utf-8
+
+# C#, Razor, .NET projects, solutions and XML configuration.
+[*.{cs,csx,razor,cshtml,csproj,sln,slnx,slnLaunch,props,targets,resx,settings,config,xml}]
+charset = utf-8-bom
+
+# Unix shell scripts require LF.
+[*.sh]
+end_of_line = lf
+
+# .NET formatting rules
+[*.{cs,vb}]
+dotnet_sort_system_directives_first = true

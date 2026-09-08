@@ -1,0 +1,573 @@
+﻿@page "/"
+@using System.Text.Json
+@implements IAsyncDisposable
+@inject CommanderApi Api
+@inject OrderRealtimeClient Realtime
+@inject DiningRealtimeClient DiningRealtime
+@inject IJSRuntime Js
+
+<PageTitle>Comandero · Restaurantes</PageTitle>
+
+<main class="shell">
+    @if (login is null)
+    {
+        <section class="login-card">
+            <div class="brand-mark">R</div>
+            <p class="eyebrow">RESTAURANTES · OPERACIONES</p>
+            <h1>Comandero</h1>
+            <p class="muted">Acceso del personal. Cada usuario solo recibe sus locales y permisos.</p>
+            <form @onsubmit="DoLogin" @onsubmit:preventDefault>
+                <label>Usuario<input autocomplete="username" @bind="username" /></label>
+                <label>Contraseña<input type="password" autocomplete="current-password" @bind="password" /></label>
+                <button class="primary full" disabled="@busy">@(busy ? "Entrando…" : "Entrar")</button>
+            </form>
+            @if (!string.IsNullOrWhiteSpace(message)) { <p class="error">@message</p> }
+            <p class="dev-hint">Desarrollo: camarero1.mad-centro / Camarero-01-1-2026!</p>
+        </section>
+    }
+    else
+    {
+        <header class="topbar">
+            <div><p class="eyebrow">COMANDERO</p><strong>@login.User.DisplayName</strong></div>
+            <button class="ghost" @onclick="Logout">Salir</button>
+        </header>
+
+        <section class="local-bar">
+            <label>Local
+                <select value="@restaurantId" @onchange="RestaurantChanged">
+                    @foreach (RestaurantAccess access in login.Restaurants)
+                    {
+                        <option value="@access.RestaurantId">@access.RestaurantId · @access.Role</option>
+                    }
+                </select>
+            </label>
+            <button class="ghost" @onclick="LoadTables" disabled="@busy">Actualizar mesas</button>
+        </section>
+
+        @if (selectedTable is null)
+        {
+            <section>
+                <div class="section-title location-title">
+                    <div><p class="eyebrow">SALÓN</p><h2>Seleccionar ubicación</h2></div>
+                </div>
+                @foreach (var zone in FilteredTables.OrderBy(x => x.ZoneSortOrder).ThenBy(x => x.ZoneName).ThenBy(x => x.Code).GroupBy(x => new { x.ZoneId, x.ZoneName }))
+                {
+                    <section class="dining-zone" @key="zone.Key.ZoneId">
+                        <h3>@zone.Key.ZoneName <small>(@zone.Count())</small></h3>
+                        <div class="table-grid">
+                            @foreach (TableResponse table in zone)
+                            {
+                                <button class="table-card @(table.Status == "Occupied" ? "occupied" : "available")"
+                                        @onclick="() => SelectTable(table)" disabled="@busy">
+                                    <strong>@table.Label</strong><span>@table.Code</span>
+                                    @if (table.Status == "Occupied")
+                                    {
+                                        <small class="order-progress">@TableOrderSummary(table)</small>
+                                    }
+                                    <em>@(table.Status == "Occupied" ? "Ocupada · continuar" : "Disponible · abrir")</em>
+                                </button>
+                            }
+                        </div>
+                    </section>
+                }
+                @if (FilteredTables.Count == 0 && !busy) { <p class="empty">No hay ubicaciones en este grupo.</p> }
+            </section>
+        }
+        else
+        {
+                @if (diningSession is { RequestGuestCount: true, GuestCount: null })
+                {
+                    <section class="guest-count">
+                        <label>¿Cuántos comensales van a comer?
+                            <input type="number" min="1" max="999" placeholder="Cantidad de comensales" @bind="guestCount" disabled="@busy" />
+                        </label>
+                        <p>Indica la cantidad antes de enviar el primer pedido.</p>
+                    </section>
+                }
+                else if (diningSession?.GuestCount is int savedGuestCount)
+                {
+                    <p class="guest-count">Comensales: @savedGuestCount</p>
+                }
+            <section class="order-head">
+                <button class="back" @onclick="BackToTables">← Mesas</button>
+                <div><p class="eyebrow">PEDIDO EN CURSO</p><h2>@selectedTable.Label</h2></div>
+                <button class="ghost" @onclick="OpenBill">Ver cuenta</button>
+            </section>
+
+            <div class="session-progress">
+                <strong>Estado de comandas</strong>
+                <span>@SessionOrderSummary(sessionId)</span>
+            </div>
+
+            <nav class="category-tabs" aria-label="Categorías del menú">
+                <button class="@CategoryClass(null)" @onclick="() => category = null">Todo</button>
+                @foreach (string itemCategory in Categories)
+                {
+                    <button class="@CategoryClass(itemCategory)" @onclick="() => category = itemCategory">@itemCategory</button>
+                }
+            </nav>
+
+            <section class="menu-grid">
+                @foreach (MenuItemResponse item in VisibleMenu)
+                {
+                    <article class="product-card">
+                        <div><span class="category">@item.CategoryName</span><h3>@item.ProductName</h3><strong>@item.Price.ToString("0.00") €</strong></div>
+                        <div class="stepper">
+                            <button @onclick="() => ChangeQuantity(item.ProductId, -1)">−</button>
+                            <span>@quantities[item.ProductId]</span>
+                            <button @onclick="() => ChangeQuantity(item.ProductId, 1)">+</button>
+                        </div>
+                        @if (quantities[item.ProductId] > 0)
+                        {
+                            <input class="notes" placeholder="Notas para cocina" @bind="notes[item.ProductId]" />
+                        }
+                    </article>
+                }
+            </section>
+
+            <footer class="checkout">
+                <div><span>@ItemCount producto(s)</span><strong>@Total.ToString("0.00") €</strong></div>
+                <button class="primary" disabled="@(busy || ItemCount == 0)" @onclick="SendOrder">
+                    @(busy ? "Enviando…" : "Enviar a cocina")
+                </button>
+            </footer>
+
+            @if (billOpen)
+            {
+                <div class="modal-backdrop" @onclick="CloseBill">
+                    <section class="bill-card" @onclick:stopPropagation>
+                        <div class="bill-title">
+                            <div><p class="eyebrow">CUENTA DE LA MESA</p><h2>@selectedTable.Label</h2></div>
+                            <button class="ghost" @onclick="CloseBill">Cerrar</button>
+                        </div>
+                        @if (bill is null)
+                        {
+                            <p class="muted">Cargando cuenta…</p>
+                        }
+                        else
+                        {
+                            <div class="bill-orders">
+                                @foreach (SessionBillOrderResponse order in bill.Orders)
+                                {
+                                    <article>
+                                        <div><strong>Comanda @order.OrderId.ToString()[..8]</strong><small>@order.AddedAtUtc.ToLocalTime().ToString("HH:mm")</small></div>
+                                        <div><span>@order.OrderStatus</span><span>@order.PaymentStatus</span><strong>@order.Amount.ToString("0.00") €</strong></div>
+                                        @if (billOrders.TryGetValue(order.OrderId, out OrderDetailResponse? detail))
+                                        {
+                                            <div class="bill-lines">
+                                                @foreach (OrderLineDetailResponse line in detail.Lines)
+                                                {
+                                                    <div class="bill-line @(line.Status == "Cancelled" ? "cancelled" : "")">
+                                                        <span>@line.Quantity × @line.ProductName · @line.PreparationStationName</span>
+                                                        @if (CanCancelLine(order, detail, line))
+                                                        {
+                                                            <button class="danger" disabled="@busy" @onclick="() => CancelLine(order, line)">Cancelar</button>
+                                                        }
+                                                        else if (line.Status == "Cancelled")
+                                                        {
+                                                            <small>Cancelado · @line.CancellationReason</small>
+                                                        }
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </article>
+                                }
+                            </div>
+                            <div class="bill-total"><span>Total de la sesión</span><strong>@bill.Total.ToString("0.00") €</strong></div>
+                            <div class="bill-total outstanding"><span>Pendiente</span><strong>@bill.Outstanding.ToString("0.00") €</strong></div>
+                            @if (!bill.CanCheckout && bill.Orders.Count > 0)
+                            {
+                                <p class="warning">Todas las comandas deben estar terminadas en cocina antes de cobrar y liberar la mesa.</p>
+                            }
+                            @if (bill.Orders.Count == 0)
+                            {
+                                <p class="muted">Esta ubicación se abrió sin comandas. Puedes liberarla sin registrar un cobro.</p>
+                            }
+                            else
+                            {
+                                <label>Método de pago
+                                    <select @bind="paymentMethod"><option value="Card">Tarjeta</option><option value="Cash">Efectivo</option></select>
+                                </label>
+                                <label>Referencia (opcional)<input @bind="paymentReference" placeholder="Ticket del datáfono o caja" /></label>
+                            }
+                            <div class="bill-actions">
+                                <button class="ghost" @onclick="OpenBill" disabled="@busy">Actualizar</button>
+                                @if (bill.Outstanding == 0)
+                                {
+                                    <button class="primary" @onclick="ReleaseSession" disabled="@busy">
+                                        @(busy ? "Liberando…" : "Liberar mesa")
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button class="primary" @onclick="CheckoutSession" disabled="@(busy || !bill.CanCheckout)">
+                                        @(busy ? "Cobrando…" : "Cobrar y cerrar mesa")
+                                    </button>
+                                }
+                            </div>
+                        }
+                    </section>
+                </div>
+            }
+        }
+
+        @if (!string.IsNullOrWhiteSpace(message))
+        {
+            <div class="toast @(success ? "success" : "error")">@message</div>
+        }
+    }
+</main>
+
+@code {
+    int? guestCount;
+    DiningSessionResponse? diningSession;
+    const string SessionKey = "restaurantes.commander.login";
+    string username = "camarero1.mad-centro";
+    string password = "Camarero-01-1-2026!";
+    string? message;
+    bool busy;
+    bool success;
+    LoginResponse? login;
+    Guid restaurantId;
+    List<TableResponse> tables = [];
+    List<TableResponse> FilteredTables => tables;
+    List<OrderResponse> activeOrders = [];
+    TableResponse? selectedTable;
+    Guid sessionId;
+    List<MenuItemResponse> menu = [];
+    string? category;
+    Dictionary<Guid, int> quantities = [];
+    Dictionary<Guid, string> notes = [];
+    SessionBillResponse? bill;
+    bool billOpen;
+    string paymentMethod = "Card";
+    string paymentReference = string.Empty;
+    Guid checkoutKey;
+    Dictionary<Guid, OrderDetailResponse> billOrders = [];
+    CancellationTokenSource? realtimeRefresh;
+
+    int ItemCount => quantities.Values.Sum();
+    decimal Total => menu.Sum(item => item.Price * quantities.GetValueOrDefault(item.ProductId));
+    List<string> Categories => menu
+        .Where(x => x.IsAvailable)
+        .Select(x => x.CategoryName)
+        .Distinct()
+        .Order()
+        .ToList();
+    List<MenuItemResponse> VisibleMenu => menu
+        .Where(x => x.IsAvailable && (category is null || x.CategoryName == category))
+        .OrderBy(x => x.CategoryName)
+        .ThenBy(x => x.ProductName)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Realtime.OrderUpdated += HandleOrderUpdated;
+        DiningRealtime.TableChanged += HandleTableChanged;
+        string? json = await Js.InvokeAsync<string?>("sessionStorage.getItem", SessionKey);
+        if (!string.IsNullOrWhiteSpace(json))
+        {
+            try
+            {
+                login = JsonSerializer.Deserialize<LoginResponse>(json);
+                if (login is not null
+                    && login.ExpiresAtUtc > DateTime.UtcNow
+                    && login.Restaurants.Count > 0
+                    && login.Restaurants.Any(x => x.Permissions.Contains("payments.capture")))
+                {
+                    Api.AccessToken = login.AccessToken;
+                    restaurantId = login.Restaurants[0].RestaurantId;
+                    await LoadTables();
+                    await ConnectRealtimeAsync();
+                }
+                else
+                {
+                    login = null;
+                    await Js.InvokeVoidAsync("sessionStorage.removeItem", SessionKey);
+                }
+            }
+            catch (JsonException) { login = null; }
+        }
+    }
+
+    async Task DoLogin()
+    {
+        await Run(async () =>
+        {
+            login = await Api.LoginAsync(username, password);
+            if (login.Restaurants.Count == 0)
+                throw new InvalidOperationException("El usuario no tiene ningún local asignado.");
+            Api.AccessToken = login.AccessToken;
+            restaurantId = login.Restaurants[0].RestaurantId;
+            await Js.InvokeVoidAsync("sessionStorage.setItem", SessionKey, JsonSerializer.Serialize(login));
+            await LoadOperationalData();
+            await ConnectRealtimeAsync();
+        });
+    }
+
+    async Task Logout()
+    {
+        await Js.InvokeVoidAsync("sessionStorage.removeItem", SessionKey);
+        await Realtime.DisconnectAsync();
+        await DiningRealtime.DisconnectAsync();
+        Api.AccessToken = null; login = null; tables = []; BackToTables(); message = null;
+    }
+
+    async Task RestaurantChanged(ChangeEventArgs args)
+    {
+        if (Guid.TryParse(args.Value?.ToString(), out Guid value))
+        {
+            restaurantId = value; BackToTables(); await LoadTables(); await ConnectRealtimeAsync();
+        }
+    }
+
+    async Task LoadTables() => await Run(LoadOperationalData);
+
+    async Task LoadOperationalData()
+    {
+        tables = await Api.TablesAsync(restaurantId);
+        activeOrders = await Api.OrdersAsync(restaurantId);
+    }
+
+
+    async Task SelectTable(TableResponse table)
+    {
+        await Run(async () =>
+        {
+            DiningSessionResponse session = table.ActiveSessionId.HasValue
+                ? await Api.ActiveSessionAsync(table.Id)
+                : await Api.OpenSessionAsync(table.Id);
+            selectedTable = table;
+            sessionId = session.Id;
+            diningSession = session;
+            guestCount = session.GuestCount;
+            menu = await Api.MenuAsync(restaurantId);
+            category = null;
+            quantities = menu.ToDictionary(x => x.ProductId, _ => 0);
+            notes = menu.ToDictionary(x => x.ProductId, _ => string.Empty);
+        });
+    }
+
+    void ChangeQuantity(Guid productId, int change) =>
+        quantities[productId] = Math.Clamp(quantities[productId] + change, 0, 99);
+
+    async Task SendOrder()
+    {
+        if (selectedTable is null) return;
+        await Run(async () =>
+        {
+            if (diningSession is { RequestGuestCount: true, GuestCount: null })
+                diningSession = await Api.SetGuestCountAsync(sessionId, guestCount ?? 0);
+            OrderResponse order = await Api.CreateAndSubmitAsync(
+                restaurantId, selectedTable, sessionId, quantities, notes
+            );
+            foreach (Guid id in quantities.Keys.ToArray()) { quantities[id] = 0; notes[id] = string.Empty; }
+            activeOrders = await Api.OrdersAsync(restaurantId);
+            success = true;
+            message = $"Pedido {order.Id.ToString()[..8]} enviado a cocina.";
+        }, clearMessage: false);
+    }
+
+    async Task OpenBill()
+    {
+        billOpen = true;
+        await Run(LoadBill);
+    }
+
+    async Task LoadBill()
+    {
+        bill = await Api.BillAsync(sessionId);
+        OrderDetailResponse[] details = await Task.WhenAll(
+            bill.Orders.Select(order => Api.OrderAsync(order.OrderId))
+        );
+        billOrders = details.ToDictionary(order => order.Id);
+    }
+
+    static bool CanCancelLine(
+        SessionBillOrderResponse billOrder,
+        OrderDetailResponse order,
+        OrderLineDetailResponse line
+    ) => billOrder.PaymentStatus != "Paid"
+        && line.Status == "Active"
+        && OrderProgress.CanCancelBeforePreparation(order.Status)
+        && order.Stations.Any(station =>
+            station.Code == line.PreparationStationCode && station.Status == "Pending"
+        );
+
+    async Task CancelLine(SessionBillOrderResponse order, OrderLineDetailResponse line)
+    {
+        string? reason = await Js.InvokeAsync<string?>(
+            "prompt",
+            $"Motivo para cancelar {line.Quantity} × {line.ProductName}:"
+        );
+        if (string.IsNullOrWhiteSpace(reason)) return;
+        bool confirmed = await Js.InvokeAsync<bool>(
+            "confirm",
+            "La línea desaparecerá del KDS si cocina todavía no comenzó. ¿Continuar?"
+        );
+        if (!confirmed) return;
+        await Run(async () =>
+        {
+            await Api.CancelOrderLineAsync(order.OrderId, line.Id, reason.Trim());
+            await Task.Delay(500);
+            await LoadBill();
+            success = true;
+            message = $"{line.ProductName} cancelado antes de preparación.";
+        }, clearMessage: false);
+    }
+
+    void CloseBill() => billOpen = false;
+
+    async Task CheckoutSession()
+    {
+        if (busy) return;
+        checkoutKey = checkoutKey == Guid.Empty ? Guid.NewGuid() : checkoutKey;
+        await Run(async () =>
+        {
+            bill = await Api.CheckoutAsync(
+                sessionId, checkoutKey, paymentMethod, paymentReference
+            );
+            success = true;
+            message = $"Cuenta cobrada: {bill.Total:0.00} €. Mesa liberada.";
+            checkoutKey = Guid.Empty;
+            billOpen = false;
+            BackToTables();
+            await LoadOperationalData();
+        }, clearMessage: false);
+    }
+
+    async Task ReleaseSession()
+    {
+        await Run(async () =>
+        {
+            bool emptySession = bill?.Orders.Count == 0;
+            if (emptySession)
+            {
+                await Api.CancelSessionAsync(sessionId, "Apertura sin pedidos");
+            }
+            else
+            {
+                await Api.ReleaseSessionAsync(sessionId);
+            }
+            success = true;
+            message = emptySession
+                ? "Apertura sin pedidos cancelada y ubicación liberada."
+                : "Ubicación liberada por el camarero.";
+            billOpen = false;
+            BackToTables();
+            await LoadOperationalData();
+        }, clearMessage: false);
+    }
+
+    void BackToTables()
+    {
+        selectedTable = null; sessionId = Guid.Empty; menu = []; category = null; quantities = []; notes = [];
+        bill = null; billOrders = []; billOpen = false; checkoutKey = Guid.Empty; paymentReference = string.Empty;
+    }
+
+    string CategoryClass(string? value) => category == value ? "category-filter active" : "category-filter";
+
+    string TableOrderSummary(TableResponse table) =>
+        OrderProgress.Summarize(
+            activeOrders.Where(order => order.TableId == table.Id).Select(order => order.Status)
+        );
+
+    string SessionOrderSummary(Guid currentSessionId) =>
+        OrderProgress.Summarize(
+            activeOrders
+                .Where(order => order.DiningSessionId == currentSessionId)
+                .Select(order => order.Status)
+        );
+
+    async Task Run(Func<Task> action, bool clearMessage = true)
+    {
+        if (clearMessage) message = null;
+        success = false; busy = true;
+        try { await action(); }
+        catch (Exception ex) { message = ex.Message; }
+        finally { busy = false; }
+    }
+
+    async Task ConnectRealtimeAsync()
+    {
+        try
+        {
+            await Realtime.ConnectAsync(restaurantId);
+            await DiningRealtime.ConnectAsync(restaurantId);
+        }
+        catch (Exception exception)
+        {
+            message = $"Datos cargados, pero sin actualización en tiempo real: {exception.Message}";
+        }
+    }
+
+    Task HandleOrderUpdated(OrderRealtimeNotification notification)
+    {
+        return ScheduleRealtimeRefresh(notification.RestaurantId);
+    }
+
+    Task HandleTableChanged(DiningTableChangedNotification notification)
+    {
+        return ScheduleRealtimeRefresh(notification.RestaurantId);
+    }
+
+    Task ScheduleRealtimeRefresh(Guid changedRestaurantId)
+    {
+        if (login is null || changedRestaurantId != restaurantId) return Task.CompletedTask;
+        realtimeRefresh?.Cancel();
+        realtimeRefresh?.Dispose();
+        realtimeRefresh = new CancellationTokenSource();
+        _ = RefreshAfterOrderEventAsync(realtimeRefresh.Token);
+        return Task.CompletedTask;
+    }
+
+    async Task RefreshAfterOrderEventAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(400, cancellationToken);
+            await InvokeAsync(async () =>
+            {
+                tables = await Api.TablesAsync(restaurantId);
+                activeOrders = await Api.OrdersAsync(restaurantId);
+                if (selectedTable is not null)
+                {
+                    TableResponse? current = tables.FirstOrDefault(x => x.Id == selectedTable.Id);
+                    if (current?.ActiveSessionId == sessionId)
+                    {
+                        selectedTable = current;
+                        if (billOpen)
+                        {
+                            await LoadBill();
+                        }
+                    }
+                    else
+                    {
+                        BackToTables();
+                    }
+                }
+                StateHasChanged();
+            });
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception exception)
+        {
+            await InvokeAsync(() =>
+            {
+                message = $"No se pudo actualizar el comandero en tiempo real: {exception.Message}";
+                StateHasChanged();
+            });
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Realtime.OrderUpdated -= HandleOrderUpdated;
+        DiningRealtime.TableChanged -= HandleTableChanged;
+        realtimeRefresh?.Cancel();
+        realtimeRefresh?.Dispose();
+        await Realtime.DisconnectAsync();
+        await DiningRealtime.DisconnectAsync();
+    }
+}

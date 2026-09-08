@@ -1,0 +1,18 @@
+﻿@identityUrl = http://localhost:5106
+
+### Login del camarero de desarrollo
+# @name waiterLogin
+POST {{identityUrl}}/api/identity/login
+Content-Type: application/json
+
+{
+  "username": "camarero1.mad-centro",
+  "password": "Camarero-01-1-2026!"
+}
+
+### Identidad y locales incluidos en el token
+GET {{identityUrl}}/api/identity/me
+Authorization: Bearer {{waiterLogin.response.body.$.accessToken}}
+
+### Debe responder 401 sin token
+GET {{identityUrl}}/api/identity/me

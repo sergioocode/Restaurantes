@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\Restaurantes.Security\Restaurantes.Security.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Restaurantes.ServiceDefaults\Restaurantes.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\Restaurantes.Payments.Application\Restaurantes.Payments.Application.csproj" />
+    <ProjectReference Include="..\Restaurantes.Payments.Contracts\Restaurantes.Payments.Contracts.csproj" />
+    <ProjectReference Include="..\Restaurantes.Payments.Infrastructure\Restaurantes.Payments.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

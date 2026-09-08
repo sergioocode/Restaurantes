@@ -1,0 +1,94 @@
+﻿<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/src/" />
+  <Folder Name="/src/ApiGateways/">
+    <Project Path="src/ApiGateways/Restaurantes.Gateway.Private/Restaurantes.Gateway.Private.csproj" />
+    <Project Path="src/ApiGateways/Restaurantes.Gateway.Public/Restaurantes.Gateway.Public.csproj" />
+  </Folder>
+  <Folder Name="/src/BuildingBlocks/">
+    <Project Path="src/BuildingBlocks/Restaurantes.Messaging.RabbitMq/Restaurantes.Messaging.RabbitMq.csproj" />
+    <Project Path="src/BuildingBlocks/Restaurantes.ServiceDefaults/Restaurantes.ServiceDefaults.csproj" />
+    <Project Path="src/BuildingBlocks/Restaurantes.Security/Restaurantes.Security.csproj" />
+  </Folder>
+  <Folder Name="/src/Clients/">
+    <Project Path="src/Clients/Restaurantes.Clients.Kds.Web/Restaurantes.Clients.Kds.Web.csproj" />
+    <Project Path="src/Clients/Restaurantes.Clients.Backoffice.Pwa/Restaurantes.Clients.Backoffice.Pwa.csproj" />
+    <Project Path="src/Clients/Restaurantes.Clients.Commander.Pwa/Restaurantes.Clients.Commander.Pwa.csproj" />
+    <Project Path="src/Clients/Restaurantes.Clients.CustomerQr.Pwa/Restaurantes.Clients.CustomerQr.Pwa.csproj" />
+    <Project Path="src/Clients/Restaurantes.Clients.Dashboard.Web/Restaurantes.Clients.Dashboard.Web.csproj" />
+    <Project Path="src/Clients/Restaurantes.Clients.Pos.Pwa/Restaurantes.Clients.Pos.Pwa.csproj" />
+    <Project Path="src/Clients/Restaurantes.Clients.Shared.Operations/Restaurantes.Clients.Shared.Operations.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/" />
+  <Folder Name="/src/Services/CashRegister/">
+    <Project Path="src/Services/CashRegister/Restaurantes.CashRegister.Api/Restaurantes.CashRegister.Api.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Catalog/">
+    <Project Path="src/Services/Catalog/Restaurantes.Catalog.Api.Write/Restaurantes.Catalog.Api.Write.csproj" />
+    <Project Path="src/Services/Catalog/Restaurantes.Catalog.Api.Read/Restaurantes.Catalog.Api.Read.csproj" />
+    <Project Path="src/Services/Catalog/Restaurantes.Catalog.Application/Restaurantes.Catalog.Application.csproj" />
+    <Project Path="src/Services/Catalog/Restaurantes.Catalog.Consumer/Restaurantes.Catalog.Consumer.csproj" />
+    <Project Path="src/Services/Catalog/Restaurantes.Catalog.Contracts/Restaurantes.Catalog.Contracts.csproj" />
+    <Project Path="src/Services/Catalog/Restaurantes.Catalog.Domain/Restaurantes.Catalog.Domain.csproj" />
+    <Project Path="src/Services/Catalog/Restaurantes.Catalog.Infrastructure/Restaurantes.Catalog.Infrastructure.csproj" />
+    <Project Path="src/Services/Catalog/Restaurantes.Catalog.Publisher/Restaurantes.Catalog.Publisher.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Dining/">
+    <Project Path="src/Services/Dining/Restaurantes.Dining.Api.Write/Restaurantes.Dining.Api.Write.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Identity/">
+    <Project Path="src/Services/Identity/Restaurantes.Identity.Api.Write/Restaurantes.Identity.Api.Write.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Integrations/">
+    <Project Path="src/Services/Integrations/Restaurantes.Integrations.Api/Restaurantes.Integrations.Api.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Orders/">
+    <Project Path="src/Services/Orders/Restaurantes.Orders.Api.Write/Restaurantes.Orders.Api.Write.csproj" />
+    <Project Path="src/Services/Orders/Restaurantes.Orders.Api.Read/Restaurantes.Orders.Api.Read.csproj" />
+    <Project Path="src/Services/Orders/Restaurantes.Orders.Application/Restaurantes.Orders.Application.csproj" />
+    <Project Path="src/Services/Orders/Restaurantes.Orders.Consumer/Restaurantes.Orders.Consumer.csproj" />
+    <Project Path="src/Services/Orders/Restaurantes.Orders.Contracts/Restaurantes.Orders.Contracts.csproj" />
+    <Project Path="src/Services/Orders/Restaurantes.Orders.Domain/Restaurantes.Orders.Domain.csproj" />
+    <Project Path="src/Services/Orders/Restaurantes.Orders.Infrastructure/Restaurantes.Orders.Infrastructure.csproj" />
+    <Project Path="src/Services/Orders/Restaurantes.Orders.Publisher/Restaurantes.Orders.Publisher.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Reporting/">
+    <Project Path="src/Services/Reporting/Restaurantes.Reporting.Api.Read/Restaurantes.Reporting.Api.Read.csproj" />
+    <Project Path="src/Services/Reporting/Restaurantes.Reporting.Consumer/Restaurantes.Reporting.Consumer.csproj" />
+    <Project Path="src/Services/Reporting/Restaurantes.Reporting.Contracts/Restaurantes.Reporting.Contracts.csproj" />
+    <Project Path="src/Services/Reporting/Restaurantes.Reporting.Infrastructure/Restaurantes.Reporting.Infrastructure.csproj" />
+    <Project Path="src/Services/Reporting/Restaurantes.Reporting.Publisher/Restaurantes.Reporting.Publisher.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Payments/">
+    <Project Path="src/Services/Payments/Restaurantes.Payments.Api.Write/Restaurantes.Payments.Api.Write.csproj" />
+    <Project Path="src/Services/Payments/Restaurantes.Payments.Application/Restaurantes.Payments.Application.csproj" />
+    <Project Path="src/Services/Payments/Restaurantes.Payments.Consumer/Restaurantes.Payments.Consumer.csproj" />
+    <Project Path="src/Services/Payments/Restaurantes.Payments.Contracts/Restaurantes.Payments.Contracts.csproj" />
+    <Project Path="src/Services/Payments/Restaurantes.Payments.Domain/Restaurantes.Payments.Domain.csproj" />
+    <Project Path="src/Services/Payments/Restaurantes.Payments.Infrastructure/Restaurantes.Payments.Infrastructure.csproj" />
+    <Project Path="src/Services/Payments/Restaurantes.Payments.Publisher/Restaurantes.Payments.Publisher.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/RestaurantOperations/">
+    <Project Path="src/Services/RestaurantOperations/Restaurantes.RestaurantOperations.Api.Read/Restaurantes.RestaurantOperations.Api.Read.csproj" />
+    <Project Path="src/Services/RestaurantOperations/Restaurantes.RestaurantOperations.Api.Write/Restaurantes.RestaurantOperations.Api.Write.csproj" />
+    <Project Path="src/Services/RestaurantOperations/Restaurantes.RestaurantOperations.Application/Restaurantes.RestaurantOperations.Application.csproj" />
+    <Project Path="src/Services/RestaurantOperations/Restaurantes.RestaurantOperations.Consumer/Restaurantes.RestaurantOperations.Consumer.csproj" />
+    <Project Path="src/Services/RestaurantOperations/Restaurantes.RestaurantOperations.Contracts/Restaurantes.RestaurantOperations.Contracts.csproj" />
+    <Project Path="src/Services/RestaurantOperations/Restaurantes.RestaurantOperations.Domain/Restaurantes.RestaurantOperations.Domain.csproj" />
+    <Project Path="src/Services/RestaurantOperations/Restaurantes.RestaurantOperations.Infrastructure/Restaurantes.RestaurantOperations.Infrastructure.csproj" />
+    <Project Path="src/Services/RestaurantOperations/Restaurantes.RestaurantOperations.Publisher/Restaurantes.RestaurantOperations.Publisher.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Sales/">
+    <Project Path="src/Services/Sales/Restaurantes.Sales.Api.Read/Restaurantes.Sales.Api.Read.csproj" />
+    <Project Path="src/Services/Sales/Restaurantes.Sales.Application/Restaurantes.Sales.Application.csproj" />
+    <Project Path="src/Services/Sales/Restaurantes.Sales.Consumer/Restaurantes.Sales.Consumer.csproj" />
+    <Project Path="src/Services/Sales/Restaurantes.Sales.Contracts/Restaurantes.Sales.Contracts.csproj" />
+    <Project Path="src/Services/Sales/Restaurantes.Sales.Domain/Restaurantes.Sales.Domain.csproj" />
+    <Project Path="src/Services/Sales/Restaurantes.Sales.Infrastructure/Restaurantes.Sales.Infrastructure.csproj" />
+    <Project Path="src/Services/Sales/Restaurantes.Sales.Publisher/Restaurantes.Sales.Publisher.csproj" />
+  </Folder>
+</Solution>

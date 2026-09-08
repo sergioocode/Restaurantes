@@ -1,0 +1,8 @@
+﻿@readUrl = http://localhost:5112
+@restaurantId = 5c7811d9-b92c-4453-8f8a-4bdb9f089d31
+
+### Listar restaurantes desde la proyeccion de lectura
+GET {{readUrl}}/api/restaurant-operations/restaurants
+
+### Consultar un restaurante
+GET {{readUrl}}/api/restaurant-operations/restaurants/{{restaurantId}}

@@ -1,0 +1,11 @@
+﻿@readUrl = http://localhost:5132
+@restaurantId = 5c7811d9-b92c-4453-8f8a-4bdb9f089d31
+
+### Categorias proyectadas
+GET {{readUrl}}/api/catalog/categories
+
+### Productos proyectados
+GET {{readUrl}}/api/catalog/products
+
+### Carta disponible para un local
+GET {{readUrl}}/api/catalog/restaurants/{{restaurantId}}/menu

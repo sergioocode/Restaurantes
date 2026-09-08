@@ -1,0 +1,11 @@
+﻿@reportingUrl = http://localhost:5142
+@restaurantId = 11111111-1111-4111-8111-111111111111
+
+### Dashboard diario consolidado para todos los locales
+GET {{reportingUrl}}/api/reporting/dashboard/daily
+
+### Dashboard diario de un local
+GET {{reportingUrl}}/api/reporting/dashboard/daily?restaurantId={{restaurantId}}
+
+### Salud de endpoints monitorizados
+GET {{reportingUrl}}/api/reporting/health

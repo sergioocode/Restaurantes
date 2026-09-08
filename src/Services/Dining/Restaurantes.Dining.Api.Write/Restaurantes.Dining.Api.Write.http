@@ -1,0 +1,143 @@
+﻿@identityUrl = http://localhost:5106
+@diningUrl = http://localhost:5102
+@restaurantId = 11111111-1111-4111-8111-111111111111
+@tableId = c270b467-98cc-47b2-b241-e45979659bf6
+@sessionId = 00000000-0000-0000-0000-000000000000
+
+### Obtener JWT de responsable
+# @name login
+POST {{identityUrl}}/api/identity/login
+Content-Type: application/json
+
+{
+  "username": "manager",
+  "password": "Manager-2026!"
+}
+
+### Listar mesas del local asignado
+GET {{diningUrl}}/api/dining/restaurants/{{restaurantId}}/tables
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+### Consultar política Dining
+GET {{diningUrl}}/api/dining/restaurants/{{restaurantId}}/policy
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+### Configurar políticas operativas del local
+PUT {{diningUrl}}/api/dining/restaurants/{{restaurantId}}/policy
+Authorization: Bearer {{login.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "qrRequiresImmediatePayment": true,
+  "requireTrustedNetworkForQr": false,
+  "takeawayRequiresPrepayment": true,
+  "qrAllowedNetworks": []
+}
+
+### Exigir presencia en la red del local (ejemplo para F5 en localhost)
+PUT {{diningUrl}}/api/dining/restaurants/{{restaurantId}}/policy
+Authorization: Bearer {{login.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "qrRequiresImmediatePayment": true,
+  "requireTrustedNetworkForQr": true,
+  "takeawayRequiresPrepayment": true,
+  "qrAllowedNetworks": [
+    "127.0.0.1/32",
+    "::1/128"
+  ]
+}
+
+### Rotar el QR de la mesa; invalida inmediatamente el codigo anterior
+# @name rotateQr
+POST {{diningUrl}}/api/dining/tables/{{tableId}}/qr/rotate
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+### Consultar la carta por QR: no abre ni ocupa una sesion
+GET {{diningUrl}}/api/dining/qr/{{rotateQr.response.body.$.qrCode}}
+
+### Confirmar el primer pedido: abre una sesion CustomerQr o recupera la propia
+# @name openQrSession
+POST {{diningUrl}}/api/dining/qr/{{rotateQr.response.body.$.qrCode}}/sessions?guestCount=2
+
+### Simular un cliente fuera del local; debe responder HTTP 403
+POST {{diningUrl}}/api/dining/qr/{{rotateQr.response.body.$.qrCode}}/sessions?guestCount=2
+X-Forwarded-For: 203.0.113.50
+
+### Crear una zona; el nombre y las ubicaciones los configura el usuario
+# @name createZone
+POST {{diningUrl}}/api/dining/restaurants/{{restaurantId}}/zones
+Authorization: Bearer {{login.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "name": "Salón principal",
+  "sortOrder": 0
+}
+### Crear una mesa fisica neutral; su uso posterior puede ser QR, comandero o TPV
+POST {{diningUrl}}/api/dining/restaurants/{{restaurantId}}/tables
+Authorization: Bearer {{login.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "code": "MESA-03",
+  "label": "Mesa 03",
+  "zoneId": "{{createZone.response.body.$.id}}"
+}
+
+### Crear otra ubicacion con nombre libre y QR propio
+POST {{diningUrl}}/api/dining/restaurants/{{restaurantId}}/tables
+Authorization: Bearer {{login.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "code": "BARRA-06",
+  "label": "Puesto de barra 06",
+  "zoneId": "{{createZone.response.body.$.id}}"
+}
+
+### Ocupa la mesa indicada; respondera 409 si ya tiene una sesion abierta
+POST {{diningUrl}}/api/dining/tables/{{tableId}}/sessions
+Authorization: Bearer {{login.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "source": "WaiterMobile"
+}
+
+### Consultar la sesion activa de una mesa
+GET {{diningUrl}}/api/dining/tables/{{tableId}}/active-session
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+### Validacion interna usada por Orders; sustituya sessionId
+GET {{diningUrl}}/api/dining/sessions/{{sessionId}}/validate?restaurantId={{restaurantId}}&tableId={{tableId}}
+
+### Cuenta completa de la sesion
+GET {{diningUrl}}/api/dining/sessions/{{sessionId}}/bill
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+### Liberar manualmente una mesa con todos sus pedidos pagados
+POST {{diningUrl}}/api/dining/sessions/{{sessionId}}/close
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+### Cancelar una sesion vacia abierta por error; sustituya sessionId
+POST {{diningUrl}}/api/dining/sessions/{{sessionId}}/cancel
+Authorization: Bearer {{login.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "reason": "Mesa abierta por error durante una prueba"
+}
+
+### Cobra todas las comandas entregadas y libera la mesa
+POST {{diningUrl}}/api/dining/sessions/{{sessionId}}/checkout
+Authorization: Bearer {{login.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "idempotencyKey": "11111111-1111-1111-1111-111111111111",
+  "method": "Card",
+  "externalReference": "HTTP-CHECKOUT-01"
+}
+
