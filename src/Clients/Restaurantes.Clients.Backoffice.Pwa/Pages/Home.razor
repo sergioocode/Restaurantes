@@ -1,0 +1,401 @@
+﻿@page "/"
+@using System.Text.Json
+@inject BackofficeApi Api
+@inject IJSRuntime Js
+
+<PageTitle>Backoffice · Restaurantes</PageTitle>
+
+@if (login is null)
+{
+    <main class="login-shell">
+        <section class="login-card">
+            <span class="brand">R</span><p class="eyebrow">ADMINISTRACIÓN</p><h1>Backoffice</h1>
+            <p>Configuración central y por local.</p>
+            <form @onsubmit="Login" @onsubmit:preventDefault>
+                <label>Usuario<input autocomplete="username" @bind="username" /></label>
+                <label>Contraseña<input type="password" autocomplete="current-password" @bind="password" /></label>
+                <button class="primary" disabled="@busy">@(busy ? "Entrando…" : "Entrar")</button>
+            </form>
+            <small>Desarrollo: admin / Admin-2026!</small>
+            @if (!string.IsNullOrWhiteSpace(message)) { <p class="error">@message</p> }
+        </section>
+    </main>
+}
+else
+{
+    <header class="topbar">
+        <div><p class="eyebrow">RESTAURANTES · BACKOFFICE</p><strong>@login.User.DisplayName</strong></div>
+        <div class="top-actions">
+            <select value="@restaurantId" @onchange="RestaurantChanged">
+                @foreach (RestaurantResponse restaurant in SelectableRestaurants)
+                {
+                    <option value="@restaurant.Id">@restaurant.Name · @RoleLabel(CurrentRoleFor(restaurant.Id))</option>
+                }
+            </select>
+            <button class="secondary" @onclick="LoadAll" disabled="@busy">Actualizar</button>
+            <button class="secondary" @onclick="Logout">Salir</button>
+        </div>
+    </header>
+
+    <main class="workspace">
+        <aside class="sidebar">
+            <h2>Módulos</h2>
+            <button class="@NavClass("menu")" @onclick='() => module = "menu"'>Menú por local</button>
+            <button class="@NavClass("stations")" @onclick='() => module = "stations"'>Estaciones KDS</button>
+            <button class="@NavClass("tables")" @onclick='() => module = "tables"'>Mesas y configuración</button>
+            <button class="@NavClass("restaurants")" @onclick='() => module = "restaurants"'>Locales</button>
+            <button class="@NavClass("categories")" @onclick='() => module = "categories"'>Categorías</button>
+            <button class="@NavClass("products")" @onclick='() => module = "products"'>Productos</button>
+            @if (HasLocalPermission("reports.financial.read")) { <button disabled>Contabilidad <small>Próximo</small></button> }
+            @if (HasLocalPermission("reports.marketing.read")) { <button disabled>Marketing y KPI <small>Próximo</small></button> }
+            @if (HasLocalPermission("reports.kitchen.read")) { <button disabled>Tiempos de cocina <small>Próximo</small></button> }
+            @if (CanManageUsers) { <button class="@NavClass("users")" @onclick='() => module = "users"'>Usuarios y perfiles</button> }
+        </aside>
+
+        <section class="content">
+            <div class="page-title">
+                <div><p class="eyebrow">@ModuleEyebrow</p><h1>@ModuleTitle</h1></div>
+                <span class="role-chip">@RoleLabel(CurrentRoleFor(restaurantId))</span>
+            </div>
+
+            @if (module == "menu")
+            {
+                @if (!HasLocalPermission("catalog.manage")) { @NoAccess }
+                else
+                {
+                    <div class="catalog-toolbar"><input type="search" placeholder="Buscar producto o SKU" @bind="search" @bind:event="oninput" /><span>@VisibleProducts.Count producto(s)</span></div>
+                    <div class="product-list">
+                        @foreach (ProductResponse product in VisibleProducts)
+                        {
+                            CategoryResponse? category = categories.FirstOrDefault(x => x.Id == product.CategoryId);
+                            MenuEditor editor = editors[product.Id];
+                            <article class="product-row @(product.IsActive ? "" : "inactive")">
+                                <div class="product-name"><span>@category?.Name</span><strong>@product.Name</strong><small>@product.Sku · Base @product.BasePrice.ToString("0.00") €</small></div>
+                                <label>Precio<input type="number" min="0" step="0.01" @bind="editor.Price" /></label>
+                                <label>Estación KDS<select value="@editor.PreparationStationCode" @onchange="args => SelectStation(editor, args)">@foreach (KitchenStationResponse station in stations.Where(x => (!x.IsPrimary && x.IsActive) || x.Code == editor.PreparationStationCode)) { <option value="@station.Code">@station.Name</option> }</select></label>
+                                <label class="availability"><input type="checkbox" @bind="editor.IsAvailable" disabled="@(!product.IsActive)" /> Visible</label>
+                                <button class="primary" @onclick="() => SaveMenuItem(product)" disabled="@(busy || !product.IsActive)">Guardar</button>
+                            </article>
+                        }
+                    </div>
+                }
+            }
+            else if (module == "stations")
+            {
+                @if (!HasLocalPermission("catalog.manage")) { @NoAccess }
+                else
+                {
+                    <details class="admin-panel" open><summary>Nueva estación KDS</summary>
+                        <form class="inline-form" @onsubmit="CreateStation" @onsubmit:preventDefault>
+                            <input placeholder="Código, ej. PIZZA" @bind="stationDraft.Code" />
+                            <input placeholder="Nombre visible, ej. Horno de pizzas" @bind="stationDraft.Name" />
+                            <label>Prioridad<input type="number" min="0" max="99" @bind="stationDraft.Priority" disabled="@stationDraft.IsPrimary" /></label>
+                            <label class="availability"><input type="checkbox" @bind="stationDraft.IsPrimary" /> KDS principal</label>
+                            <label class="availability"><input type="checkbox" @bind="stationDraft.RequiresPrimaryDispatch" disabled="@stationDraft.IsPrimary" /> Requiere despacho del principal</label>
+                            <button class="primary" disabled="@busy">Agregar</button>
+                        </form>
+                    </details>
+                    <div class="maintenance-list">
+                        @foreach (KitchenStationResponse item in stations.OrderBy(x => x.Priority).ThenBy(x => x.Name))
+                        {
+                            <article class="maintenance-row @(item.IsActive ? "" : "inactive")">
+                                <div><strong>@item.Code</strong><small>v@item.Version</small></div>
+                                <label>Nombre KDS<input maxlength="80" @bind="item.Name" /></label>
+                                <label>Prioridad<input type="number" min="0" max="99" @bind="item.Priority" disabled="@item.IsPrimary" /></label>
+                                <label class="availability"><input type="checkbox" @bind="item.IsPrimary" /> Principal</label>
+                                <label class="availability"><input type="checkbox" @bind="item.RequiresPrimaryDispatch" disabled="@item.IsPrimary" /> Despacha principal</label>
+                                <label class="availability"><input type="checkbox" @bind="item.IsActive" /> Activa</label>
+                                <button class="primary" @onclick="() => SaveStation(item)" disabled="@busy">Guardar</button>
+                            </article>
+                        }
+                    </div>
+                }
+            }
+            else if (module == "categories")
+            {
+                @if (!HasGlobalPermission("catalog.global.manage")) { @NoAccess }
+                else
+                {
+                    <details class="admin-panel" open><summary>Nueva categoría</summary>
+                        <form class="inline-form" @onsubmit="CreateCategory" @onsubmit:preventDefault>
+                            <input placeholder="Código" @bind="categoryDraft.Code" /><input placeholder="Nombre" @bind="categoryDraft.Name" />
+                            <select value="@categoryDraft.DefaultStationCode" @onchange="SelectDraftCategoryStation" disabled="@(stations.Count(x => x.IsActive) == 0)">
+                                <option value="">Estación KDS</option>
+                                @foreach (KitchenStationResponse station in stations.Where(x => x.IsActive && !x.IsPrimary).OrderBy(x => x.Name))
+                                {
+                                    <option value="@station.Code">@station.Name</option>
+                                }
+                            </select>
+                            <button class="primary" disabled="@busy">Agregar</button>
+                        </form>
+                    </details>
+                    <div class="maintenance-list">
+                        @foreach (CategoryResponse item in categories.OrderBy(x => x.Name))
+                        {
+                            <article class="maintenance-row @(item.IsActive ? "" : "inactive")">
+                                <div><strong>@item.Code</strong><small>v@item.Version</small></div>
+                                <label>Nombre<input @bind="item.Name" /></label>
+                                <label>Estación KDS<select value="@item.DefaultStationCode" @onchange="args => SelectCategoryStation(item, args)">
+                                    @if (!stations.Any(x => x.Code == item.DefaultStationCode))
+                                    {
+                                        <option value="@item.DefaultStationCode">@item.DefaultStationName (no disponible en este local)</option>
+                                    }
+                                    @foreach (KitchenStationResponse station in stations.Where(x => (!x.IsPrimary && x.IsActive) || x.Code == item.DefaultStationCode).OrderBy(x => x.Name))
+                                    {
+                                        <option value="@station.Code">@station.Name</option>
+                                    }
+                                </select></label>
+                                <label class="availability"><input type="checkbox" @bind="item.IsActive" /> Activa</label>
+                                <button class="primary" @onclick="() => SaveCategory(item)" disabled="@busy">Guardar</button>
+                            </article>
+                        }
+                    </div>
+                }
+            }
+            else if (module == "products")
+            {
+                @if (!HasGlobalPermission("catalog.global.manage")) { @NoAccess }
+                else
+                {
+                    <details class="admin-panel" open><summary>Nuevo producto</summary>
+                        <form class="inline-form" @onsubmit="CreateProduct" @onsubmit:preventDefault>
+                            <input placeholder="SKU" @bind="productDraft.Sku" /><input placeholder="Nombre" @bind="productDraft.Name" />
+                            <select @bind="productDraft.CategoryId"><option value="@Guid.Empty">Categoría</option>@foreach (CategoryResponse category in categories.Where(x => x.IsActive)) { <option value="@category.Id">@category.Name</option> }</select>
+                            <input type="number" min="0" step="0.01" @bind="productDraft.BasePrice" /><button class="primary" disabled="@busy">Agregar</button>
+                        </form>
+                    </details>
+                    <div class="maintenance-list">
+                        @foreach (ProductResponse item in products.OrderBy(x => x.Name))
+                        {
+                            <article class="maintenance-row product-maintenance @(item.IsActive ? "" : "inactive")">
+                                <div><strong>@item.Sku</strong><small>v@item.Version</small></div><label>Nombre<input @bind="item.Name" /></label>
+                                <label>Categoría<select @bind="item.CategoryId">@foreach (CategoryResponse category in categories) { <option value="@category.Id">@category.Name</option> }</select></label>
+                                <label>Precio base<input type="number" min="0" step="0.01" @bind="item.BasePrice" /></label>
+                                <label class="availability"><input type="checkbox" @bind="item.IsActive" /> Activo</label><button class="primary" @onclick="() => SaveProduct(item)" disabled="@busy">Guardar</button>
+                            </article>
+                        }
+                    </div>
+                }
+            }
+            else if (module == "restaurants")
+            {
+                @if (IsAdmin)
+                {
+                    <details class="admin-panel"><summary>Nuevo local · solo Admin</summary>
+                        <form class="inline-form" @onsubmit="CreateRestaurant" @onsubmit:preventDefault>
+                            <input placeholder="Código" @bind="restaurantDraft.Code" /><input placeholder="Nombre" @bind="restaurantDraft.Name" />
+                            <input class="wide" placeholder="Dirección" @bind="restaurantDraft.Address" /><button class="primary" disabled="@busy">Agregar</button>
+                        </form>
+                    </details>
+                }
+                @if (CurrentRestaurant is not null)
+                {
+                    <section class="settings-panel">
+                        <div><strong>@CurrentRestaurant.Code</strong><small>ID @CurrentRestaurant.Id</small></div>
+                        <label>Nombre<input @bind="CurrentRestaurant.Name" /></label><label>Dirección<input @bind="CurrentRestaurant.Address" /></label>
+                        <label class="availability"><input type="checkbox" @bind="CurrentRestaurant.IsActive" /> Local activo</label>
+                        <button class="primary" @onclick="SaveRestaurant" disabled="@busy">Guardar local</button>
+                    </section>
+                }
+            }
+            else if (module == "users")
+            {
+                @if (!CanManageUsers) { @NoAccess }
+                else
+                {
+                    <details class="admin-panel" open><summary>Nuevo usuario</summary>
+                        <form class="inline-form user-create-form" @onsubmit="CreateUser" @onsubmit:preventDefault>
+                            <input autocomplete="off" placeholder="Usuario" @bind="userDraft.Username" />
+                            <input placeholder="Nombre visible" @bind="userDraft.DisplayName" />
+                            <input type="password" autocomplete="new-password" placeholder="Contraseña (mín. 10)" @bind="userDraft.Password" />
+                            <select @bind="userDraft.RestaurantId"><option value="@Guid.Empty">Local inicial</option>@foreach (RestaurantResponse restaurant in ManageableRestaurants) { <option value="@restaurant.Id">@restaurant.Name · @restaurant.Id</option> }</select>
+                            <select @bind="userDraft.Role">@foreach (string role in AssignableRoles) { <option value="@role">@RoleLabel(role)</option> }</select>
+                            <button class="primary" disabled="@busy">Crear</button>
+                        </form>
+                    </details>
+                    <div class="user-list">
+                        @foreach (StaffUserResponse user in users.OrderBy(x => x.DisplayName))
+                        {
+                            <article class="user-card @(user.IsActive ? "" : "inactive")">
+                                <header><div><strong>@user.DisplayName</strong><small>@user.Username · ID @user.Id</small></div><span>@(user.IsActive ? "Activo" : "Inactivo")</span></header>
+                                <div class="assignment-list">
+                                    @foreach (UserRestaurantAssignmentResponse assignment in user.Restaurants.OrderBy(x => RestaurantName(x.RestaurantId)))
+                                    {
+                                        <div class="assignment-row">
+                                            <label>Local<input value="@RestaurantNameWithId(assignment.RestaurantId)" readonly /></label>
+                                            <label>Rol<select @bind="assignment.Role">@foreach (string role in AssignableRolesFor(assignment.Role)) { <option value="@role">@RoleLabel(role)</option> }</select></label>
+                                            <label>Desde<input type="date" value="@DateValue(assignment.ValidFromUtc)" @onchange="e => assignment.ValidFromUtc = ParseDate(e.Value)" /></label>
+                                            <label>Hasta<input type="date" value="@DateValue(assignment.ValidUntilUtc)" @onchange="e => assignment.ValidUntilUtc = ParseDate(e.Value)" /></label>
+                                            <label class="availability"><input type="checkbox" @bind="assignment.IsActive" /> Activa</label>
+                                            <button class="primary" @onclick="() => SaveAssignment(user, assignment)" disabled="@busy">Guardar</button>
+                                        </div>
+                                    }
+                                </div>
+                                <form class="assignment-add" @onsubmit="() => AddAssignment(user)" @onsubmit:preventDefault>
+                                    <select @bind="assignmentDrafts[user.Id].RestaurantId"><option value="@Guid.Empty">Añadir otro local</option>@foreach (RestaurantResponse restaurant in AvailableRestaurantsFor(user)) { <option value="@restaurant.Id">@restaurant.Name · @restaurant.Id</option> }</select>
+                                    <select @bind="assignmentDrafts[user.Id].Role">@foreach (string role in AssignableRoles) { <option value="@role">@RoleLabel(role)</option> }</select>
+                                    <button class="secondary" disabled="@busy">Asignar local</button>
+                                </form>
+                            </article>
+                        }
+                    </div>
+                }
+            }
+            else if (module == "tables")
+            {
+                @if (!HasLocalPermission("tables.manage")) { @NoAccess }
+                else
+                {
+                    <section class="settings-panel policy-panel">
+                        <h2>Política del local</h2>
+                        <label class="check-line"><input type="checkbox" @bind="policy.QrRequiresImmediatePayment" /> El cliente QR paga antes de enviar a cocina</label>
+                        <label class="check-line"><input type="checkbox" @bind="policy.TakeawayRequiresPrepayment" /> Para llevar requiere cobro previo</label>
+                        <label class="check-line"><input type="checkbox" @bind="policy.AllowCheckoutBeforeKitchenCompletion" /> Permite cobrar antes de terminar los KDS</label>
+                        <label class="check-line"><input type="checkbox" @bind="policy.RequireTrustedNetworkForQr" /> Exigir red autorizada para usar QR</label>
+                        <label>IP o redes CIDR autorizadas, una por línea<textarea rows="3" @bind="allowedNetworksText"></textarea></label>
+                        <button class="primary" @onclick="SavePolicy" disabled="@busy">Guardar política</button>
+                    </section>
+                    <section class="admin-panel">
+                        <h3>Zonas del restaurante</h3>
+                        <form class="inline-form" @onsubmit="CreateZone" @onsubmit:preventDefault>
+                            <input aria-label="Nombre de la zona" placeholder="Nueva zona, ej. Terraza" maxlength="80" required @bind="zoneDraft.Name" />
+                            <input aria-label="Orden de la zona" type="number" min="0" @bind="zoneDraft.SortOrder" />
+                            <button class="primary" disabled="@busy">Agregar zona</button>
+                        </form>
+                        @if (zones.Count == 0) { <p>Crea una zona antes de agregar mesas o puestos de barra.</p> }
+                        @foreach (ZoneResponse zone in zones.OrderBy(x => x.SortOrder).ThenBy(x => x.Name))
+                        {
+                            <div class="inline-form" @key="zone.Id">
+                                <label>Zona<input maxlength="80" @bind="zone.Name" /></label>
+                                <label>Orden<input type="number" min="0" @bind="zone.SortOrder" /></label>
+                                <span>@tables.Count(x => x.ZoneId == zone.Id) ubicaciones</span>
+                                <button class="primary" @onclick="() => SaveZone(zone)" disabled="@busy">Guardar zona</button>
+                                <button class="secondary" @onclick="() => DeleteZone(zone)" disabled="@(busy || tables.Any(x => x.ZoneId == zone.Id))">Eliminar zona vacía</button>
+                            </div>
+                        }
+                    </section>
+                    <details class="admin-panel" open><summary>Nueva ubicación</summary>
+                        <form class="inline-form" @onsubmit="CreateTable" @onsubmit:preventDefault>
+                            <input placeholder="Código, ej. MESA-03" @bind="tableDraft.Code" /><input placeholder="Nombre visible" @bind="tableDraft.Label" />
+                            <select aria-label="Zona" @bind="tableDraft.ZoneId"><option value="@Guid.Empty">Selecciona una zona</option>@foreach (ZoneResponse zone in zones.OrderBy(x => x.SortOrder).ThenBy(x => x.Name)) { <option value="@zone.Id">@zone.Name</option> }</select>
+                            <label class="check-line"><input type="checkbox" @bind="tableDraft.RequestGuestCount" /> Solicita cantidad de comensales antes de pedir</label>
+                            <button class="primary" disabled="@(busy || tableDraft.ZoneId == Guid.Empty)">Agregar</button>
+                        </form>
+                    </details>
+                    <div class="maintenance-list">
+                        @foreach (TableResponse item in tables.OrderBy(x => x.Code))
+                        {
+                            <article class="table-maintenance @(item.IsActive ? "" : "inactive")">
+                                <div><strong>@item.Code</strong><small>@StatusLabel(item.Status)</small></div>
+                                <label>Nombre<input @bind="item.Label" /></label>
+                                <label>Zona<select @bind="item.ZoneId">@foreach (ZoneResponse zone in zones.OrderBy(x => x.SortOrder).ThenBy(x => x.Name)) { <option value="@zone.Id">@zone.Name</option> }</select></label>
+                                <label class="availability"><input type="checkbox" @bind="item.IsActive" disabled="@(item.Status == "Occupied")" /> Activa</label>
+                                <button class="primary" @onclick="() => SaveTable(item)" disabled="@busy">Guardar</button>
+                                <button class="secondary" @onclick="() => DeleteTable(item)" disabled="@(busy || item.Status == "Occupied")" title="Elimina la ubicación de la operación y conserva su historial">Eliminar</button>
+                                <label class="check-line guest-setting"><input type="checkbox" @bind="item.RequestGuestCount" /> Solicita cantidad de comensales antes de pedir</label>
+                                <div class="qr-data"><code>@item.QrCode</code><a href="@($"http://localhost:5300{item.CustomerQrPath}")" target="_blank" rel="noopener noreferrer">Abrir QR</a><button class="secondary" @onclick="() => RotateQr(item)" disabled="@(busy || item.Status == "Occupied")">Regenerar QR</button></div>
+                            </article>
+                        }
+                    </div>
+                }
+            }
+        </section>
+    </main>
+    @if (!string.IsNullOrWhiteSpace(message)) { <div class="toast @(ok ? "ok" : "error")">@message</div> }
+}
+
+@code {
+    const string SessionKey = "restaurantes.backoffice.login";
+    string username = "admin", password = "Admin-2026!", search = "", module = "menu", allowedNetworksText = "";
+    string? message; bool busy, ok; LoginResponse? login; Guid restaurantId;
+    List<CategoryResponse> categories = []; List<ProductResponse> products = []; List<MenuItemResponse> menu = [];
+    List<KitchenStationResponse> stations = [];
+    List<RestaurantResponse> restaurants = []; List<TableResponse> tables = []; DiningPolicyResponse policy = new();
+    List<StaffUserResponse> users = [];
+    Dictionary<Guid, UserAssignmentDraft> assignmentDrafts = [];
+    Dictionary<Guid, MenuEditor> editors = []; CategoryDraft categoryDraft = new(); ProductDraft productDraft = new();
+    RestaurantDraft restaurantDraft = new(); TableDraft tableDraft = new();
+    List<ZoneResponse> zones = []; ZoneResponse zoneDraft = new();
+    KitchenStationDraft stationDraft = new();
+    StaffUserDraft userDraft = new();
+
+    static readonly string[] LocalRoles = ["Manager", "PosComandero", "Kds"];
+    static readonly string[] GlobalRoles = ["Admin", "Gerente", "Oficina"];
+
+    bool IsAdmin => login?.GlobalRoles?.Contains("Admin") == true || login?.Restaurants.Any(x => x.Role == "Admin") == true;
+    bool CanManageUsers => IsAdmin;
+    IEnumerable<string> AssignableRoles => [.. GlobalRoles, .. LocalRoles];
+    List<RestaurantResponse> ManageableRestaurants => restaurants.Where(x => IsAdmin || login!.Restaurants.Any(a => a.RestaurantId == x.Id && a.Permissions.Contains("identity.manage"))).ToList();
+    List<RestaurantResponse> SelectableRestaurants => IsAdmin ? restaurants : restaurants.Where(x => login!.Restaurants.Any(a => a.RestaurantId == x.Id && a.Permissions.Contains("backoffice.access"))).ToList();
+    RestaurantResponse? CurrentRestaurant => restaurants.FirstOrDefault(x => x.Id == restaurantId);
+    List<ProductResponse> VisibleProducts => products.Where(x => string.IsNullOrWhiteSpace(search) || x.Name.Contains(search, StringComparison.OrdinalIgnoreCase) || x.Sku.Contains(search, StringComparison.OrdinalIgnoreCase)).OrderBy(x => x.Name).ToList();
+    string ModuleEyebrow => module switch { "tables" => "OPERACIÓN DEL LOCAL", "restaurants" => "CADENA", "categories" or "products" => "CATÁLOGO GLOBAL", "users" => "SEGURIDAD", _ => "CATÁLOGO DEL LOCAL" };
+    string ModuleTitle => module switch { "tables" => "Mesas, barra y reglas de venta", "restaurants" => "Locales", "stations" => "Estaciones Kitchen Display System", "categories" => "Categorías", "products" => "Productos", "users" => "Usuarios, roles y locales", _ => "Menú, precios y estaciones KDS" };
+
+    protected override async Task OnInitializedAsync()
+    {
+        string? json = await Js.InvokeAsync<string?>("sessionStorage.getItem", SessionKey); if (string.IsNullOrWhiteSpace(json)) return;
+        try { login = JsonSerializer.Deserialize<LoginResponse>(json); if (login is null || login.ExpiresAtUtc <= DateTime.UtcNow || !login.Restaurants.Any(x => x.Permissions.Contains("backoffice.access"))) { await Logout(); return; } Api.AccessToken = login.AccessToken; restaurantId = login.Restaurants.First(x => x.Permissions.Contains("backoffice.access")).RestaurantId; await LoadAllCore(); }
+        catch { await Logout(); }
+    }
+
+    async Task Login() => await Run(async () => { login = await Api.LoginAsync(username, password); if (!login.Restaurants.Any(x => x.Permissions.Contains("backoffice.access"))) throw new InvalidOperationException("Este perfil no tiene acceso al Backoffice."); Api.AccessToken = login.AccessToken; restaurantId = login.Restaurants.First(x => x.Permissions.Contains("backoffice.access")).RestaurantId; await Js.InvokeVoidAsync("sessionStorage.setItem", SessionKey, JsonSerializer.Serialize(login)); await LoadAllCore(); });
+    async Task Logout() { await Js.InvokeVoidAsync("sessionStorage.removeItem", SessionKey); Api.AccessToken = null; login = null; message = null; }
+    async Task RestaurantChanged(ChangeEventArgs args) { if (!Guid.TryParse(args.Value?.ToString(), out restaurantId)) return; await LoadLocal(); }
+    async Task LoadAll() => await Run(LoadAllCore);
+    async Task LoadAllCore() { categories = await Api.CategoriesAsync(); products = await Api.ProductsAsync(); restaurants = await Api.RestaurantsAsync(); if (!restaurants.Any(x => x.Id == restaurantId) && SelectableRestaurants.Count > 0) restaurantId = SelectableRestaurants[0].Id; if (CanManageUsers) await LoadUsersCore(); await LoadLocalCore(); }
+    async Task LoadLocal() => await Run(LoadLocalCore);
+    async Task LoadLocalCore()
+    {
+        menu = await Api.MenuAsync(restaurantId); stations = await Api.StationsAsync(restaurantId); tables = await Api.TablesAsync(restaurantId); zones = await Api.ZonesAsync(restaurantId); tableDraft = new() { ZoneId = zones.FirstOrDefault()?.Id ?? Guid.Empty }; zoneDraft = new(); policy = await Api.DiningPolicyAsync(restaurantId); allowedNetworksText = string.Join(Environment.NewLine, policy.QrAllowedNetworks);
+        editors = products.ToDictionary(p => p.Id, p => { MenuItemResponse? m = menu.FirstOrDefault(x => x.ProductId == p.Id); CategoryResponse? c = categories.FirstOrDefault(x => x.Id == p.CategoryId); return new MenuEditor { Price = m?.Price ?? p.BasePrice, IsAvailable = m?.IsAvailable ?? false, PreparationStationCode = m?.PreparationStationCode ?? c?.DefaultStationCode ?? "GENERAL", PreparationStationName = m?.PreparationStationName ?? c?.DefaultStationName ?? "General" }; });
+    }
+
+    async Task SaveMenuItem(ProductResponse p) => await Run(async () => { MenuItemResponse accepted = await Api.ConfigureAsync(restaurantId, p.Id, editors[p.Id]); MenuItemResponse saved = await ConfirmMenuProjection(accepted); menu.RemoveAll(x => x.ProductId == p.Id); menu.Add(saved); editors[p.Id].Price = saved.Price; editors[p.Id].IsAvailable = saved.IsAvailable; editors[p.Id].PreparationStationCode = saved.PreparationStationCode; editors[p.Id].PreparationStationName = saved.PreparationStationName; ok = true; message = $"{p.Name} actualizado para {CurrentRestaurant?.Name} y confirmado en la vista de lectura."; }, false);
+    async Task CreateStation() => await Run(async () => { await Api.CreateStationAsync(restaurantId, stationDraft); stationDraft = new(); await RefreshStations(); ok = true; message = "Estación KDS agregada."; }, false);
+    async Task SaveStation(KitchenStationResponse item) => await Run(async () => { await Api.UpdateStationAsync(item); await RefreshStations(); ok = true; message = "Estación KDS actualizada."; }, false);
+    async Task RefreshStations() { await Task.Delay(600); stations = await Api.StationsAsync(restaurantId); menu = await Api.MenuAsync(restaurantId); }
+    async Task CreateCategory() => await Run(async () => { if (!stations.Any(x => x.IsActive && x.Code == categoryDraft.DefaultStationCode)) throw new InvalidOperationException("Selecciona una estación KDS activa del local."); await Api.CreateCategoryAsync(categoryDraft); categoryDraft = new(); await RefreshCatalogProjection(); ok = true; message = "Categoría agregada. Crea sus productos y habilítalos en Menú por local para publicarlos."; }, false);
+    async Task SaveCategory(CategoryResponse item) => await Run(async () => { CategoryResponse accepted = await Api.UpdateCategoryAsync(item); await ConfirmCategoryProjection(accepted); await RefreshCatalogProjection(); ok = true; message = "Categoría actualizada y confirmada en la vista de lectura."; }, false);
+    async Task CreateProduct() => await Run(async () => { if (productDraft.CategoryId == Guid.Empty) throw new InvalidOperationException("Selecciona una categoría."); await Api.CreateProductAsync(productDraft); productDraft = new(); await RefreshCatalogProjection(); ok = true; message = "Producto agregado al catálogo global. Habilítalo y define precio/estación en Menú por local."; }, false);
+    async Task SaveProduct(ProductResponse item) => await Run(async () => { await Api.UpdateProductAsync(item); await RefreshCatalogProjection(); ok = true; message = "Producto actualizado."; }, false);
+    async Task RefreshCatalogProjection() { await Task.Delay(800); categories = await Api.CategoriesAsync(); products = await Api.ProductsAsync(); await LoadLocalCore(); }
+    async Task CreateRestaurant() => await Run(async () => { RestaurantResponse created = await Api.CreateRestaurantAsync(restaurantDraft); await Api.EnsureDefaultStationsAsync(created.Id); restaurantDraft = new(); await Task.Delay(800); restaurants = await Api.RestaurantsAsync(); restaurantId = created.Id; await LoadLocalCore(); module = "restaurants"; ok = true; message = "Local creado con las cuatro estaciones KDS predeterminadas. Asigna usuarios antes de operarlo."; }, false);
+    async Task SaveRestaurant() { if (CurrentRestaurant is null) return; await Run(async () => { await Api.UpdateRestaurantAsync(CurrentRestaurant); await Task.Delay(600); restaurants = await Api.RestaurantsAsync(); ok = true; message = "Local actualizado."; }, false); }
+    async Task RefreshZones() { zones = await Api.ZonesAsync(restaurantId); tables = await Api.TablesAsync(restaurantId); if (!zones.Any(x => x.Id == tableDraft.ZoneId)) tableDraft.ZoneId = zones.FirstOrDefault()?.Id ?? Guid.Empty; }
+    async Task CreateZone() => await Run(async () => { await Api.SaveZoneAsync(restaurantId, zoneDraft); zoneDraft = new(); await RefreshZones(); ok = true; message = "Zona agregada."; }, false);
+    async Task SaveZone(ZoneResponse zone) => await Run(async () => { await Api.SaveZoneAsync(restaurantId, zone); await RefreshZones(); ok = true; message = "Zona actualizada."; }, false);
+    async Task DeleteZone(ZoneResponse zone) => await Run(async () => { await Api.DeleteZoneAsync(restaurantId, zone.Id); await RefreshZones(); ok = true; message = "Zona vacía eliminada."; }, false);
+    async Task CreateTable() => await Run(async () => { await Api.CreateTableAsync(restaurantId, tableDraft); tableDraft = new() { ZoneId = tableDraft.ZoneId }; tables = await Api.TablesAsync(restaurantId); ok = true; message = "Ubicación agregada."; }, false);
+    async Task SaveTable(TableResponse item) => await Run(async () => { await Api.UpdateTableAsync(item); tables = await Api.TablesAsync(restaurantId); ok = true; message = "Ubicación actualizada."; }, false);
+    async Task DeleteTable(TableResponse item) => await Run(async () => { await Api.DeleteTableAsync(item.Id); tables = await Api.TablesAsync(restaurantId); ok = true; message = "Ubicación eliminada. Su historial se conserva y el código queda disponible."; }, false);
+    async Task RotateQr(TableResponse item) => await Run(async () => { bool confirmed = await Js.InvokeAsync<bool>("confirm", $"El QR impreso de {item.Label} dejará de funcionar. ¿Regenerarlo?"); if (!confirmed) return; await Api.RotateQrAsync(item.Id); tables = await Api.TablesAsync(restaurantId); ok = true; message = "QR regenerado. Debes volver a imprimirlo."; }, false);
+    async Task SavePolicy() => await Run(async () => { policy.QrAllowedNetworks = allowedNetworksText.Split(['\r','\n',',',';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries); policy = await Api.UpdateDiningPolicyAsync(restaurantId, policy); allowedNetworksText = string.Join(Environment.NewLine, policy.QrAllowedNetworks); ok = true; message = "Política del local actualizada."; }, false);
+    async Task LoadUsersCore() { users = await Api.UsersAsync(); assignmentDrafts = users.ToDictionary(x => x.Id, _ => new UserAssignmentDraft()); }
+    async Task CreateUser() => await Run(async () => { if (userDraft.RestaurantId == Guid.Empty) throw new InvalidOperationException("Selecciona el local inicial."); await Api.CreateUserAsync(userDraft); userDraft = new(); await LoadUsersCore(); ok = true; message = "Usuario creado y asignado al local."; }, false);
+    async Task SaveAssignment(StaffUserResponse user, UserRestaurantAssignmentResponse assignment) => await Run(async () => { await Api.SaveUserAssignmentAsync(user.Id, assignment); await LoadUsersCore(); ok = true; message = "Asignación actualizada. El usuario deberá iniciar sesión otra vez para usar los nuevos permisos."; }, false);
+    async Task AddAssignment(StaffUserResponse user) => await Run(async () => { UserAssignmentDraft draft = assignmentDrafts[user.Id]; if (draft.RestaurantId == Guid.Empty) throw new InvalidOperationException("Selecciona un local que todavía no tenga asignado."); await Api.AddUserAssignmentAsync(user.Id, draft); await LoadUsersCore(); ok = true; message = "Local asignado al usuario."; }, false);
+
+    bool HasLocalPermission(string permission) => IsAdmin || login?.Restaurants.FirstOrDefault(x => x.RestaurantId == restaurantId)?.Permissions.Contains(permission) == true;
+    bool HasGlobalPermission(string permission) => IsAdmin || login?.Restaurants.Any(x => x.Permissions.Contains(permission)) == true;
+    string CurrentRoleFor(Guid id) => IsAdmin ? "Admin" : login?.Restaurants.FirstOrDefault(x => x.RestaurantId == id)?.Role ?? "Sin asignar";
+    string NavClass(string value) => module == value ? "nav-active" : "";
+    IEnumerable<string> AssignableRolesFor(string current) => AssignableRoles.Contains(current) ? AssignableRoles : AssignableRoles.Append(current);
+    IEnumerable<RestaurantResponse> AvailableRestaurantsFor(StaffUserResponse user) => ManageableRestaurants.Where(x => user.Restaurants.All(a => a.RestaurantId != x.Id));
+    string RestaurantName(Guid id) => restaurants.FirstOrDefault(x => x.Id == id)?.Name ?? id.ToString();
+    string RestaurantNameWithId(Guid id) => $"{RestaurantName(id)} · {id}";
+    static string DateValue(DateTime? value) => value?.ToString("yyyy-MM-dd") ?? string.Empty;
+    static DateTime? ParseDate(object? value) => DateTime.TryParse(value?.ToString(), out DateTime date) ? DateTime.SpecifyKind(date, DateTimeKind.Utc) : null;
+    static string RoleLabel(string role) => role switch { "Admin" => "Administrador", "Gerente" => "Gerencia", "Oficina" => "Oficina", "Manager" => "Encargado de local", "PosComandero" => "Caja / Camarero", "Kds" => "Cocina", _ => role };
+    static string StatusLabel(string status) => status == "Occupied" ? "Ocupada" : "Disponible";
+    void SelectStation(MenuEditor editor, ChangeEventArgs args) { KitchenStationResponse? station = stations.FirstOrDefault(x => x.Code == args.Value?.ToString()); if (station is null) return; editor.PreparationStationCode = station.Code; editor.PreparationStationName = station.Name; }
+    void SelectCategoryStation(CategoryResponse categoryItem, ChangeEventArgs args) { KitchenStationResponse? station = stations.FirstOrDefault(x => x.Code == args.Value?.ToString()); if (station is null) return; categoryItem.DefaultStationCode = station.Code; categoryItem.DefaultStationName = station.Name; }
+    void SelectDraftCategoryStation(ChangeEventArgs args) { KitchenStationResponse? station = stations.FirstOrDefault(x => x.Code == args.Value?.ToString()); if (station is null) return; categoryDraft.DefaultStationCode = station.Code; categoryDraft.DefaultStationName = station.Name; }
+    async Task<MenuItemResponse> ConfirmMenuProjection(MenuItemResponse expected) { for (int attempt = 0; attempt < 20; attempt++) { List<MenuItemResponse> projected = await Api.MenuAsync(expected.RestaurantId); MenuItemResponse? current = projected.FirstOrDefault(x => x.ProductId == expected.ProductId && x.Version >= expected.Version); if (current is not null) return current; await Task.Delay(300); } throw new InvalidOperationException("El cambio se guardó, pero la proyección Read del catálogo no lo confirmó. Comprueba Catalog Publisher, Consumer y RabbitMQ."); }
+    async Task ConfirmCategoryProjection(CategoryResponse expected) { for (int attempt = 0; attempt < 20; attempt++) { CategoryResponse? current = (await Api.CategoriesAsync()).FirstOrDefault(x => x.Id == expected.Id && x.Version >= expected.Version); if (current is not null) return; await Task.Delay(300); } throw new InvalidOperationException("La categoría se guardó, pero la proyección Read del catálogo no la confirmó. Comprueba Catalog Publisher, Consumer y RabbitMQ."); }
+    async Task Run(Func<Task> action, bool clear = true) { if (clear) message = null; ok = false; busy = true; try { await action(); } catch (Exception ex) { message = ex.Message; } finally { busy = false; } }
+}
+
+@code {
+    RenderFragment NoAccess => @<section class="empty-panel"><h2>Sin acceso de edición</h2><p>Tu perfil no puede modificar este módulo.</p></section>;
+}

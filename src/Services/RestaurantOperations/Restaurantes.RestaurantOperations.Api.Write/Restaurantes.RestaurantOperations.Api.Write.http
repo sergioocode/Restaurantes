@@ -1,0 +1,22 @@
+﻿@writeUrl = http://localhost:5111
+
+### Crea datos: cambie el code antes de repetir
+# @name createRestaurant
+POST {{writeUrl}}/api/restaurant-operations/restaurants
+Content-Type: application/json
+
+{
+  "code": "HTTP-MAD-01",
+  "name": "Restaurante HTTP Madrid",
+  "address": "Calle de prueba 1"
+}
+
+### Actualizar el restaurante creado arriba
+PUT {{writeUrl}}/api/restaurant-operations/restaurants/{{createRestaurant.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "name": "Restaurante HTTP Madrid actualizado",
+  "address": "Calle de prueba 2",
+  "isActive": true
+}

@@ -1,0 +1,23 @@
+﻿@salesReadUrl = http://localhost:5162
+@privateGatewayUrl = http://localhost:5001
+@restaurantId = 5c7811d9-b92c-4453-8f8a-4bdb9f089d31
+@saleId = 00000000-0000-0000-0000-000000000000
+
+### Salud directa de Sales Read
+GET {{salesReadUrl}}/health
+
+### Últimas ventas, todos los locales
+GET {{salesReadUrl}}/api/sales
+Accept: application/json
+
+### Ventas de un local
+GET {{salesReadUrl}}/api/sales?restaurantId={{restaurantId}}
+Accept: application/json
+
+### Una venta por su identificador
+GET {{salesReadUrl}}/api/sales/{{saleId}}
+Accept: application/json
+
+### La misma consulta a través del gateway privado
+GET {{privateGatewayUrl}}/api/sales?restaurantId={{restaurantId}}
+Accept: application/json

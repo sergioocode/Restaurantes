@@ -1,0 +1,428 @@
+﻿<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Restaurantes · Operación y ventas</title>
+    <style>
+        body {
+            font: 14px system-ui;
+            background: #101419;
+            color: #e8edf2;
+            margin: 0
+        }
+
+        header {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            padding: 15px;
+            background: #17202a;
+            position: sticky;
+            top: 0;
+            z-index: 2
+        }
+
+        button,
+        input,
+        select {
+            padding: 8px 10px;
+            background: #263646;
+            color: white;
+            border: 1px solid #496076;
+            border-radius: 6px
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 14px;
+            padding: 16px
+        }
+
+        .card {
+            background: #18212b;
+            border: 1px solid #2c3b49;
+            border-radius: 10px;
+            padding: 15px
+        }
+
+        .metric {
+            grid-column: span 4
+        }
+
+        .wide {
+            grid-column: span 6
+        }
+
+        .full {
+            grid-column: 1/-1
+        }
+
+        .value {
+            font-size: 27px;
+            font-weight: 700
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse
+        }
+
+        td,
+        th {
+            padding: 8px;
+            border-bottom: 1px solid #31404d;
+            text-align: left
+        }
+
+        .ok {
+            color: #62d98b
+        }
+
+        .bad {
+            color: #ff6b6b
+        }
+
+        small,
+        .muted {
+            color: #9fb0c0
+        }
+
+        .local {
+            margin: 14px 0 8px
+        }
+
+        .orders {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 10px
+        }
+
+        .order {
+            border: 1px solid #344858;
+            background: #121a22;
+            border-radius: 8px;
+            padding: 12px
+        }
+
+        .order-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px
+        }
+
+        .badges {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin: 8px 0
+        }
+
+        .badge {
+            padding: 3px 7px;
+            border-radius: 99px;
+            background: #304050
+        }
+
+        .Submitted,
+        .Pending {
+            background: #66521f
+        }
+
+        .InPreparation {
+            background: #155579
+        }
+
+        .Ready,
+        .Paid {
+            background: #17603c
+        }
+
+        .Delivered {
+            background: #45505a
+        }
+
+        .Refunded {
+            background: #7b2b3c
+        }
+
+        ul {
+            padding-left: 20px;
+            margin: 7px 0
+        }
+
+        #restaurant { min-width: 340px }
+
+        @media(max-width:800px) {
+
+            .metric,
+            .wide {
+                grid-column: 1/-1
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <strong>Operación y ventas</strong><label>Día <input id="date" type="date"></label><label>Local <select id="restaurant"><option value="">Todos mis locales</option></select></label><button id="refresh">Refrescar</button><label>
+            Auto <select id="interval">
+                <option value="3000">3 segundos</option>
+                <option value="5000" selected>5 segundos</option>
+                <option value="10000">10 segundos</option>
+                <option value="0">Desactivado</option>
+            </select>
+        </label><small id="state">Sin conexión</small><small id="currentUser"></small><button id="logout">Salir</button>
+    </header>
+    <main class="grid">
+        <section class="card metric">
+            <small>Ventas reconocidas del día</small>
+            <div class="value" id="sales">0,00 €</div><small>Suma de eventos SaleCompleted</small>
+        </section>
+        <section class="card metric">
+            <small>Tickets finalizados</small>
+            <div class="value" id="orders">0</div>
+        </section>
+        <section class="card metric">
+            <small>Ticket medio</small>
+            <div class="value" id="average">0,00 €</div>
+        </section>
+        <section class="card wide">
+            <h3>Productos vendidos</h3>
+            <table>
+                <tbody id="products"></tbody>
+            </table>
+        </section>
+        <section class="card wide">
+            <h3>Ranking locales</h3>
+            <table>
+                <tbody id="restaurants"></tbody>
+            </table>
+        </section>
+        <section class="card wide">
+            <h3>Canales</h3>
+            <table>
+                <tbody id="channels"></tbody>
+            </table>
+        </section>
+        <section class="card wide">
+            <h3>Medios de cobro</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tipo</th>
+                        <th>Cantidad</th>
+                        <th>Monto</th>
+                    </tr>
+                </thead>
+                <tbody id="paymentMethods"></tbody>
+            </table>
+        </section>
+        <section class="card wide">
+            <h3>Salud</h3>
+            <table>
+                <tbody id="health"></tbody>
+            </table>
+        </section>
+        <section class="card full">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+                <h2 style="margin:0">Pedidos por local</h2><label>
+                    Últimos <select id="orderLimit">
+                        <option value="10" selected>10 pedidos</option>
+                        <option value="20">20 pedidos</option>
+                        <option value="100">100 pedidos</option>
+                    </select>
+                </label>
+            </div>
+            <p class="muted">Estado general del pedido, pago independiente y tickets de preparación por estación.</p>
+            <div id="operations"></div>
+        </section>
+    </main>
+    <script>
+        const $ = id => document.getElementById(id),
+            sep = String.fromCharCode(30),
+            money = new Intl.NumberFormat('es-ES', {
+                style: 'currency',
+                currency: 'EUR'
+            }),
+            gatewayOrigin = location.hostname === 'localhost' && (location.port === '5000' || location.port === '5600') ? 'http://localhost:5001' : location.origin,
+            sessionKey = 'restaurantes.dashboard.login';
+        let timer, access, socket, realtimeGeneration = 0;
+        const today = new Date();
+        $('date').value = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
+        async function load() {
+            try {
+                const params = new URLSearchParams();
+                if ($('date').value) params.set('date', $('date').value);
+                if ($('restaurant').value) params.set('restaurantId', $('restaurant').value);
+                params.set('orderLimit', $('orderLimit').value);
+                const [d, h] = await Promise.all([authorizedFetch('/api/reporting/dashboard/daily?' + params).then(r => r.json()), authorizedFetch('/api/reporting/health').then(r => r.json())]);
+                $('sales').textContent = money.format(d.totalSales);
+                $('orders').textContent = d.completedSales;
+                $('average').textContent = money.format(d.averageTicket);
+                fill($('products'), d.topProducts, x => `<td>${escapeHtml(x.name)}</td><td>${x.quantity}</td><td>${money.format(x.sales)}</td>`);
+                fill($('restaurants'), d.restaurantRanking, x => `<td>${short(x.restaurantId)}</td><td>${x.tickets}</td><td>${money.format(x.sales)}</td>`);
+                fill($('channels'), d.channels, x => `<td>${escapeHtml(x.source)}</td><td>${x.tickets}</td><td>${money.format(x.sales)}</td>`);
+                fill($('paymentMethods'), d.paymentMethods, x => `<td>${escapeHtml(paymentMethodLabel(x.method))}</td><td>${x.tickets}</td><td>${money.format(x.sales)}</td>`);
+                fill($('health'), h, x => `<td>${escapeHtml(x.service)}</td><td class="${x.healthy ? 'ok' : 'bad'}">${x.healthy ? 'OK' : 'Error'} ${x.status || ''}</td>`);
+                renderOperations(d.operationalOrders);
+                $('state').textContent = 'Actualizado ' + new Date().toLocaleTimeString();
+            } catch (e) {
+                $('state').textContent = 'Error: ' + e.message
+            }
+        }
+
+        function check(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r
+        }
+
+        function authorizedFetch(path, options = {}) {
+            const headers = new Headers(options.headers || {});
+            headers.set('Authorization', 'Bearer ' + access.accessToken);
+            return fetch(gatewayOrigin + path, { ...options, headers }).then(check)
+        }
+
+        function fill(node, items, row) {
+            node.innerHTML = items.map(x => `<tr>${row(x)}</tr>`).join('') || '<tr><td>Sin datos</td></tr>'
+        }
+
+        function short(id) {
+            return id ? id.slice(0, 8) : '-'
+        }
+
+        function escapeHtml(v) {
+            return String(v ?? '').replace(/[&<>"']/g, c => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            }[c]))
+        }
+
+        function badge(value) {
+            return `<span class="badge ${escapeHtml(value)}">${escapeHtml(value)}</span>`
+        }
+
+        function paymentMethodLabel(method) {
+            return ({
+                Card: 'Tarjeta',
+                Cash: 'Efectivo',
+                Online: 'Pago online',
+                Check: 'Cheque',
+                Cheque: 'Cheque',
+                Unknown: 'Sin especificar'
+            })[method] || method
+        }
+
+        function renderOperations(items) {
+            const groups = items.reduce((all, item) => {
+                if (!all[item.restaurantId]) all[item.restaurantId] = [];
+                all[item.restaurantId].push(item);
+            return all
+        }, { });
+        $('operations').innerHTML = Object.entries(groups).map(([local, orders]) => `<section><h3 class="local">Local ${short(local)}</h3><div class="orders">${orders.map(renderOrder).join('')}</div></section>`).join('') || '<p>Sin pedidos para este día.</p>'
+          }
+
+        function renderOrder(o) {
+            const stations = o.stations.map(s => badge(s.code + ': ' + s.status)).join('');
+            const lines = o.lines.map(l => `<li>${l.quantity} × ${escapeHtml(l.productName)} <small>${escapeHtml(l.categoryName)} · ${escapeHtml(l.preparationStationCode)}</small></li>`).join('');
+            const label = o.serviceMode === 'DineIn' ? o.tableLabel : o.serviceMode === 'Bar' ? (o.tableLabel || 'Barra') : ('Para llevar · ' + (o.customerName || 'Sin nombre'));
+            return `<article class="order"><div class="order-head"><strong>${escapeHtml(label)}</strong><small>${short(o.orderId)}</small></div><div class="badges">${badge(o.serviceMode)}${badge(o.source)}${badge(o.orderStatus)}${badge(o.paymentStatus)}${o.paymentMethod ? badge(o.paymentMethod) : ''}</div><div class="badges">${stations}</div><ul>${lines}</ul><strong>${money.format(o.total)}</strong></article>`
+        }
+
+        function schedule() {
+            clearInterval(timer);
+            const ms = +$('interval').value;
+            if (ms) timer = setInterval(load, ms)
+        }
+        $('refresh').onclick = load;
+        $('interval').onchange = schedule;
+        $('date').onchange = load;
+        $('restaurant').onchange = async () => { await load(); realtime() };
+        $('orderLimit').onchange = load;
+
+        $('logout').onclick = logout;
+
+        async function openDashboard(session) {
+            access = session;
+            const isAdmin = (access.globalRoles || []).includes('Admin');
+            const allowed = new Set((access.restaurants || []).filter(x => (x.permissions || []).includes('dashboard.read')).map(x => x.restaurantId.toLowerCase()));
+            if (!isAdmin && allowed.size === 0) throw new Error('Este perfil no tiene acceso al Dashboard.');
+
+            let knownRestaurants = [];
+            try {
+                knownRestaurants = await authorizedFetch('/api/restaurant-operations/restaurants').then(r => r.json())
+            } catch { }
+            const visible = knownRestaurants.filter(x => isAdmin || allowed.has(x.id.toLowerCase()));
+            const missing = (access.restaurants || []).filter(x => allowed.has(x.restaurantId.toLowerCase()) && !visible.some(r => r.id.toLowerCase() === x.restaurantId.toLowerCase())).map(x => ({ id: x.restaurantId, name: 'Local ' + short(x.restaurantId) }));
+            const restaurants = [...visible, ...missing].sort((a, b) => a.name.localeCompare(b.name));
+            $('restaurant').innerHTML = `<option value="">${isAdmin ? 'Todos los locales' : 'Todos mis locales'}</option>` + restaurants.map(x => `<option value="${escapeHtml(x.id)}">${escapeHtml(x.name)} · ${escapeHtml(x.id)}</option>`).join('');
+            $('currentUser').textContent = access.user.displayName;
+            schedule();
+            await load();
+            realtime()
+        }
+
+        function logout() {
+            realtimeGeneration++;
+            if (socket) socket.close();
+            socket = null;
+            access = null;
+            clearInterval(timer);
+            sessionStorage.removeItem(sessionKey);
+            location.replace('/login/')
+        }
+
+        async function realtime() {
+            const generation = ++realtimeGeneration;
+            if (socket) socket.close();
+            if (!access) return;
+            try {
+                const gateway = new URL(gatewayOrigin),
+                    protocol = gateway.protocol === 'https:' ? 'wss' : 'ws',
+                    neg = await authorizedFetch('/hubs/reporting/negotiate?negotiateVersion=1', {
+                        method: 'POST'
+                    }).then(check).then(r => r.json()),
+                    ws = new WebSocket(`${protocol}://${gateway.host}/hubs/reporting?id=${encodeURIComponent(neg.connectionToken)}&access_token=${encodeURIComponent(access.accessToken)}`);
+                socket = ws;
+                let joined = false;
+                ws.onopen = () => ws.send(JSON.stringify({
+                    protocol: 'json',
+                    version: 1
+                }) + sep);
+                ws.onmessage = e => {
+                    for (const raw of e.data.split(sep)) {
+                        if (!raw) continue;
+                        const m = JSON.parse(raw);
+                        if (!joined && m.type === undefined) {
+                            const restaurantIds = $('restaurant').value ? [$('restaurant').value] : Array.from($('restaurant').options).map(x => x.value).filter(Boolean);
+                            ws.send(JSON.stringify({ type: 1, target: 'JoinRestaurants', arguments: [restaurantIds] }) + sep);
+                            joined = true;
+                            $('state').textContent = 'Conectado';
+                        }
+                        if (m.type === 1 && m.target === 'DashboardUpdated') setTimeout(load, 200)
+                    }
+                };
+                ws.onclose = () => { if (access && generation === realtimeGeneration) setTimeout(realtime, 2000) }
+            } catch {
+                if (access && generation === realtimeGeneration) setTimeout(realtime, 2000)
+            }
+        }
+
+        (async function bootstrap() {
+            const saved = sessionStorage.getItem(sessionKey);
+            if (!saved) return location.replace('/login/');
+            try {
+                const session = JSON.parse(saved);
+                if (new Date(session.expiresAtUtc) <= new Date()) return logout();
+                await openDashboard(session)
+            } catch {
+                logout()
+            }
+        })();
+    </script>
+</body>
+</html>

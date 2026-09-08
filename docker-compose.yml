@@ -1,0 +1,60 @@
+﻿name: restaurantes
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: restaurantes-postgres
+    environment:
+      POSTGRES_USER: restaurants
+      POSTGRES_PASSWORD: restaurants_dev
+      POSTGRES_DB: restaurant_operations_write
+    ports:
+      - "5432:5432"
+    volumes:
+      - restaurant-postgres-data:/var/lib/postgresql
+      - ./tools/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U restaurants -d restaurant_operations_write" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: restaurantes-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@restaurants.com
+      PGADMIN_DEFAULT_PASSWORD: restaurants_dev
+      PGADMIN_REPLACE_SERVERS_ON_STARTUP: "True"
+    ports:
+      - "5050:80"
+    volumes:
+      - restaurant-pgadmin-data:/var/lib/pgadmin
+      - ./tools/pgadmin/servers.json:/pgadmin4/servers.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  rabbitmq:
+    image: rabbitmq:4.3.4-management-alpine
+    container_name: restaurantes-rabbitmq
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: restaurants
+      RABBITMQ_DEFAULT_PASS: restaurants_dev
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - restaurant-rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+volumes:
+  restaurant-postgres-data:
+  restaurant-pgadmin-data:
+  restaurant-rabbitmq-data:

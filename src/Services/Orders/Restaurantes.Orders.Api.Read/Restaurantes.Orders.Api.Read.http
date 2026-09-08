@@ -1,0 +1,12 @@
+﻿@readUrl = http://localhost:5122
+@restaurantId = 5c7811d9-b92c-4453-8f8a-4bdb9f089d31
+@orderId = 00000000-0000-0000-0000-000000000000
+
+### Vista CHEF: todas las estaciones del local
+GET {{readUrl}}/api/orders?restaurantId={{restaurantId}}&stationCode=CHEF
+
+### Vista de una estacion concreta
+GET {{readUrl}}/api/orders?restaurantId={{restaurantId}}&stationCode=BEBIDAS
+
+### Consultar un pedido proyectado
+GET {{readUrl}}/api/orders/{{orderId}}

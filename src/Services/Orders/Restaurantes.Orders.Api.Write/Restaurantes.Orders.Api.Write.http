@@ -1,0 +1,81 @@
+﻿@identityUrl = http://localhost:5106
+@ordersUrl = http://localhost:5121
+@restaurantId = 11111111-1111-4111-8111-111111111111
+@tableId = c270b467-98cc-47b2-b241-e45979659bf6
+@sessionId = 00000000-0000-0000-0000-000000000000
+@productId = f2de6d34-3665-4807-84f1-773ab16182da
+@customerSessionId = 00000000-0000-0000-0000-000000000000
+@customerAccessToken = REEMPLAZAR_DESDE_DINING_QR
+
+### Obtener JWT de camarero
+# @name login
+POST {{identityUrl}}/api/identity/login
+Content-Type: application/json
+
+{
+  "username": "camarero1.mad-centro",
+  "password": "Camarero-01-1-2026!"
+}
+
+### Crea datos: primero abra una sesion Dining y sustituya sessionId
+# @name createOrder
+POST {{ordersUrl}}/api/orders
+Authorization: Bearer {{login.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "restaurantId": "{{restaurantId}}",
+  "tableId": "{{tableId}}",
+  "diningSessionId": "{{sessionId}}",
+  "tableLabel": "Mesa 01",
+  "serviceMode": "DineIn",
+  "source": "WaiterMobile",
+  "paymentTiming": "OnAccount",
+  "lines": [
+    {
+      "productId": "{{productId}}",
+      "quantity": 1,
+      "notes": "Prueba de Orders.Api.Write"
+    }
+  ]
+}
+
+### Enviar el pedido creado a cocina
+POST {{ordersUrl}}/api/orders/{{createOrder.response.body.$.id}}/submit
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+### Iniciar la primera estacion
+POST {{ordersUrl}}/api/orders/{{createOrder.response.body.$.id}}/stations/{{createOrder.response.body.$.stations[0].code}}/start-preparation
+
+### Marcar la primera estacion como lista
+POST {{ordersUrl}}/api/orders/{{createOrder.response.body.$.id}}/stations/{{createOrder.response.body.$.stations[0].code}}/ready
+
+### Entregar el pedido cuando todas las estaciones esten listas
+POST {{ordersUrl}}/api/orders/{{createOrder.response.body.$.id}}/deliver
+
+### Crear pedido de cliente QR; la credencial viene de OpenQrSession en Dining
+# @name createCustomerQrOrder
+POST {{ordersUrl}}/api/orders
+X-Customer-Session-Token: {{customerAccessToken}}
+Content-Type: application/json
+
+{
+  "restaurantId": "{{restaurantId}}",
+  "tableId": "{{tableId}}",
+  "diningSessionId": "{{customerSessionId}}",
+  "tableLabel": "Mesa 01",
+  "serviceMode": "DineIn",
+  "source": "CustomerQr",
+  "paymentTiming": "Immediate",
+  "lines": [
+    {
+      "productId": "{{productId}}",
+      "quantity": 1,
+      "notes": "Pedido desde QR"
+    }
+  ]
+}
+
+### Enviar CustomerQr después de que Payments confirme el pago
+POST {{ordersUrl}}/api/orders/{{createCustomerQrOrder.response.body.$.id}}/submit
+X-Customer-Session-Token: {{customerAccessToken}}

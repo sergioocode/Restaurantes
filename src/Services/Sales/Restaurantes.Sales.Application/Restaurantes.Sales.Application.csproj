@@ -1,0 +1,13 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Orders\Restaurantes.Orders.Contracts\Restaurantes.Orders.Contracts.csproj" />
+    <ProjectReference Include="..\..\Payments\Restaurantes.Payments.Contracts\Restaurantes.Payments.Contracts.csproj" />
+    <ProjectReference Include="..\Restaurantes.Sales.Contracts\Restaurantes.Sales.Contracts.csproj" />
+    <ProjectReference Include="..\Restaurantes.Sales.Domain\Restaurantes.Sales.Domain.csproj" />
+  </ItemGroup>
+</Project>
