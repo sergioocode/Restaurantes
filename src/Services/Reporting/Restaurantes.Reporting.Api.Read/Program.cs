@@ -1,8 +1,8 @@
-﻿using Microsoft.EntityFrameworkCore;
-using Restaurantes.Messaging.RabbitMq;
+﻿using Restaurantes.Messaging.RabbitMq;
 using Restaurantes.Reporting.Api.Read;
-using Restaurantes.Reporting.Infrastructure.Persistence.Read;
-using Restaurantes.Reporting.Infrastructure.Queries;
+using Restaurantes.Reporting.Application.Dashboard;
+using Restaurantes.Reporting.Application.Health;
+using Restaurantes.Reporting.Infrastructure;
 using Restaurantes.Security;
 using Restaurantes.ServiceDefaults;
 
@@ -10,13 +10,10 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
-builder.Services.AddHttpClient();
-builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<DashboardQueryService>();
+builder.Services.AddScoped<ReportingHealthService>();
+builder.Services.AddReportingInfrastructure(builder.Configuration);
 builder.Services.AddRestaurantSecurity(builder.Configuration);
-builder.Services.AddDbContext<ReportingReadDbContext>(o =>
-    o.UseNpgsql(builder.Configuration.GetConnectionString("ReportingRead"))
-);
-builder.Services.AddScoped<ReportingQueries>();
 builder
     .Services.AddOptions<RabbitMqOptions>()
     .Bind(builder.Configuration.GetSection(RabbitMqOptions.SectionName))
@@ -31,12 +28,7 @@ builder
     .ValidateOnStart();
 builder.Services.AddHostedService<ReportingSignalRWorker>();
 WebApplication app = builder.Build();
-await using (AsyncServiceScope scope = app.Services.CreateAsyncScope())
-{
-    ReportingReadDbContext dbContext =
-        scope.ServiceProvider.GetRequiredService<ReportingReadDbContext>();
-    await dbContext.Database.MigrateAsync();
-}
+await app.Services.MigrateReportingDatabaseAsync();
 app.MapServiceDefaults();
 app.UseAuthentication();
 app.UseAuthorization();

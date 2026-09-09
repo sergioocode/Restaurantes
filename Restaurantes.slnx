@@ -69,6 +69,7 @@
   </Folder>
   <Folder Name="/src/Services/Reporting/">
     <Project Path="src/Services/Reporting/Restaurantes.Reporting.Api.Read/Restaurantes.Reporting.Api.Read.csproj" />
+    <Project Path="src/Services/Reporting/Restaurantes.Reporting.Application/Restaurantes.Reporting.Application.csproj" />
     <Project Path="src/Services/Reporting/Restaurantes.Reporting.Consumer/Restaurantes.Reporting.Consumer.csproj" />
     <Project Path="src/Services/Reporting/Restaurantes.Reporting.Contracts/Restaurantes.Reporting.Contracts.csproj" />
     <Project Path="src/Services/Reporting/Restaurantes.Reporting.Infrastructure/Restaurantes.Reporting.Infrastructure.csproj" />
