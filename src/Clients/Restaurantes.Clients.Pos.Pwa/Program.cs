@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Restaurantes.Clients.Pos.Pwa;
+using Restaurantes.Clients.Pos.Pwa.Api;
+using Restaurantes.Clients.Pos.Pwa.Realtime;
 
 WebAssemblyHostBuilder builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
