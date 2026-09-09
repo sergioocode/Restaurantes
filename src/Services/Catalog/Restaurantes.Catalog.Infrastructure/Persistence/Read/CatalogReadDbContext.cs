@@ -1,70 +1,7 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Restaurantes.Catalog.Infrastructure.Persistence.Read;
-
-public sealed class CategoryReadModel
-{
-    public Guid Id { get; set; }
-    public string Code { get; set; } = "";
-    public string Name { get; set; } = "";
-    public string DefaultStationCode { get; set; } = "";
-    public string DefaultStationName { get; set; } = "";
-    public bool IsActive { get; set; }
-    public int Version { get; set; }
-    public DateTime UpdatedAtUtc { get; set; }
-}
-
-public sealed class ProductReadModel
-{
-    public Guid Id { get; set; }
-    public string Sku { get; set; } = "";
-    public string Name { get; set; } = "";
-    public Guid CategoryId { get; set; }
-    public decimal BasePrice { get; set; }
-    public bool IsActive { get; set; }
-    public int Version { get; set; }
-    public DateTime UpdatedAtUtc { get; set; }
-}
-
-public sealed class MenuItemReadModel
-{
-    public Guid Id { get; set; }
-    public Guid RestaurantId { get; set; }
-    public Guid ProductId { get; set; }
-    public string Sku { get; set; } = "";
-    public string ProductName { get; set; } = "";
-    public Guid CategoryId { get; set; }
-    public string CategoryCode { get; set; } = "";
-    public string CategoryName { get; set; } = "";
-    public decimal Price { get; set; }
-    public bool IsAvailable { get; set; }
-    public string PreparationStationCode { get; set; } = "";
-    public string PreparationStationName { get; set; } = "";
-    public int Version { get; set; }
-    public DateTime UpdatedAtUtc { get; set; }
-}
-
-public sealed class KitchenStationReadModel
-{
-    public Guid Id { get; set; }
-    public Guid RestaurantId { get; set; }
-    public string Code { get; set; } = "";
-    public string Name { get; set; } = "";
-    public bool IsPrimary { get; set; }
-    public bool RequiresPrimaryDispatch { get; set; }
-    public int Priority { get; set; }
-    public bool IsActive { get; set; }
-    public int Version { get; set; }
-    public DateTime UpdatedAtUtc { get; set; }
-}
-
-public sealed class InboxMessage
-{
-    public Guid Id { get; set; }
-    public string Type { get; set; } = "";
-    public DateTime ProcessedAtUtc { get; set; }
-}
 
 public sealed class CatalogReadDbContext(DbContextOptions<CatalogReadDbContext> options)
     : DbContext(options)
