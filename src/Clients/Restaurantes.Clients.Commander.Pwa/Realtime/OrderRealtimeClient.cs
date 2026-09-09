@@ -1,15 +1,8 @@
-﻿using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.AspNetCore.SignalR.Client;
+using Restaurantes.Clients.Commander.Pwa.Api;
+using Restaurantes.Clients.Commander.Pwa.Models;
 
-namespace Restaurantes.Clients.Commander.Pwa;
-
-public sealed record OrderRealtimeNotification(
-    Guid OrderId,
-    Guid RestaurantId,
-    string Status,
-    int Version,
-    DateTime OccurredAtUtc,
-    IReadOnlyList<string> StationCodes
-);
+namespace Restaurantes.Clients.Commander.Pwa.Realtime;
 
 public sealed class OrderRealtimeClient(HttpClient http, CommanderApi api) : IAsyncDisposable
 {

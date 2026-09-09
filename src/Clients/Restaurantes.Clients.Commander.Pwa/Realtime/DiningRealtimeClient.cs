@@ -1,15 +1,8 @@
-﻿using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.AspNetCore.SignalR.Client;
+using Restaurantes.Clients.Commander.Pwa.Api;
+using Restaurantes.Clients.Commander.Pwa.Models;
 
-namespace Restaurantes.Clients.Commander.Pwa;
-
-public sealed record DiningTableChangedNotification(
-    Guid RestaurantId,
-    Guid TableId,
-    string Status,
-    Guid? ActiveSessionId,
-    string Source,
-    DateTime OccurredAtUtc
-);
+namespace Restaurantes.Clients.Commander.Pwa.Realtime;
 
 public sealed class DiningRealtimeClient(HttpClient http, CommanderApi api) : IAsyncDisposable
 {
