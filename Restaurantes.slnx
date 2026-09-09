@@ -26,6 +26,10 @@
   <Folder Name="/src/Services/" />
   <Folder Name="/src/Services/CashRegister/">
     <Project Path="src/Services/CashRegister/Restaurantes.CashRegister.Api/Restaurantes.CashRegister.Api.csproj" />
+    <Project Path="src/Services/CashRegister/Restaurantes.CashRegister.Application/Restaurantes.CashRegister.Application.csproj" />
+    <Project Path="src/Services/CashRegister/Restaurantes.CashRegister.Consumer/Restaurantes.CashRegister.Consumer.csproj" />
+    <Project Path="src/Services/CashRegister/Restaurantes.CashRegister.Domain/Restaurantes.CashRegister.Domain.csproj" />
+    <Project Path="src/Services/CashRegister/Restaurantes.CashRegister.Infrastructure/Restaurantes.CashRegister.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/src/Services/Catalog/">
     <Project Path="src/Services/Catalog/Restaurantes.Catalog.Api.Write/Restaurantes.Catalog.Api.Write.csproj" />

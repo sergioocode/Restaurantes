@@ -1,75 +1,8 @@
-﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Restaurantes.CashRegister.Domain;
 
-namespace Restaurantes.CashRegister.Api;
-
-public enum CashRegisterStatus
-{
-    Open,
-    Closed,
-    Expired,
-}
-
-public enum CashMovementType
-{
-    Sale,
-    Refund,
-}
-
-public sealed class CashRegisterSession
-{
-    public Guid Id { get; set; }
-    public Guid RestaurantId { get; set; }
-    public DateOnly BusinessDate { get; set; }
-    public CashRegisterStatus Status { get; set; }
-    public decimal OpeningFloat { get; set; }
-    public DateTime OpenedAtUtc { get; set; }
-    public Guid OpenedByUserId { get; set; }
-    public string OpenedByName { get; set; } = string.Empty;
-    public DateTime? ClosedAtUtc { get; set; }
-    public Guid? ClosedByUserId { get; set; }
-    public string? ClosedByName { get; set; }
-    public decimal? CountedCash { get; set; }
-    public decimal? ExpectedCashAtClose { get; set; }
-    public decimal? DifferenceAtClose { get; set; }
-    public decimal? ExpectedTotalAtClose { get; set; }
-    public decimal? ReconciledTotalAtClose { get; set; }
-    public int Version { get; set; } = 1;
-    public List<CashMovement> Movements { get; set; } = [];
-    public List<CashRegisterReconciliation> Reconciliations { get; set; } = [];
-}
-
-public sealed class CashRegisterReconciliation
-{
-    public Guid Id { get; set; }
-    public Guid CashRegisterSessionId { get; set; }
-    public CashRegisterSession Session { get; set; } = null!;
-    public string Method { get; set; } = string.Empty;
-    public decimal ExpectedAmount { get; set; }
-    public decimal ReconciledAmount { get; set; }
-    public decimal Difference { get; set; }
-}
-
-public sealed class CashMovement
-{
-    public Guid Id { get; set; }
-    public Guid CashRegisterSessionId { get; set; }
-    public CashRegisterSession Session { get; set; } = null!;
-    public Guid PaymentId { get; set; }
-    public Guid OrderId { get; set; }
-    public CashMovementType Type { get; set; }
-    public string Method { get; set; } = string.Empty;
-    public decimal Amount { get; set; }
-    public string Reference { get; set; } = string.Empty;
-    public DateTime OccurredAtUtc { get; set; }
-}
-
-public sealed class CashRegisterInboxMessage
-{
-    public Guid Id { get; set; }
-    public DateTime ProcessedAtUtc { get; set; }
-}
+namespace Restaurantes.CashRegister.Infrastructure.Persistence;
 
 public sealed class CashRegisterDbContext(DbContextOptions<CashRegisterDbContext> options)
     : DbContext(options)
@@ -96,6 +29,7 @@ public sealed class CashRegisterDbContext(DbContextOptions<CashRegisterDbContext
         session.Property(x => x.OpenedByName).HasMaxLength(120).IsRequired();
         session.Property(x => x.ClosedByName).HasMaxLength(120);
         session.Property(x => x.Version).IsConcurrencyToken();
+
         EntityTypeBuilder<CashMovement> movement = modelBuilder.Entity<CashMovement>();
         movement.ToTable("cash_movements");
         movement.HasKey(x => x.Id);
@@ -108,6 +42,7 @@ public sealed class CashRegisterDbContext(DbContextOptions<CashRegisterDbContext
             .HasOne(x => x.Session)
             .WithMany(x => x.Movements)
             .HasForeignKey(x => x.CashRegisterSessionId);
+
         EntityTypeBuilder<CashRegisterReconciliation> reconciliation =
             modelBuilder.Entity<CashRegisterReconciliation>();
         reconciliation.ToTable("cash_register_reconciliations");
@@ -123,20 +58,5 @@ public sealed class CashRegisterDbContext(DbContextOptions<CashRegisterDbContext
             .HasForeignKey(x => x.CashRegisterSessionId)
             .OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<CashRegisterInboxMessage>().ToTable("inbox_messages").HasKey(x => x.Id);
-    }
-}
-
-public sealed class CashRegisterDbContextFactory
-    : IDesignTimeDbContextFactory<CashRegisterDbContext>
-{
-    public CashRegisterDbContext CreateDbContext(string[] args)
-    {
-        return new(
-            new DbContextOptionsBuilder<CashRegisterDbContext>()
-                .UseNpgsql(
-                    "Host=localhost;Port=5432;Database=cash_register_write;Username=restaurants;Password=restaurants_dev"
-                )
-                .Options
-        );
     }
 }

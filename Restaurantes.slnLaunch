@@ -108,6 +108,10 @@
         "Action": "Start"
       },
       {
+        "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Consumer\\Restaurantes.CashRegister.Consumer.csproj",
+        "Action": "Start"
+      },
+      {
         "Path": "src\\ApiGateways\\Restaurantes.Gateway.Private\\Restaurantes.Gateway.Private.csproj",
         "Action": "Start"
       },
@@ -154,6 +158,10 @@
       },
       {
         "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Api\\Restaurantes.CashRegister.Api.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Consumer\\Restaurantes.CashRegister.Consumer.csproj",
         "Action": "Start"
       },
       {
@@ -219,6 +227,10 @@
       },
       {
         "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Api\\Restaurantes.CashRegister.Api.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Consumer\\Restaurantes.CashRegister.Consumer.csproj",
         "Action": "Start"
       },
       {
@@ -378,6 +390,10 @@
       },
       {
         "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Api\\Restaurantes.CashRegister.Api.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Consumer\\Restaurantes.CashRegister.Consumer.csproj",
         "Action": "Start"
       },
       {
