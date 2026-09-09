@@ -1,14 +1,13 @@
 ﻿using System.Net;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.EntityFrameworkCore;
 using Restaurantes.Dining.Api.Write;
-using Restaurantes.Messaging.RabbitMq;
+using Restaurantes.Dining.Application;
+using Restaurantes.Dining.Infrastructure;
 using Restaurantes.Security;
 using Restaurantes.ServiceDefaults;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
-builder.Services.AddSingleton(TimeProvider.System);
 string[] trustedProxyAddresses =
     builder.Configuration.GetSection("QrAccess:TrustedProxyAddresses").Get<string[]>() ?? [];
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
@@ -29,38 +28,22 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
         options.KnownProxies.Add(address);
     }
 });
-builder.Services.AddDbContext<DiningDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DiningWrite"))
-);
-builder
-    .Services.AddOptions<RabbitMqOptions>()
-    .Bind(builder.Configuration.GetSection(RabbitMqOptions.SectionName))
-    .Validate(x => x.Port > 0 && !string.IsNullOrWhiteSpace(x.HostName), "RabbitMq invalid")
-    .ValidateOnStart();
-builder.Services.AddHostedService<DiningIntegrationWorker>();
+builder.Services.AddScoped<DiningService>();
+builder.Services.AddScoped<DiningIntegrationService>();
+builder.Services.AddSingleton<IDiningAuthorization, DiningAuthorization>();
+builder.Services.AddDiningInfrastructure(builder.Configuration);
+builder.Services.AddScoped<IDiningNotifications, DiningNotifications>();
 builder.Services.AddRestaurantSecurity(builder.Configuration);
-builder.Services.AddCashRegisterAvailability(builder.Configuration);
+builder.Services.AddControllers();
 builder.Services.AddSignalR();
-builder.Services.AddHttpClient(
-    "payments",
-    client =>
-        client.BaseAddress = new Uri(
-            builder.Configuration["Payments:BaseAddress"]
-                ?? throw new InvalidOperationException("Payments:BaseAddress is required.")
-        )
-);
 
 WebApplication app = builder.Build();
-await using (AsyncServiceScope scope = app.Services.CreateAsyncScope())
-{
-    DiningDbContext db = scope.ServiceProvider.GetRequiredService<DiningDbContext>();
-    await db.Database.MigrateAsync();
-}
+await app.Services.MigrateDiningDatabaseAsync();
 
 app.MapServiceDefaults();
 app.UseForwardedHeaders();
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapDiningEndpoints();
+app.MapControllers();
 app.MapHub<DiningHub>("/hubs/dining");
 app.Run();
