@@ -1,22 +1,15 @@
-﻿using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.AspNetCore.SignalR.Client;
+using Restaurantes.Clients.Pos.Pwa.Api;
+using Restaurantes.Clients.Pos.Pwa.Models;
 
-namespace Restaurantes.Clients.Pos.Pwa;
+namespace Restaurantes.Clients.Pos.Pwa.Realtime;
 
-public sealed record OrderRealtimeNotification(
-    Guid OrderId,
-    Guid RestaurantId,
-    string Status,
-    int Version,
-    DateTime OccurredAtUtc,
-    IReadOnlyList<string> StationCodes
-);
-
-public sealed class OrderRealtimeClient(HttpClient http, PosApi api) : IAsyncDisposable
+public sealed class DiningRealtimeClient(HttpClient http, PosApi api) : IAsyncDisposable
 {
     private HubConnection? connection;
     private Guid restaurantId;
 
-    public event Func<OrderRealtimeNotification, Task>? OrderUpdated;
+    public event Func<DiningTableChangedNotification, Task>? TableChanged;
 
     public async Task ConnectAsync(Guid newRestaurantId)
     {
@@ -29,7 +22,7 @@ public sealed class OrderRealtimeClient(HttpClient http, PosApi api) : IAsyncDis
         {
             connection = new HubConnectionBuilder()
                 .WithUrl(
-                    new Uri(http.BaseAddress!, "/hubs/kds"),
+                    new Uri(http.BaseAddress!, "/hubs/dining"),
                     options =>
                         options.AccessTokenProvider = () =>
                             Task.FromResult<string?>(api.AccessToken)
@@ -40,12 +33,22 @@ public sealed class OrderRealtimeClient(HttpClient http, PosApi api) : IAsyncDis
                     TimeSpan.FromSeconds(5),
                 ])
                 .Build();
-            connection.On<OrderRealtimeNotification>("OrderUpdated", NotifyAsync);
+            connection.On<DiningTableChangedNotification>("TableChanged", NotifyAsync);
             connection.Reconnected += async _ =>
             {
                 if (restaurantId != Guid.Empty)
                 {
                     await connection.InvokeAsync("JoinRestaurant", restaurantId);
+                    await NotifyAsync(
+                        new DiningTableChangedNotification(
+                            restaurantId,
+                            Guid.Empty,
+                            string.Empty,
+                            null,
+                            "SignalRReconnect",
+                            DateTime.UtcNow
+                        )
+                    );
                 }
             };
             await connection.StartAsync();
@@ -74,13 +77,15 @@ public sealed class OrderRealtimeClient(HttpClient http, PosApi api) : IAsyncDis
         restaurantId = Guid.Empty;
     }
 
-    private async Task NotifyAsync(OrderRealtimeNotification notification)
+    private async Task NotifyAsync(DiningTableChangedNotification notification)
     {
-        if (notification.RestaurantId != restaurantId || OrderUpdated is null)
+        if (notification.RestaurantId != restaurantId || TableChanged is null)
         {
             return;
         }
-        foreach (Func<OrderRealtimeNotification, Task> handler in OrderUpdated.GetInvocationList())
+        foreach (
+            Func<DiningTableChangedNotification, Task> handler in TableChanged.GetInvocationList()
+        )
         {
             await handler(notification);
         }
