@@ -320,7 +320,7 @@ else
     StaffUserDraft userDraft = new();
 
     static readonly string[] LocalRoles = ["Manager", "PosComandero", "Kds"];
-    static readonly string[] GlobalRoles = ["Admin", "Gerente", "Oficina"];
+    static readonly string[] GlobalRoles = ["Admin", "Gerente", "Contabilidad", "Oficina"];
 
     bool IsAdmin => login?.GlobalRoles?.Contains("Admin") == true || login?.Restaurants.Any(x => x.Role == "Admin") == true;
     bool CanManageUsers => IsAdmin;
@@ -386,7 +386,7 @@ else
     string RestaurantNameWithId(Guid id) => $"{RestaurantName(id)} · {id}";
     static string DateValue(DateTime? value) => value?.ToString("yyyy-MM-dd") ?? string.Empty;
     static DateTime? ParseDate(object? value) => DateTime.TryParse(value?.ToString(), out DateTime date) ? DateTime.SpecifyKind(date, DateTimeKind.Utc) : null;
-    static string RoleLabel(string role) => role switch { "Admin" => "Administrador", "Gerente" => "Gerencia", "Oficina" => "Oficina", "Manager" => "Encargado de local", "PosComandero" => "Caja / Camarero", "Kds" => "Cocina", _ => role };
+    static string RoleLabel(string role) => role switch { "Admin" => "Administrador", "Gerente" => "Gerencia", "Contabilidad" => "Contabilidad", "Oficina" => "Oficina", "Manager" => "Encargado de local", "PosComandero" => "Caja / Camarero", "Kds" => "Cocina", _ => role };
     static string StatusLabel(string status) => status == "Occupied" ? "Ocupada" : "Disponible";
     void SelectStation(MenuEditor editor, ChangeEventArgs args) { KitchenStationResponse? station = stations.FirstOrDefault(x => x.Code == args.Value?.ToString()); if (station is null) return; editor.PreparationStationCode = station.Code; editor.PreparationStationName = station.Name; }
     void SelectCategoryStation(CategoryResponse categoryItem, ChangeEventArgs args) { KitchenStationResponse? station = stations.FirstOrDefault(x => x.Code == args.Value?.ToString()); if (station is null) return; categoryItem.DefaultStationCode = station.Code; categoryItem.DefaultStationName = station.Name; }

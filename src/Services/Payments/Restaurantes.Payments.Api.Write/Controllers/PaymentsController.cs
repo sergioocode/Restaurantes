@@ -208,7 +208,7 @@ public sealed class PaymentsController(
             return NotFound();
         }
 
-        if (!User.CanAccessRestaurant(payable.RestaurantId, RestaurantPermissions.PaymentsCapture))
+        if (!User.CanAccessRestaurant(payable.RestaurantId, RestaurantPermissions.PaymentsRefund))
         {
             return Forbid();
         }

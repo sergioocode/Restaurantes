@@ -13,13 +13,14 @@ public sealed class IdentityService(
     [
         "Admin",
         "Gerente",
+        "Contabilidad",
         "Oficina",
         "Manager",
         "PosComandero",
         "Kds",
     ];
 
-    private static readonly string[] GlobalRoles = ["Admin", "Gerente", "Oficina"];
+    private static readonly string[] GlobalRoles = ["Admin", "Gerente", "Contabilidad", "Oficina"];
     private static readonly string[] SingleRestaurantRoles = ["PosComandero", "Kds"];
 
     public async Task<IdentityResult> Login(LoginRequest request, CancellationToken ct)

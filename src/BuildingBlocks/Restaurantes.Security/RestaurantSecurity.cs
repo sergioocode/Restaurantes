@@ -34,6 +34,7 @@ public static class RestaurantPermissions
     public const string OrdersManage = "orders.manage";
     public const string OrdersRecover = "orders.recover";
     public const string PaymentsCapture = "payments.capture";
+    public const string PaymentsRefund = "payments.refund";
     public const string CashRegisterManage = "cash-register.manage";
     public const string CatalogManage = "catalog.manage";
     public const string CatalogGlobalManage = "catalog.global.manage";
@@ -58,6 +59,7 @@ public static class RestaurantPermissions
                 OrdersManage,
                 OrdersRecover,
                 PaymentsCapture,
+                PaymentsRefund,
                 CashRegisterManage,
                 CatalogManage,
                 CatalogGlobalManage,
@@ -67,7 +69,14 @@ public static class RestaurantPermissions
                 MarketingReportsRead,
                 KitchenReportsRead,
             ],
-            "Gerente" => [BackofficeAccess, DashboardRead, FinancialReportsRead],
+            "Gerente" => [BackofficeAccess, DashboardRead, FinancialReportsRead, PaymentsRefund],
+            "Contabilidad" =>
+            [
+                BackofficeAccess,
+                DashboardRead,
+                FinancialReportsRead,
+                PaymentsRefund,
+            ],
             "Oficina" =>
             [
                 BackofficeAccess,
@@ -187,7 +196,7 @@ public static class RestaurantSecurityExtensions
             return true;
         }
 
-        foreach (string globalRole in new[] { "Gerente", "Oficina" })
+        foreach (string globalRole in new[] { "Gerente", "Contabilidad", "Oficina" })
         {
             if (
                 user.IsInRole(globalRole)

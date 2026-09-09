@@ -15,13 +15,20 @@ public sealed class IdentitySeed(
     [
         "Admin",
         "Gerente",
+        "Contabilidad",
         "Oficina",
         "Manager",
         "PosComandero",
         "Kds",
     ];
 
-    private static readonly HashSet<string> GlobalRoles = ["Admin", "Gerente", "Oficina"];
+    private static readonly HashSet<string> GlobalRoles =
+    [
+        "Admin",
+        "Gerente",
+        "Contabilidad",
+        "Oficina",
+    ];
 
     private static readonly RestaurantSeed[] Restaurants =
     [
@@ -55,7 +62,7 @@ public sealed class IdentitySeed(
             "gerente.contabilidad",
             "Gerente-Contabilidad-2026!",
             "Gerente · Contabilidad",
-            "Gerente",
+            "Contabilidad",
             allRestaurantIds,
             ct
         );
@@ -134,21 +141,38 @@ public sealed class IdentitySeed(
             EnsureSucceeded(await users.CreateAsync(user, password));
         }
 
-        if (GlobalRoles.Contains(role) && !await users.IsInRoleAsync(user, role))
+        if (GlobalRoles.Contains(role))
         {
-            EnsureSucceeded(await users.AddToRoleAsync(user, role));
+            string[] obsoleteRoles =
+            [
+                .. (await users.GetRolesAsync(user)).Where(currentRole =>
+                    GlobalRoles.Contains(currentRole)
+                    && !string.Equals(currentRole, role, StringComparison.Ordinal)
+                ),
+            ];
+            if (obsoleteRoles.Length > 0)
+            {
+                EnsureSucceeded(await users.RemoveFromRolesAsync(user, obsoleteRoles));
+            }
+            if (!await users.IsInRoleAsync(user, role))
+            {
+                EnsureSucceeded(await users.AddToRoleAsync(user, role));
+            }
         }
 
-        HashSet<Guid> assignedRestaurantIds = await db
-            .RestaurantAccesses.AsNoTracking()
-            .Where(item => item.UserId == user.Id)
-            .Select(item => item.RestaurantId)
-            .ToHashSetAsync(ct);
+        Dictionary<Guid, UserRestaurantAssignment> assignments = await db
+            .RestaurantAccesses.Where(item => item.UserId == user.Id)
+            .ToDictionaryAsync(item => item.RestaurantId, ct);
         DateTime now = time.GetUtcNow().UtcDateTime;
         foreach (Guid restaurantId in restaurantIds)
         {
-            if (assignedRestaurantIds.Contains(restaurantId))
+            if (assignments.TryGetValue(restaurantId, out UserRestaurantAssignment? assignment))
+            {
+                assignment.Role = role;
+                assignment.IsActive = true;
+                assignment.ValidUntilUtc = null;
                 continue;
+            }
             db.RestaurantAccesses.Add(
                 new UserRestaurantAssignment
                 {
