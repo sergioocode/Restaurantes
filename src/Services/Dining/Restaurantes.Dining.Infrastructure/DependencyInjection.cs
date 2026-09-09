@@ -6,7 +6,6 @@ using Restaurantes.Dining.Application;
 using Restaurantes.Dining.Infrastructure.Integrations;
 using Restaurantes.Dining.Infrastructure.Persistence;
 using Restaurantes.Dining.Infrastructure.Stores;
-using Restaurantes.Security;
 
 namespace Restaurantes.Dining.Infrastructure;
 
@@ -32,8 +31,11 @@ public static class DependencyInjection
     {
         services.AddDiningPersistence(configuration);
         services.AddScoped<IDiningPayments, DiningPayments>();
-        services.AddScoped<IDiningCashRegister, DiningCashRegister>();
-        services.AddCashRegisterAvailability(configuration);
+        services.AddHttpClient<IDiningCashRegister, DiningCashRegister>(client =>
+            client.BaseAddress = new Uri(
+                configuration["CashRegister:BaseAddress"] ?? "http://localhost:5105"
+            )
+        );
         services.AddHttpClient(
             "payments",
             client =>

@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Restaurantes.Orders.Application;
+using Restaurantes.Orders.Infrastructure.Integrations;
 using Restaurantes.Orders.Infrastructure.Persistence.Read;
 using Restaurantes.Orders.Infrastructure.Persistence.Write;
 using Restaurantes.Orders.Infrastructure.Stores;
@@ -21,6 +22,11 @@ public static class DependencyInjection
         services.AddScoped<IOrderWriteStore, OrderWriteStore>();
         services.AddScoped<IOrderCatalogStore, OrderCatalogStore>();
         services.AddScoped<IOrderPaymentStore, OrderPaymentStore>();
+        services.AddHttpClient<IOrderCashRegister, OrderCashRegister>(client =>
+            client.BaseAddress = new Uri(
+                configuration["CashRegister:BaseAddress"] ?? "http://localhost:5105"
+            )
+        );
         return services;
     }
 

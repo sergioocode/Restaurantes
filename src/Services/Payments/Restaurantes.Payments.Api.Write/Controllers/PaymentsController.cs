@@ -13,8 +13,8 @@ namespace Restaurantes.Payments.Api.Write.Controllers;
 public sealed class PaymentsController(
     PaymentCommandService service,
     IPaymentWriteStore store,
-    CustomerDiningSessionValidator dining,
-    CashRegisterAvailabilityClient cashRegister
+    ICustomerDiningSessionValidator dining,
+    IPaymentCashRegister cashRegister
 ) : ControllerBase
 {
     private const int TooEarlyStatusCode = 425;
@@ -56,7 +56,7 @@ public sealed class PaymentsController(
         {
             await cashRegister.EnsureOpenAsync(payable.RestaurantId, ct);
         }
-        catch (CashRegisterClosedException e)
+        catch (PaymentCashRegisterClosedException e)
         {
             return Conflict(
                 new ProblemDetails
@@ -157,7 +157,7 @@ public sealed class PaymentsController(
         {
             await cashRegister.EnsureOpenAsync(payable.RestaurantId, ct);
         }
-        catch (CashRegisterClosedException e)
+        catch (PaymentCashRegisterClosedException e)
         {
             return Conflict(
                 new ProblemDetails
@@ -217,7 +217,7 @@ public sealed class PaymentsController(
         {
             await cashRegister.EnsureOpenAsync(payable.RestaurantId, ct);
         }
-        catch (CashRegisterClosedException e)
+        catch (PaymentCashRegisterClosedException e)
         {
             return Conflict(
                 new ProblemDetails
