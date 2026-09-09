@@ -1,6 +1,7 @@
 ﻿using System.Net;
 using Microsoft.AspNetCore.HttpOverrides;
 using Restaurantes.Dining.Api.Write;
+using Restaurantes.Dining.Api.Write.Realtime;
 using Restaurantes.Dining.Application;
 using Restaurantes.Dining.Infrastructure;
 using Restaurantes.Security;

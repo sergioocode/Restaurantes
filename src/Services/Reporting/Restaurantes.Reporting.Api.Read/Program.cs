@@ -1,5 +1,5 @@
 ﻿using Restaurantes.Messaging.RabbitMq;
-using Restaurantes.Reporting.Api.Read;
+using Restaurantes.Reporting.Api.Read.Realtime;
 using Restaurantes.Reporting.Application.Dashboard;
 using Restaurantes.Reporting.Application.Health;
 using Restaurantes.Reporting.Infrastructure;
