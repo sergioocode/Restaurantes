@@ -6,7 +6,11 @@ namespace Restaurantes.Dining.Api.Write;
 
 public sealed class DiningAuthorization : IDiningAuthorization
 {
-    public bool CanAccessRestaurant(ClaimsPrincipal principal, Guid restaurantId, DiningPermission permission)
+    public bool CanAccessRestaurant(
+        ClaimsPrincipal principal,
+        Guid restaurantId,
+        DiningPermission permission
+    )
     {
         string requiredPermission = permission switch
         {

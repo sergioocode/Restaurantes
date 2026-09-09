@@ -27,10 +27,7 @@ public sealed partial class DiningService
             );
         bool customer =
             session.Source == "CustomerQr"
-            && TokenEquals(
-                session.CustomerAccessToken,
-                http.CustomerSessionToken
-            );
+            && TokenEquals(session.CustomerAccessToken, http.CustomerSessionToken);
         if (!staff && !customer)
         {
             return DiningResults.Unauthorized();

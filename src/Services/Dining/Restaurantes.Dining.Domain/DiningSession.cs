@@ -24,8 +24,10 @@ public sealed class DiningSession
     public bool CanCheckout(bool allowBeforeKitchenCompletion) =>
         Status == "Open"
         && Orders.Count > 0
-        && (allowBeforeKitchenCompletion
-            || Orders.All(x => x.OrderStatus is "Ready" or "Delivered" or "Cancelled"));
+        && (
+            allowBeforeKitchenCompletion
+            || Orders.All(x => x.OrderStatus is "Ready" or "Delivered" or "Cancelled")
+        );
 
     public void CompleteCheckout(Guid idempotencyKey, string method, DateTime now)
     {

@@ -16,12 +16,21 @@ public sealed partial class DiningService
         {
             return DiningResults.NotFound();
         }
-        if (!access.CanAccessRestaurant(principal, session.RestaurantId, DiningPermission.TablesRead))
+        if (
+            !access.CanAccessRestaurant(
+                principal,
+                session.RestaurantId,
+                DiningPermission.TablesRead
+            )
+        )
         {
             return DiningResults.Forbid();
         }
 
-        bool allowCheckoutBeforeKitchenCompletion = await db.AllowsEarlyCheckoutAsync(session.RestaurantId, ct);
+        bool allowCheckoutBeforeKitchenCompletion = await db.AllowsEarlyCheckoutAsync(
+            session.RestaurantId,
+            ct
+        );
         return DiningResults.Ok(BillResponse(session, allowCheckoutBeforeKitchenCompletion));
     }
 
@@ -66,10 +75,15 @@ public sealed partial class DiningService
         }
         if (session.Orders.Count == 0)
         {
-            return DiningResults.Conflict(new { detail = "The dining session has no projected orders." });
+            return DiningResults.Conflict(
+                new { detail = "The dining session has no projected orders." }
+            );
         }
 
-        bool allowCheckoutBeforeKitchenCompletion = await db.AllowsEarlyCheckoutAsync(session.RestaurantId, ct);
+        bool allowCheckoutBeforeKitchenCompletion = await db.AllowsEarlyCheckoutAsync(
+            session.RestaurantId,
+            ct
+        );
         if (!allowCheckoutBeforeKitchenCompletion)
         {
             Guid[] notDelivered = session

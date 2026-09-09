@@ -7,6 +7,4 @@ public sealed partial class DiningService(
     IDiningNotifications realtime,
     IDiningAuthorization access,
     TimeProvider time
-)
-{
-}
+) { }

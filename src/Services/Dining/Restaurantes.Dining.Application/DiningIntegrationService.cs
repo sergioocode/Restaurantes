@@ -61,7 +61,10 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
             return;
         }
 
-        DiningSession? session = await db.FindSessionWithOrdersAsync(e.DiningSessionId.Value, CancellationToken.None);
+        DiningSession? session = await db.FindSessionWithOrdersAsync(
+            e.DiningSessionId.Value,
+            CancellationToken.None
+        );
         if (session is null)
         {
             throw new JsonException($"Dining session '{e.DiningSessionId}' does not exist.");
@@ -237,5 +240,4 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
             pending.UpdatedAtUtc = occurredAtUtc;
         }
     }
-
 }

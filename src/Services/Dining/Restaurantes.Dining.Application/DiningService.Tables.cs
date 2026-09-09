@@ -48,7 +48,10 @@ public sealed partial class DiningService
         {
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
-            return DiningResults.Created($"/api/dining/tables/{table.Id}", TableResponse(table, null));
+            return DiningResults.Created(
+                $"/api/dining/tables/{table.Id}",
+                TableResponse(table, null)
+            );
         }
         catch (DiningStoreException e) when (e.Failure == DiningStoreFailure.Duplicate)
         {
@@ -78,14 +81,22 @@ public sealed partial class DiningService
             return DiningResults.NotFound();
         }
 
-        if (!access.CanAccessRestaurant(principal, table.RestaurantId, DiningPermission.TablesManage))
+        if (
+            !access.CanAccessRestaurant(
+                principal,
+                table.RestaurantId,
+                DiningPermission.TablesManage
+            )
+        )
         {
             return DiningResults.Forbid();
         }
         bool occupied = await db.HasOpenSessionAsync(tableId, ct);
         if (occupied && !request.IsActive)
         {
-            return DiningResults.Conflict(new { detail = "An occupied location cannot be disabled." });
+            return DiningResults.Conflict(
+                new { detail = "An occupied location cannot be disabled." }
+            );
         }
         DiningZone? zone = await db.LockZoneAsync(table.RestaurantId, request.ZoneId, ct);
         if (zone is null || zone.DeletedAtUtc is not null)
@@ -130,7 +141,9 @@ public sealed partial class DiningService
 
         Dictionary<Guid, DiningSession> active = await db.ReadActiveSessionsAsync(restaurantId, ct);
         List<RestaurantTable> tables = await db.ListTablesAsync(restaurantId, ct);
-        return DiningResults.Ok(tables.Select(x => TableResponse(x, active.GetValueOrDefault(x.Id))));
+        return DiningResults.Ok(
+            tables.Select(x => TableResponse(x, active.GetValueOrDefault(x.Id)))
+        );
     }
 
     public async Task<DiningResult> RotateQr(
@@ -146,7 +159,13 @@ public sealed partial class DiningService
             return DiningResults.NotFound();
         }
 
-        if (!access.CanAccessRestaurant(principal, table.RestaurantId, DiningPermission.TablesManage))
+        if (
+            !access.CanAccessRestaurant(
+                principal,
+                table.RestaurantId,
+                DiningPermission.TablesManage
+            )
+        )
         {
             return DiningResults.Forbid();
         }

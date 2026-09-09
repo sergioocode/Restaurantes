@@ -3,8 +3,9 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 using Restaurantes.Dining.Application;
 using Restaurantes.Dining.Domain;
+using Restaurantes.Dining.Infrastructure.Persistence;
 
-namespace Restaurantes.Dining.Infrastructure.Persistence.Stores;
+namespace Restaurantes.Dining.Infrastructure.Stores;
 
 public sealed class DiningStore(DiningDbContext db) : IDiningStore
 {
@@ -68,7 +69,10 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
         return db.RestaurantPolicies.SingleOrDefaultAsync(x => x.RestaurantId == restaurantId, ct);
     }
 
-    public Task<Dictionary<Guid, DiningSession>> ReadActiveSessionsAsync(Guid restaurantId, CancellationToken ct)
+    public Task<Dictionary<Guid, DiningSession>> ReadActiveSessionsAsync(
+        Guid restaurantId,
+        CancellationToken ct
+    )
     {
         return db
             .Sessions.AsNoTracking()
@@ -110,7 +114,12 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
             .SingleOrDefaultAsync(x => x.Id == sessionId, ct);
     }
 
-    public Task<DiningSession?> ReadValidatedSessionAsync(Guid sessionId, Guid restaurantId, Guid tableId, CancellationToken ct)
+    public Task<DiningSession?> ReadValidatedSessionAsync(
+        Guid sessionId,
+        Guid restaurantId,
+        Guid tableId,
+        CancellationToken ct
+    )
     {
         return db
             .Sessions.AsNoTracking()
@@ -135,9 +144,7 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
 
     public Task<DiningSession?> FindSessionWithOrdersAsync(Guid sessionId, CancellationToken ct)
     {
-        return db
-            .Sessions.Include(x => x.Orders)
-            .SingleOrDefaultAsync(x => x.Id == sessionId, ct);
+        return db.Sessions.Include(x => x.Orders).SingleOrDefaultAsync(x => x.Id == sessionId, ct);
     }
 
     public Task<List<DiningZone>> ListZonesAsync(Guid restaurantId, CancellationToken ct)
@@ -170,13 +177,16 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
     public Task<bool> HasTablesInZoneAsync(Guid restaurantId, Guid zoneId, CancellationToken ct)
     {
         return db.Tables.AnyAsync(
-                x => x.ZoneId == zoneId && x.RestaurantId == restaurantId && x.DeletedAtUtc == null,
-                ct
-            );
+            x => x.ZoneId == zoneId && x.RestaurantId == restaurantId && x.DeletedAtUtc == null,
+            ct
+        );
     }
 
-    public void Add<T>(T entity) where T : class => db.Add(entity);
+    public void Add<T>(T entity)
+        where T : class => db.Add(entity);
+
     public void Detach(DiningSession session) => db.Entry(session).State = EntityState.Detached;
+
     public Task LoadOrdersAsync(DiningSession session, CancellationToken ct) =>
         db.Entry(session).Collection(x => x.Orders).LoadAsync(ct);
 
@@ -184,15 +194,20 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
         db.InboxMessages.AnyAsync(x => x.Id == messageId, ct);
 
     public void MarkMessageProcessed(Guid messageId, DateTime processedAtUtc) =>
-        db.InboxMessages.Add(new DiningInboxMessage { Id = messageId, ProcessedAtUtc = processedAtUtc });
+        db.InboxMessages.Add(
+            new DiningInboxMessage { Id = messageId, ProcessedAtUtc = processedAtUtc }
+        );
 
     public Task<DiningSessionOrder?> FindOrderAsync(Guid orderId, CancellationToken ct = default) =>
         db.SessionOrders.SingleOrDefaultAsync(x => x.OrderId == orderId, ct);
 
-    public Task<DiningPendingPayment?> FindPendingPaymentAsync(Guid orderId, CancellationToken ct = default) =>
-        db.PendingPayments.SingleOrDefaultAsync(x => x.OrderId == orderId, ct);
+    public Task<DiningPendingPayment?> FindPendingPaymentAsync(
+        Guid orderId,
+        CancellationToken ct = default
+    ) => db.PendingPayments.SingleOrDefaultAsync(x => x.OrderId == orderId, ct);
 
-    public void RemovePendingPayment(DiningPendingPayment payment) => db.PendingPayments.Remove(payment);
+    public void RemovePendingPayment(DiningPendingPayment payment) =>
+        db.PendingPayments.Remove(payment);
 
     public async Task SaveChangesAsync(CancellationToken ct = default)
     {
@@ -204,11 +219,13 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
         {
             throw new DiningStoreException(DiningStoreFailure.Concurrency, e);
         }
-        catch (DbUpdateException e) when (e.InnerException is PostgresException { SqlState: "23505" })
+        catch (DbUpdateException e)
+            when (e.InnerException is PostgresException { SqlState: "23505" })
         {
             throw new DiningStoreException(DiningStoreFailure.Duplicate, e);
         }
-        catch (DbUpdateException e) when (e.InnerException is PostgresException { SqlState: "23503" })
+        catch (DbUpdateException e)
+            when (e.InnerException is PostgresException { SqlState: "23503" })
         {
             throw new DiningStoreException(DiningStoreFailure.ForeignKey, e);
         }
@@ -220,7 +237,9 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
     private sealed class DiningTransaction(IDbContextTransaction transaction) : IDiningTransaction
     {
         public Task CommitAsync(CancellationToken ct) => transaction.CommitAsync(ct);
+
         public Task RollbackAsync(CancellationToken ct) => transaction.RollbackAsync(ct);
+
         public ValueTask DisposeAsync() => transaction.DisposeAsync();
     }
 }

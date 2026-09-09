@@ -52,7 +52,9 @@ public sealed partial class DiningService
         }
 
         DiningZone? zone = await db.FindZoneAsync(restaurantId, zoneId, ct);
-        return zone is null ? DiningResults.NotFound() : await SaveZone(zone, request, db, false, ct);
+        return zone is null
+            ? DiningResults.NotFound()
+            : await SaveZone(zone, request, db, false, ct);
     }
 
     private static async Task<DiningResult> SaveZone(

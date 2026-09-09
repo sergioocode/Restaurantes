@@ -19,7 +19,13 @@ public sealed partial class DiningService
             return DiningResults.NotFound();
         }
 
-        if (!access.CanAccessRestaurant(principal, table.RestaurantId, DiningPermission.TablesManage))
+        if (
+            !access.CanAccessRestaurant(
+                principal,
+                table.RestaurantId,
+                DiningPermission.TablesManage
+            )
+        )
         {
             return DiningResults.Forbid();
         }
