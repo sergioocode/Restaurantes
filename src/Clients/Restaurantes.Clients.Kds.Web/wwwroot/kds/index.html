@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
@@ -184,7 +184,7 @@
         if (stationSelect.value === primaryStationCode) {
           article.append(renderChefPasses(order));
         }
-        if (action || canRecover(order)) {
+        if (action || canConfirmDelivery(order)) {
           const actions = document.createElement('div');
           actions.className = 'actions';
           if (action) {
@@ -193,15 +193,11 @@
             actionButton.addEventListener('click', () => advanceOrder(order, action, actionButton));
             actions.append(actionButton);
           }
-          if (canRecover(order)) {
+          if (canConfirmDelivery(order)) {
             const deliverButton = document.createElement('button');
             deliverButton.textContent = 'Entregado · resolver incidencia';
             deliverButton.addEventListener('click', () => recoverDelivery(order, deliverButton));
-            const cancelButton = document.createElement('button');
-            cancelButton.className = 'danger';
-            cancelButton.textContent = 'Cancelar incidencia';
-            cancelButton.addEventListener('click', () => cancelIncident(order, cancelButton));
-            actions.append(deliverButton, cancelButton);
+            actions.append(deliverButton);
           }
           article.append(actions);
         }
@@ -308,7 +304,7 @@
       return 'Listo hace ' + hours + ' h ' + (minutes % 60) + ' min';
     }
 
-    function canRecover(order) {
+    function canConfirmDelivery(order) {
       if (order.serviceMode !== 'Takeaway' || order.status !== 'Ready') return false;
       const access = restaurantAccesses.find(item => item.restaurantId === restaurantSelect.value);
       return Boolean(access?.permissions?.includes('orders.recover'));
@@ -347,49 +343,6 @@
     async function recoverDelivery(order, button) {
       if (!confirm('Confirma que el pedido de ' + (order.customerName || 'este cliente') + ' ya fue entregado.')) return;
       await advanceOrder(order, { path: 'deliver', label: button.textContent }, button);
-    }
-
-    async function cancelIncident(order, button) {
-      const reason = prompt('Motivo de cancelación (quedará registrado):', 'Pedido de prueba o incidencia operativa');
-      if (!reason || reason.trim().length < 3) return;
-      if (!confirm('Esta acción devolverá el pago si existe y cancelará definitivamente el pedido. ¿Continuar?')) return;
-
-      button.disabled = true;
-      eventText.textContent = 'Resolviendo la incidencia y comprobando el pago…';
-      try {
-        const refund = await apiFetch('/api/payments/orders/' + order.id + '/refund', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reason: reason.trim() })
-        });
-        if (!refund.ok && refund.status !== 404 && refund.status !== 409) {
-          throw new Error('No se pudo devolver el pago: HTTP ' + refund.status);
-        }
-
-        let cancelled = false;
-        for (let attempt = 0; attempt < 20 && !cancelled; attempt++) {
-          const response = await apiFetch('/api/orders/' + order.id + '/cancel', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ reason: reason.trim() })
-          });
-          if (response.ok) {
-            cancelled = true;
-            break;
-          }
-          if (response.status !== 409) {
-            throw new Error('No se pudo cancelar el pedido: HTTP ' + response.status);
-          }
-          await new Promise(resolve => setTimeout(resolve, 250));
-        }
-        if (!cancelled) throw new Error('La devolución aún no se ha proyectado. Reintenta en unos segundos.');
-        eventText.textContent = 'Pedido cancelado con trazabilidad; esperando actualización…';
-        await new Promise(resolve => setTimeout(resolve, 200));
-        await loadOrders();
-      } catch (error) {
-        eventText.textContent = error.message;
-        button.disabled = false;
-      }
     }
 
     function send(currentSocket, message) {
