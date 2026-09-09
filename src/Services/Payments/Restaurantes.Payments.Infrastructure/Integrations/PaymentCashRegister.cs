@@ -1,9 +1,9 @@
 using System.Net.Http.Json;
-using Restaurantes.Dining.Application;
+using Restaurantes.Payments.Application;
 
-namespace Restaurantes.Dining.Infrastructure.Integrations;
+namespace Restaurantes.Payments.Infrastructure.Integrations;
 
-public sealed class DiningCashRegister(HttpClient httpClient) : IDiningCashRegister
+public sealed class PaymentCashRegister(HttpClient httpClient) : IPaymentCashRegister
 {
     public async Task EnsureOpenAsync(Guid restaurantId, CancellationToken cancellationToken)
     {
@@ -21,9 +21,7 @@ public sealed class DiningCashRegister(HttpClient httpClient) : IDiningCashRegis
             );
         if (!availability.IsOpen)
         {
-            throw new DiningCashRegisterClosedException(
-                $"La caja del local '{restaurantId}' está cerrada. Ábrela antes de iniciar una mesa."
-            );
+            throw new PaymentCashRegisterClosedException(restaurantId);
         }
     }
 

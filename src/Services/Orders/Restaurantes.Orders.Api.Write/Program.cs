@@ -13,7 +13,6 @@ builder.Services.AddScoped<OrderCommandService>();
 builder.Services.AddOrdersWriteInfrastructure(builder.Configuration);
 builder.Services.AddDiningSessionClient(builder.Configuration);
 builder.Services.AddRestaurantSecurity(builder.Configuration);
-builder.Services.AddCashRegisterAvailability(builder.Configuration);
 
 WebApplication app = builder.Build();
 await using (AsyncServiceScope scope = app.Services.CreateAsyncScope())

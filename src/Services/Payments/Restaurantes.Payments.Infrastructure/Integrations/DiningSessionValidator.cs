@@ -1,8 +1,9 @@
-﻿using System.Net;
+using System.Net;
+using Restaurantes.Payments.Application;
 
-namespace Restaurantes.Payments.Api.Write;
+namespace Restaurantes.Payments.Infrastructure.Integrations;
 
-public sealed class CustomerDiningSessionValidator(HttpClient http)
+public sealed class DiningSessionValidator(HttpClient httpClient) : ICustomerDiningSessionValidator
 {
     public async Task<bool> IsValidAsync(
         Guid sessionId,
@@ -10,7 +11,7 @@ public sealed class CustomerDiningSessionValidator(HttpClient http)
         Guid tableId,
         string serviceMode,
         string customerAccessToken,
-        CancellationToken ct
+        CancellationToken cancellationToken
     )
     {
         string path =
@@ -21,7 +22,10 @@ public sealed class CustomerDiningSessionValidator(HttpClient http)
         request.Headers.Add("X-Customer-Session-Token", customerAccessToken);
         try
         {
-            using HttpResponseMessage response = await http.SendAsync(request, ct);
+            using HttpResponseMessage response = await httpClient.SendAsync(
+                request,
+                cancellationToken
+            );
             return response.StatusCode == HttpStatusCode.NoContent;
         }
         catch (HttpRequestException)

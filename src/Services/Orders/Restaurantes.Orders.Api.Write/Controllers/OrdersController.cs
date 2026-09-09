@@ -15,7 +15,7 @@ public sealed class OrdersController(
     OrderCommandService commandService,
     IOrderWriteStore store,
     IDiningSessionStore dining,
-    CashRegisterAvailabilityClient cashRegister
+    IOrderCashRegister cashRegister
 ) : ControllerBase
 {
     [HttpPost]
@@ -51,7 +51,7 @@ public sealed class OrdersController(
             );
             return Accepted($"/api/orders/{order.Id}", order);
         }
-        catch (CashRegisterClosedException exception)
+        catch (OrderCashRegisterClosedException exception)
         {
             return Conflict(
                 new ProblemDetails

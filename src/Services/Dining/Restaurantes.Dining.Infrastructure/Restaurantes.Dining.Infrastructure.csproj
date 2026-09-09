@@ -5,6 +5,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.4" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.4">
       <PrivateAssets>all</PrivateAssets>
@@ -15,6 +18,5 @@
   <ItemGroup>
     <ProjectReference Include="..\Restaurantes.Dining.Application\Restaurantes.Dining.Application.csproj" />
     <ProjectReference Include="..\Restaurantes.Dining.Domain\Restaurantes.Dining.Domain.csproj" />
-    <ProjectReference Include="..\..\..\BuildingBlocks\Restaurantes.Security\Restaurantes.Security.csproj" />
   </ItemGroup>
 </Project>
