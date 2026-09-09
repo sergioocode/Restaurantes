@@ -20,10 +20,7 @@ public sealed partial class DiningService
         DiningRestaurantPolicy? policy = await db.ReadPolicyAsync(table.RestaurantId, ct);
         if (
             policy?.RequireTrustedNetworkForQr == true
-            && !QrNetworkAccess.IsAllowed(
-                httpContext.RemoteIpAddress,
-                policy.QrAllowedNetworks
-            )
+            && !QrNetworkAccess.IsAllowed(httpContext.RemoteIpAddress, policy.QrAllowedNetworks)
         )
         {
             return DiningResults.Problem(
@@ -36,10 +33,7 @@ public sealed partial class DiningService
         // Only the holder of this session's token may recover its private account.
         return
             session?.Source == "CustomerQr"
-            && TokenEquals(
-                session.CustomerAccessToken,
-                httpContext.CustomerSessionToken
-            )
+            && TokenEquals(session.CustomerAccessToken, httpContext.CustomerSessionToken)
             ? DiningResults.Ok(QrSessionResponse(table, session, policy))
             : DiningResults.Ok(
                 new
@@ -91,10 +85,7 @@ public sealed partial class DiningService
         DiningRestaurantPolicy? policy = await db.ReadPolicyAsync(table.RestaurantId, ct);
         if (
             policy?.RequireTrustedNetworkForQr == true
-            && !QrNetworkAccess.IsAllowed(
-                httpContext.RemoteIpAddress,
-                policy.QrAllowedNetworks
-            )
+            && !QrNetworkAccess.IsAllowed(httpContext.RemoteIpAddress, policy.QrAllowedNetworks)
         )
         {
             return DiningResults.Problem(
@@ -156,7 +147,9 @@ public sealed partial class DiningService
             await transaction.RollbackAsync(ct);
             db.Detach(session);
             existing = await db.ReadActiveSessionWithOrdersAsync(table.Id, ct);
-            return DiningResults.Conflict(new { detail = "This table already has an open session." });
+            return DiningResults.Conflict(
+                new { detail = "This table already has an open session." }
+            );
         }
     }
 }

@@ -1,6 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
 using Restaurantes.Dining.Domain;
 
 namespace Restaurantes.Dining.Infrastructure.Persistence;

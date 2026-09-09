@@ -19,7 +19,13 @@ public sealed partial class DiningService
             return DiningResults.NotFound();
         }
 
-        if (!access.CanAccessRestaurant(principal, table.RestaurantId, DiningPermission.OrdersCreate))
+        if (
+            !access.CanAccessRestaurant(
+                principal,
+                table.RestaurantId,
+                DiningPermission.OrdersCreate
+            )
+        )
         {
             return DiningResults.Forbid();
         }
@@ -53,7 +59,10 @@ public sealed partial class DiningService
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
             await PublishTableChanged(realtime, session, "Occupied", time);
-            return DiningResults.Created($"/api/dining/sessions/{session.Id}", SessionResponse(session));
+            return DiningResults.Created(
+                $"/api/dining/sessions/{session.Id}",
+                SessionResponse(session)
+            );
         }
         catch (DiningStoreException e) when (e.Failure == DiningStoreFailure.Duplicate)
         {
@@ -71,7 +80,11 @@ public sealed partial class DiningService
     {
         DiningSession? session = await db.ReadActiveSessionWithOrdersAsync(tableId, ct);
         return session is null ? DiningResults.NotFound()
-            : access.CanAccessRestaurant(principal, session.RestaurantId, DiningPermission.TablesRead)
+            : access.CanAccessRestaurant(
+                principal,
+                session.RestaurantId,
+                DiningPermission.TablesRead
+            )
                 ? DiningResults.Ok(SessionResponse(session))
             : DiningResults.Forbid();
     }
@@ -84,7 +97,11 @@ public sealed partial class DiningService
     {
         DiningSession? session = await db.ReadSessionWithOrdersAsync(sessionId, ct);
         return session is null ? DiningResults.NotFound()
-            : access.CanAccessRestaurant(principal, session.RestaurantId, DiningPermission.TablesRead)
+            : access.CanAccessRestaurant(
+                principal,
+                session.RestaurantId,
+                DiningPermission.TablesRead
+            )
                 ? DiningResults.Ok(SessionResponse(session))
             : DiningResults.Forbid();
     }
@@ -99,7 +116,12 @@ public sealed partial class DiningService
         CancellationToken ct
     )
     {
-        DiningSession? session = await db.ReadValidatedSessionAsync(sessionId, restaurantId, tableId, ct);
+        DiningSession? session = await db.ReadValidatedSessionAsync(
+            sessionId,
+            restaurantId,
+            tableId,
+            ct
+        );
         bool valid = session is not null;
         if (valid && session!.RequestGuestCount && session.GuestCount is null)
         {
