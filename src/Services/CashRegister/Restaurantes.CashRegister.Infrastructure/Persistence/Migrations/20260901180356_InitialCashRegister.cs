@@ -1,8 +1,8 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Restaurantes.CashRegister.Api.Migrations;
+namespace Restaurantes.CashRegister.Infrastructure.Persistence.Migrations;
 
 /// <inheritdoc />
 public partial class InitialCashRegister : Migration
