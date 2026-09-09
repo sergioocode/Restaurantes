@@ -1,14 +1,8 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Restaurantes.Security;
-using Restaurantes.Dining.Application;
 
-namespace Restaurantes.Dining.Api.Write;
-
-public interface IDiningRealtimeClient
-{
-    Task TableChanged(DiningTableChanged notification);
-}
+namespace Restaurantes.Dining.Api.Write.Realtime;
 
 [Authorize]
 public sealed class DiningHub : Hub<IDiningRealtimeClient>
@@ -32,10 +26,4 @@ public sealed class DiningHub : Hub<IDiningRealtimeClient>
     {
         return $"restaurant:{restaurantId:N}:dining";
     }
-}
-
-public sealed class DiningNotifications(IHubContext<DiningHub, IDiningRealtimeClient> hub) : IDiningNotifications
-{
-    public Task TableChanged(DiningTableChanged notification) =>
-        hub.Clients.Group(DiningHub.RestaurantGroup(notification.RestaurantId)).TableChanged(notification);
 }

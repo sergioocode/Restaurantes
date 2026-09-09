@@ -1,14 +1,8 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using Restaurantes.Orders.Contracts;
 using Restaurantes.Security;
 
 namespace Restaurantes.Orders.Api.Read.Realtime;
-
-public interface IKdsClient
-{
-    Task OrderUpdated(KdsOrderUpdated notification);
-}
 
 [Authorize]
 public sealed class KdsHub : Hub<IKdsClient>
