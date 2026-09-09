@@ -39,6 +39,10 @@
   </Folder>
   <Folder Name="/src/Services/Dining/">
     <Project Path="src/Services/Dining/Restaurantes.Dining.Api.Write/Restaurantes.Dining.Api.Write.csproj" />
+    <Project Path="src/Services/Dining/Restaurantes.Dining.Application/Restaurantes.Dining.Application.csproj" />
+    <Project Path="src/Services/Dining/Restaurantes.Dining.Consumer/Restaurantes.Dining.Consumer.csproj" />
+    <Project Path="src/Services/Dining/Restaurantes.Dining.Domain/Restaurantes.Dining.Domain.csproj" />
+    <Project Path="src/Services/Dining/Restaurantes.Dining.Infrastructure/Restaurantes.Dining.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/src/Services/Identity/">
     <Project Path="src/Services/Identity/Restaurantes.Identity.Api.Write/Restaurantes.Identity.Api.Write.csproj" />

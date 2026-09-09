@@ -1,4 +1,4 @@
-﻿@identityUrl = http://localhost:5106
+@identityUrl = http://localhost:5106
 @diningUrl = http://localhost:5102
 @restaurantId = 11111111-1111-4111-8111-111111111111
 @tableId = c270b467-98cc-47b2-b241-e45979659bf6
