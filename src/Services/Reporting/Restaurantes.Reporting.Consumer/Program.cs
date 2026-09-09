@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Restaurantes.Messaging.RabbitMq;
 using Restaurantes.Reporting.Consumer;
+using Restaurantes.Reporting.Consumer.Handlers;
 using Restaurantes.Reporting.Infrastructure.Persistence.Read;
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
@@ -20,5 +21,6 @@ builder
         "RabbitMq invalid"
     )
     .ValidateOnStart();
-builder.Services.AddHostedService<SalesProjectionWorker>();
+builder.Services.AddScoped<ReportingProjectionHandler>();
+builder.Services.AddHostedService<ReportingProjectionWorker>();
 await builder.Build().RunAsync();

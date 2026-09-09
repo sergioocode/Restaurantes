@@ -1,5 +1,6 @@
 ﻿using Restaurantes.Messaging.RabbitMq;
 using Restaurantes.Orders.Consumer;
+using Restaurantes.Orders.Consumer.Handlers;
 using Restaurantes.Orders.Infrastructure;
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
@@ -18,6 +19,7 @@ builder
         "RabbitMq configuration is invalid."
     )
     .ValidateOnStart();
+builder.Services.AddScoped<KdsProjectionHandler>();
 builder.Services.AddHostedService<KdsProjectionWorker>();
 builder.Services.AddHostedService<CatalogProjectionWorker>();
 builder.Services.AddHostedService<PaymentProjectionWorker>();
