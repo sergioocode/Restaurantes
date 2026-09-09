@@ -1,4 +1,4 @@
-﻿using Restaurantes.RestaurantOperations.Contracts;
+﻿using Restaurantes.RestaurantOperations.Contracts.Responses;
 
 namespace Restaurantes.RestaurantOperations.Application;
 

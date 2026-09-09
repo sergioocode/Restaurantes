@@ -1,4 +1,6 @@
-﻿using Restaurantes.Payments.Contracts;
+﻿using Restaurantes.Payments.Contracts.Events;
+using Restaurantes.Payments.Contracts.Requests;
+using Restaurantes.Payments.Contracts.Responses;
 using Restaurantes.Payments.Domain;
 
 namespace Restaurantes.Payments.Application;

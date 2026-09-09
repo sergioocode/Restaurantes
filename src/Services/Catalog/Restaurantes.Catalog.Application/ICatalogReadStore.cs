@@ -1,4 +1,4 @@
-﻿using Restaurantes.Catalog.Contracts;
+﻿using Restaurantes.Catalog.Contracts.Responses;
 
 namespace Restaurantes.Catalog.Application;
 

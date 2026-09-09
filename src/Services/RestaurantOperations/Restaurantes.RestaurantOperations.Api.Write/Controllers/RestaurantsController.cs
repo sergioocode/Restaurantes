@@ -1,7 +1,8 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Restaurantes.RestaurantOperations.Application;
-using Restaurantes.RestaurantOperations.Contracts;
+using Restaurantes.RestaurantOperations.Contracts.Requests;
+using Restaurantes.RestaurantOperations.Contracts.Responses;
 using Restaurantes.Security;
 
 namespace Restaurantes.RestaurantOperations.Api.Write.Controllers;

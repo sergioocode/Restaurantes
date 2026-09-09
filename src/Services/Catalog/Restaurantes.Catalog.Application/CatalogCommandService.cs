@@ -1,4 +1,6 @@
-﻿using Restaurantes.Catalog.Contracts;
+﻿using Restaurantes.Catalog.Contracts.Events;
+using Restaurantes.Catalog.Contracts.Requests;
+using Restaurantes.Catalog.Contracts.Responses;
 using Restaurantes.Catalog.Domain;
 
 namespace Restaurantes.Catalog.Application;

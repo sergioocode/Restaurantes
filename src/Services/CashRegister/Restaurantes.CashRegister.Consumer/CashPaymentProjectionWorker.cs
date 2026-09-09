@@ -1,10 +1,10 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Restaurantes.CashRegister.Application;
 using Restaurantes.Messaging.RabbitMq;
-using Restaurantes.Payments.Contracts;
+using Restaurantes.Payments.Contracts.Events;
 
 namespace Restaurantes.CashRegister.Consumer;
 

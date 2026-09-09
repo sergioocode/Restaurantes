@@ -4,12 +4,12 @@ using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Restaurantes.Messaging.RabbitMq;
-using Restaurantes.Orders.Contracts;
-using Restaurantes.Payments.Contracts;
-using Restaurantes.Reporting.Contracts;
+using Restaurantes.Orders.Contracts.Events;
+using Restaurantes.Payments.Contracts.Events;
+using Restaurantes.Reporting.Contracts.Events;
 using Restaurantes.Reporting.Infrastructure.Persistence;
 using Restaurantes.Reporting.Infrastructure.Persistence.Read;
-using Restaurantes.Sales.Contracts;
+using Restaurantes.Sales.Contracts.Events;
 
 namespace Restaurantes.Reporting.Consumer;
 

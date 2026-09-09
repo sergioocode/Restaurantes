@@ -1,10 +1,10 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Restaurantes.Messaging.RabbitMq;
-using Restaurantes.Reporting.Contracts;
+using Restaurantes.Reporting.Contracts.Events;
 
 namespace Restaurantes.Reporting.Api.Read.Realtime;
 

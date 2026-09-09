@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Restaurantes.Sales.Application;
-using Restaurantes.Sales.Contracts;
+using Restaurantes.Sales.Contracts.Responses;
 
 namespace Restaurantes.Sales.Api.Read.Controllers;
 

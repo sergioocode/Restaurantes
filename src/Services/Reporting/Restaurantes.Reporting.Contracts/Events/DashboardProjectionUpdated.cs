@@ -1,4 +1,4 @@
-﻿namespace Restaurantes.Reporting.Contracts;
+﻿namespace Restaurantes.Reporting.Contracts.Events;
 
 public sealed record DashboardProjectionUpdated(
     Guid OrderId,

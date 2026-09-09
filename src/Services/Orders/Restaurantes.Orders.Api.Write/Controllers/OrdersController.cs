@@ -2,7 +2,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Restaurantes.Orders.Application;
-using Restaurantes.Orders.Contracts;
+using Restaurantes.Orders.Contracts.Requests;
+using Restaurantes.Orders.Contracts.Responses;
 using Restaurantes.Orders.Domain;
 using Restaurantes.Security;
 

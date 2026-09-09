@@ -1,4 +1,4 @@
-﻿using Restaurantes.Sales.Contracts;
+﻿using Restaurantes.Sales.Contracts.Events;
 using Restaurantes.Sales.Domain;
 
 namespace Restaurantes.Sales.Application;

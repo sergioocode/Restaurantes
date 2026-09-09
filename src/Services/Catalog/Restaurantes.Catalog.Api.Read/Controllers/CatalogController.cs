@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Restaurantes.Catalog.Application;
-using Restaurantes.Catalog.Contracts;
+using Restaurantes.Catalog.Contracts.Responses;
 using Restaurantes.Security;
 
 namespace Restaurantes.Catalog.Api.Read.Controllers;
