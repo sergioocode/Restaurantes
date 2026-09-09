@@ -1,7 +1,8 @@
 ﻿using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Restaurantes.Sales.Application;
-using Restaurantes.Sales.Contracts;
+using Restaurantes.Sales.Contracts.Events;
+using Restaurantes.Sales.Contracts.Responses;
 using Restaurantes.Sales.Infrastructure.Persistence.Read;
 
 namespace Restaurantes.Sales.Infrastructure.Stores;

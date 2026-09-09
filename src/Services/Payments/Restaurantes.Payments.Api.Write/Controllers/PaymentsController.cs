@@ -1,7 +1,8 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Restaurantes.Payments.Application;
-using Restaurantes.Payments.Contracts;
+using Restaurantes.Payments.Contracts.Requests;
+using Restaurantes.Payments.Contracts.Responses;
 using Restaurantes.Payments.Domain;
 using Restaurantes.Security;
 

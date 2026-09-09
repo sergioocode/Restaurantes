@@ -1,7 +1,7 @@
 ﻿using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Restaurantes.Catalog.Application;
-using Restaurantes.Catalog.Contracts;
+using Restaurantes.Catalog.Contracts.Events;
 using Restaurantes.Catalog.Domain;
 using Restaurantes.Catalog.Infrastructure.Persistence;
 using Restaurantes.Catalog.Infrastructure.Persistence.Write;

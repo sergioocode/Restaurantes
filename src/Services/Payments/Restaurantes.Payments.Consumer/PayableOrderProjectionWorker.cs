@@ -4,7 +4,7 @@ using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Restaurantes.Messaging.RabbitMq;
-using Restaurantes.Orders.Contracts;
+using Restaurantes.Orders.Contracts.Events;
 using Restaurantes.Payments.Domain;
 using Restaurantes.Payments.Infrastructure.Persistence;
 using Restaurantes.Payments.Infrastructure.Persistence.Write;

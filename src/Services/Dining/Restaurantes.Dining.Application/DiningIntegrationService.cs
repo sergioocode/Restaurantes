@@ -1,7 +1,7 @@
 ﻿using System.Text.Json;
 using Restaurantes.Dining.Domain;
-using Restaurantes.Orders.Contracts;
-using Restaurantes.Payments.Contracts;
+using Restaurantes.Orders.Contracts.Events;
+using Restaurantes.Payments.Contracts.Events;
 
 namespace Restaurantes.Dining.Application;
 

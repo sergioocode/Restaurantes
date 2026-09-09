@@ -1,4 +1,6 @@
-﻿using Restaurantes.RestaurantOperations.Contracts;
+﻿using Restaurantes.RestaurantOperations.Contracts.Events;
+using Restaurantes.RestaurantOperations.Contracts.Requests;
+using Restaurantes.RestaurantOperations.Contracts.Responses;
 using Restaurantes.RestaurantOperations.Domain;
 
 namespace Restaurantes.RestaurantOperations.Application;

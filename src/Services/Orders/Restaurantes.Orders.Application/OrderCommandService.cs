@@ -1,4 +1,7 @@
 ﻿using Restaurantes.Orders.Contracts;
+using Restaurantes.Orders.Contracts.Events;
+using Restaurantes.Orders.Contracts.Requests;
+using Restaurantes.Orders.Contracts.Responses;
 using Restaurantes.Orders.Domain;
 
 namespace Restaurantes.Orders.Application;

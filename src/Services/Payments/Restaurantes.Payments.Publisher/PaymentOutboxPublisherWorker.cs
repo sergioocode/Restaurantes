@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using Restaurantes.Messaging.RabbitMq;
-using Restaurantes.Payments.Contracts;
+using Restaurantes.Payments.Contracts.Events;
 using Restaurantes.Payments.Infrastructure.Persistence;
 using Restaurantes.Payments.Infrastructure.Persistence.Write;
 

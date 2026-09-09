@@ -4,7 +4,7 @@ using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Restaurantes.Messaging.RabbitMq;
 using Restaurantes.Orders.Infrastructure.Persistence.Write;
-using Restaurantes.Payments.Contracts;
+using Restaurantes.Payments.Contracts.Events;
 
 namespace Restaurantes.Orders.Consumer;
 

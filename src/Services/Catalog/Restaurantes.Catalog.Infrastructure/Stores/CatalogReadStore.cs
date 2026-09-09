@@ -1,6 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Restaurantes.Catalog.Application;
-using Restaurantes.Catalog.Contracts;
+using Restaurantes.Catalog.Contracts.Responses;
 using Restaurantes.Catalog.Infrastructure.Persistence.Read;
 
 namespace Restaurantes.Catalog.Infrastructure.Stores;

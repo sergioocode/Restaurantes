@@ -4,7 +4,8 @@ using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Restaurantes.Messaging.RabbitMq;
-using Restaurantes.Orders.Contracts;
+using Restaurantes.Orders.Contracts.Events;
+using Restaurantes.Orders.Contracts.Responses;
 using Restaurantes.Orders.Infrastructure.Persistence;
 using Restaurantes.Orders.Infrastructure.Persistence.Read;
 

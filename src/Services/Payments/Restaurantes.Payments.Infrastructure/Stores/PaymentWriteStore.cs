@@ -1,7 +1,7 @@
 ﻿using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Restaurantes.Payments.Application;
-using Restaurantes.Payments.Contracts;
+using Restaurantes.Payments.Contracts.Events;
 using Restaurantes.Payments.Domain;
 using Restaurantes.Payments.Infrastructure.Persistence;
 using Restaurantes.Payments.Infrastructure.Persistence.Write;

@@ -2,7 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
-using Restaurantes.Catalog.Contracts;
+using Restaurantes.Catalog.Contracts.Events;
 using Restaurantes.Catalog.Infrastructure.Persistence;
 using Restaurantes.Catalog.Infrastructure.Persistence.Write;
 using Restaurantes.Messaging.RabbitMq;
