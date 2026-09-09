@@ -9,6 +9,7 @@
     <ProjectReference Include="..\..\..\BuildingBlocks\Restaurantes.ServiceDefaults\Restaurantes.ServiceDefaults.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Restaurantes.Messaging.RabbitMq\Restaurantes.Messaging.RabbitMq.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Restaurantes.Security\Restaurantes.Security.csproj" />
+    <ProjectReference Include="..\Restaurantes.Reporting.Application\Restaurantes.Reporting.Application.csproj" />
     <ProjectReference Include="..\Restaurantes.Reporting.Contracts\Restaurantes.Reporting.Contracts.csproj" />
     <ProjectReference Include="..\Restaurantes.Reporting.Infrastructure\Restaurantes.Reporting.Infrastructure.csproj" />
   </ItemGroup>

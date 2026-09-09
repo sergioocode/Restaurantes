@@ -1,16 +1,16 @@
 ﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Restaurantes.Reporting.Infrastructure.Queries;
+using Restaurantes.Reporting.Application.Dashboard;
+using Restaurantes.Reporting.Application.Health;
 using Restaurantes.Security;
 
 namespace Restaurantes.Reporting.Api.Read.Controllers;
 
 [Authorize, ApiController, Route("api/reporting")]
 public sealed class ReportingController(
-    ReportingQueries queries,
-    IHttpClientFactory clients,
-    IConfiguration configuration
+    DashboardQueryService dashboard,
+    ReportingHealthService health
 ) : ControllerBase
 {
     [HttpGet("dashboard"), HttpGet("dashboard/daily")]
@@ -36,7 +36,7 @@ public sealed class ReportingController(
         return restaurantIds is { Count: 0 }
             ? (ActionResult<DailyDashboard>)Forbid()
             : (ActionResult<DailyDashboard>)
-                Ok(await queries.GetDailyAsync(date, restaurantIds, orderLimit, ct));
+                Ok(await dashboard.GetDailyAsync(date, restaurantIds, orderLimit, ct));
     }
 
     [HttpGet("health")]
@@ -46,36 +46,7 @@ public sealed class ReportingController(
         {
             return Forbid();
         }
-        Dictionary<string, string>? endpoints = configuration
-            .GetSection("MonitoredEndpoints")
-            .Get<Dictionary<string, string>>();
-        var tasks = (endpoints ?? []).Select(async pair =>
-        {
-            try
-            {
-                using HttpResponseMessage response = await clients
-                    .CreateClient()
-                    .GetAsync(pair.Value, ct);
-                return new
-                {
-                    service = pair.Key,
-                    url = pair.Value,
-                    healthy = response.IsSuccessStatusCode,
-                    status = (int)response.StatusCode,
-                };
-            }
-            catch
-            {
-                return new
-                {
-                    service = pair.Key,
-                    url = pair.Value,
-                    healthy = false,
-                    status = 0,
-                };
-            }
-        });
-        return Ok(await Task.WhenAll(tasks));
+        return Ok(await health.GetAsync(ct));
     }
 
     private static Guid[] AuthorizedRestaurants(ClaimsPrincipal user)
