@@ -1,9 +1,9 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Restaurantes.Identity.Api.Write.Migrations;
+namespace Restaurantes.Identity.Infrastructure.Persistence.Migrations;
 
 /// <inheritdoc />
 public partial class MigrateToAspNetCoreIdentity : Migration

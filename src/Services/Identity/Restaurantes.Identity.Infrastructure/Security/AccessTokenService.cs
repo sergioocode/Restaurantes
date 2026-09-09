@@ -1,18 +1,18 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Restaurantes.Identity.Application;
+using Restaurantes.Identity.Domain;
 using Restaurantes.Security;
 
-namespace Restaurantes.Identity.Api.Write;
-
-public sealed record IssuedAccessToken(string Value, DateTime ExpiresAtUtc);
+namespace Restaurantes.Identity.Infrastructure.Security;
 
 public sealed class AccessTokenService(
     IOptions<RestaurantSecurityOptions> options,
     TimeProvider time
-)
+) : IAccessTokenIssuer
 {
     public IssuedAccessToken Issue(ApplicationUser user, IReadOnlyCollection<string> globalRoles)
     {
@@ -64,7 +64,7 @@ public sealed class AccessTokenService(
         }
 
         SigningCredentials credentials = new(
-            new SymmetricSecurityKey(Encoding.UTF8.GetBytes(security.SigningKey)),
+            new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(security.SigningKey)),
             SecurityAlgorithms.HmacSha256
         );
         JwtSecurityToken token = new(

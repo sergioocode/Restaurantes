@@ -1,9 +1,10 @@
-﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Restaurantes.Identity.Domain;
 
-namespace Restaurantes.Identity.Api.Write;
+namespace Restaurantes.Identity.Infrastructure.Persistence;
 
 public sealed class IdentityWriteDbContext(DbContextOptions<IdentityWriteDbContext> options)
     : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>(options)
@@ -42,32 +43,5 @@ public sealed class IdentityWriteDbContext(DbContextOptions<IdentityWriteDbConte
         access.HasKey(x => x.Id);
         access.Property(x => x.Role).HasMaxLength(40).IsRequired();
         access.HasIndex(x => new { x.UserId, x.RestaurantId }).IsUnique();
-    }
-}
-
-public sealed class ApplicationUser : IdentityUser<Guid>
-{
-    public string DisplayName { get; set; } = string.Empty;
-    public bool IsActive { get; set; } = true;
-    public DateTime CreatedAtUtc { get; set; }
-    public List<UserRestaurantAssignment> RestaurantAccesses { get; set; } = [];
-}
-
-public sealed class UserRestaurantAssignment
-{
-    public Guid Id { get; set; }
-    public Guid UserId { get; set; }
-    public ApplicationUser User { get; set; } = null!;
-    public Guid RestaurantId { get; set; }
-    public string Role { get; set; } = string.Empty;
-    public bool IsActive { get; set; } = true;
-    public DateTime ValidFromUtc { get; set; }
-    public DateTime? ValidUntilUtc { get; set; }
-
-    public bool IsCurrentlyActive(DateTime utcNow)
-    {
-        return IsActive
-            && ValidFromUtc <= utcNow
-            && (ValidUntilUtc is null || ValidUntilUtc > utcNow);
     }
 }

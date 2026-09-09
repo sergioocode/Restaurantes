@@ -1,7 +1,8 @@
-﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Restaurantes.Identity.Domain;
 
-namespace Restaurantes.Identity.Api.Write;
+namespace Restaurantes.Identity.Infrastructure.Persistence;
 
 public sealed class IdentitySeed(
     IdentityWriteDbContext db,
@@ -147,10 +148,7 @@ public sealed class IdentitySeed(
         foreach (Guid restaurantId in restaurantIds)
         {
             if (assignedRestaurantIds.Contains(restaurantId))
-            {
                 continue;
-            }
-
             db.RestaurantAccesses.Add(
                 new UserRestaurantAssignment
                 {
@@ -165,14 +163,12 @@ public sealed class IdentitySeed(
         await db.SaveChangesAsync(ct);
     }
 
-    private static void EnsureSucceeded(IdentityResult result)
+    private static void EnsureSucceeded(Microsoft.AspNetCore.Identity.IdentityResult result)
     {
         if (!result.Succeeded)
-        {
             throw new InvalidOperationException(
                 string.Join("; ", result.Errors.Select(item => item.Description))
             );
-        }
     }
 
     private sealed record RestaurantSeed(Guid Id, string Slug, string Name);
