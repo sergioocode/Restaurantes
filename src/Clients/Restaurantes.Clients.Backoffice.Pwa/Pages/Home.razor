@@ -293,7 +293,7 @@ else
                                 <button class="primary" @onclick="() => SaveTable(item)" disabled="@busy">Guardar</button>
                                 <button class="secondary" @onclick="() => DeleteTable(item)" disabled="@(busy || item.Status == "Occupied")" title="Elimina la ubicación de la operación y conserva su historial">Eliminar</button>
                                 <label class="check-line guest-setting"><input type="checkbox" @bind="item.RequestGuestCount" /> Solicita cantidad de comensales antes de pedir</label>
-                                <div class="qr-data"><code>@item.QrCode</code><a href="@($"http://localhost:5300{item.CustomerQrPath}")" target="_blank" rel="noopener noreferrer">Abrir QR</a><button class="secondary" @onclick="() => RotateQr(item)" disabled="@(busy || item.Status == "Occupied")">Regenerar QR</button></div>
+                                <div class="qr-data"><code>@item.QrCode</code><a href="@item.CustomerQrPath" target="_blank" rel="noopener noreferrer">Abrir QR</a><button class="secondary" @onclick="() => RotateQr(item)" disabled="@(busy || item.Status == "Occupied")">Regenerar QR</button></div>
                             </article>
                         }
                     </div>

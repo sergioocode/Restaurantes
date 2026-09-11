@@ -78,7 +78,7 @@
     const separator = String.fromCharCode(30);
     const sessionKey = 'restaurantes.kds.login';
     const restaurantKey = 'restaurantes.kds.restaurant';
-    const apiBaseUrl = window.location.port === '5700' ? 'http://localhost:5001' : '';
+    const apiBaseUrl = window.location.origin;
     const loginPanel = document.querySelector('#loginPanel');
     const monitorPanel = document.querySelector('#monitorPanel');
     const usernameInput = document.querySelector('#username');
@@ -355,7 +355,7 @@
       if (socket) socket.close();
       handshakeComplete = false;
       setStatus(false, 'Conectando…');
-      const hubOrigin = new URL(apiBaseUrl || location.origin);
+      const hubOrigin = new URL(apiBaseUrl);
       const protocol = hubOrigin.protocol === 'https:' ? 'wss:' : 'ws:';
       const token = encodeURIComponent(login.accessToken);
       const currentSocket = new WebSocket(protocol + '//' + hubOrigin.host + '/hubs/kds?access_token=' + token);
