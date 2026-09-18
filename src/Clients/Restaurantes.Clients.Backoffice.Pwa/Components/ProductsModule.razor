@@ -1,0 +1,39 @@
+﻿@if (!Host.HasGlobalPermission("catalog.global.manage"))
+{
+    <NoAccessPanel />
+}
+else
+{
+    <details class="admin-panel" open>
+        <summary>Nuevo producto</summary>
+        <form class="inline-form" @onsubmit="Host.CreateProduct" @onsubmit:preventDefault>
+            <input placeholder="SKU" @bind="Host.productDraft.Sku" /><input placeholder="Nombre" @bind="Host.productDraft.Name" />
+            <select @bind="Host.productDraft.CategoryId"><option value="@Guid.Empty">Categoría</option>@foreach (CategoryResponse category in Host.categories.Where(x => x.IsActive)) {
+                <option value="@category.Id">@category.Name</option>
+            }
+        </select>
+        <input type="number" min="0" step="0.01" @bind="Host.productDraft.BasePrice" /><button class="primary" disabled="@Host.busy">Agregar</button>
+    </form>
+</details>
+<div class="maintenance-list">
+    @foreach (ProductResponse item in Host.products.OrderBy(x => x.Name))
+    {
+        <article class="maintenance-row product-maintenance @(item.IsActive ? "" : "inactive")">
+            <div><strong>@item.Sku</strong><small>v@item.Version</small></div>
+            <label>Nombre<input @bind="item.Name" /></label>
+            <label>Categoría<select @bind="item.CategoryId">@foreach (CategoryResponse category in Host.categories) {
+                <option value="@category.Id">@category.Name</option>
+            }
+        </select></label>
+        <label>Precio base<input type="number" min="0" step="0.01" @bind="item.BasePrice" /></label>
+        <label class="availability"><input type="checkbox" @bind="item.IsActive" /> Activo</label>
+        <button class="primary" @onclick="() => Host.SaveProduct(item)" disabled="@Host.busy">Guardar</button>
+    </article>
+}
+</div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Home Host { get; set; } = default!;
+}

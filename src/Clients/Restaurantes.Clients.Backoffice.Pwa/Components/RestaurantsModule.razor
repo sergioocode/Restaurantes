@@ -1,0 +1,23 @@
+@if (Host.IsAdmin)
+{
+    <details class="admin-panel"><summary>Nuevo local · solo Admin</summary>
+        <form class="inline-form" @onsubmit="Host.CreateRestaurant" @onsubmit:preventDefault>
+            <input placeholder="Código" @bind="Host.restaurantDraft.Code" /><input placeholder="Nombre" @bind="Host.restaurantDraft.Name" />
+            <input class="wide" placeholder="Dirección" @bind="Host.restaurantDraft.Address" /><button class="primary" disabled="@Host.busy">Agregar</button>
+        </form>
+    </details>
+}
+@if (Host.CurrentRestaurant is not null)
+{
+    <section class="settings-panel">
+        <div><strong>@Host.CurrentRestaurant.Code</strong><small>ID @Host.CurrentRestaurant.Id</small></div>
+        <label>Nombre<input @bind="Host.CurrentRestaurant.Name" /></label><label>Dirección<input @bind="Host.CurrentRestaurant.Address" /></label>
+        <label class="availability"><input type="checkbox" @bind="Host.CurrentRestaurant.IsActive" /> Local activo</label>
+        <button class="primary" @onclick="Host.SaveRestaurant" disabled="@Host.busy">Guardar local</button>
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Home Host { get; set; } = default!;
+}
