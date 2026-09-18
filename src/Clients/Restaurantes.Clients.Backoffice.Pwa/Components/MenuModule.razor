@@ -1,0 +1,38 @@
+﻿@if (!Host.HasLocalPermission("catalog.manage"))
+{
+    <NoAccessPanel />
+}
+else
+{
+    <div class="catalog-toolbar"><input type="search" placeholder="Buscar producto o SKU" @bind="Host.search" @bind:event="oninput" /><span>@Host.VisibleProducts.Count producto(s)</span></div>
+    <div class="product-list">
+        @foreach (ProductResponse product in Host.VisibleProducts)
+        {
+            CategoryResponse? category = Host.categories.FirstOrDefault(x => x.Id == product.CategoryId);
+            MenuEditor editor = Host.editors[product.Id];
+            <article class="product-row @(product.IsActive ? "" : "inactive")">
+                <div class="product-name">
+                    <span>@category?.Name</span><strong>@product.Name</strong>
+                    <small>@product.Sku · Base @product.BasePrice.ToString("0.00") €</small>
+                </div>
+                <label>Precio<input type="number" min="0" step="0.01" @bind="editor.Price" /></label>
+                <label>
+                    Estación KDS
+                    <select value="@editor.PreparationStationCode" @onchange="args => Host.SelectStation(editor, args)">
+                        @foreach (KitchenStationResponse station in Host.stations.Where(x => (!x.IsPrimary && x.IsActive) || x.Code == editor.PreparationStationCode))
+                        {
+                            <option value="@station.Code">@station.Name</option>
+                        }
+                    </select>
+                </label>
+                <label class="availability"><input type="checkbox" @bind="editor.IsAvailable" disabled="@(!product.IsActive)" /> Visible</label>
+                <button class="primary" @onclick="() => Host.SaveMenuItem(product)" disabled="@(Host.busy || !product.IsActive)">Guardar</button>
+            </article>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Home Host { get; set; } = default!;
+}

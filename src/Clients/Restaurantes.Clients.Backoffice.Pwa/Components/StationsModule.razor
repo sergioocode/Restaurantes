@@ -1,0 +1,33 @@
+@if (!Host.HasLocalPermission("catalog.manage")) { <NoAccessPanel /> }
+else
+{
+    <details class="admin-panel" open><summary>Nueva estación KDS</summary>
+        <form class="inline-form" @onsubmit="Host.CreateStation" @onsubmit:preventDefault>
+            <input placeholder="Código, ej. PIZZA" @bind="Host.stationDraft.Code" />
+            <input placeholder="Nombre visible, ej. Horno de pizzas" @bind="Host.stationDraft.Name" />
+            <label>Prioridad<input type="number" min="0" max="99" @bind="Host.stationDraft.Priority" disabled="@Host.stationDraft.IsPrimary" /></label>
+            <label class="availability"><input type="checkbox" @bind="Host.stationDraft.IsPrimary" /> KDS principal</label>
+            <label class="availability"><input type="checkbox" @bind="Host.stationDraft.RequiresPrimaryDispatch" disabled="@Host.stationDraft.IsPrimary" /> Requiere despacho del principal</label>
+            <button class="primary" disabled="@Host.busy">Agregar</button>
+        </form>
+    </details>
+    <div class="maintenance-list">
+        @foreach (KitchenStationResponse item in Host.stations.OrderBy(x => x.Priority).ThenBy(x => x.Name))
+        {
+            <article class="maintenance-row @(item.IsActive ? "" : "inactive")">
+                <div><strong>@item.Code</strong><small>v@item.Version</small></div>
+                <label>Nombre KDS<input maxlength="80" @bind="item.Name" /></label>
+                <label>Prioridad<input type="number" min="0" max="99" @bind="item.Priority" disabled="@item.IsPrimary" /></label>
+                <label class="availability"><input type="checkbox" @bind="item.IsPrimary" /> Principal</label>
+                <label class="availability"><input type="checkbox" @bind="item.RequiresPrimaryDispatch" disabled="@item.IsPrimary" /> Despacha principal</label>
+                <label class="availability"><input type="checkbox" @bind="item.IsActive" /> Activa</label>
+                <button class="primary" @onclick="() => Host.SaveStation(item)" disabled="@Host.busy">Guardar</button>
+            </article>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Home Host { get; set; } = default!;
+}

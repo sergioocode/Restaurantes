@@ -11,42 +11,42 @@ public partial class Home
     const string SessionKey = "restaurantes.backoffice.login";
     string username = "admin",
         password = "Admin-2026!",
-        search = "",
-        module = "menu",
+        module = "menu";
+    internal string search = "",
         allowedNetworksText = "";
     string? message;
-    bool busy,
-        ok;
+    internal bool busy;
+    bool ok;
     LoginResponse? login;
     Guid restaurantId;
-    List<CategoryResponse> categories = [];
-    List<ProductResponse> products = [];
+    internal List<CategoryResponse> categories = [];
+    internal List<ProductResponse> products = [];
     List<MenuItemResponse> menu = [];
-    List<KitchenStationResponse> stations = [];
+    internal List<KitchenStationResponse> stations = [];
     List<RestaurantResponse> restaurants = [];
-    List<TableResponse> tables = [];
-    DiningPolicyResponse policy = new();
-    List<StaffUserResponse> users = [];
-    Dictionary<Guid, UserAssignmentDraft> assignmentDrafts = [];
-    Dictionary<Guid, MenuEditor> editors = [];
-    CategoryDraft categoryDraft = new();
-    ProductDraft productDraft = new();
-    RestaurantDraft restaurantDraft = new();
-    TableDraft tableDraft = new();
-    List<ZoneResponse> zones = [];
-    ZoneResponse zoneDraft = new();
-    KitchenStationDraft stationDraft = new();
-    StaffUserDraft userDraft = new();
+    internal List<TableResponse> tables = [];
+    internal DiningPolicyResponse policy = new();
+    internal List<StaffUserResponse> users = [];
+    internal Dictionary<Guid, UserAssignmentDraft> assignmentDrafts = [];
+    internal Dictionary<Guid, MenuEditor> editors = [];
+    internal CategoryDraft categoryDraft = new();
+    internal ProductDraft productDraft = new();
+    internal RestaurantDraft restaurantDraft = new();
+    internal TableDraft tableDraft = new();
+    internal List<ZoneResponse> zones = [];
+    internal ZoneResponse zoneDraft = new();
+    internal KitchenStationDraft stationDraft = new();
+    internal StaffUserDraft userDraft = new();
 
     static readonly string[] LocalRoles = ["Manager", "PosComandero", "Kds"];
     static readonly string[] GlobalRoles = ["Admin", "Gerente", "Contabilidad", "Oficina"];
 
-    bool IsAdmin =>
+    internal bool IsAdmin =>
         login?.GlobalRoles?.Contains("Admin") == true
         || login?.Restaurants.Any(x => x.Role == "Admin") == true;
-    bool CanManageUsers => IsAdmin;
-    IEnumerable<string> AssignableRoles => [.. GlobalRoles, .. LocalRoles];
-    List<RestaurantResponse> ManageableRestaurants =>
+    internal bool CanManageUsers => IsAdmin;
+    internal IEnumerable<string> AssignableRoles => [.. GlobalRoles, .. LocalRoles];
+    internal List<RestaurantResponse> ManageableRestaurants =>
         restaurants
             .Where(x =>
                 IsAdmin
@@ -65,8 +65,9 @@ public partial class Home
                     )
                 )
                 .ToList();
-    RestaurantResponse? CurrentRestaurant => restaurants.FirstOrDefault(x => x.Id == restaurantId);
-    List<ProductResponse> VisibleProducts =>
+    internal RestaurantResponse? CurrentRestaurant =>
+        restaurants.FirstOrDefault(x => x.Id == restaurantId);
+    internal List<ProductResponse> VisibleProducts =>
         products
             .Where(x =>
                 string.IsNullOrWhiteSpace(search)
@@ -203,7 +204,7 @@ public partial class Home
         );
     }
 
-    async Task SaveMenuItem(ProductResponse p) =>
+    internal async Task SaveMenuItem(ProductResponse p) =>
         await Run(
             async () =>
             {
@@ -226,7 +227,7 @@ public partial class Home
             false
         );
 
-    async Task CreateStation() =>
+    internal async Task CreateStation() =>
         await Run(
             async () =>
             {
@@ -239,7 +240,7 @@ public partial class Home
             false
         );
 
-    async Task SaveStation(KitchenStationResponse item) =>
+    internal async Task SaveStation(KitchenStationResponse item) =>
         await Run(
             async () =>
             {
@@ -258,7 +259,7 @@ public partial class Home
         menu = await Api.MenuAsync(restaurantId);
     }
 
-    async Task CreateCategory() =>
+    internal async Task CreateCategory() =>
         await Run(
             async () =>
             {
@@ -276,7 +277,7 @@ public partial class Home
             false
         );
 
-    async Task SaveCategory(CategoryResponse item) =>
+    internal async Task SaveCategory(CategoryResponse item) =>
         await Run(
             async () =>
             {
@@ -289,7 +290,7 @@ public partial class Home
             false
         );
 
-    async Task CreateProduct() =>
+    internal async Task CreateProduct() =>
         await Run(
             async () =>
             {
@@ -305,7 +306,7 @@ public partial class Home
             false
         );
 
-    async Task SaveProduct(ProductResponse item) =>
+    internal async Task SaveProduct(ProductResponse item) =>
         await Run(
             async () =>
             {
@@ -325,7 +326,7 @@ public partial class Home
         await LoadLocalCore();
     }
 
-    async Task CreateRestaurant() =>
+    internal async Task CreateRestaurant() =>
         await Run(
             async () =>
             {
@@ -344,7 +345,7 @@ public partial class Home
             false
         );
 
-    async Task SaveRestaurant()
+    internal async Task SaveRestaurant()
     {
         if (CurrentRestaurant is null)
             return;
@@ -369,7 +370,7 @@ public partial class Home
             tableDraft.ZoneId = zones.FirstOrDefault()?.Id ?? Guid.Empty;
     }
 
-    async Task CreateZone() =>
+    internal async Task CreateZone() =>
         await Run(
             async () =>
             {
@@ -382,7 +383,7 @@ public partial class Home
             false
         );
 
-    async Task SaveZone(ZoneResponse zone) =>
+    internal async Task SaveZone(ZoneResponse zone) =>
         await Run(
             async () =>
             {
@@ -394,7 +395,7 @@ public partial class Home
             false
         );
 
-    async Task DeleteZone(ZoneResponse zone) =>
+    internal async Task DeleteZone(ZoneResponse zone) =>
         await Run(
             async () =>
             {
@@ -406,7 +407,7 @@ public partial class Home
             false
         );
 
-    async Task CreateTable() =>
+    internal async Task CreateTable() =>
         await Run(
             async () =>
             {
@@ -419,7 +420,7 @@ public partial class Home
             false
         );
 
-    async Task SaveTable(TableResponse item) =>
+    internal async Task SaveTable(TableResponse item) =>
         await Run(
             async () =>
             {
@@ -431,7 +432,7 @@ public partial class Home
             false
         );
 
-    async Task DeleteTable(TableResponse item) =>
+    internal async Task DeleteTable(TableResponse item) =>
         await Run(
             async () =>
             {
@@ -444,7 +445,7 @@ public partial class Home
             false
         );
 
-    async Task RotateQr(TableResponse item) =>
+    internal async Task RotateQr(TableResponse item) =>
         await Run(
             async () =>
             {
@@ -462,7 +463,7 @@ public partial class Home
             false
         );
 
-    async Task SavePolicy() =>
+    internal async Task SavePolicy() =>
         await Run(
             async () =>
             {
@@ -484,7 +485,7 @@ public partial class Home
         assignmentDrafts = users.ToDictionary(x => x.Id, _ => new UserAssignmentDraft());
     }
 
-    async Task CreateUser() =>
+    internal async Task CreateUser() =>
         await Run(
             async () =>
             {
@@ -499,7 +500,7 @@ public partial class Home
             false
         );
 
-    async Task SaveAssignment(
+    internal async Task SaveAssignment(
         StaffUserResponse user,
         UserRestaurantAssignmentResponse assignment
     ) =>
@@ -515,7 +516,7 @@ public partial class Home
             false
         );
 
-    async Task AddAssignment(StaffUserResponse user) =>
+    internal async Task AddAssignment(StaffUserResponse user) =>
         await Run(
             async () =>
             {
@@ -532,13 +533,13 @@ public partial class Home
             false
         );
 
-    bool HasLocalPermission(string permission) =>
+    internal bool HasLocalPermission(string permission) =>
         IsAdmin
         || login
             ?.Restaurants.FirstOrDefault(x => x.RestaurantId == restaurantId)
             ?.Permissions.Contains(permission) == true;
 
-    bool HasGlobalPermission(string permission) =>
+    internal bool HasGlobalPermission(string permission) =>
         IsAdmin || login?.Restaurants.Any(x => x.Permissions.Contains(permission)) == true;
 
     string CurrentRoleFor(Guid id) =>
@@ -548,25 +549,26 @@ public partial class Home
 
     string NavClass(string value) => module == value ? "nav-active" : "";
 
-    IEnumerable<string> AssignableRolesFor(string current) =>
+    internal IEnumerable<string> AssignableRolesFor(string current) =>
         AssignableRoles.Contains(current) ? AssignableRoles : AssignableRoles.Append(current);
 
-    IEnumerable<RestaurantResponse> AvailableRestaurantsFor(StaffUserResponse user) =>
+    internal IEnumerable<RestaurantResponse> AvailableRestaurantsFor(StaffUserResponse user) =>
         ManageableRestaurants.Where(x => user.Restaurants.All(a => a.RestaurantId != x.Id));
 
-    string RestaurantName(Guid id) =>
+    internal string RestaurantName(Guid id) =>
         restaurants.FirstOrDefault(x => x.Id == id)?.Name ?? id.ToString();
 
-    string RestaurantNameWithId(Guid id) => $"{RestaurantName(id)} · {id}";
+    internal string RestaurantNameWithId(Guid id) => $"{RestaurantName(id)} · {id}";
 
-    static string DateValue(DateTime? value) => value?.ToString("yyyy-MM-dd") ?? string.Empty;
+    internal static string DateValue(DateTime? value) =>
+        value?.ToString("yyyy-MM-dd") ?? string.Empty;
 
-    static DateTime? ParseDate(object? value) =>
+    internal static DateTime? ParseDate(object? value) =>
         DateTime.TryParse(value?.ToString(), out DateTime date)
             ? DateTime.SpecifyKind(date, DateTimeKind.Utc)
             : null;
 
-    static string RoleLabel(string role) =>
+    internal static string RoleLabel(string role) =>
         role switch
         {
             "Admin" => "Administrador",
@@ -579,9 +581,10 @@ public partial class Home
             _ => role,
         };
 
-    static string StatusLabel(string status) => status == "Occupied" ? "Ocupada" : "Disponible";
+    internal static string StatusLabel(string status) =>
+        status == "Occupied" ? "Ocupada" : "Disponible";
 
-    void SelectStation(MenuEditor editor, ChangeEventArgs args)
+    internal void SelectStation(MenuEditor editor, ChangeEventArgs args)
     {
         KitchenStationResponse? station = stations.FirstOrDefault(x =>
             x.Code == args.Value?.ToString()
@@ -592,7 +595,7 @@ public partial class Home
         editor.PreparationStationName = station.Name;
     }
 
-    void SelectCategoryStation(CategoryResponse categoryItem, ChangeEventArgs args)
+    internal void SelectCategoryStation(CategoryResponse categoryItem, ChangeEventArgs args)
     {
         KitchenStationResponse? station = stations.FirstOrDefault(x =>
             x.Code == args.Value?.ToString()
@@ -603,7 +606,7 @@ public partial class Home
         categoryItem.DefaultStationName = station.Name;
     }
 
-    void SelectDraftCategoryStation(ChangeEventArgs args)
+    internal void SelectDraftCategoryStation(ChangeEventArgs args)
     {
         KitchenStationResponse? station = stations.FirstOrDefault(x =>
             x.Code == args.Value?.ToString()
@@ -664,6 +667,7 @@ public partial class Home
         finally
         {
             busy = false;
+            await InvokeAsync(StateHasChanged);
         }
     }
 }

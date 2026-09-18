@@ -1,0 +1,60 @@
+@if (!Host.HasLocalPermission("tables.manage")) { <NoAccessPanel /> }
+else
+{
+    <section class="settings-panel policy-panel">
+        <h2>Política del local</h2>
+        <label class="check-line"><input type="checkbox" @bind="Host.policy.QrRequiresImmediatePayment" /> El cliente QR paga antes de enviar a cocina</label>
+        <label class="check-line"><input type="checkbox" @bind="Host.policy.TakeawayRequiresPrepayment" /> Para llevar requiere cobro previo</label>
+        <label class="check-line"><input type="checkbox" @bind="Host.policy.AllowCheckoutBeforeKitchenCompletion" /> Permite cobrar antes de terminar los KDS</label>
+        <label class="check-line"><input type="checkbox" @bind="Host.policy.RequireTrustedNetworkForQr" /> Exigir red autorizada para usar QR</label>
+        <label>IP o redes CIDR autorizadas, una por línea<textarea rows="3" @bind="Host.allowedNetworksText"></textarea></label>
+        <button class="primary" @onclick="Host.SavePolicy" disabled="@Host.busy">Guardar política</button>
+    </section>
+    <section class="admin-panel">
+        <h3>Zonas del restaurante</h3>
+        <form class="inline-form" @onsubmit="Host.CreateZone" @onsubmit:preventDefault>
+            <input aria-label="Nombre de la zona" placeholder="Nueva zona, ej. Terraza" maxlength="80" required @bind="Host.zoneDraft.Name" />
+            <input aria-label="Orden de la zona" type="number" min="0" @bind="Host.zoneDraft.SortOrder" />
+            <button class="primary" disabled="@Host.busy">Agregar zona</button>
+        </form>
+        @if (Host.zones.Count == 0) { <p>Crea una zona antes de agregar mesas o puestos de barra.</p> }
+        @foreach (ZoneResponse zone in Host.zones.OrderBy(x => x.SortOrder).ThenBy(x => x.Name))
+        {
+            <div class="inline-form" @key="zone.Id">
+                <label>Zona<input maxlength="80" @bind="zone.Name" /></label>
+                <label>Orden<input type="number" min="0" @bind="zone.SortOrder" /></label>
+                <span>@Host.tables.Count(x => x.ZoneId == zone.Id) ubicaciones</span>
+                <button class="primary" @onclick="() => Host.SaveZone(zone)" disabled="@Host.busy">Guardar zona</button>
+                <button class="secondary" @onclick="() => Host.DeleteZone(zone)" disabled="@(Host.busy || Host.tables.Any(x => x.ZoneId == zone.Id))">Eliminar zona vacía</button>
+            </div>
+        }
+    </section>
+    <details class="admin-panel" open><summary>Nueva ubicación</summary>
+        <form class="inline-form" @onsubmit="Host.CreateTable" @onsubmit:preventDefault>
+            <input placeholder="Código, ej. MESA-03" @bind="Host.tableDraft.Code" /><input placeholder="Nombre visible" @bind="Host.tableDraft.Label" />
+            <select aria-label="Zona" @bind="Host.tableDraft.ZoneId"><option value="@Guid.Empty">Selecciona una zona</option>@foreach (ZoneResponse zone in Host.zones.OrderBy(x => x.SortOrder).ThenBy(x => x.Name)) { <option value="@zone.Id">@zone.Name</option> }</select>
+            <label class="check-line"><input type="checkbox" @bind="Host.tableDraft.RequestGuestCount" /> Solicita cantidad de comensales antes de pedir</label>
+            <button class="primary" disabled="@(Host.busy || Host.tableDraft.ZoneId == Guid.Empty)">Agregar</button>
+        </form>
+    </details>
+    <div class="maintenance-list">
+        @foreach (TableResponse item in Host.tables.OrderBy(x => x.Code))
+        {
+            <article class="table-maintenance @(item.IsActive ? "" : "inactive")">
+                <div><strong>@item.Code</strong><small>@Home.StatusLabel(item.Status)</small></div>
+                <label>Nombre<input @bind="item.Label" /></label>
+                <label>Zona<select @bind="item.ZoneId">@foreach (ZoneResponse zone in Host.zones.OrderBy(x => x.SortOrder).ThenBy(x => x.Name)) { <option value="@zone.Id">@zone.Name</option> }</select></label>
+                <label class="availability"><input type="checkbox" @bind="item.IsActive" disabled="@(item.Status == "Occupied")" /> Activa</label>
+                <button class="primary" @onclick="() => Host.SaveTable(item)" disabled="@Host.busy">Guardar</button>
+                <button class="secondary" @onclick="() => Host.DeleteTable(item)" disabled="@(Host.busy || item.Status == "Occupied")" title="Elimina la ubicación de la operación y conserva su historial">Eliminar</button>
+                <label class="check-line guest-setting"><input type="checkbox" @bind="item.RequestGuestCount" /> Solicita cantidad de comensales antes de pedir</label>
+                <div class="qr-data"><code>@item.QrCode</code><a href="@item.CustomerQrPath" target="_blank" rel="noopener noreferrer">Abrir QR</a><button class="secondary" @onclick="() => Host.RotateQr(item)" disabled="@(Host.busy || item.Status == "Occupied")">Regenerar QR</button></div>
+            </article>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Home Host { get; set; } = default!;
+}

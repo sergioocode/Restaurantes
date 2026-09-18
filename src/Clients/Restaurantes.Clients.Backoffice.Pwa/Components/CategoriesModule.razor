@@ -1,0 +1,43 @@
+@if (!Host.HasGlobalPermission("catalog.global.manage")) { <NoAccessPanel /> }
+else
+{
+    <details class="admin-panel" open><summary>Nueva categoría</summary>
+        <form class="inline-form" @onsubmit="Host.CreateCategory" @onsubmit:preventDefault>
+            <input placeholder="Código" @bind="Host.categoryDraft.Code" /><input placeholder="Nombre" @bind="Host.categoryDraft.Name" />
+            <select value="@Host.categoryDraft.DefaultStationCode" @onchange="Host.SelectDraftCategoryStation" disabled="@(Host.stations.Count(x => x.IsActive) == 0)">
+                <option value="">Estación KDS</option>
+                @foreach (KitchenStationResponse station in Host.stations.Where(x => x.IsActive && !x.IsPrimary).OrderBy(x => x.Name))
+                {
+                    <option value="@station.Code">@station.Name</option>
+                }
+            </select>
+            <button class="primary" disabled="@Host.busy">Agregar</button>
+        </form>
+    </details>
+    <div class="maintenance-list">
+        @foreach (CategoryResponse item in Host.categories.OrderBy(x => x.Name))
+        {
+            <article class="maintenance-row @(item.IsActive ? "" : "inactive")">
+                <div><strong>@item.Code</strong><small>v@item.Version</small></div>
+                <label>Nombre<input @bind="item.Name" /></label>
+                <label>Estación KDS<select value="@item.DefaultStationCode" @onchange="args => Host.SelectCategoryStation(item, args)">
+                    @if (!Host.stations.Any(x => x.Code == item.DefaultStationCode))
+                    {
+                        <option value="@item.DefaultStationCode">@item.DefaultStationName (no disponible en este local)</option>
+                    }
+                    @foreach (KitchenStationResponse station in Host.stations.Where(x => (!x.IsPrimary && x.IsActive) || x.Code == item.DefaultStationCode).OrderBy(x => x.Name))
+                    {
+                        <option value="@station.Code">@station.Name</option>
+                    }
+                </select></label>
+                <label class="availability"><input type="checkbox" @bind="item.IsActive" /> Activa</label>
+                <button class="primary" @onclick="() => Host.SaveCategory(item)" disabled="@Host.busy">Guardar</button>
+            </article>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Home Host { get; set; } = default!;
+}
