@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
@@ -6,7 +6,6 @@ using RabbitMQ.Client.Events;
 using Restaurantes.Messaging.RabbitMq;
 using Restaurantes.Orders.Consumer.Handlers;
 using Restaurantes.Orders.Contracts.Events;
-using Restaurantes.Orders.Infrastructure.Persistence;
 using Restaurantes.Orders.Infrastructure.Persistence.Read;
 
 namespace Restaurantes.Orders.Consumer;

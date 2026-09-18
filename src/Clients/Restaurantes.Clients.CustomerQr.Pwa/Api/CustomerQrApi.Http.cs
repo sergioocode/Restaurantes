@@ -1,11 +1,15 @@
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using System.Text.Json;
 
 namespace Restaurantes.Clients.CustomerQr.Pwa.Api;
 
 public sealed partial class CustomerQrApi
 {
-    static HttpRequestMessage WithCustomerToken(HttpMethod method, string path, string? token)
+    private static HttpRequestMessage WithCustomerToken(
+        HttpMethod method,
+        string path,
+        string? token
+    )
     {
         HttpRequestMessage request = new(method, path);
         if (!string.IsNullOrWhiteSpace(token))
@@ -15,7 +19,7 @@ public sealed partial class CustomerQrApi
         return request;
     }
 
-    static async Task<T> ReadAsync<T>(HttpResponseMessage response)
+    private static async Task<T> ReadAsync<T>(HttpResponseMessage response)
     {
         if (response.IsSuccessStatusCode)
         {

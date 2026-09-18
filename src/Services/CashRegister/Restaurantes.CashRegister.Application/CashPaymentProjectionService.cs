@@ -1,4 +1,4 @@
-using Restaurantes.CashRegister.Domain;
+﻿using Restaurantes.CashRegister.Domain;
 
 namespace Restaurantes.CashRegister.Application;
 
@@ -7,19 +7,27 @@ public sealed class CashPaymentProjectionService(ICashRegisterStore store, TimeP
     public async Task Project(PaymentProjection payment, CancellationToken ct)
     {
         if (await store.HasProcessedMessageAsync(payment.MessageId, ct))
+        {
             return;
+        }
+
         Guid? sessionId = ParseSessionId(payment.Reference);
         if (payment.IsRefund)
+        {
             sessionId = await store.GetSaleSessionIdAsync(payment.PaymentId, ct);
+        }
+
         CashRegisterSession? session = await store.FindProjectionSessionAsync(
             payment,
             sessionId,
             ct
         );
         if (session is null)
+        {
             throw new InvalidOperationException(
                 $"No cash-register shift covers payment {payment.PaymentId} for restaurant {payment.RestaurantId}."
             );
+        }
 
         CashMovementType type = payment.IsRefund ? CashMovementType.Refund : CashMovementType.Sale;
         store.AddMovement(
@@ -37,7 +45,10 @@ public sealed class CashPaymentProjectionService(ICashRegisterStore store, TimeP
             }
         );
         if (session.Status == CashRegisterStatus.Closed)
+        {
             ReconcileLateMovement(session, payment, type);
+        }
+
         store.MarkMessageProcessed(payment.MessageId, time.GetUtcNow().UtcDateTime);
         await store.SaveChangesAsync(ct);
     }
@@ -68,8 +79,11 @@ public sealed class CashPaymentProjectionService(ICashRegisterStore store, TimeP
         session.DifferenceAtClose =
             (session.ReconciledTotalAtClose ?? 0) - session.ExpectedTotalAtClose;
         if (payment.Method == "Cash")
+        {
             session.ExpectedCashAtClose =
                 (session.ExpectedCashAtClose ?? session.OpeningFloat) + signed;
+        }
+
         session.Version++;
     }
 
@@ -77,7 +91,10 @@ public sealed class CashPaymentProjectionService(ICashRegisterStore store, TimeP
     {
         const string prefix = "CASHREGISTER:";
         if (!reference.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
             return null;
+        }
+
         int end = reference.IndexOf(';', prefix.Length);
         string value = end < 0 ? reference[prefix.Length..] : reference[prefix.Length..end];
         return Guid.TryParse(value, out Guid id) ? id : null;

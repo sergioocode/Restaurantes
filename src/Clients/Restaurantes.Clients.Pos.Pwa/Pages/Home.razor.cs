@@ -1,82 +1,97 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Restaurantes.Clients.Pos.Pwa.Api;
 using Restaurantes.Clients.Pos.Pwa.Models;
-using Restaurantes.Clients.Pos.Pwa.Realtime;
 using Restaurantes.Clients.Shared.Operations;
 
 namespace Restaurantes.Clients.Pos.Pwa.Pages;
 
 public partial class Home
 {
-    int? guestCount;
-    const string SessionKey = "restaurantes.pos.login";
-    string username = "camarero1.mad-centro";
-    string password = "Camarero-01-1-2026!";
-    string? message;
-    bool busy;
-    bool success;
-    LoginResponse? login;
-    Guid restaurantId;
-    List<TableResponse> tables = [];
-    string tableFilter = "All";
-    string serviceMode = "DineIn";
-    string quickPaymentMethod = "Card";
-    string customerName = string.Empty;
-    bool takeawayRequiresPrepayment = true;
-    List<OrderResponse> activeOrders = [];
-    List<OrderResponse> pickupOrders = [];
-    TableResponse? selectedTable;
-    DiningSessionResponse? session;
-    List<MenuItemResponse> menu = [];
-    Dictionary<Guid, int> quantities = [];
-    Dictionary<Guid, string> notes = [];
-    string? category;
-    bool submittedLocally;
-    string cancelReason = "Apertura accidental";
-    SessionBillResponse? bill;
-    bool billOpen;
-    string paymentMethod = "Card";
-    string paymentReference = string.Empty;
-    Guid checkoutKey;
-    Dictionary<Guid, OrderDetailResponse> billOrders = [];
-    CancellationTokenSource? realtimeRefresh;
-    CancellationTokenSource? reconciliation;
-    CashRegisterResponse? cashRegister;
-    bool cashPanelOpen;
-    decimal openingFloat;
-    Dictionary<string, decimal> reconciliationAmounts = new(StringComparer.OrdinalIgnoreCase);
+    private int? guestCount;
+    private const string SessionKey = "restaurantes.pos.login";
+    private string? message;
+    private bool busy;
+    private bool success;
+    private LoginResponse? login;
+    private ProviderSettingsResponse? providerSettings;
+    private Guid restaurantId;
+    private List<TableResponse> tables = [];
+    private string tableFilter = "All";
+    private string serviceMode = "DineIn";
+    private string quickPaymentMethod = "Card";
+    private string customerName = string.Empty;
+    private bool takeawayRequiresPrepayment = true;
+    private List<OrderResponse> activeOrders = [];
+    private List<OrderResponse> pickupOrders = [];
+    private TableResponse? selectedTable;
+    private DiningSessionResponse? session;
+    private List<MenuItemResponse> menu = [];
+    private Dictionary<Guid, int> quantities = [];
+    private Dictionary<Guid, string> notes = [];
+    private string? category;
+    private string cancelReason = "Apertura accidental";
+    private SessionBillResponse? bill;
+    private bool billOpen;
+    private string paymentMethod = "Card";
+    private string paymentReference = string.Empty;
+    private Guid checkoutKey;
+    private Dictionary<Guid, OrderDetailResponse> billOrders = [];
+    private CancellationTokenSource? realtimeRefresh;
+    private CancellationTokenSource? reconciliation;
+    private CashRegisterResponse? cashRegister;
+    private bool cashPanelOpen;
+    private decimal openingFloat;
+    private Dictionary<string, decimal> reconciliationAmounts = new(
+        StringComparer.OrdinalIgnoreCase
+    );
 
-    bool CashRegisterOpen => cashRegister?.Status == "Open";
-    decimal ReconciliationDifference =>
+    private bool CashRegisterOpen => cashRegister?.Status == "Open";
+    private decimal ReconciliationDifference =>
         reconciliationAmounts.Values.Sum() - (cashRegister?.ExpectedTotal ?? 0);
 
-    List<TableResponse> FilteredTables =>
+    private List<TableResponse> FilteredTables =>
         tables.Where(x => tableFilter == "All" || x.Status == tableFilter).ToList();
-    List<string> Categories => menu.Select(x => x.CategoryName).Distinct().Order().ToList();
-    List<MenuItemResponse> VisibleMenu =>
+    private List<string> Categories => menu.Select(x => x.CategoryName).Distinct().Order().ToList();
+    private List<MenuItemResponse> VisibleMenu =>
         menu.Where(x => x.IsAvailable && (category is null || x.CategoryName == category)).ToList();
-    List<MenuItemResponse> Cart =>
+    private List<MenuItemResponse> Cart =>
         menu.Where(x => quantities.GetValueOrDefault(x.ProductId) > 0).ToList();
-    int ItemCount => quantities.Values.Sum();
-    decimal Total => menu.Sum(x => x.Price * quantities.GetValueOrDefault(x.ProductId));
-    bool HasPhysicalLocation => serviceMode is "DineIn" or "Bar";
-    bool CanCancelSession =>
-        HasPhysicalLocation
-        && session is not null
-        && session.Orders.Count == 0
-        && !submittedLocally;
-    string CurrentLabel =>
+    private int ItemCount => quantities.Values.Sum();
+    private decimal Total => menu.Sum(x => x.Price * quantities.GetValueOrDefault(x.ProductId));
+    private bool HasPhysicalLocation => serviceMode is "DineIn" or "Bar";
+    private bool CanCancelSession
+    {
+        get => HasPhysicalLocation && session is not null && session.Orders.Count == 0 && !field;
+        set;
+    }
+    private string CurrentLabel =>
         HasPhysicalLocation ? selectedTable?.Label ?? "Ubicación" : "Pedido para llevar";
 
     protected override async Task OnInitializedAsync()
     {
         Realtime.OrderUpdated += HandleOrderUpdated;
         DiningRealtime.TableChanged += HandleTableChanged;
+        providerSettings = await Api.ProviderAsync();
+        string? code = QueryValue("login_code");
+        if (!string.IsNullOrWhiteSpace(code))
+        {
+            Nav.NavigateTo(Nav.BaseUri, replace: true);
+            await Run(async () => await AcceptLogin(await Api.ExchangeAsync(code)));
+            return;
+        }
+        if (QueryValue("login_error") is not null)
+        {
+            message = "La cuenta no está autorizada o el proveedor rechazó el acceso.";
+        }
+
         string? json = await Js.InvokeAsync<string?>("sessionStorage.getItem", SessionKey);
         if (string.IsNullOrWhiteSpace(json))
+        {
             return;
+        }
+
         try
         {
             login = JsonSerializer.Deserialize<LoginResponse>(json);
@@ -101,31 +116,52 @@ public partial class Home
         }
     }
 
-    async Task DoLogin() =>
-        await Run(async () =>
-        {
-            login = await Api.LoginAsync(username, password);
-            RestaurantAccess? allowed = login.Restaurants.FirstOrDefault(x =>
-                x.Permissions.Contains("orders.create")
-                && x.Permissions.Contains("payments.capture")
-            );
-            if (allowed is null)
-                throw new InvalidOperationException(
-                    "El usuario no tiene permisos para operar el TPV."
-                );
-            Api.AccessToken = login.AccessToken;
-            restaurantId = allowed.RestaurantId;
-            await Js.InvokeVoidAsync(
-                "sessionStorage.setItem",
-                SessionKey,
-                JsonSerializer.Serialize(login)
-            );
-            await LoadOperationalData();
-            await ConnectRealtimeAsync();
-            StartReconciliation();
-        });
+    private void StartLogin(string provider)
+    {
+        Nav.NavigateTo(
+            $"/api/identity/auth/start/{provider}?returnPath=%2Fpos%2F",
+            forceLoad: true
+        );
+    }
 
-    async Task Logout()
+    private string? QueryValue(string key)
+    {
+        string query = new Uri(Nav.Uri).Fragment.TrimStart('#');
+        foreach (string part in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            string[] pair = part.Split('=', 2);
+            if (pair[0] == key)
+            {
+                return Uri.UnescapeDataString(pair.Length > 1 ? pair[1] : "");
+            }
+        }
+        return null;
+    }
+
+    private async Task AcceptLogin(LoginResponse response)
+    {
+        login = response;
+        RestaurantAccess? allowed = login.Restaurants.FirstOrDefault(x =>
+            x.Permissions.Contains("orders.create") && x.Permissions.Contains("payments.capture")
+        );
+        if (allowed is null)
+        {
+            throw new InvalidOperationException("El usuario no tiene permisos para operar el TPV.");
+        }
+
+        Api.AccessToken = login.AccessToken;
+        restaurantId = allowed.RestaurantId;
+        await Js.InvokeVoidAsync(
+            "sessionStorage.setItem",
+            SessionKey,
+            JsonSerializer.Serialize(login)
+        );
+        await LoadOperationalData();
+        await ConnectRealtimeAsync();
+        StartReconciliation();
+    }
+
+    private async Task Logout()
     {
         await Js.InvokeVoidAsync("sessionStorage.removeItem", SessionKey);
         await Realtime.DisconnectAsync();
@@ -141,19 +177,25 @@ public partial class Home
         message = null;
     }
 
-    async Task RestaurantChanged(ChangeEventArgs args)
+    private async Task RestaurantChanged(ChangeEventArgs args)
     {
         if (!Guid.TryParse(args.Value?.ToString(), out Guid value))
+        {
             return;
+        }
+
         restaurantId = value;
         BackToTables();
         await LoadTables();
         await ConnectRealtimeAsync();
     }
 
-    async Task LoadTables() => await Run(LoadOperationalData);
+    private async Task LoadTables()
+    {
+        await Run(LoadOperationalData);
+    }
 
-    async Task LoadOperationalData()
+    private async Task LoadOperationalData()
     {
         tables = await Api.TablesAsync(restaurantId);
         DiningPolicyResponse policy = await Api.PolicyAsync(restaurantId);
@@ -163,9 +205,12 @@ public partial class Home
         await LoadPickupOrdersCore();
     }
 
-    async Task LoadPickupOrders() => await Run(LoadPickupOrdersCore);
+    private async Task LoadPickupOrders()
+    {
+        await Run(LoadPickupOrdersCore);
+    }
 
-    async Task LoadPickupOrdersCore()
+    private async Task LoadPickupOrdersCore()
     {
         activeOrders = await Api.OrdersAsync(restaurantId);
         pickupOrders = activeOrders
@@ -174,7 +219,8 @@ public partial class Home
             .ToList();
     }
 
-    async Task SelectTable(TableResponse table) =>
+    private async Task SelectTable(TableResponse table)
+    {
         await Run(async () =>
         {
             if (!CashRegisterOpen && table.Status != "Occupied")
@@ -188,13 +234,15 @@ public partial class Home
                 : await Api.OpenSessionAsync(table.Id);
             guestCount = session.GuestCount;
             selectedTable = table;
-            submittedLocally = session.Orders.Count > 0;
+            CanCancelSession = session.Orders.Count > 0;
             menu = await Api.MenuAsync(restaurantId);
             quantities = menu.ToDictionary(x => x.ProductId, _ => 0);
             notes = menu.ToDictionary(x => x.ProductId, _ => string.Empty);
         });
+    }
 
-    async Task BeginTakeaway() =>
+    private async Task BeginTakeaway()
+    {
         await Run(async () =>
         {
             if (!CashRegisterOpen)
@@ -210,11 +258,14 @@ public partial class Home
             quantities = menu.ToDictionary(x => x.ProductId, _ => 0);
             notes = menu.ToDictionary(x => x.ProductId, _ => string.Empty);
         });
+    }
 
-    void ChangeQuantity(Guid productId, int change) =>
+    private void ChangeQuantity(Guid productId, int change)
+    {
         quantities[productId] = Math.Clamp(quantities[productId] + change, 0, 99);
+    }
 
-    async Task SendOrder()
+    private async Task SendOrder()
     {
         if (!CashRegisterOpen)
         {
@@ -222,9 +273,15 @@ public partial class Home
             return;
         }
         if (HasPhysicalLocation && (selectedTable is null || session is null))
+        {
             return;
+        }
+
         if (!HasPhysicalLocation && string.IsNullOrWhiteSpace(customerName))
+        {
             return;
+        }
+
         if (
             !HasPhysicalLocation
             && takeawayRequiresPrepayment
@@ -242,7 +299,9 @@ public partial class Home
                 $"Confirma que el cobro de {Total:0.00} € mediante {PaymentLabel(quickPaymentMethod)} fue aceptado. Esta acción registrará el pedido como PAGADO."
             );
             if (!confirmed)
+            {
                 return;
+            }
         }
 
         await Run(
@@ -252,7 +311,10 @@ public partial class Home
                 if (HasPhysicalLocation)
                 {
                     if (session is { RequestGuestCount: true, GuestCount: null })
+                    {
                         session = await Api.SetGuestCountAsync(session.Id, guestCount ?? 0);
+                    }
+
                     order = await Api.CreateAndSubmitAsync(
                         restaurantId,
                         selectedTable!,
@@ -262,26 +324,24 @@ public partial class Home
                         notes
                     );
                 }
-                else if (takeawayRequiresPrepayment)
-                {
-                    order = await Api.CreatePayAndSubmitQuickSaleAsync(
-                        restaurantId,
-                        serviceMode,
-                        customerName.Trim(),
-                        quickPaymentMethod,
-                        cashRegister?.Id,
-                        quantities,
-                        notes
-                    );
-                }
                 else
                 {
-                    order = await Api.CreateAndSubmitTakeawayOnAccountAsync(
-                        restaurantId,
-                        customerName.Trim(),
-                        quantities,
-                        notes
-                    );
+                    order = takeawayRequiresPrepayment
+                        ? await Api.CreatePayAndSubmitQuickSaleAsync(
+                            restaurantId,
+                            serviceMode,
+                            customerName.Trim(),
+                            quickPaymentMethod,
+                            cashRegister?.Id,
+                            quantities,
+                            notes
+                        )
+                        : await Api.CreateAndSubmitTakeawayOnAccountAsync(
+                            restaurantId,
+                            customerName.Trim(),
+                            quantities,
+                            notes
+                        );
                 }
 
                 foreach (Guid id in quantities.Keys.ToArray())
@@ -289,7 +349,7 @@ public partial class Home
                     quantities[id] = 0;
                     notes[id] = string.Empty;
                 }
-                submittedLocally = HasPhysicalLocation;
+                CanCancelSession = HasPhysicalLocation;
                 success = true;
                 message =
                     HasPhysicalLocation ? $"Comanda {order.Id.ToString()[..8]} enviada a cocina."
@@ -307,7 +367,7 @@ public partial class Home
         );
     }
 
-    async Task CompletePickup(OrderResponse pickup)
+    private async Task CompletePickup(OrderResponse pickup)
     {
         bool requiresPayment = pickup.PaymentTiming != "Immediate";
         if (requiresPayment && !CashRegisterOpen)
@@ -319,7 +379,9 @@ public partial class Home
             ? $"Confirma el cobro de {pickup.Total:0.00} € mediante {PaymentLabel(quickPaymentMethod)} y la entrega a {pickup.CustomerName}."
             : $"Confirma que entregas el pedido a {pickup.CustomerName}.";
         if (!await Js.InvokeAsync<bool>("confirm", prompt))
+        {
             return;
+        }
 
         await Run(
             async () =>
@@ -340,10 +402,13 @@ public partial class Home
         );
     }
 
-    async Task CancelSession()
+    private async Task CancelSession()
     {
         if (session is null)
+        {
             return;
+        }
+
         await Run(
             async () =>
             {
@@ -357,18 +422,24 @@ public partial class Home
         );
     }
 
-    async Task OpenBill()
+    private async Task OpenBill()
     {
         if (session is null)
+        {
             return;
+        }
+
         billOpen = true;
         await Run(LoadBill);
     }
 
-    async Task LoadBill()
+    private async Task LoadBill()
     {
         if (session is null)
+        {
             return;
+        }
+
         bill = await Api.BillAsync(session.Id);
         OrderDetailResponse[] details = await Task.WhenAll(
             bill.Orders.Select(order => Api.OrderAsync(order.OrderId))
@@ -376,32 +447,40 @@ public partial class Home
         billOrders = details.ToDictionary(order => order.Id);
     }
 
-    static bool CanCancelLine(
+    private static bool CanCancelLine(
         SessionBillOrderResponse billOrder,
         OrderDetailResponse order,
         OrderLineDetailResponse line
-    ) =>
-        billOrder.PaymentStatus != "Paid"
-        && line.Status == "Active"
-        && OrderProgress.CanCancelBeforePreparation(order.Status)
-        && order.Stations.Any(station =>
-            station.Code == line.PreparationStationCode && station.Status == "Pending"
-        );
+    )
+    {
+        return billOrder.PaymentStatus != "Paid"
+            && line.Status == "Active"
+            && OrderProgress.CanCancelBeforePreparation(order.Status)
+            && order.Stations.Any(station =>
+                station.Code == line.PreparationStationCode && station.Status == "Pending"
+            );
+    }
 
-    async Task CancelLine(SessionBillOrderResponse order, OrderLineDetailResponse line)
+    private async Task CancelLine(SessionBillOrderResponse order, OrderLineDetailResponse line)
     {
         string? reason = await Js.InvokeAsync<string?>(
             "prompt",
             $"Motivo para cancelar {line.Quantity} × {line.ProductName}:"
         );
         if (string.IsNullOrWhiteSpace(reason))
+        {
             return;
+        }
+
         bool confirmed = await Js.InvokeAsync<bool>(
             "confirm",
             "La línea desaparecerá del KDS si cocina todavía no comenzó. ¿Continuar?"
         );
         if (!confirmed)
+        {
             return;
+        }
+
         await Run(
             async () =>
             {
@@ -415,12 +494,18 @@ public partial class Home
         );
     }
 
-    void CloseBill() => billOpen = false;
+    private void CloseBill()
+    {
+        billOpen = false;
+    }
 
-    async Task CheckoutSession()
+    private async Task CheckoutSession()
     {
         if (session is null || busy)
+        {
             return;
+        }
+
         if (!CashRegisterOpen)
         {
             message = "Debes abrir la caja antes de registrar el cobro.";
@@ -445,10 +530,13 @@ public partial class Home
         );
     }
 
-    async Task ReleaseSession()
+    private async Task ReleaseSession()
     {
         if (session is null)
+        {
             return;
+        }
+
         await Run(
             async () =>
             {
@@ -462,7 +550,7 @@ public partial class Home
         );
     }
 
-    void BackToTables()
+    private void BackToTables()
     {
         selectedTable = null;
         session = null;
@@ -471,7 +559,7 @@ public partial class Home
         quantities = [];
         notes = [];
         category = null;
-        submittedLocally = false;
+        CanCancelSession = false;
         cancelReason = "Apertura accidental";
         bill = null;
         billOrders = [];
@@ -480,16 +568,20 @@ public partial class Home
         paymentReference = string.Empty;
     }
 
-    async Task OpenCashRegisterPanel()
+    private async Task OpenCashRegisterPanel()
     {
         cashPanelOpen = true;
         await RefreshCashRegister();
         PrepareReconciliation();
     }
 
-    void CloseCashRegisterPanel() => cashPanelOpen = false;
+    private void CloseCashRegisterPanel()
+    {
+        cashPanelOpen = false;
+    }
 
-    async Task RefreshCashRegister() =>
+    private async Task RefreshCashRegister()
+    {
         await Run(
             async () =>
             {
@@ -498,8 +590,10 @@ public partial class Home
             },
             false
         );
+    }
 
-    async Task OpenDailyCashRegister() =>
+    private async Task OpenDailyCashRegister()
+    {
         await Run(
             async () =>
             {
@@ -510,11 +604,15 @@ public partial class Home
             },
             false
         );
+    }
 
-    async Task CloseDailyCashRegister()
+    private async Task CloseDailyCashRegister()
     {
         if (cashRegister is null)
+        {
             return;
+        }
+
         decimal reconciledTotal = reconciliationAmounts.Values.Sum();
         if (
             !await Js.InvokeAsync<bool>(
@@ -522,7 +620,10 @@ public partial class Home
                 $"Total esperado: {cashRegister.ExpectedTotal:0.00} €. Total conciliado: {reconciledTotal:0.00} €. ¿Cerrar el turno?"
             )
         )
+        {
             return;
+        }
+
         await Run(
             async () =>
             {
@@ -538,7 +639,7 @@ public partial class Home
         );
     }
 
-    void PrepareReconciliation()
+    private void PrepareReconciliation()
     {
         reconciliationAmounts =
             cashRegister?.ExpectedByMethod.ToDictionary(
@@ -548,25 +649,37 @@ public partial class Home
             ) ?? new(StringComparer.OrdinalIgnoreCase);
     }
 
-    string FilterClass(string value) => tableFilter == value ? "filter active" : "filter";
+    private string FilterClass(string value)
+    {
+        return tableFilter == value ? "filter active" : "filter";
+    }
 
-    string CategoryClass(string? value) => category == value ? "filter active" : "filter";
+    private string CategoryClass(string? value)
+    {
+        return category == value ? "filter active" : "filter";
+    }
 
-    static string StatusLabel(string status) => status == "Occupied" ? "Ocupada" : "Disponible";
+    private static string StatusLabel(string status)
+    {
+        return status == "Occupied" ? "Ocupada" : "Disponible";
+    }
 
-    string TableOrderSummary(TableResponse table)
+    private string TableOrderSummary(TableResponse table)
     {
         List<OrderResponse> orders = activeOrders.Where(x => x.TableId == table.Id).ToList();
         return OrderProgress.Summarize(orders.Select(x => x.Status));
     }
 
-    string SessionOrderSummary(Guid sessionId) =>
-        OrderProgress.Summarize(
+    private string SessionOrderSummary(Guid sessionId)
+    {
+        return OrderProgress.Summarize(
             activeOrders.Where(x => x.DiningSessionId == sessionId).Select(x => x.Status)
         );
+    }
 
-    static string PaymentLabel(string method) =>
-        method switch
+    private static string PaymentLabel(string method)
+    {
+        return method switch
         {
             "Cash" => "Efectivo",
             "Card" => "Tarjeta / datáfono",
@@ -574,19 +687,25 @@ public partial class Home
             "Cheque" => "Cheque",
             _ => method,
         };
+    }
 
-    static string ModeLabel(string mode) =>
-        mode switch
+    private static string ModeLabel(string mode)
+    {
+        return mode switch
         {
             "Bar" => "BARRA",
             "Takeaway" => "PARA LLEVAR",
             _ => "SERVICIO EN MESA",
         };
+    }
 
-    async Task Run(Func<Task> action, bool clearMessage = true)
+    private async Task Run(Func<Task> action, bool clearMessage = true)
     {
         if (clearMessage)
+        {
             message = null;
+        }
+
         success = false;
         busy = true;
         try
@@ -603,7 +722,7 @@ public partial class Home
         }
     }
 
-    async Task ConnectRealtimeAsync()
+    private async Task ConnectRealtimeAsync()
     {
         try
         {
@@ -618,15 +737,17 @@ public partial class Home
         }
     }
 
-    Task HandleOrderUpdated(OrderRealtimeNotification notification)
+    private Task HandleOrderUpdated(OrderRealtimeNotification notification)
     {
         return ScheduleRealtimeRefresh(notification.RestaurantId);
     }
 
-    async Task HandleTableChanged(DiningTableChangedNotification notification)
+    private async Task HandleTableChanged(DiningTableChangedNotification notification)
     {
         if (login is null || notification.RestaurantId != restaurantId)
+        {
             return;
+        }
 
         await InvokeAsync(() =>
         {
@@ -645,10 +766,13 @@ public partial class Home
         await ScheduleRealtimeRefresh(notification.RestaurantId);
     }
 
-    Task ScheduleRealtimeRefresh(Guid changedRestaurantId)
+    private Task ScheduleRealtimeRefresh(Guid changedRestaurantId)
     {
         if (login is null || changedRestaurantId != restaurantId)
+        {
             return Task.CompletedTask;
+        }
+
         realtimeRefresh?.Cancel();
         realtimeRefresh?.Dispose();
         realtimeRefresh = new CancellationTokenSource();
@@ -656,7 +780,7 @@ public partial class Home
         return Task.CompletedTask;
     }
 
-    async Task RefreshAfterOrderEventAsync(CancellationToken cancellationToken)
+    private async Task RefreshAfterOrderEventAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -696,7 +820,7 @@ public partial class Home
         }
     }
 
-    void StartReconciliation()
+    private void StartReconciliation()
     {
         reconciliation?.Cancel();
         reconciliation?.Dispose();
@@ -704,7 +828,7 @@ public partial class Home
         _ = ReconcileOperationalDataAsync(reconciliation.Token);
     }
 
-    async Task ReconcileOperationalDataAsync(CancellationToken cancellationToken)
+    private async Task ReconcileOperationalDataAsync(CancellationToken cancellationToken)
     {
         using PeriodicTimer timer = new(TimeSpan.FromSeconds(15));
         try
@@ -714,7 +838,10 @@ public partial class Home
                 await InvokeAsync(async () =>
                 {
                     if (login is null || busy)
+                    {
                         return;
+                    }
+
                     tables = await Api.TablesAsync(restaurantId);
                     await LoadPickupOrdersCore();
                     cashRegister = await Api.CurrentCashRegisterAsync(restaurantId);

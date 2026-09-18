@@ -1,33 +1,29 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
-using Restaurantes.Clients.Backoffice.Pwa.Api;
 using Restaurantes.Clients.Backoffice.Pwa.Models;
 
 namespace Restaurantes.Clients.Backoffice.Pwa.Pages;
 
 public partial class Home
 {
-    const string SessionKey = "restaurantes.backoffice.login";
-    string username = "admin",
-        password = "Admin-2026!",
-        module = "menu";
+    private const string SessionKey = "restaurantes.backoffice.login";
+    private string module = "menu";
     internal string search = "",
         allowedNetworksText = "";
-    string? message;
+    private string? message;
     internal bool busy;
-    bool ok;
-    LoginResponse? login;
-    Guid restaurantId;
+    private bool ok;
+    private LoginResponse? login;
+    private Guid restaurantId;
     internal List<CategoryResponse> categories = [];
     internal List<ProductResponse> products = [];
-    List<MenuItemResponse> menu = [];
+    private List<MenuItemResponse> menu = [];
     internal List<KitchenStationResponse> stations = [];
-    List<RestaurantResponse> restaurants = [];
+    private List<RestaurantResponse> restaurants = [];
     internal List<TableResponse> tables = [];
     internal DiningPolicyResponse policy = new();
     internal List<StaffUserResponse> users = [];
-    internal Dictionary<Guid, UserAssignmentDraft> assignmentDrafts = [];
     internal Dictionary<Guid, MenuEditor> editors = [];
     internal CategoryDraft categoryDraft = new();
     internal ProductDraft productDraft = new();
@@ -37,13 +33,18 @@ public partial class Home
     internal ZoneResponse zoneDraft = new();
     internal KitchenStationDraft stationDraft = new();
     internal StaffUserDraft userDraft = new();
+    internal ProviderSettingsResponse? providerSettings;
+    internal string providerDraft = "Microsoft";
+    internal bool MicrosoftConfigured => providerSettings?.MicrosoftConfigured == true;
+    internal bool GoogleConfigured => providerSettings?.GoogleConfigured == true;
 
-    static readonly string[] LocalRoles = ["Manager", "PosComandero", "Kds"];
-    static readonly string[] GlobalRoles = ["Admin", "Gerente", "Contabilidad", "Oficina"];
+    private static readonly string[] LocalRoles = ["Manager", "PosComandero", "Kds"];
+    private static readonly string[] GlobalRoles = ["Admin", "Gerente", "Contabilidad", "Oficina"];
 
-    internal bool IsAdmin =>
-        login?.GlobalRoles?.Contains("Admin") == true
-        || login?.Restaurants.Any(x => x.Role == "Admin") == true;
+    internal bool IsAdmin => login?.GlobalRoles?.Contains("Admin") == true;
+    private bool HasBackofficeAccess =>
+        login?.GlobalRoles?.Any(x => GlobalRoles.Contains(x)) == true
+        || login?.Restaurants.Any(x => x.Permissions.Contains("backoffice.access")) == true;
     internal bool CanManageUsers => IsAdmin;
     internal IEnumerable<string> AssignableRoles => [.. GlobalRoles, .. LocalRoles];
     internal List<RestaurantResponse> ManageableRestaurants =>
@@ -55,8 +56,8 @@ public partial class Home
                 )
             )
             .ToList();
-    List<RestaurantResponse> SelectableRestaurants =>
-        IsAdmin
+    private List<RestaurantResponse> SelectableRestaurants =>
+        login?.GlobalRoles?.Any(x => GlobalRoles.Contains(x)) == true
             ? restaurants
             : restaurants
                 .Where(x =>
@@ -76,7 +77,7 @@ public partial class Home
             )
             .OrderBy(x => x.Name)
             .ToList();
-    string ModuleEyebrow =>
+    private string ModuleEyebrow =>
         module switch
         {
             "tables" => "OPERACIÓN DEL LOCAL",
@@ -85,7 +86,7 @@ public partial class Home
             "users" => "SEGURIDAD",
             _ => "CATÁLOGO DEL LOCAL",
         };
-    string ModuleTitle =>
+    private string ModuleTitle =>
         module switch
         {
             "tables" => "Mesas, barra y reglas de venta",
@@ -99,25 +100,49 @@ public partial class Home
 
     protected override async Task OnInitializedAsync()
     {
+        providerSettings = await Api.ProviderAsync();
+        providerDraft = providerSettings.ActiveProvider;
+        userDraft.Provider = providerDraft;
+        string? code = QueryValue("login_code");
+        if (!string.IsNullOrWhiteSpace(code))
+        {
+            Nav.NavigateTo(Nav.BaseUri, replace: true);
+            try
+            {
+                await AcceptLogin(await Api.ExchangeAsync(code));
+            }
+            catch (Exception exception)
+            {
+                message = exception.Message;
+            }
+            return;
+        }
+        if (QueryValue("login_error") is not null)
+        {
+            message = "La cuenta no está autorizada o el proveedor rechazó el acceso.";
+        }
+
         string? json = await Js.InvokeAsync<string?>("sessionStorage.getItem", SessionKey);
         if (string.IsNullOrWhiteSpace(json))
+        {
             return;
+        }
+
         try
         {
             login = JsonSerializer.Deserialize<LoginResponse>(json);
-            if (
-                login is null
-                || login.ExpiresAtUtc <= DateTime.UtcNow
-                || !login.Restaurants.Any(x => x.Permissions.Contains("backoffice.access"))
-            )
+            if (login is null || login.ExpiresAtUtc <= DateTime.UtcNow || !HasBackofficeAccess)
             {
                 await Logout();
                 return;
             }
             Api.AccessToken = login.AccessToken;
-            restaurantId = login
-                .Restaurants.First(x => x.Permissions.Contains("backoffice.access"))
-                .RestaurantId;
+            AuthState.SetSession(login);
+            restaurantId =
+                login
+                    .Restaurants.FirstOrDefault(x => x.Permissions.Contains("backoffice.access"))
+                    ?.RestaurantId
+                ?? Guid.Empty;
             await LoadAllCore();
         }
         catch
@@ -126,64 +151,118 @@ public partial class Home
         }
     }
 
-    async Task Login() =>
-        await Run(async () =>
+    private string? QueryValue(string key)
+    {
+        string query = new Uri(Nav.Uri).Fragment.TrimStart('#');
+        foreach (string part in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
         {
-            login = await Api.LoginAsync(username, password);
-            if (!login.Restaurants.Any(x => x.Permissions.Contains("backoffice.access")))
-                throw new InvalidOperationException("Este perfil no tiene acceso al Backoffice.");
-            Api.AccessToken = login.AccessToken;
-            restaurantId = login
-                .Restaurants.First(x => x.Permissions.Contains("backoffice.access"))
-                .RestaurantId;
-            await Js.InvokeVoidAsync(
-                "sessionStorage.setItem",
-                SessionKey,
-                JsonSerializer.Serialize(login)
-            );
-            await LoadAllCore();
-        });
+            string[] pair = part.Split('=', 2);
+            if (pair[0] == key)
+            {
+                return Uri.UnescapeDataString(pair.Length > 1 ? pair[1] : "");
+            }
+        }
+        return null;
+    }
 
-    async Task Logout()
+    private void StartLogin(string provider)
+    {
+        Nav.NavigateTo(
+            $"/api/identity/auth/start/{provider}?returnPath=%2Fbackoffice%2F",
+            forceLoad: true
+        );
+    }
+
+    private async Task AcceptLogin(LoginResponse response)
+    {
+        login = response;
+        if (!HasBackofficeAccess)
+        {
+            throw new InvalidOperationException("Este perfil no tiene acceso al Backoffice.");
+        }
+
+        Api.AccessToken = login.AccessToken;
+        AuthState.SetSession(login);
+        restaurantId =
+            login
+                .Restaurants.FirstOrDefault(x => x.Permissions.Contains("backoffice.access"))
+                ?.RestaurantId
+            ?? Guid.Empty;
+        await Js.InvokeVoidAsync(
+            "sessionStorage.setItem",
+            SessionKey,
+            JsonSerializer.Serialize(login)
+        );
+        await LoadAllCore();
+    }
+
+    private async Task Logout()
     {
         await Js.InvokeVoidAsync("sessionStorage.removeItem", SessionKey);
         Api.AccessToken = null;
         login = null;
+        AuthState.SetSession(null);
         message = null;
     }
 
-    async Task RestaurantChanged(ChangeEventArgs args)
+    private async Task RestaurantChanged(ChangeEventArgs args)
     {
         if (!Guid.TryParse(args.Value?.ToString(), out restaurantId))
+        {
             return;
+        }
+
         await LoadLocal();
     }
 
-    async Task LoadAll() => await Run(LoadAllCore);
+    private async Task LoadAll()
+    {
+        await Run(LoadAllCore);
+    }
 
-    async Task LoadAllCore()
+    private async Task LoadAllCore()
     {
         categories = await Api.CategoriesAsync();
         products = await Api.ProductsAsync();
         restaurants = await Api.RestaurantsAsync();
         if (!restaurants.Any(x => x.Id == restaurantId) && SelectableRestaurants.Count > 0)
+        {
             restaurantId = SelectableRestaurants[0].Id;
+        }
+
         if (CanManageUsers)
+        {
             await LoadUsersCore();
+        }
+
         await LoadLocalCore();
     }
 
-    async Task LoadLocal() => await Run(LoadLocalCore);
-
-    async Task LoadLocalCore()
+    private async Task LoadLocal()
     {
-        menu = await Api.MenuAsync(restaurantId);
-        stations = await Api.StationsAsync(restaurantId);
-        tables = await Api.TablesAsync(restaurantId);
-        zones = await Api.ZonesAsync(restaurantId);
+        await Run(LoadLocalCore);
+    }
+
+    private async Task LoadLocalCore()
+    {
+        if (!IsAdmin && login?.Restaurants.Count == 0)
+        {
+            menu = [];
+            stations = [];
+            tables = [];
+            zones = [];
+            policy = new();
+            return;
+        }
+        menu = HasLocalPermission("catalog.manage") ? await Api.MenuAsync(restaurantId) : [];
+        stations = HasLocalPermission("kds.use") ? await Api.StationsAsync(restaurantId) : [];
+        tables = HasLocalPermission("tables.read") ? await Api.TablesAsync(restaurantId) : [];
+        zones = HasLocalPermission("tables.read") ? await Api.ZonesAsync(restaurantId) : [];
         tableDraft = new() { ZoneId = zones.FirstOrDefault()?.Id ?? Guid.Empty };
         zoneDraft = new();
-        policy = await Api.DiningPolicyAsync(restaurantId);
+        policy = HasLocalPermission("tables.read")
+            ? await Api.DiningPolicyAsync(restaurantId)
+            : new();
         allowedNetworksText = string.Join(Environment.NewLine, policy.QrAllowedNetworks);
         editors = products.ToDictionary(
             p => p.Id,
@@ -204,7 +283,8 @@ public partial class Home
         );
     }
 
-    internal async Task SaveMenuItem(ProductResponse p) =>
+    internal async Task SaveMenuItem(ProductResponse p)
+    {
         await Run(
             async () =>
             {
@@ -226,8 +306,10 @@ public partial class Home
             },
             false
         );
+    }
 
-    internal async Task CreateStation() =>
+    internal async Task CreateStation()
+    {
         await Run(
             async () =>
             {
@@ -239,8 +321,10 @@ public partial class Home
             },
             false
         );
+    }
 
-    internal async Task SaveStation(KitchenStationResponse item) =>
+    internal async Task SaveStation(KitchenStationResponse item)
+    {
         await Run(
             async () =>
             {
@@ -251,22 +335,27 @@ public partial class Home
             },
             false
         );
+    }
 
-    async Task RefreshStations()
+    private async Task RefreshStations()
     {
         await Task.Delay(600);
         stations = await Api.StationsAsync(restaurantId);
         menu = await Api.MenuAsync(restaurantId);
     }
 
-    internal async Task CreateCategory() =>
+    internal async Task CreateCategory()
+    {
         await Run(
             async () =>
             {
                 if (!stations.Any(x => x.IsActive && x.Code == categoryDraft.DefaultStationCode))
+                {
                     throw new InvalidOperationException(
                         "Selecciona una estación KDS activa del local."
                     );
+                }
+
                 await Api.CreateCategoryAsync(categoryDraft);
                 categoryDraft = new();
                 await RefreshCatalogProjection();
@@ -276,8 +365,10 @@ public partial class Home
             },
             false
         );
+    }
 
-    internal async Task SaveCategory(CategoryResponse item) =>
+    internal async Task SaveCategory(CategoryResponse item)
+    {
         await Run(
             async () =>
             {
@@ -289,13 +380,18 @@ public partial class Home
             },
             false
         );
+    }
 
-    internal async Task CreateProduct() =>
+    internal async Task CreateProduct()
+    {
         await Run(
             async () =>
             {
                 if (productDraft.CategoryId == Guid.Empty)
+                {
                     throw new InvalidOperationException("Selecciona una categoría.");
+                }
+
                 await Api.CreateProductAsync(productDraft);
                 productDraft = new();
                 await RefreshCatalogProjection();
@@ -305,8 +401,10 @@ public partial class Home
             },
             false
         );
+    }
 
-    internal async Task SaveProduct(ProductResponse item) =>
+    internal async Task SaveProduct(ProductResponse item)
+    {
         await Run(
             async () =>
             {
@@ -317,8 +415,9 @@ public partial class Home
             },
             false
         );
+    }
 
-    async Task RefreshCatalogProjection()
+    private async Task RefreshCatalogProjection()
     {
         await Task.Delay(800);
         categories = await Api.CategoriesAsync();
@@ -326,7 +425,8 @@ public partial class Home
         await LoadLocalCore();
     }
 
-    internal async Task CreateRestaurant() =>
+    internal async Task CreateRestaurant()
+    {
         await Run(
             async () =>
             {
@@ -344,11 +444,15 @@ public partial class Home
             },
             false
         );
+    }
 
     internal async Task SaveRestaurant()
     {
         if (CurrentRestaurant is null)
+        {
             return;
+        }
+
         await Run(
             async () =>
             {
@@ -362,15 +466,18 @@ public partial class Home
         );
     }
 
-    async Task RefreshZones()
+    private async Task RefreshZones()
     {
         zones = await Api.ZonesAsync(restaurantId);
         tables = await Api.TablesAsync(restaurantId);
         if (!zones.Any(x => x.Id == tableDraft.ZoneId))
+        {
             tableDraft.ZoneId = zones.FirstOrDefault()?.Id ?? Guid.Empty;
+        }
     }
 
-    internal async Task CreateZone() =>
+    internal async Task CreateZone()
+    {
         await Run(
             async () =>
             {
@@ -382,8 +489,10 @@ public partial class Home
             },
             false
         );
+    }
 
-    internal async Task SaveZone(ZoneResponse zone) =>
+    internal async Task SaveZone(ZoneResponse zone)
+    {
         await Run(
             async () =>
             {
@@ -394,8 +503,10 @@ public partial class Home
             },
             false
         );
+    }
 
-    internal async Task DeleteZone(ZoneResponse zone) =>
+    internal async Task DeleteZone(ZoneResponse zone)
+    {
         await Run(
             async () =>
             {
@@ -406,8 +517,10 @@ public partial class Home
             },
             false
         );
+    }
 
-    internal async Task CreateTable() =>
+    internal async Task CreateTable()
+    {
         await Run(
             async () =>
             {
@@ -419,8 +532,10 @@ public partial class Home
             },
             false
         );
+    }
 
-    internal async Task SaveTable(TableResponse item) =>
+    internal async Task SaveTable(TableResponse item)
+    {
         await Run(
             async () =>
             {
@@ -431,8 +546,10 @@ public partial class Home
             },
             false
         );
+    }
 
-    internal async Task DeleteTable(TableResponse item) =>
+    internal async Task DeleteTable(TableResponse item)
+    {
         await Run(
             async () =>
             {
@@ -444,8 +561,10 @@ public partial class Home
             },
             false
         );
+    }
 
-    internal async Task RotateQr(TableResponse item) =>
+    internal async Task RotateQr(TableResponse item)
+    {
         await Run(
             async () =>
             {
@@ -454,7 +573,10 @@ public partial class Home
                     $"El QR impreso de {item.Label} dejará de funcionar. ¿Regenerarlo?"
                 );
                 if (!confirmed)
+                {
                     return;
+                }
+
                 await Api.RotateQrAsync(item.Id);
                 tables = await Api.TablesAsync(restaurantId);
                 ok = true;
@@ -462,8 +584,10 @@ public partial class Home
             },
             false
         );
+    }
 
-    internal async Task SavePolicy() =>
+    internal async Task SavePolicy()
+    {
         await Run(
             async () =>
             {
@@ -478,98 +602,143 @@ public partial class Home
             },
             false
         );
-
-    async Task LoadUsersCore()
-    {
-        users = await Api.UsersAsync();
-        assignmentDrafts = users.ToDictionary(x => x.Id, _ => new UserAssignmentDraft());
     }
 
-    internal async Task CreateUser() =>
+    private async Task LoadUsersCore()
+    {
+        users = await Api.UsersAsync();
+    }
+
+    internal async Task CreateUser()
+    {
         await Run(
             async () =>
             {
-                if (userDraft.RestaurantId == Guid.Empty)
-                    throw new InvalidOperationException("Selecciona el local inicial.");
+                if (GlobalRoles.Contains(userDraft.Role))
+                {
+                    userDraft.RestaurantId = null;
+                }
+                else if (userDraft.RestaurantId is null || userDraft.RestaurantId == Guid.Empty)
+                {
+                    throw new InvalidOperationException("Selecciona un local.");
+                }
+
                 await Api.CreateUserAsync(userDraft);
-                userDraft = new();
+                userDraft = new() { Provider = providerDraft };
                 await LoadUsersCore();
                 ok = true;
-                message = "Usuario creado y asignado al local.";
+                message = "Cuenta autorizada.";
             },
             false
         );
+    }
 
-    internal async Task SaveAssignment(
-        StaffUserResponse user,
-        UserRestaurantAssignmentResponse assignment
-    ) =>
+    internal async Task SaveUser(StaffUserResponse user)
+    {
         await Run(
             async () =>
             {
-                await Api.SaveUserAssignmentAsync(user.Id, assignment);
+                if (GlobalRoles.Contains(user.Role))
+                {
+                    user.RestaurantId = null;
+                }
+
+                await Api.UpdateUserAsync(user);
                 await LoadUsersCore();
                 ok = true;
-                message =
-                    "Asignación actualizada. El usuario deberá iniciar sesión otra vez para usar los nuevos permisos.";
+                message = "Cuenta actualizada.";
             },
             false
         );
+    }
 
-    internal async Task AddAssignment(StaffUserResponse user) =>
+    internal async Task SaveProvider()
+    {
         await Run(
             async () =>
             {
-                UserAssignmentDraft draft = assignmentDrafts[user.Id];
-                if (draft.RestaurantId == Guid.Empty)
-                    throw new InvalidOperationException(
-                        "Selecciona un local que todavía no tenga asignado."
-                    );
-                await Api.AddUserAssignmentAsync(user.Id, draft);
-                await LoadUsersCore();
+                await Api.ChangeProviderAsync(providerDraft);
+                providerSettings = await Api.ProviderAsync();
+                userDraft.Provider = providerDraft;
                 ok = true;
-                message = "Local asignado al usuario.";
+                message = "Proveedor activo actualizado.";
             },
             false
         );
+    }
 
-    internal bool HasLocalPermission(string permission) =>
-        IsAdmin
-        || login
-            ?.Restaurants.FirstOrDefault(x => x.RestaurantId == restaurantId)
-            ?.Permissions.Contains(permission) == true;
+    internal bool HasLocalPermission(string permission)
+    {
+        return IsAdmin
+            || GlobalRoleHasPermission(permission)
+            || login
+                ?.Restaurants.FirstOrDefault(x => x.RestaurantId == restaurantId)
+                ?.Permissions.Contains(permission) == true;
+    }
 
-    internal bool HasGlobalPermission(string permission) =>
-        IsAdmin || login?.Restaurants.Any(x => x.Permissions.Contains(permission)) == true;
+    internal bool HasGlobalPermission(string permission)
+    {
+        return IsAdmin
+            || GlobalRoleHasPermission(permission)
+            || login?.Restaurants.Any(x => x.Permissions.Contains(permission)) == true;
+    }
 
-    string CurrentRoleFor(Guid id) =>
-        IsAdmin
-            ? "Admin"
-            : login?.Restaurants.FirstOrDefault(x => x.RestaurantId == id)?.Role ?? "Sin asignar";
+    private bool GlobalRoleHasPermission(string permission)
+    {
+        string? role = login?.GlobalRoles?.FirstOrDefault();
+        return role switch
+        {
+            "Gerente" or "Contabilidad" => permission
+                is "backoffice.access"
+                    or "dashboard.read"
+                    or "reports.financial.read"
+                    or "payments.refund",
+            "Oficina" => permission
+                is "backoffice.access"
+                    or "dashboard.read"
+                    or "reports.financial.read"
+                    or "reports.marketing.read",
+            _ => false,
+        };
+    }
 
-    string NavClass(string value) => module == value ? "nav-active" : "";
+    private string CurrentRoleFor(Guid id)
+    {
+        return login?.GlobalRoles?.FirstOrDefault()
+            ?? login?.Restaurants.FirstOrDefault(x => x.RestaurantId == id)?.Role
+            ?? "Sin asignar";
+    }
 
-    internal IEnumerable<string> AssignableRolesFor(string current) =>
-        AssignableRoles.Contains(current) ? AssignableRoles : AssignableRoles.Append(current);
+    private string NavClass(string value)
+    {
+        return module == value ? "nav-active" : "";
+    }
 
-    internal IEnumerable<RestaurantResponse> AvailableRestaurantsFor(StaffUserResponse user) =>
-        ManageableRestaurants.Where(x => user.Restaurants.All(a => a.RestaurantId != x.Id));
+    internal string RestaurantName(Guid id)
+    {
+        return restaurants.FirstOrDefault(x => x.Id == id)?.Name ?? id.ToString();
+    }
 
-    internal string RestaurantName(Guid id) =>
-        restaurants.FirstOrDefault(x => x.Id == id)?.Name ?? id.ToString();
+    internal string RestaurantNameWithId(Guid id)
+    {
+        return $"{RestaurantName(id)} · {id}";
+    }
 
-    internal string RestaurantNameWithId(Guid id) => $"{RestaurantName(id)} · {id}";
+    internal static string DateValue(DateTime? value)
+    {
+        return value?.ToString("yyyy-MM-dd") ?? string.Empty;
+    }
 
-    internal static string DateValue(DateTime? value) =>
-        value?.ToString("yyyy-MM-dd") ?? string.Empty;
-
-    internal static DateTime? ParseDate(object? value) =>
-        DateTime.TryParse(value?.ToString(), out DateTime date)
+    internal static DateTime? ParseDate(object? value)
+    {
+        return DateTime.TryParse(value?.ToString(), out DateTime date)
             ? DateTime.SpecifyKind(date, DateTimeKind.Utc)
             : null;
+    }
 
-    internal static string RoleLabel(string role) =>
-        role switch
+    internal static string RoleLabel(string role)
+    {
+        return role switch
         {
             "Admin" => "Administrador",
             "Gerente" => "Gerencia",
@@ -580,9 +749,12 @@ public partial class Home
             "Kds" => "Cocina",
             _ => role,
         };
+    }
 
-    internal static string StatusLabel(string status) =>
-        status == "Occupied" ? "Ocupada" : "Disponible";
+    internal static string StatusLabel(string status)
+    {
+        return status == "Occupied" ? "Ocupada" : "Disponible";
+    }
 
     internal void SelectStation(MenuEditor editor, ChangeEventArgs args)
     {
@@ -590,7 +762,10 @@ public partial class Home
             x.Code == args.Value?.ToString()
         );
         if (station is null)
+        {
             return;
+        }
+
         editor.PreparationStationCode = station.Code;
         editor.PreparationStationName = station.Name;
     }
@@ -601,7 +776,10 @@ public partial class Home
             x.Code == args.Value?.ToString()
         );
         if (station is null)
+        {
             return;
+        }
+
         categoryItem.DefaultStationCode = station.Code;
         categoryItem.DefaultStationName = station.Name;
     }
@@ -612,12 +790,15 @@ public partial class Home
             x.Code == args.Value?.ToString()
         );
         if (station is null)
+        {
             return;
+        }
+
         categoryDraft.DefaultStationCode = station.Code;
         categoryDraft.DefaultStationName = station.Name;
     }
 
-    async Task<MenuItemResponse> ConfirmMenuProjection(MenuItemResponse expected)
+    private async Task<MenuItemResponse> ConfirmMenuProjection(MenuItemResponse expected)
     {
         for (int attempt = 0; attempt < 20; attempt++)
         {
@@ -626,7 +807,10 @@ public partial class Home
                 x.ProductId == expected.ProductId && x.Version >= expected.Version
             );
             if (current is not null)
+            {
                 return current;
+            }
+
             await Task.Delay(300);
         }
         throw new InvalidOperationException(
@@ -634,7 +818,7 @@ public partial class Home
         );
     }
 
-    async Task ConfirmCategoryProjection(CategoryResponse expected)
+    private async Task ConfirmCategoryProjection(CategoryResponse expected)
     {
         for (int attempt = 0; attempt < 20; attempt++)
         {
@@ -642,7 +826,10 @@ public partial class Home
                 x.Id == expected.Id && x.Version >= expected.Version
             );
             if (current is not null)
+            {
                 return;
+            }
+
             await Task.Delay(300);
         }
         throw new InvalidOperationException(
@@ -650,10 +837,13 @@ public partial class Home
         );
     }
 
-    async Task Run(Func<Task> action, bool clear = true)
+    private async Task Run(Func<Task> action, bool clear = true)
     {
         if (clear)
+        {
             message = null;
+        }
+
         ok = false;
         busy = true;
         try

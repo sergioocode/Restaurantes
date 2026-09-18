@@ -1,34 +1,38 @@
 namespace Restaurantes.Identity.Application;
 
-public sealed record LoginRequest(string Username, string Password);
-
-public sealed record CreateStaffUserRequest(
-    string Username,
+public sealed record CreateAccountRequest(
+    string Email,
+    string Provider,
     string DisplayName,
-    string Password,
-    Guid RestaurantId,
-    string Role
+    string Role,
+    Guid? RestaurantId
 );
 
-public sealed record AssignRestaurantRequest(
-    Guid RestaurantId,
+public sealed record UpdateAccountRequest(
+    string DisplayName,
     string Role,
-    DateTime? ValidFromUtc = null,
-    DateTime? ValidUntilUtc = null
+    Guid? RestaurantId,
+    bool IsActive
 );
 
-public sealed record UpdateRestaurantAssignmentRequest(
+public sealed record ProviderSettingsResponse(
+    string ActiveProvider,
+    bool MicrosoftConfigured,
+    bool GoogleConfigured
+);
+
+public sealed record ChangeProviderRequest(string ActiveProvider);
+
+public sealed record AccountResponse(
+    Guid Id,
+    string Email,
+    string Provider,
+    string DisplayName,
     string Role,
+    Guid? RestaurantId,
     bool IsActive,
-    DateTime? ValidFromUtc = null,
-    DateTime? ValidUntilUtc = null
+    bool IsLinked
 );
-
-public sealed record IdentityActor(bool IsAdmin, IReadOnlySet<Guid> ManageableRestaurantIds)
-{
-    public bool CanManage(Guid restaurantId) =>
-        IsAdmin && ManageableRestaurantIds.Contains(restaurantId);
-}
 
 public sealed record IssuedAccessToken(string Value, DateTime ExpiresAtUtc);
 
@@ -42,23 +46,6 @@ public sealed record LoginRestaurantResponse(
     IReadOnlyCollection<string> Permissions
 );
 
-public sealed record RestaurantAssignmentResponse(
-    Guid RestaurantId,
-    string Role,
-    bool IsActive,
-    DateTime ValidFromUtc,
-    DateTime? ValidUntilUtc
-);
-
-public sealed record UpdatedRestaurantAssignmentResponse(
-    Guid Id,
-    Guid RestaurantId,
-    string Role,
-    bool IsActive,
-    DateTime ValidFromUtc,
-    DateTime? ValidUntilUtc
-);
-
 public sealed record LoginResponse(
     string AccessToken,
     string TokenType,
@@ -66,23 +53,6 @@ public sealed record LoginResponse(
     LoginUserResponse User,
     IReadOnlyCollection<string> GlobalRoles,
     IReadOnlyCollection<LoginRestaurantResponse> Restaurants
-);
-
-public sealed record IdentityUserResponse(
-    Guid Id,
-    string? Username,
-    string DisplayName,
-    bool IsActive,
-    DateTime CreatedAtUtc,
-    IReadOnlyCollection<RestaurantAssignmentResponse> Restaurants
-);
-
-public sealed record CreatedIdentityUserResponse(
-    Guid Id,
-    string? Username,
-    string DisplayName,
-    Guid RestaurantId,
-    string Role
 );
 
 public enum IdentityOutcome

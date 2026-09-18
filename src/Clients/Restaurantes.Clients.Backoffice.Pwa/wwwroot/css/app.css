@@ -1,4 +1,4 @@
-﻿:root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #18211d; background: #eef1ed; }
+:root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #18211d; background: #eef1ed; }
 * { box-sizing: border-box; } body { margin: 0; } button, input, select { font: inherit; }
 button { cursor: pointer; } button:disabled { cursor: not-allowed; opacity: .55; }
 .loading, .login-shell { min-height: 100vh; display: grid; place-items: center; }
@@ -31,3 +31,6 @@ input, select { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px s
 @media (max-width: 700px) { .topbar, .top-actions, .page-title { align-items: stretch; flex-direction: column; }.top-actions select { min-width: 0; }.content { padding: 18px; }.admin-grid, .product-row, .maintenance-row, .table-maintenance, .settings-panel, .inline-form, .assignment-row, .assignment-add { grid-template-columns: 1fr; }.product-name, .qr-data, .inline-form .wide { grid-column: auto; }.qr-data { align-items: stretch; flex-direction: column; } }
 
 .guest-setting { grid-column: 1 / -1; }
+
+.login-providers { display: grid; gap: .75rem; margin-top: 1.5rem; }
+.login-providers button { width: 100%; }

@@ -1,39 +1,65 @@
 @if (!Host.CanManageUsers) { <NoAccessPanel /> }
 else
 {
-    <details class="admin-panel" open><summary>Nuevo usuario</summary>
+    <details class="admin-panel" open>
+        <summary>Proveedor de inicio de sesión</summary>
+        <p>Solo el proveedor activo puede iniciar sesión. El cambio afecta a todos los clientes.</p>
+        <select @bind="Host.providerDraft">
+            <option value="Microsoft" disabled="@(!Host.MicrosoftConfigured)">Microsoft corporativo</option>
+            <option value="Google" disabled="@(!Host.GoogleConfigured)">Google Workspace</option>
+        </select>
+        <button class="primary" @onclick="Host.SaveProvider" disabled="@Host.busy">Guardar proveedor</button>
+    </details>
+    <details class="admin-panel" open>
+        <summary>Autorizar cuenta</summary>
         <form class="inline-form user-create-form" @onsubmit="Host.CreateUser" @onsubmit:preventDefault>
-            <input autocomplete="off" placeholder="Usuario" @bind="Host.userDraft.Username" />
+            <input type="email" autocomplete="off" placeholder="Correo corporativo" @bind="Host.userDraft.Email" />
             <input placeholder="Nombre visible" @bind="Host.userDraft.DisplayName" />
-            <input type="password" autocomplete="new-password" placeholder="Contraseña (mín. 10)" @bind="Host.userDraft.Password" />
-            <select @bind="Host.userDraft.RestaurantId"><option value="@Guid.Empty">Local inicial</option>@foreach (RestaurantResponse restaurant in Host.ManageableRestaurants) { <option value="@restaurant.Id">@restaurant.Name · @restaurant.Id</option> }</select>
-            <select @bind="Host.userDraft.Role">@foreach (string role in Host.AssignableRoles) { <option value="@role">@Home.RoleLabel(role)</option> }</select>
-            <button class="primary" disabled="@Host.busy">Crear</button>
+            <select @bind="Host.userDraft.Provider">
+                <option value="Microsoft">Microsoft</option>
+                <option value="Google">Google Workspace</option>
+            </select>
+            <select @bind="Host.userDraft.Role">
+                @foreach (string role in Host.AssignableRoles)
+                {
+                    <option value="@role">@Home.RoleLabel(role)</option>
+                }
+            </select>
+            <select @bind="Host.userDraft.RestaurantId">
+                <option value="">Sin local (rol global)</option>
+                @foreach (RestaurantResponse restaurant in Host.ManageableRestaurants)
+                {
+                    <option value="@restaurant.Id">@restaurant.Name</option>
+                }
+            </select>
+            <button class="primary" disabled="@Host.busy">Autorizar</button>
         </form>
     </details>
     <div class="user-list">
         @foreach (StaffUserResponse user in Host.users.OrderBy(x => x.DisplayName))
         {
             <article class="user-card @(user.IsActive ? "" : "inactive")">
-                <header><div><strong>@user.DisplayName</strong><small>@user.Username · ID @user.Id</small></div><span>@(user.IsActive ? "Activo" : "Inactivo")</span></header>
-                <div class="assignment-list">
-                    @foreach (UserRestaurantAssignmentResponse assignment in user.Restaurants.OrderBy(x => Host.RestaurantName(x.RestaurantId)))
-                    {
-                        <div class="assignment-row">
-                            <label>Local<input value="@Host.RestaurantNameWithId(assignment.RestaurantId)" readonly /></label>
-                            <label>Rol<select @bind="assignment.Role">@foreach (string role in Host.AssignableRolesFor(assignment.Role)) { <option value="@role">@Home.RoleLabel(role)</option> }</select></label>
-                            <label>Desde<input type="date" value="@Home.DateValue(assignment.ValidFromUtc)" @onchange="e => assignment.ValidFromUtc = Home.ParseDate(e.Value)" /></label>
-                            <label>Hasta<input type="date" value="@Home.DateValue(assignment.ValidUntilUtc)" @onchange="e => assignment.ValidUntilUtc = Home.ParseDate(e.Value)" /></label>
-                            <label class="availability"><input type="checkbox" @bind="assignment.IsActive" /> Activa</label>
-                            <button class="primary" @onclick="() => Host.SaveAssignment(user, assignment)" disabled="@Host.busy">Guardar</button>
-                        </div>
-                    }
+                <header>
+                    <div><strong>@user.DisplayName</strong><small>@user.Email · @user.Provider · @(user.IsLinked ? "Vinculada" : "Pendiente de primer acceso")</small></div>
+                </header>
+                <div class="assignment-row">
+                    <label>Nombre<input @bind="user.DisplayName" /></label>
+                    <label>Rol<select @bind="user.Role">
+                        @foreach (string role in Host.AssignableRoles)
+                        {
+                            <option value="@role">@Home.RoleLabel(role)</option>
+                        }
+                    </select></label>
+                    <label>Local<select @bind="user.RestaurantId">
+                        <option value="">Sin local (rol global)</option>
+                        @foreach (RestaurantResponse restaurant in Host.ManageableRestaurants)
+                        {
+                            <option value="@restaurant.Id">@restaurant.Name</option>
+                        }
+                    </select></label>
+                    <label class="availability"><input type="checkbox" @bind="user.IsActive" /> Activa</label>
+                    <button class="primary" @onclick="() => Host.SaveUser(user)" disabled="@Host.busy">Guardar</button>
                 </div>
-                <form class="assignment-add" @onsubmit="() => Host.AddAssignment(user)" @onsubmit:preventDefault>
-                    <select @bind="Host.assignmentDrafts[user.Id].RestaurantId"><option value="@Guid.Empty">Añadir otro local</option>@foreach (RestaurantResponse restaurant in Host.AvailableRestaurantsFor(user)) { <option value="@restaurant.Id">@restaurant.Name · @restaurant.Id</option> }</select>
-                    <select @bind="Host.assignmentDrafts[user.Id].Role">@foreach (string role in Host.AssignableRoles) { <option value="@role">@Home.RoleLabel(role)</option> }</select>
-                    <button class="secondary" disabled="@Host.busy">Asignar local</button>
-                </form>
             </article>
         }
     </div>

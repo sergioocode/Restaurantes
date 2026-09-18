@@ -1,4 +1,4 @@
-using Restaurantes.Identity.Domain;
+﻿using Restaurantes.Identity.Domain;
 using Restaurantes.Security;
 
 namespace Restaurantes.Identity.Application;
@@ -9,389 +9,285 @@ public sealed class IdentityService(
     TimeProvider time
 )
 {
-    private static readonly string[] AllowedRoles =
-    [
-        "Admin",
-        "Gerente",
-        "Contabilidad",
-        "Oficina",
-        "Manager",
-        "PosComandero",
-        "Kds",
-    ];
-
     private static readonly string[] GlobalRoles = ["Admin", "Gerente", "Contabilidad", "Oficina"];
-    private static readonly string[] SingleRestaurantRoles = ["PosComandero", "Kds"];
+    private static readonly string[] LocalRoles = ["Manager", "PosComandero", "Kds"];
 
-    public async Task<IdentityResult> Login(LoginRequest request, CancellationToken ct)
+    public async Task<IdentityResult> GetProviderSettings(
+        bool microsoftConfigured,
+        bool googleConfigured,
+        CancellationToken ct
+    )
     {
-        if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrEmpty(request.Password))
+        AuthenticationSettings settings = await store.GetSettingsAsync(ct);
+        return Ok(
+            new ProviderSettingsResponse(
+                settings.ActiveProvider,
+                microsoftConfigured,
+                googleConfigured
+            )
+        );
+    }
+
+    public async Task<IdentityResult> ChangeProvider(
+        ChangeProviderRequest request,
+        bool microsoftConfigured,
+        bool googleConfigured,
+        CancellationToken ct
+    )
+    {
+        if (!ValidProvider(request.ActiveProvider))
         {
-            return BadRequest("Username and password are required.");
+            return BadRequest("Proveedor no válido.");
         }
 
-        ApplicationUser? user = await store.FindByNameAsync(request.Username.Trim());
         if (
-            user is null
-            || !user.IsActive
-            || !await store.CheckPasswordAsync(user, request.Password)
+            (request.ActiveProvider == "Microsoft" && !microsoftConfigured)
+            || (request.ActiveProvider == "Google" && !googleConfigured)
         )
+        {
+            return BadRequest("El proveedor aún no está configurado.");
+        }
+
+        if (!await store.AnyActiveAdminForProviderAsync(request.ActiveProvider, ct))
+        {
+            return BadRequest("Autoriza primero un Admin del proveedor de destino.");
+        }
+
+        AuthenticationSettings settings = await store.GetSettingsAsync(ct);
+        settings.ActiveProvider = request.ActiveProvider;
+        await store.SaveChangesAsync(ct);
+        return Ok(
+            new ProviderSettingsResponse(
+                settings.ActiveProvider,
+                microsoftConfigured,
+                googleConfigured
+            )
+        );
+    }
+
+    public async Task<IdentityResult> AuthorizeExternalAsync(
+        string provider,
+        string email,
+        string subject,
+        string? tenantId,
+        CancellationToken ct
+    )
+    {
+        AuthenticationSettings settings = await store.GetSettingsAsync(ct);
+        if (!string.Equals(settings.ActiveProvider, provider, StringComparison.Ordinal))
         {
             return new(IdentityOutcome.Unauthorized);
         }
 
-        await store.LoadRestaurantAccessesAsync(user, ct);
-        DateTime now = time.GetUtcNow().UtcDateTime;
-        string[] globalRoles = await store.GetRolesAsync(user);
-        IssuedAccessToken token = tokens.Issue(user, globalRoles);
-        LoginRestaurantResponse[] restaurants = user
-            .RestaurantAccesses.Where(x => x.IsCurrentlyActive(now))
-            .Select(x => new LoginRestaurantResponse(
-                x.RestaurantId,
-                x.Role,
-                x.ValidFromUtc,
-                x.ValidUntilUtc,
-                RestaurantPermissions.ForRole(x.Role)
-            ))
-            .ToArray();
+        string normalizedEmail = email.Trim().ToLowerInvariant();
+        ApplicationUser? user = await store.FindByEmailAsync(provider, normalizedEmail, ct);
+        if (user is null || !user.IsActive)
+        {
+            return new(IdentityOutcome.Unauthorized);
+        }
+
+        ApplicationUser? subjectOwner = await store.FindBySubjectAsync(
+            provider,
+            tenantId,
+            subject,
+            ct
+        );
+        if (subjectOwner is not null && subjectOwner.Id != user.Id)
+        {
+            return new(IdentityOutcome.Unauthorized);
+        }
+
+        if (user.ProviderSubject is null)
+        {
+            user.ProviderSubject = subject;
+            user.TenantId = tenantId;
+            await store.SaveChangesAsync(ct);
+        }
+        else if (user.ProviderSubject != subject || user.TenantId != tenantId)
+        {
+            return new(IdentityOutcome.Unauthorized);
+        }
+
+        string code = await store.CreateLoginTicketAsync(user.Id, ct);
+        return Ok(code);
+    }
+
+    public async Task<IdentityResult> ExchangeAsync(string code, CancellationToken ct)
+    {
+        ApplicationUser? user = await store.ConsumeLoginTicketAsync(code, ct);
+        if (user is null || !user.IsActive)
+        {
+            return new(IdentityOutcome.Unauthorized);
+        }
+
+        AuthenticationSettings settings = await store.GetSettingsAsync(ct);
+        if (settings.ActiveProvider != user.Provider)
+        {
+            return new(IdentityOutcome.Unauthorized);
+        }
+
+        IssuedAccessToken token = tokens.Issue(user);
+        string[] globalRoles = GlobalRoles.Contains(user.Role, StringComparer.Ordinal)
+            ? [user.Role]
+            : [];
+        LoginRestaurantResponse[] restaurants =
+            user.RestaurantId is Guid restaurantId
+            && LocalRoles.Contains(user.Role, StringComparer.Ordinal)
+                ?
+                [
+                    new(
+                        restaurantId,
+                        user.Role,
+                        user.CreatedAtUtc,
+                        null,
+                        RestaurantPermissions.ForRole(user.Role)
+                    ),
+                ]
+                : [];
         return Ok(
             new LoginResponse(
                 token.Value,
                 "Bearer",
                 token.ExpiresAtUtc,
-                new LoginUserResponse(user.Id, user.UserName, user.DisplayName),
+                new(user.Id, user.Email, user.DisplayName),
                 globalRoles,
                 restaurants
             )
         );
     }
 
-    public async Task<IdentityResult> ListUsers(IdentityActor actor, CancellationToken ct)
+    public async Task<IdentityResult> ListUsers(CancellationToken ct)
     {
-        if (!actor.IsAdmin)
-        {
-            return new(IdentityOutcome.Forbidden);
-        }
-
-        IdentityUserResponse[] visible = (await store.ListUsersAsync(ct))
-            .Select(user => new
-            {
-                User = user,
-                Assignments = user
-                    .RestaurantAccesses.Where(x =>
-                        actor.ManageableRestaurantIds.Contains(x.RestaurantId)
-                    )
-                    .OrderBy(x => x.RestaurantId)
-                    .ToArray(),
-            })
-            .Where(x => x.Assignments.Length > 0 || actor.IsAdmin)
-            .Select(x => new IdentityUserResponse(
-                x.User.Id,
-                x.User.UserName,
-                x.User.DisplayName,
-                x.User.IsActive,
-                x.User.CreatedAtUtc,
-                x.Assignments.Select(ToRestaurantAccess).ToArray()
-            ))
-            .ToArray();
-        return Ok(visible);
+        return Ok((await store.ListUsersAsync(ct)).Select(ToResponse).ToArray());
     }
 
-    public async Task<IdentityResult> CreateUser(
-        CreateStaffUserRequest request,
-        IdentityActor actor,
-        CancellationToken ct
-    )
+    public async Task<IdentityResult> CreateUser(CreateAccountRequest request, CancellationToken ct)
     {
-        if (!actor.CanManage(request.RestaurantId))
+        string? error = Validate(
+            request.Email,
+            request.Provider,
+            request.DisplayName,
+            request.Role,
+            request.RestaurantId
+        );
+        if (error is not null)
         {
-            return new(IdentityOutcome.Forbidden);
-        }
-        if (!ValidUserRequest(request, out string? error))
-        {
-            return BadRequest(error!);
-        }
-        if (!CanAssignRole(actor, request.Role))
-        {
-            return new(IdentityOutcome.Forbidden);
-        }
-        if (await store.FindByNameAsync(request.Username.Trim()) is not null)
-        {
-            return Conflict("Username already exists.");
+            return BadRequest(error);
         }
 
-        await using IIdentityTransaction transaction = await store.BeginTransactionAsync(ct);
-        DateTime now = time.GetUtcNow().UtcDateTime;
+        string email = request.Email.Trim().ToLowerInvariant();
+        if (await store.FindByEmailAsync(request.Provider, email, ct) is not null)
+        {
+            return new(IdentityOutcome.Conflict, new { detail = "La cuenta ya está autorizada." });
+        }
+
         ApplicationUser user = new()
         {
             Id = Guid.NewGuid(),
-            UserName = request.Username.Trim(),
+            Email = email,
+            Provider = request.Provider,
             DisplayName = request.DisplayName.Trim(),
-            CreatedAtUtc = now,
+            Role = request.Role,
+            RestaurantId = request.RestaurantId,
             IsActive = true,
-            LockoutEnabled = true,
+            CreatedAtUtc = time.GetUtcNow().UtcDateTime,
         };
-        IdentityOperation created = await store.CreateUserAsync(user, request.Password);
-        if (!created.Succeeded)
-        {
-            return IdentityFailure(created);
-        }
-
-        if (GlobalRoles.Contains(request.Role, StringComparer.Ordinal))
-        {
-            IdentityOperation roleResult = await EnsureGlobalRoleAsync(user, request.Role);
-            if (!roleResult.Succeeded)
-            {
-                return IdentityFailure(roleResult);
-            }
-        }
-
-        store.AddAssignment(
-            new UserRestaurantAssignment
-            {
-                Id = Guid.NewGuid(),
-                UserId = user.Id,
-                RestaurantId = request.RestaurantId,
-                Role = request.Role,
-                ValidFromUtc = now,
-            }
-        );
-        await store.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
-        return new(
-            IdentityOutcome.Created,
-            new CreatedIdentityUserResponse(
-                user.Id,
-                user.UserName,
-                user.DisplayName,
-                request.RestaurantId,
-                request.Role
-            ),
-            $"/api/identity/users/{user.Id}"
-        );
+        await store.AddUserAsync(user, ct);
+        return new(IdentityOutcome.Created, ToResponse(user), $"/api/identity/users/{user.Id}");
     }
 
-    public Task<IdentityResult> AssignRestaurant(
-        Guid userId,
-        AssignRestaurantRequest request,
-        IdentityActor actor,
-        CancellationToken ct
-    ) =>
-        UpsertRestaurantAssignment(
-            userId,
-            request.RestaurantId,
-            new UpdateRestaurantAssignmentRequest(
-                request.Role,
-                true,
-                request.ValidFromUtc,
-                request.ValidUntilUtc
-            ),
-            actor,
-            ct
-        );
-
-    public Task<IdentityResult> UpdateRestaurantAssignment(
-        Guid userId,
-        Guid restaurantId,
-        UpdateRestaurantAssignmentRequest request,
-        IdentityActor actor,
-        CancellationToken ct
-    ) => UpsertRestaurantAssignment(userId, restaurantId, request, actor, ct);
-
-    public async Task<IdentityResult> DisableRestaurantAssignment(
-        Guid userId,
-        Guid restaurantId,
-        IdentityActor actor,
+    public async Task<IdentityResult> UpdateUser(
+        Guid id,
+        UpdateAccountRequest request,
         CancellationToken ct
     )
     {
-        if (!actor.CanManage(restaurantId))
-        {
-            return new(IdentityOutcome.Forbidden);
-        }
-
-        UserRestaurantAssignment? assignment = await store.FindAssignmentAsync(
-            userId,
-            restaurantId,
-            ct
-        );
-        if (assignment is null)
-        {
-            return new(IdentityOutcome.NotFound);
-        }
-        assignment.IsActive = false;
-        await store.SaveChangesAsync(ct);
-        ApplicationUser? user = await store.FindByIdAsync(userId);
-        if (user is not null)
-        {
-            await SynchronizeGlobalRolesAsync(user, ct);
-            await store.UpdateSecurityStampAsync(user);
-        }
-        return new(IdentityOutcome.NoContent);
-    }
-
-    private async Task<IdentityResult> UpsertRestaurantAssignment(
-        Guid userId,
-        Guid restaurantId,
-        UpdateRestaurantAssignmentRequest request,
-        IdentityActor actor,
-        CancellationToken ct
-    )
-    {
-        if (!actor.CanManage(restaurantId))
-        {
-            return new(IdentityOutcome.Forbidden);
-        }
-        if (!AllowedRoles.Contains(request.Role, StringComparer.Ordinal))
-        {
-            return BadRequest("Role is invalid.");
-        }
-        if (!CanAssignRole(actor, request.Role))
-        {
-            return new(IdentityOutcome.Forbidden);
-        }
-        if (request.ValidUntilUtc <= request.ValidFromUtc)
-        {
-            return BadRequest("ValidUntilUtc must be later than ValidFromUtc.");
-        }
-
-        ApplicationUser? user = await store.FindByIdAsync(userId);
+        ApplicationUser? user = await store.FindByIdAsync(id, ct);
         if (user is null)
         {
             return new(IdentityOutcome.NotFound);
         }
-        string[] assignedRoles = await store.GetOtherActiveRolesAsync(userId, restaurantId, ct);
-        if (assignedRoles.Any(role => !string.Equals(role, request.Role, StringComparison.Ordinal)))
+
+        string? error = Validate(
+            user.Email,
+            user.Provider,
+            request.DisplayName,
+            request.Role,
+            request.RestaurantId
+        );
+        if (error is not null)
         {
-            return Conflict("A user can only have one role.");
+            return BadRequest(error);
         }
+
         if (
-            request.IsActive
-            && SingleRestaurantRoles.Contains(request.Role, StringComparer.Ordinal)
-            && assignedRoles.Length > 0
+            user.Role == "Admin"
+            && (!request.IsActive || request.Role != "Admin")
+            && !await store.AnyActiveAdminExceptAsync(id, user.Provider, ct)
         )
         {
-            return Conflict($"Role {request.Role} can only be assigned to one restaurant.");
-        }
-        if (GlobalRoles.Contains(request.Role, StringComparer.Ordinal))
-        {
-            IdentityOperation roleResult = await EnsureGlobalRoleAsync(user, request.Role);
-            if (!roleResult.Succeeded)
-            {
-                return IdentityFailure(roleResult);
-            }
+            return BadRequest("No se puede desactivar el último Admin.");
         }
 
-        DateTime now = time.GetUtcNow().UtcDateTime;
-        UserRestaurantAssignment? assignment = await store.FindAssignmentAsync(
-            userId,
-            restaurantId,
-            ct
-        );
-        if (assignment is null)
-        {
-            assignment = new UserRestaurantAssignment
-            {
-                Id = Guid.NewGuid(),
-                UserId = userId,
-                RestaurantId = restaurantId,
-            };
-            store.AddAssignment(assignment);
-        }
-        assignment.Role = request.Role;
-        assignment.IsActive = request.IsActive;
-        assignment.ValidFromUtc = request.ValidFromUtc?.ToUniversalTime() ?? now;
-        assignment.ValidUntilUtc = request.ValidUntilUtc?.ToUniversalTime();
+        user.DisplayName = request.DisplayName.Trim();
+        user.Role = request.Role;
+        user.RestaurantId = request.RestaurantId;
+        user.IsActive = request.IsActive;
         await store.SaveChangesAsync(ct);
-        await SynchronizeGlobalRolesAsync(user, ct);
-        await store.UpdateSecurityStampAsync(user);
-        return Ok(
-            new UpdatedRestaurantAssignmentResponse(
-                user.Id,
-                assignment.RestaurantId,
-                assignment.Role,
-                assignment.IsActive,
-                assignment.ValidFromUtc,
-                assignment.ValidUntilUtc
-            )
+        return Ok(ToResponse(user));
+    }
+
+    private static string? Validate(
+        string email,
+        string provider,
+        string displayName,
+        string role,
+        Guid? restaurantId
+    )
+    {
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@') || email.Length > 320)
+        {
+            return "Introduce un correo válido.";
+        }
+
+        return !ValidProvider(provider) ? "Proveedor no válido."
+            : string.IsNullOrWhiteSpace(displayName) || displayName.Length > 120
+                ? "Introduce un nombre visible."
+            : GlobalRoles.Contains(role, StringComparer.Ordinal)
+                ? restaurantId is null ? null
+                    : "Los roles globales no tienen local."
+            : LocalRoles.Contains(role, StringComparer.Ordinal)
+                ? restaurantId is Guid id && id != Guid.Empty ? null
+                    : "El rol local requiere un local."
+            : "Rol no válido.";
+    }
+
+    private static bool ValidProvider(string provider)
+    {
+        return provider is "Microsoft" or "Google";
+    }
+
+    private static AccountResponse ToResponse(ApplicationUser user)
+    {
+        return new(
+            user.Id,
+            user.Email,
+            user.Provider,
+            user.DisplayName,
+            user.Role,
+            user.RestaurantId,
+            user.IsActive,
+            user.ProviderSubject is not null
         );
     }
 
-    private async Task<IdentityOperation> EnsureGlobalRoleAsync(ApplicationUser user, string role)
+    private static IdentityResult Ok(object value)
     {
-        if (!await store.RoleExistsAsync(role))
-        {
-            IdentityOperation created = await store.CreateRoleAsync(role);
-            if (!created.Succeeded)
-            {
-                return created;
-            }
-        }
-        return await store.IsInRoleAsync(user, role)
-            ? IdentityOperation.Success
-            : await store.AddToRoleAsync(user, role);
+        return new(IdentityOutcome.Ok, value);
     }
 
-    private async Task SynchronizeGlobalRolesAsync(ApplicationUser user, CancellationToken ct)
+    private static IdentityResult BadRequest(string detail)
     {
-        string[] desired = await store.GetDesiredGlobalRolesAsync(user.Id, GlobalRoles, ct);
-        string[] current = (await store.GetRolesAsync(user))
-            .Where(x => GlobalRoles.Contains(x, StringComparer.Ordinal))
-            .ToArray();
-        string[] removed = current.Except(desired, StringComparer.Ordinal).ToArray();
-        if (removed.Length > 0)
-        {
-            IdentityOperation result = await store.RemoveFromRolesAsync(user, removed);
-            if (!result.Succeeded)
-            {
-                throw new InvalidOperationException(string.Join("; ", result.Errors));
-            }
-        }
-        foreach (string role in desired.Except(current, StringComparer.Ordinal))
-        {
-            IdentityOperation result = await EnsureGlobalRoleAsync(user, role);
-            if (!result.Succeeded)
-            {
-                throw new InvalidOperationException($"Could not synchronize global role {role}.");
-            }
-        }
+        return new(IdentityOutcome.BadRequest, new { detail });
     }
-
-    private static bool ValidUserRequest(CreateStaffUserRequest request, out string? error)
-    {
-        error =
-            request.Username.Trim().Length is < 3 or > 80
-                ? "Username must contain 3 to 80 characters."
-            : request.DisplayName.Trim().Length is < 1 or > 120
-                ? "DisplayName must contain 1 to 120 characters."
-            : request.Password.Length < 10 ? "Password must contain at least 10 characters."
-            : !AllowedRoles.Contains(request.Role, StringComparer.Ordinal) ? "Role is invalid."
-            : null;
-        return error is null;
-    }
-
-    private static bool CanAssignRole(IdentityActor actor, string role) =>
-        actor.IsAdmin && AllowedRoles.Contains(role, StringComparer.Ordinal);
-
-    private static RestaurantAssignmentResponse ToRestaurantAccess(
-        UserRestaurantAssignment access
-    ) =>
-        new(
-            access.RestaurantId,
-            access.Role,
-            access.IsActive,
-            access.ValidFromUtc,
-            access.ValidUntilUtc
-        );
-
-    private static IdentityResult Ok(object value) => new(IdentityOutcome.Ok, value);
-
-    private static IdentityResult BadRequest(string detail) =>
-        new(IdentityOutcome.BadRequest, new { detail });
-
-    private static IdentityResult Conflict(string detail) =>
-        new(IdentityOutcome.Conflict, new { detail });
-
-    private static IdentityResult IdentityFailure(IdentityOperation result) =>
-        BadRequest(string.Join("; ", result.Errors));
 }

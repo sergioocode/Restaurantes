@@ -1,4 +1,4 @@
-using System.IdentityModel.Tokens.Jwt;
+﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.Extensions.Options;
@@ -14,7 +14,7 @@ public sealed class AccessTokenService(
     TimeProvider time
 ) : IAccessTokenIssuer
 {
-    public IssuedAccessToken Issue(ApplicationUser user, IReadOnlyCollection<string> globalRoles)
+    public IssuedAccessToken Issue(ApplicationUser user)
     {
         RestaurantSecurityOptions security = options.Value;
         DateTime now = time.GetUtcNow().UtcDateTime;
@@ -24,47 +24,32 @@ public sealed class AccessTokenService(
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Name, user.DisplayName),
-            new("preferred_username", user.UserName ?? string.Empty),
+            new("preferred_username", user.Email),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-            new("security_stamp", user.SecurityStamp ?? string.Empty),
         ];
-
-        foreach (string role in globalRoles.Distinct(StringComparer.Ordinal))
+        if (user.RestaurantId is Guid restaurantId)
         {
-            claims.Add(new Claim(ClaimTypes.Role, role));
-        }
-
-        foreach (
-            UserRestaurantAssignment access in user.RestaurantAccesses.Where(x =>
-                x.IsCurrentlyActive(now)
-            )
-        )
-        {
+            claims.Add(new Claim(RestaurantClaimTypes.RestaurantId, restaurantId.ToString()));
             claims.Add(
-                new Claim(RestaurantClaimTypes.RestaurantId, access.RestaurantId.ToString())
+                new Claim(RestaurantClaimTypes.RestaurantRole, $"{restaurantId:N}:{user.Role}")
             );
-            claims.Add(
-                new Claim(
-                    RestaurantClaimTypes.RestaurantRole,
-                    $"{access.RestaurantId:N}:{access.Role}"
-                )
-            );
-            foreach (string permission in RestaurantPermissions.ForRole(access.Role))
+            foreach (string permission in RestaurantPermissions.ForRole(user.Role))
             {
                 claims.Add(
                     new Claim(
                         RestaurantClaimTypes.Permission,
-                        RestaurantSecurityExtensions.ScopedPermission(
-                            access.RestaurantId,
-                            permission
-                        )
+                        RestaurantSecurityExtensions.ScopedPermission(restaurantId, permission)
                     )
                 );
             }
         }
+        else
+        {
+            claims.Add(new Claim(ClaimTypes.Role, user.Role));
+        }
 
         SigningCredentials credentials = new(
-            new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(security.SigningKey)),
+            new SymmetricSecurityKey(Encoding.UTF8.GetBytes(security.SigningKey)),
             SecurityAlgorithms.HmacSha256
         );
         JwtSecurityToken token = new(

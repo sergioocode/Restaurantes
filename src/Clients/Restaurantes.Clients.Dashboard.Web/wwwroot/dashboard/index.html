@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="es">
 <head>
     <meta charset="utf-8">
@@ -48,13 +48,13 @@
             line-height: 1.5
         }
 
-        #loginView form,
+        #loginForm,
         #loginView label {
             display: grid;
             gap: 9px
         }
 
-        #loginView form {
+        #loginForm {
             gap: 16px;
             margin-top: 24px
         }
@@ -235,11 +235,10 @@
         <small>RESTAURANTES · INFORMES</small>
         <h1>Iniciar sesión</h1>
         <p>Accede para consultar la operación y las ventas de tus locales autorizados.</p>
-        <form id="loginForm">
-            <label>Usuario<input id="username" autocomplete="username" value="admin" autofocus></label>
-            <label>Contraseña<input id="password" type="password" autocomplete="current-password" value="Admin-2026!"></label>
-            <button id="submit">Entrar al Dashboard</button>
-        </form>
+        <div id="loginForm">
+            <button id="loginMicrosoft" type="button">Iniciar sesión con Microsoft</button>
+            <button id="loginGoogle" type="button">Iniciar sesión con Google</button>
+        </div>
         <p id="loginError"></p>
     </section>
     <header id="dashboardHeader" hidden>
@@ -344,32 +343,19 @@
             document.body.classList.remove('login-mode')
         }
 
-        $('loginForm').onsubmit = async event => {
-            event.preventDefault();
-            const submit = $('submit');
-            $('loginError').textContent = '';
-            submit.disabled = true;
-            try {
-                const response = await fetch(gatewayOrigin + '/api/identity/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: $('username').value, password: $('password').value })
-                });
-                if (!response.ok) throw new Error('HTTP ' + response.status);
-                const session = await response.json();
-                const isAdmin = (session.globalRoles || []).includes('Admin');
-                const canRead = (session.restaurants || []).some(x => (x.permissions || []).includes('dashboard.read'));
-                if (!isAdmin && !canRead) throw new Error('Este perfil no tiene acceso al Dashboard.');
-                sessionStorage.setItem(sessionKey, JSON.stringify(session));
-                showDashboard();
-                await openDashboard(session)
-            } catch (exception) {
-                sessionStorage.removeItem(sessionKey);
-                showLogin(exception.message === 'HTTP 401' ? 'Usuario o contraseña incorrectos.' : exception.message)
-            } finally {
-                submit.disabled = false
-            }
-        };
+        function startLogin(provider) {
+            window.location.assign('/api/identity/auth/start/' + provider + '?returnPath=' + encodeURIComponent('/dashboard/'));
+        }
+        $('loginMicrosoft').onclick = () => startLogin('Microsoft');
+        $('loginGoogle').onclick = () => startLogin('Google');
+
+        async function loadProvider() {
+            const response = await fetch(gatewayOrigin + '/api/identity/auth/provider');
+            if (!response.ok) throw new Error('No se pudo consultar el proveedor.');
+            const settings = await response.json();
+            $('loginMicrosoft').disabled = settings.activeProvider !== 'Microsoft' || !settings.microsoftConfigured;
+            $('loginGoogle').disabled = settings.activeProvider !== 'Google' || !settings.googleConfigured;
+        }
 
         async function load() {
             try {
@@ -468,7 +454,7 @@
 
         async function openDashboard(session) {
             access = session;
-            const isAdmin = (access.globalRoles || []).includes('Admin');
+            const isAdmin = (access.globalRoles || []).some(role => ['Admin', 'Gerente', 'Contabilidad', 'Oficina'].includes(role));
             const allowed = new Set((access.restaurants || []).filter(x => (x.permissions || []).includes('dashboard.read')).map(x => x.restaurantId.toLowerCase()));
             if (!isAdmin && allowed.size === 0) throw new Error('Este perfil no tiene acceso al Dashboard.');
 
@@ -533,15 +519,37 @@
         }
 
         (async function bootstrap() {
-            const saved = sessionStorage.getItem(sessionKey);
-            if (!saved) return showLogin();
             try {
+                await loadProvider();
+                const query = new URLSearchParams(window.location.hash.slice(1));
+                const code = query.get('login_code');
+                if (code) {
+                    history.replaceState(null, '', window.location.pathname);
+                    const response = await fetch(gatewayOrigin + '/api/identity/auth/exchange', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ code })
+                    });
+                    if (!response.ok) throw new Error('La cuenta no está autorizada.');
+                    const session = await response.json();
+                    sessionStorage.setItem(sessionKey, JSON.stringify(session));
+                    showDashboard();
+                    await openDashboard(session);
+                    return;
+                }
+                if (query.has('login_error')) {
+                    history.replaceState(null, '', window.location.pathname);
+                    return showLogin('La cuenta no está autorizada o el proveedor rechazó el acceso.');
+                }
+                const saved = sessionStorage.getItem(sessionKey);
+                if (!saved) return showLogin();
                 const session = JSON.parse(saved);
                 if (new Date(session.expiresAtUtc) <= new Date()) return logout();
                 showDashboard();
-                await openDashboard(session)
-            } catch {
-                logout()
+                await openDashboard(session);
+            } catch (error) {
+                logout();
+                showLogin(error.message);
             }
         })();
     </script>

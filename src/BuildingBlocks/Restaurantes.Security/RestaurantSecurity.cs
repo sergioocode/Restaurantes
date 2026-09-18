@@ -225,6 +225,16 @@ public static class RestaurantSecurityExtensions
         {
             return true;
         }
+        foreach (string globalRole in new[] { "Gerente", "Contabilidad", "Oficina" })
+        {
+            if (
+                user.IsInRole(globalRole)
+                && RestaurantPermissions.ForRole(globalRole).Contains(permission)
+            )
+            {
+                return true;
+            }
+        }
 
         string suffix = $":{permission}";
         return user.Identity?.IsAuthenticated == true

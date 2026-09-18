@@ -1,4 +1,5 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Restaurantes.Identity.Application;
@@ -6,16 +7,168 @@ using Restaurantes.Security;
 
 namespace Restaurantes.Identity.Api.Write.Controllers;
 
-[ApiController, Authorize, Route("api/identity")]
-public sealed class IdentityController(IdentityService service) : ControllerBase
+[ApiController, Route("api/identity")]
+public sealed class IdentityController(IdentityService service, IConfiguration configuration)
+    : ControllerBase
 {
-    [AllowAnonymous, HttpPost("login")]
-    public Task<IActionResult> Login(LoginRequest request, CancellationToken ct) =>
-        Execute(() => service.Login(request, ct));
+    private bool MicrosoftConfigured =>
+        !string.IsNullOrWhiteSpace(configuration["ExternalAuth:PublicOrigin"])
+        && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Microsoft:TenantId"])
+        && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Microsoft:ClientId"])
+        && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Microsoft:ClientSecret"]);
+    private bool GoogleConfigured =>
+        !string.IsNullOrWhiteSpace(configuration["ExternalAuth:PublicOrigin"])
+        && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Google:WorkspaceDomain"])
+        && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Google:ClientId"])
+        && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Google:ClientSecret"]);
 
-    [HttpGet("me")]
-    public IActionResult Me() =>
-        Ok(
+    [HttpGet("auth/provider")]
+    public Task<IActionResult> Provider(CancellationToken ct)
+    {
+        return Execute(() =>
+            service.GetProviderSettings(MicrosoftConfigured, GoogleConfigured, ct)
+        );
+    }
+
+    [Authorize(Roles = "Admin"), HttpPut("auth/provider")]
+    public Task<IActionResult> ChangeProvider(ChangeProviderRequest request, CancellationToken ct)
+    {
+        return Execute(() =>
+            service.ChangeProvider(request, MicrosoftConfigured, GoogleConfigured, ct)
+        );
+    }
+
+    [HttpGet("auth/start/{provider}")]
+    public async Task<IActionResult> Start(
+        string provider,
+        [FromQuery] string returnPath,
+        CancellationToken ct
+    )
+    {
+        if (provider is not ("Microsoft" or "Google") || !IsAllowedReturnPath(returnPath))
+        {
+            return BadRequest();
+        }
+
+        ProviderSettingsResponse settings = (ProviderSettingsResponse)
+            (await service.GetProviderSettings(MicrosoftConfigured, GoogleConfigured, ct)).Value!;
+        if (
+            settings.ActiveProvider != provider
+            || (provider == "Microsoft" && !MicrosoftConfigured)
+            || (provider == "Google" && !GoogleConfigured)
+        )
+        {
+            return BadRequest(new { detail = "Proveedor no disponible." });
+        }
+
+        await HttpContext.SignOutAsync("External");
+        AuthenticationProperties properties = new()
+        {
+            RedirectUri =
+                $"/api/identity/auth/complete?returnPath={Uri.EscapeDataString(returnPath)}&provider={provider}",
+        };
+        properties.Items["provider"] = provider;
+        properties.Items["returnPath"] = returnPath;
+        return Challenge(properties, provider);
+    }
+
+    [HttpGet("auth/complete")]
+    public async Task<IActionResult> Complete(
+        string provider,
+        string returnPath,
+        CancellationToken ct
+    )
+    {
+        if (provider is not ("Microsoft" or "Google") || !IsAllowedReturnPath(returnPath))
+        {
+            return BadRequest();
+        }
+
+        AuthenticateResult authentication = await HttpContext.AuthenticateAsync("External");
+        await HttpContext.SignOutAsync("External");
+        if (
+            !authentication.Succeeded
+            || authentication.Principal is null
+            || authentication.Properties is null
+            || !authentication.Properties.Items.TryGetValue(
+                "provider",
+                out string? challengedProvider
+            )
+            || challengedProvider != provider
+        )
+        {
+            return Redirect($"{returnPath}#login_error=authentication");
+        }
+
+        ClaimsPrincipal principal = authentication.Principal;
+        string? email =
+            principal.FindFirstValue("email") ?? principal.FindFirstValue("preferred_username");
+        string? subject =
+            provider == "Microsoft"
+                ? principal.FindFirstValue("oid")
+                : principal.FindFirstValue("sub");
+        string? tenant = provider == "Microsoft" ? principal.FindFirstValue("tid") : null;
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(subject))
+        {
+            return Redirect($"{returnPath}#login_error=identity");
+        }
+
+        string? accountType = principal.FindFirstValue("acct");
+        if (
+            provider == "Microsoft"
+            && (
+                !string.Equals(
+                    tenant,
+                    configuration["ExternalAuth:Microsoft:TenantId"],
+                    StringComparison.OrdinalIgnoreCase
+                ) || (accountType is not null && accountType != "0")
+            )
+        )
+        {
+            return Redirect($"{returnPath}#login_error=tenant");
+        }
+
+        if (
+            provider == "Google"
+            && (
+                !string.Equals(
+                    principal.FindFirstValue("hd"),
+                    configuration["ExternalAuth:Google:WorkspaceDomain"],
+                    StringComparison.OrdinalIgnoreCase
+                )
+                || !string.Equals(
+                    principal.FindFirstValue("email_verified"),
+                    "true",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+        )
+        {
+            return Redirect($"{returnPath}#login_error=workspace");
+        }
+
+        IdentityResult result = await service.AuthorizeExternalAsync(
+            provider,
+            email,
+            subject,
+            tenant,
+            ct
+        );
+        return result.Outcome != IdentityOutcome.Ok
+            ? Redirect($"{returnPath}#login_error=unauthorized")
+            : Redirect($"{returnPath}#login_code={Uri.EscapeDataString((string)result.Value!)}");
+    }
+
+    [HttpPost("auth/exchange")]
+    public Task<IActionResult> Exchange(ExchangeRequest request, CancellationToken ct)
+    {
+        return Execute(() => service.ExchangeAsync(request.Code, ct));
+    }
+
+    [Authorize, HttpGet("me")]
+    public IActionResult Me()
+    {
+        return Ok(
             new
             {
                 id = User.FindFirstValue(ClaimTypes.NameIdentifier),
@@ -26,54 +179,33 @@ public sealed class IdentityController(IdentityService service) : ControllerBase
                     .Distinct(),
             }
         );
+    }
 
-    [HttpGet("users")]
-    public Task<IActionResult> ListUsers(CancellationToken ct) =>
-        Execute(() => service.ListUsers(CurrentActor(), ct));
-
-    [HttpPost("users")]
-    public Task<IActionResult> CreateUser(CreateStaffUserRequest request, CancellationToken ct) =>
-        Execute(() => service.CreateUser(request, CurrentActor(), ct));
-
-    [HttpPost("users/{userId:guid}/restaurants")]
-    public Task<IActionResult> AssignRestaurant(
-        Guid userId,
-        AssignRestaurantRequest request,
-        CancellationToken ct
-    ) => Execute(() => service.AssignRestaurant(userId, request, CurrentActor(), ct));
-
-    [HttpPut("users/{userId:guid}/restaurants/{restaurantId:guid}")]
-    public Task<IActionResult> UpdateRestaurantAssignment(
-        Guid userId,
-        Guid restaurantId,
-        UpdateRestaurantAssignmentRequest request,
-        CancellationToken ct
-    ) =>
-        Execute(() =>
-            service.UpdateRestaurantAssignment(userId, restaurantId, request, CurrentActor(), ct)
-        );
-
-    [HttpDelete("users/{userId:guid}/restaurants/{restaurantId:guid}")]
-    public Task<IActionResult> DisableRestaurantAssignment(
-        Guid userId,
-        Guid restaurantId,
-        CancellationToken ct
-    ) =>
-        Execute(() =>
-            service.DisableRestaurantAssignment(userId, restaurantId, CurrentActor(), ct)
-        );
-
-    private IdentityActor CurrentActor()
+    [Authorize(Roles = "Admin"), HttpGet("users")]
+    public Task<IActionResult> ListUsers(CancellationToken ct)
     {
-        HashSet<Guid> manageableRestaurantIds = User.FindAll(RestaurantClaimTypes.RestaurantId)
-            .Select(claim => Guid.TryParse(claim.Value, out Guid id) ? id : (Guid?)null)
-            .Where(id =>
-                id.HasValue
-                && User.CanAccessRestaurant(id.Value, RestaurantPermissions.IdentityManage)
-            )
-            .Select(id => id!.Value)
-            .ToHashSet();
-        return new IdentityActor(User.IsInRole("Admin"), manageableRestaurantIds);
+        return Execute(() => service.ListUsers(ct));
+    }
+
+    [Authorize(Roles = "Admin"), HttpPost("users")]
+    public Task<IActionResult> CreateUser(CreateAccountRequest request, CancellationToken ct)
+    {
+        return Execute(() => service.CreateUser(request, ct));
+    }
+
+    [Authorize(Roles = "Admin"), HttpPut("users/{id:guid}")]
+    public Task<IActionResult> UpdateUser(
+        Guid id,
+        UpdateAccountRequest request,
+        CancellationToken ct
+    )
+    {
+        return Execute(() => service.UpdateUser(id, request, ct));
+    }
+
+    private static bool IsAllowedReturnPath(string path)
+    {
+        return path is "/backoffice/" or "/pos/" or "/commander/" or "/kds/" or "/dashboard/";
     }
 
     private async Task<IActionResult> Execute(Func<Task<IdentityResult>> operation)
@@ -92,4 +224,6 @@ public sealed class IdentityController(IdentityService service) : ControllerBase
             _ => throw new ArgumentOutOfRangeException(),
         };
     }
+
+    public sealed record ExchangeRequest(string Code);
 }

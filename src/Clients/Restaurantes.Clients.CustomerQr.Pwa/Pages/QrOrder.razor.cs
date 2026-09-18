@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
@@ -9,35 +9,35 @@ namespace Restaurantes.Clients.CustomerQr.Pwa.Pages;
 
 public partial class QrOrder
 {
-    int? guestCount;
-    string? guestError;
+    private int? guestCount;
+    private string? guestError;
 
     [Parameter]
     public string QrCode { get; set; } = string.Empty;
 
-    QrSessionEnvelope? context;
-    RestaurantResponse? restaurant;
-    List<MenuItemResponse> menu = [];
-    readonly Dictionary<Guid, int> quantities = [];
-    readonly Dictionary<Guid, string> notes = [];
-    bool loading = true;
-    bool busy;
-    string error = string.Empty;
-    string success = string.Empty;
-    string progress = string.Empty;
-    OrderResponse? pendingOrder;
-    Guid pendingPaymentKey;
-    List<OrderResponse> customerOrders = [];
-    CancellationTokenSource? statusPolling;
-    string ordersStorageKey = string.Empty;
+    private QrSessionEnvelope? context;
+    private RestaurantResponse? restaurant;
+    private List<MenuItemResponse> menu = [];
+    private readonly Dictionary<Guid, int> quantities = [];
+    private readonly Dictionary<Guid, string> notes = [];
+    private bool loading = true;
+    private bool busy;
+    private string error = string.Empty;
+    private string success = string.Empty;
+    private string progress = string.Empty;
+    private OrderResponse? pendingOrder;
+    private Guid pendingPaymentKey;
+    private List<OrderResponse> customerOrders = [];
+    private CancellationTokenSource? statusPolling;
+    private string ordersStorageKey = string.Empty;
 
-    IEnumerable<IGrouping<string, MenuItemResponse>> Categories =>
+    private IEnumerable<IGrouping<string, MenuItemResponse>> Categories =>
         menu.Where(x => x.IsAvailable)
             .OrderBy(x => x.CategoryName)
             .ThenBy(x => x.ProductName)
             .GroupBy(x => x.CategoryName);
 
-    bool NeedsGuestCount =>
+    private bool NeedsGuestCount =>
         context is not null
         && (
             context.Session is null
@@ -45,12 +45,15 @@ public partial class QrOrder
                 : context.Session.RequestGuestCount && context.Session.GuestCount is null
         );
 
-    int ItemCount => quantities.Values.Sum();
-    decimal Total => menu.Sum(x => x.Price * Quantity(x.ProductId));
+    private int ItemCount => quantities.Values.Sum();
+    private decimal Total => menu.Sum(x => x.Price * Quantity(x.ProductId));
 
-    protected override Task OnParametersSetAsync() => LoadAsync();
+    protected override Task OnParametersSetAsync()
+    {
+        return LoadAsync();
+    }
 
-    async Task LoadAsync()
+    private async Task LoadAsync()
     {
         statusPolling?.Cancel();
         loading = true;
@@ -124,21 +127,27 @@ public partial class QrOrder
         }
     }
 
-    int Quantity(Guid productId) => quantities.GetValueOrDefault(productId);
+    private int Quantity(Guid productId)
+    {
+        return quantities.GetValueOrDefault(productId);
+    }
 
-    string Note(Guid productId) => notes.GetValueOrDefault(productId) ?? string.Empty;
+    private string Note(Guid productId)
+    {
+        return notes.GetValueOrDefault(productId) ?? string.Empty;
+    }
 
-    void Change(Guid productId, int delta)
+    private void Change(Guid productId, int delta)
     {
         quantities[productId] = Math.Clamp(Quantity(productId) + delta, 0, 100);
     }
 
-    void SetNote(Guid productId, string? value)
+    private void SetNote(Guid productId, string? value)
     {
         notes[productId] = value ?? string.Empty;
     }
 
-    async Task SubmitOrderAsync()
+    private async Task SubmitOrderAsync()
     {
         if (context is null || ItemCount == 0)
         {
@@ -240,7 +249,7 @@ public partial class QrOrder
         }
     }
 
-    void StartStatusPolling()
+    private void StartStatusPolling()
     {
         statusPolling?.Cancel();
         statusPolling?.Dispose();
@@ -248,7 +257,7 @@ public partial class QrOrder
         _ = PollOrderStatusesAsync(statusPolling.Token);
     }
 
-    async Task PollOrderStatusesAsync(CancellationToken cancellationToken)
+    private async Task PollOrderStatusesAsync(CancellationToken cancellationToken)
     {
         using PeriodicTimer timer = new(TimeSpan.FromSeconds(3));
         try
@@ -265,7 +274,7 @@ public partial class QrOrder
         catch (OperationCanceledException) { }
     }
 
-    async Task RefreshOrderStatusesAsync()
+    private async Task RefreshOrderStatusesAsync()
     {
         if (context?.Session is null || customerOrders.Count == 0)
         {
@@ -287,7 +296,7 @@ public partial class QrOrder
         customerOrders = refreshed;
     }
 
-    async Task PersistOrderIdsAsync()
+    private async Task PersistOrderIdsAsync()
     {
         if (string.IsNullOrWhiteSpace(ordersStorageKey))
         {
@@ -307,7 +316,10 @@ public partial class QrOrder
         return ValueTask.CompletedTask;
     }
 
-    static async Task<T> RetryAsync<T>(Func<Task<T>> action, Func<HttpStatusCode, bool> shouldRetry)
+    private static async Task<T> RetryAsync<T>(
+        Func<Task<T>> action,
+        Func<HttpStatusCode, bool> shouldRetry
+    )
     {
         const int attempts = 30;
         for (int attempt = 1; ; attempt++)

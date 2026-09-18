@@ -1,18 +1,12 @@
-﻿@identityUrl = http://localhost:5106
+@identityUrl = http://localhost:5106
+@accessToken = REEMPLAZAR_CON_TOKEN_DE_SESION
 
-### Login del camarero de desarrollo
-# @name waiterLogin
-POST {{identityUrl}}/api/identity/login
-Content-Type: application/json
+### Proveedor activo y disponibilidad
+GET {{identityUrl}}/api/identity/auth/provider
 
-{
-  "username": "camarero1.mad-centro",
-  "password": "Camarero-01-1-2026!"
-}
-
-### Identidad y locales incluidos en el token
+### Identidad del usuario autorizado
 GET {{identityUrl}}/api/identity/me
-Authorization: Bearer {{waiterLogin.response.body.$.accessToken}}
+Authorization: Bearer {{accessToken}}
 
 ### Debe responder 401 sin token
 GET {{identityUrl}}/api/identity/me

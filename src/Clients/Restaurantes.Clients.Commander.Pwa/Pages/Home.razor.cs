@@ -1,47 +1,45 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
-using Restaurantes.Clients.Commander.Pwa.Api;
 using Restaurantes.Clients.Commander.Pwa.Models;
-using Restaurantes.Clients.Commander.Pwa.Realtime;
 using Restaurantes.Clients.Shared.Operations;
 
 namespace Restaurantes.Clients.Commander.Pwa.Pages;
 
 public partial class Home
 {
-    int? guestCount;
-    DiningSessionResponse? diningSession;
-    const string SessionKey = "restaurantes.commander.login";
-    string username = "camarero1.mad-centro";
-    string password = "Camarero-01-1-2026!";
-    string? message;
-    bool busy;
-    bool success;
-    LoginResponse? login;
-    Guid restaurantId;
-    List<TableResponse> tables = [];
-    List<TableResponse> FilteredTables => tables;
-    List<OrderResponse> activeOrders = [];
-    TableResponse? selectedTable;
-    Guid sessionId;
-    List<MenuItemResponse> menu = [];
-    string? category;
-    Dictionary<Guid, int> quantities = [];
-    Dictionary<Guid, string> notes = [];
-    SessionBillResponse? bill;
-    bool billOpen;
-    string paymentMethod = "Card";
-    string paymentReference = string.Empty;
-    Guid checkoutKey;
-    Dictionary<Guid, OrderDetailResponse> billOrders = [];
-    CancellationTokenSource? realtimeRefresh;
+    private int? guestCount;
+    private DiningSessionResponse? diningSession;
+    private const string SessionKey = "restaurantes.commander.login";
+    private string? message;
+    private bool busy;
+    private bool success;
+    private LoginResponse? login;
+    private ProviderSettingsResponse? providerSettings;
+    private Guid restaurantId;
 
-    int ItemCount => quantities.Values.Sum();
-    decimal Total => menu.Sum(item => item.Price * quantities.GetValueOrDefault(item.ProductId));
-    List<string> Categories =>
+    private List<TableResponse> FilteredTables { get; set; } = [];
+    private List<OrderResponse> activeOrders = [];
+    private TableResponse? selectedTable;
+    private Guid sessionId;
+    private List<MenuItemResponse> menu = [];
+    private string? category;
+    private Dictionary<Guid, int> quantities = [];
+    private Dictionary<Guid, string> notes = [];
+    private SessionBillResponse? bill;
+    private bool billOpen;
+    private string paymentMethod = "Card";
+    private string paymentReference = string.Empty;
+    private Guid checkoutKey;
+    private Dictionary<Guid, OrderDetailResponse> billOrders = [];
+    private CancellationTokenSource? realtimeRefresh;
+
+    private int ItemCount => quantities.Values.Sum();
+    private decimal Total =>
+        menu.Sum(item => item.Price * quantities.GetValueOrDefault(item.ProductId));
+    private List<string> Categories =>
         menu.Where(x => x.IsAvailable).Select(x => x.CategoryName).Distinct().Order().ToList();
-    List<MenuItemResponse> VisibleMenu =>
+    private List<MenuItemResponse> VisibleMenu =>
         menu.Where(x => x.IsAvailable && (category is null || x.CategoryName == category))
             .OrderBy(x => x.CategoryName)
             .ThenBy(x => x.ProductName)
@@ -51,6 +49,19 @@ public partial class Home
     {
         Realtime.OrderUpdated += HandleOrderUpdated;
         DiningRealtime.TableChanged += HandleTableChanged;
+        providerSettings = await Api.ProviderAsync();
+        string? code = QueryValue("login_code");
+        if (!string.IsNullOrWhiteSpace(code))
+        {
+            Nav.NavigateTo(Nav.BaseUri, replace: true);
+            await Run(async () => await AcceptLogin(await Api.ExchangeAsync(code)));
+            return;
+        }
+        if (QueryValue("login_error") is not null)
+        {
+            message = "La cuenta no está autorizada o el proveedor rechazó el acceso.";
+        }
+
         string? json = await Js.InvokeAsync<string?>("sessionStorage.getItem", SessionKey);
         if (!string.IsNullOrWhiteSpace(json))
         {
@@ -82,38 +93,60 @@ public partial class Home
         }
     }
 
-    async Task DoLogin()
+    private void StartLogin(string provider)
     {
-        await Run(async () =>
-        {
-            login = await Api.LoginAsync(username, password);
-            if (login.Restaurants.Count == 0)
-                throw new InvalidOperationException("El usuario no tiene ningún local asignado.");
-            Api.AccessToken = login.AccessToken;
-            restaurantId = login.Restaurants[0].RestaurantId;
-            await Js.InvokeVoidAsync(
-                "sessionStorage.setItem",
-                SessionKey,
-                JsonSerializer.Serialize(login)
-            );
-            await LoadOperationalData();
-            await ConnectRealtimeAsync();
-        });
+        Nav.NavigateTo(
+            $"/api/identity/auth/start/{provider}?returnPath=%2Fcommander%2F",
+            forceLoad: true
+        );
     }
 
-    async Task Logout()
+    private string? QueryValue(string key)
+    {
+        string query = new Uri(Nav.Uri).Fragment.TrimStart('#');
+        foreach (string part in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            string[] pair = part.Split('=', 2);
+            if (pair[0] == key)
+            {
+                return Uri.UnescapeDataString(pair.Length > 1 ? pair[1] : "");
+            }
+        }
+        return null;
+    }
+
+    private async Task AcceptLogin(LoginResponse response)
+    {
+        login = response;
+        if (login.Restaurants.Count == 0)
+        {
+            throw new InvalidOperationException("El usuario no tiene ningún local asignado.");
+        }
+
+        Api.AccessToken = login.AccessToken;
+        restaurantId = login.Restaurants[0].RestaurantId;
+        await Js.InvokeVoidAsync(
+            "sessionStorage.setItem",
+            SessionKey,
+            JsonSerializer.Serialize(login)
+        );
+        await LoadOperationalData();
+        await ConnectRealtimeAsync();
+    }
+
+    private async Task Logout()
     {
         await Js.InvokeVoidAsync("sessionStorage.removeItem", SessionKey);
         await Realtime.DisconnectAsync();
         await DiningRealtime.DisconnectAsync();
         Api.AccessToken = null;
         login = null;
-        tables = [];
+        FilteredTables = [];
         BackToTables();
         message = null;
     }
 
-    async Task RestaurantChanged(ChangeEventArgs args)
+    private async Task RestaurantChanged(ChangeEventArgs args)
     {
         if (Guid.TryParse(args.Value?.ToString(), out Guid value))
         {
@@ -124,15 +157,18 @@ public partial class Home
         }
     }
 
-    async Task LoadTables() => await Run(LoadOperationalData);
-
-    async Task LoadOperationalData()
+    private async Task LoadTables()
     {
-        tables = await Api.TablesAsync(restaurantId);
+        await Run(LoadOperationalData);
+    }
+
+    private async Task LoadOperationalData()
+    {
+        FilteredTables = await Api.TablesAsync(restaurantId);
         activeOrders = await Api.OrdersAsync(restaurantId);
     }
 
-    async Task SelectTable(TableResponse table)
+    private async Task SelectTable(TableResponse table)
     {
         await Run(async () =>
         {
@@ -150,18 +186,26 @@ public partial class Home
         });
     }
 
-    void ChangeQuantity(Guid productId, int change) =>
+    private void ChangeQuantity(Guid productId, int change)
+    {
         quantities[productId] = Math.Clamp(quantities[productId] + change, 0, 99);
+    }
 
-    async Task SendOrder()
+    private async Task SendOrder()
     {
         if (selectedTable is null)
+        {
             return;
+        }
+
         await Run(
             async () =>
             {
                 if (diningSession is { RequestGuestCount: true, GuestCount: null })
+                {
                     diningSession = await Api.SetGuestCountAsync(sessionId, guestCount ?? 0);
+                }
+
                 OrderResponse order = await Api.CreateAndSubmitAsync(
                     restaurantId,
                     selectedTable,
@@ -182,13 +226,13 @@ public partial class Home
         );
     }
 
-    async Task OpenBill()
+    private async Task OpenBill()
     {
         billOpen = true;
         await Run(LoadBill);
     }
 
-    async Task LoadBill()
+    private async Task LoadBill()
     {
         bill = await Api.BillAsync(sessionId);
         OrderDetailResponse[] details = await Task.WhenAll(
@@ -197,32 +241,40 @@ public partial class Home
         billOrders = details.ToDictionary(order => order.Id);
     }
 
-    static bool CanCancelLine(
+    private static bool CanCancelLine(
         SessionBillOrderResponse billOrder,
         OrderDetailResponse order,
         OrderLineDetailResponse line
-    ) =>
-        billOrder.PaymentStatus != "Paid"
-        && line.Status == "Active"
-        && OrderProgress.CanCancelBeforePreparation(order.Status)
-        && order.Stations.Any(station =>
-            station.Code == line.PreparationStationCode && station.Status == "Pending"
-        );
+    )
+    {
+        return billOrder.PaymentStatus != "Paid"
+            && line.Status == "Active"
+            && OrderProgress.CanCancelBeforePreparation(order.Status)
+            && order.Stations.Any(station =>
+                station.Code == line.PreparationStationCode && station.Status == "Pending"
+            );
+    }
 
-    async Task CancelLine(SessionBillOrderResponse order, OrderLineDetailResponse line)
+    private async Task CancelLine(SessionBillOrderResponse order, OrderLineDetailResponse line)
     {
         string? reason = await Js.InvokeAsync<string?>(
             "prompt",
             $"Motivo para cancelar {line.Quantity} × {line.ProductName}:"
         );
         if (string.IsNullOrWhiteSpace(reason))
+        {
             return;
+        }
+
         bool confirmed = await Js.InvokeAsync<bool>(
             "confirm",
             "La línea desaparecerá del KDS si cocina todavía no comenzó. ¿Continuar?"
         );
         if (!confirmed)
+        {
             return;
+        }
+
         await Run(
             async () =>
             {
@@ -236,12 +288,18 @@ public partial class Home
         );
     }
 
-    void CloseBill() => billOpen = false;
+    private void CloseBill()
+    {
+        billOpen = false;
+    }
 
-    async Task CheckoutSession()
+    private async Task CheckoutSession()
     {
         if (busy)
+        {
             return;
+        }
+
         checkoutKey = checkoutKey == Guid.Empty ? Guid.NewGuid() : checkoutKey;
         await Run(
             async () =>
@@ -263,7 +321,7 @@ public partial class Home
         );
     }
 
-    async Task ReleaseSession()
+    private async Task ReleaseSession()
     {
         await Run(
             async () =>
@@ -289,7 +347,7 @@ public partial class Home
         );
     }
 
-    void BackToTables()
+    private void BackToTables()
     {
         selectedTable = null;
         sessionId = Guid.Empty;
@@ -304,25 +362,34 @@ public partial class Home
         paymentReference = string.Empty;
     }
 
-    string CategoryClass(string? value) =>
-        category == value ? "category-filter active" : "category-filter";
+    private string CategoryClass(string? value)
+    {
+        return category == value ? "category-filter active" : "category-filter";
+    }
 
-    string TableOrderSummary(TableResponse table) =>
-        OrderProgress.Summarize(
+    private string TableOrderSummary(TableResponse table)
+    {
+        return OrderProgress.Summarize(
             activeOrders.Where(order => order.TableId == table.Id).Select(order => order.Status)
         );
+    }
 
-    string SessionOrderSummary(Guid currentSessionId) =>
-        OrderProgress.Summarize(
+    private string SessionOrderSummary(Guid currentSessionId)
+    {
+        return OrderProgress.Summarize(
             activeOrders
                 .Where(order => order.DiningSessionId == currentSessionId)
                 .Select(order => order.Status)
         );
+    }
 
-    async Task Run(Func<Task> action, bool clearMessage = true)
+    private async Task Run(Func<Task> action, bool clearMessage = true)
     {
         if (clearMessage)
+        {
             message = null;
+        }
+
         success = false;
         busy = true;
         try
@@ -339,7 +406,7 @@ public partial class Home
         }
     }
 
-    async Task ConnectRealtimeAsync()
+    private async Task ConnectRealtimeAsync()
     {
         try
         {
@@ -352,20 +419,23 @@ public partial class Home
         }
     }
 
-    Task HandleOrderUpdated(OrderRealtimeNotification notification)
+    private Task HandleOrderUpdated(OrderRealtimeNotification notification)
     {
         return ScheduleRealtimeRefresh(notification.RestaurantId);
     }
 
-    Task HandleTableChanged(DiningTableChangedNotification notification)
+    private Task HandleTableChanged(DiningTableChangedNotification notification)
     {
         return ScheduleRealtimeRefresh(notification.RestaurantId);
     }
 
-    Task ScheduleRealtimeRefresh(Guid changedRestaurantId)
+    private Task ScheduleRealtimeRefresh(Guid changedRestaurantId)
     {
         if (login is null || changedRestaurantId != restaurantId)
+        {
             return Task.CompletedTask;
+        }
+
         realtimeRefresh?.Cancel();
         realtimeRefresh?.Dispose();
         realtimeRefresh = new CancellationTokenSource();
@@ -373,18 +443,20 @@ public partial class Home
         return Task.CompletedTask;
     }
 
-    async Task RefreshAfterOrderEventAsync(CancellationToken cancellationToken)
+    private async Task RefreshAfterOrderEventAsync(CancellationToken cancellationToken)
     {
         try
         {
             await Task.Delay(400, cancellationToken);
             await InvokeAsync(async () =>
             {
-                tables = await Api.TablesAsync(restaurantId);
+                FilteredTables = await Api.TablesAsync(restaurantId);
                 activeOrders = await Api.OrdersAsync(restaurantId);
                 if (selectedTable is not null)
                 {
-                    TableResponse? current = tables.FirstOrDefault(x => x.Id == selectedTable.Id);
+                    TableResponse? current = FilteredTables.FirstOrDefault(x =>
+                        x.Id == selectedTable.Id
+                    );
                     if (current?.ActiveSessionId == sessionId)
                     {
                         selectedTable = current;

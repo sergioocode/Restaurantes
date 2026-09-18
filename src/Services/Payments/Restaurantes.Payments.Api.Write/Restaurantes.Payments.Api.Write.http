@@ -1,22 +1,12 @@
-﻿@paymentsUrl = http://localhost:5151
-@identityUrl = http://localhost:5106
+@paymentsUrl = http://localhost:5151
+@accessToken = REEMPLAZAR_CON_TOKEN_DE_SESION
 @orderId = 00000000-0000-0000-0000-000000000000
 @customerSessionId = 00000000-0000-0000-0000-000000000000
 @customerAccessToken = REEMPLAZAR_DESDE_DINING_QR
 
-### Obtener JWT con permiso de cobro
-# @name login
-POST {{identityUrl}}/api/identity/login
-Content-Type: application/json
-
-{
-  "username": "camarero1.mad-centro",
-  "password": "Camarero-01-1-2026!"
-}
-
 ### Crea datos: sustituya orderId por un pedido entregado o cobrable
 POST {{paymentsUrl}}/api/payments/orders/{{orderId}}/capture
-Authorization: Bearer {{login.response.body.$.accessToken}}
+Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 {
@@ -27,7 +17,7 @@ Content-Type: application/json
 
 ### Reembolsar el pago capturado
 POST {{paymentsUrl}}/api/payments/orders/{{orderId}}/refund
-Authorization: Bearer {{login.response.body.$.accessToken}}
+Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 {
