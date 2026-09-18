@@ -2,6 +2,8 @@
 @using System.Text.Json
 @inject BackofficeApi Api
 @inject IJSRuntime Js
+@inject NavigationManager Nav
+@inject Restaurantes.Clients.Backoffice.Pwa.Security.SessionAuthenticationStateProvider AuthState
 
 <PageTitle>Backoffice · Restaurantes</PageTitle>
 
@@ -11,12 +13,16 @@
         <section class="login-card">
             <span class="brand">R</span><p class="eyebrow">ADMINISTRACIÓN</p><h1>Backoffice</h1>
             <p>Configuración central y por local.</p>
-            <form @onsubmit="Login" @onsubmit:preventDefault>
-                <label>Usuario<input autocomplete="username" @bind="username" /></label>
-                <label>Contraseña<input type="password" autocomplete="current-password" @bind="password" /></label>
-                <button class="primary" disabled="@busy">@(busy ? "Entrando…" : "Entrar")</button>
-            </form>
-            <small>Desarrollo: admin / Admin-2026!</small>
+            <div class="login-providers">
+                <button class="primary" type="button" @onclick='() => StartLogin("Microsoft")'
+                        disabled="@(providerSettings is null || providerSettings.ActiveProvider != "Microsoft" || !MicrosoftConfigured)">
+                    Iniciar sesión con Microsoft
+                </button>
+                <button class="primary" type="button" @onclick='() => StartLogin("Google")'
+                        disabled="@(providerSettings is null || providerSettings.ActiveProvider != "Google" || !GoogleConfigured)">
+                    Iniciar sesión con Google
+                </button>
+            </div>
             @if (!string.IsNullOrWhiteSpace(message)) { <p class="error">@message</p> }
         </section>
     </main>
@@ -40,16 +46,20 @@ else
     <main class="workspace">
         <aside class="sidebar">
             <h2>Módulos</h2>
-            <button class="@NavClass("menu")" @onclick='() => module = "menu"'>Menú por local</button>
-            <button class="@NavClass("stations")" @onclick='() => module = "stations"'>Estaciones KDS</button>
-            <button class="@NavClass("tables")" @onclick='() => module = "tables"'>Mesas y configuración</button>
-            <button class="@NavClass("restaurants")" @onclick='() => module = "restaurants"'>Locales</button>
-            <button class="@NavClass("categories")" @onclick='() => module = "categories"'>Categorías</button>
-            <button class="@NavClass("products")" @onclick='() => module = "products"'>Productos</button>
+            @if (HasLocalPermission("catalog.manage")) { <button class="@NavClass("menu")" @onclick='() => module = "menu"'>Menú por local</button> }
+            @if (HasLocalPermission("kds.use")) { <button class="@NavClass("stations")" @onclick='() => module = "stations"'>Estaciones KDS</button> }
+            @if (HasLocalPermission("tables.read")) { <button class="@NavClass("tables")" @onclick='() => module = "tables"'>Mesas y configuración</button> }
+            @if (IsAdmin) { <button class="@NavClass("restaurants")" @onclick='() => module = "restaurants"'>Locales</button> }
+            @if (IsAdmin) { <button class="@NavClass("categories")" @onclick='() => module = "categories"'>Categorías</button> }
+            @if (IsAdmin) { <button class="@NavClass("products")" @onclick='() => module = "products"'>Productos</button> }
             @if (HasLocalPermission("reports.financial.read")) { <button disabled>Contabilidad <small>Próximo</small></button> }
             @if (HasLocalPermission("reports.marketing.read")) { <button disabled>Marketing y KPI <small>Próximo</small></button> }
             @if (HasLocalPermission("reports.kitchen.read")) { <button disabled>Tiempos de cocina <small>Próximo</small></button> }
-            @if (CanManageUsers) { <button class="@NavClass("users")" @onclick='() => module = "users"'>Usuarios y perfiles</button> }
+            <AuthorizeView Roles="Admin">
+                <Authorized>
+                    <button class="@NavClass("users")" @onclick='() => module = "users"'>Usuarios y perfiles</button>
+                </Authorized>
+            </AuthorizeView>
         </aside>
 
         <section class="content">

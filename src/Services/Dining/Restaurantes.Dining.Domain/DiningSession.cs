@@ -21,13 +21,15 @@ public sealed class DiningSession
     public string CancellationReason { get; set; } = string.Empty;
     public List<DiningSessionOrder> Orders { get; set; } = [];
 
-    public bool CanCheckout(bool allowBeforeKitchenCompletion) =>
-        Status == "Open"
-        && Orders.Count > 0
-        && (
-            allowBeforeKitchenCompletion
-            || Orders.All(x => x.OrderStatus is "Ready" or "Delivered" or "Cancelled")
-        );
+    public bool CanCheckout(bool allowBeforeKitchenCompletion)
+    {
+        return Status == "Open"
+            && Orders.Count > 0
+            && (
+                allowBeforeKitchenCompletion
+                || Orders.All(x => x.OrderStatus is "Ready" or "Delivered" or "Cancelled")
+            );
+    }
 
     public void CompleteCheckout(Guid idempotencyKey, string method, DateTime now)
     {

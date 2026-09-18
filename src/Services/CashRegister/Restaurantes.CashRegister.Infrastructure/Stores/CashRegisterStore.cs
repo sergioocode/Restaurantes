@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Restaurantes.CashRegister.Application;
 using Restaurantes.CashRegister.Domain;
@@ -12,8 +12,9 @@ public sealed class CashRegisterStore(CashRegisterDbContext db) : ICashRegisterS
         Guid restaurantId,
         DateOnly businessDate,
         CancellationToken ct
-    ) =>
-        db
+    )
+    {
+        return db
             .Sessions.AsNoTracking()
             .Where(x =>
                 x.RestaurantId == restaurantId
@@ -22,13 +23,15 @@ public sealed class CashRegisterStore(CashRegisterDbContext db) : ICashRegisterS
             )
             .Select(x => (Guid?)x.Id)
             .SingleOrDefaultAsync(ct);
+    }
 
     public Task<CashRegisterSession?> GetCurrentAsync(
         Guid restaurantId,
         DateOnly businessDate,
         CancellationToken ct
-    ) =>
-        db
+    )
+    {
+        return db
             .Sessions.AsNoTracking()
             .Include(x => x.Movements)
             .Include(x => x.Reconciliations)
@@ -39,13 +42,15 @@ public sealed class CashRegisterStore(CashRegisterDbContext db) : ICashRegisterS
                     && x.BusinessDate == businessDate,
                 ct
             );
+    }
 
     public Task<List<CashRegisterSession>> GetHistoryAsync(
         Guid restaurantId,
         int take,
         CancellationToken ct
-    ) =>
-        db
+    )
+    {
+        return db
             .Sessions.AsNoTracking()
             .Include(x => x.Movements)
             .Include(x => x.Reconciliations)
@@ -53,45 +58,56 @@ public sealed class CashRegisterStore(CashRegisterDbContext db) : ICashRegisterS
             .OrderByDescending(x => x.OpenedAtUtc)
             .Take(take)
             .ToListAsync(ct);
+    }
 
-    public Task<bool> HasOpenSessionAsync(Guid restaurantId, CancellationToken ct) =>
-        db.Sessions.AnyAsync(
+    public Task<bool> HasOpenSessionAsync(Guid restaurantId, CancellationToken ct)
+    {
+        return db.Sessions.AnyAsync(
             x => x.RestaurantId == restaurantId && x.Status == CashRegisterStatus.Open,
             ct
         );
+    }
 
     public Task<CashRegisterSession?> GetSessionAsync(
         Guid restaurantId,
         Guid sessionId,
         CancellationToken ct
-    ) =>
-        db
+    )
+    {
+        return db
             .Sessions.Include(x => x.Movements)
             .Include(x => x.Reconciliations)
             .SingleOrDefaultAsync(x => x.Id == sessionId && x.RestaurantId == restaurantId, ct);
+    }
 
     public Task<List<CashRegisterSession>> GetStaleSessionsAsync(
         Guid restaurantId,
         DateOnly businessDate,
         CancellationToken ct
-    ) =>
-        db
+    )
+    {
+        return db
             .Sessions.Where(x =>
                 x.RestaurantId == restaurantId
                 && x.Status == CashRegisterStatus.Open
                 && x.BusinessDate != businessDate
             )
             .ToListAsync(ct);
+    }
 
-    public Task<bool> HasProcessedMessageAsync(Guid messageId, CancellationToken ct) =>
-        db.InboxMessages.AnyAsync(x => x.Id == messageId, ct);
+    public Task<bool> HasProcessedMessageAsync(Guid messageId, CancellationToken ct)
+    {
+        return db.InboxMessages.AnyAsync(x => x.Id == messageId, ct);
+    }
 
-    public Task<Guid?> GetSaleSessionIdAsync(Guid paymentId, CancellationToken ct) =>
-        db
+    public Task<Guid?> GetSaleSessionIdAsync(Guid paymentId, CancellationToken ct)
+    {
+        return db
             .Movements.AsNoTracking()
             .Where(x => x.PaymentId == paymentId && x.Type == CashMovementType.Sale)
             .Select(x => (Guid?)x.CashRegisterSessionId)
             .SingleOrDefaultAsync(ct);
+    }
 
     public Task<CashRegisterSession?> FindProjectionSessionAsync(
         PaymentProjection payment,
@@ -117,17 +133,27 @@ public sealed class CashRegisterStore(CashRegisterDbContext db) : ICashRegisterS
                 .FirstOrDefaultAsync(ct);
     }
 
-    public void AddSession(CashRegisterSession session) => db.Sessions.Add(session);
+    public void AddSession(CashRegisterSession session)
+    {
+        db.Sessions.Add(session);
+    }
 
-    public void AddReconciliation(CashRegisterReconciliation reconciliation) =>
+    public void AddReconciliation(CashRegisterReconciliation reconciliation)
+    {
         db.Reconciliations.Add(reconciliation);
+    }
 
-    public void AddMovement(CashMovement movement) => db.Movements.Add(movement);
+    public void AddMovement(CashMovement movement)
+    {
+        db.Movements.Add(movement);
+    }
 
-    public void MarkMessageProcessed(Guid messageId, DateTime processedAtUtc) =>
+    public void MarkMessageProcessed(Guid messageId, DateTime processedAtUtc)
+    {
         db.InboxMessages.Add(
             new CashRegisterInboxMessage { Id = messageId, ProcessedAtUtc = processedAtUtc }
         );
+    }
 
     public async Task SaveChangesAsync(CancellationToken ct = default)
     {

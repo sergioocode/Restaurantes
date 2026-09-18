@@ -1,5 +1,4 @@
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -22,27 +21,14 @@ public static class DependencyInjection
         services.AddDbContext<IdentityWriteDbContext>(options =>
             options.UseNpgsql(configuration.GetConnectionString("IdentityWrite"))
         );
-        services
-            .AddIdentityCore<ApplicationUser>(options =>
-            {
-                options.User.RequireUniqueEmail = false;
-                options.Password.RequiredLength = 10;
-                options.Lockout.MaxFailedAccessAttempts = 5;
-                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
-            })
-            .AddRoles<IdentityRole<Guid>>()
-            .AddEntityFrameworkStores<IdentityWriteDbContext>()
-            .AddSignInManager()
-            .AddDefaultTokenProviders();
         services.AddScoped<IIdentityStore, IdentityStore>();
         services.AddScoped<IAccessTokenIssuer, AccessTokenService>();
-        services.AddScoped<IdentitySeed>();
         return services;
     }
 
     public static async Task InitializeIdentityDatabaseAsync(
         this IServiceProvider services,
-        bool seed,
+        IConfiguration configuration,
         CancellationToken ct = default
     )
     {
@@ -50,9 +36,41 @@ public static class DependencyInjection
         IdentityWriteDbContext db =
             scope.ServiceProvider.GetRequiredService<IdentityWriteDbContext>();
         await db.Database.MigrateAsync(ct);
-        if (seed)
+        if (!await db.AuthenticationSettings.AnyAsync(ct))
         {
-            await scope.ServiceProvider.GetRequiredService<IdentitySeed>().SeedAsync(ct);
+            db.AuthenticationSettings.Add(
+                new AuthenticationSettings { Id = 1, ActiveProvider = "Microsoft" }
+            );
+            await db.SaveChangesAsync(ct);
         }
+        string? bootstrapEmail = configuration["IdentityBootstrap:AdminEmail"];
+        string? bootstrapProvider = configuration["IdentityBootstrap:Provider"];
+        if (await db.Users.AnyAsync(ct) || string.IsNullOrWhiteSpace(bootstrapEmail))
+        {
+            return;
+        }
+
+        if (bootstrapProvider is not ("Microsoft" or "Google"))
+        {
+            throw new InvalidOperationException(
+                "IdentityBootstrap:Provider must be Microsoft or Google."
+            );
+        }
+
+        db.Users.Add(
+            new ApplicationUser
+            {
+                Id = Guid.NewGuid(),
+                Email = bootstrapEmail.Trim().ToLowerInvariant(),
+                Provider = bootstrapProvider,
+                DisplayName = "Administrador",
+                Role = "Admin",
+                IsActive = true,
+                CreatedAtUtc = DateTime.UtcNow,
+            }
+        );
+        AuthenticationSettings settings = await db.AuthenticationSettings.SingleAsync(ct);
+        settings.ActiveProvider = bootstrapProvider;
+        await db.SaveChangesAsync(ct);
     }
 }

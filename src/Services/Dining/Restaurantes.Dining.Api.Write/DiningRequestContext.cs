@@ -6,13 +6,15 @@ namespace Restaurantes.Dining.Api.Write;
 
 internal static class DiningRequestContext
 {
-    public static DiningRequest FromHttpContext(HttpContext http) =>
-        new(
+    public static DiningRequest FromHttpContext(HttpContext http)
+    {
+        return new(
             http.User,
             http.Connection.RemoteIpAddress,
             http.Request.Headers["X-Customer-Session-Token"].FirstOrDefault(),
             http.Request.Headers.Authorization.FirstOrDefault()
         );
+    }
 
     public static IActionResult ToActionResult(this ControllerBase controller, DiningResult result)
     {

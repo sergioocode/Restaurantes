@@ -1,4 +1,4 @@
-using Restaurantes.CashRegister.Domain;
+﻿using Restaurantes.CashRegister.Domain;
 
 namespace Restaurantes.CashRegister.Application;
 
@@ -26,8 +26,10 @@ public sealed class CashRegisterService(ICashRegisterStore store, TimeProvider t
         return session is null ? new(CashRegisterOutcome.NoContent) : Ok(ToResponse(session));
     }
 
-    public async Task<CashRegisterResult> History(Guid restaurantId, CancellationToken ct) =>
-        Ok((await store.GetHistoryAsync(restaurantId, 100, ct)).Select(ToResponse));
+    public async Task<CashRegisterResult> History(Guid restaurantId, CancellationToken ct)
+    {
+        return Ok((await store.GetHistoryAsync(restaurantId, 100, ct)).Select(ToResponse));
+    }
 
     public async Task<CashRegisterResult> Open(
         Guid restaurantId,
@@ -37,13 +39,17 @@ public sealed class CashRegisterService(ICashRegisterStore store, TimeProvider t
     )
     {
         if (request.OpeningFloat is < 0 or > 100000)
+        {
             return Validation("openingFloat", "El fondo inicial debe estar entre 0 y 100.000 €.");
+        }
 
         DateTime now = time.GetUtcNow().UtcDateTime;
         DateOnly today = BusinessDate(now);
         await ExpirePreviousDays(restaurantId, today, now, ct);
         if (await store.HasOpenSessionAsync(restaurantId, ct))
+        {
             return Conflict("Ya existe un turno de caja abierto para este local.");
+        }
 
         CashRegisterSession session = new()
         {
@@ -81,20 +87,31 @@ public sealed class CashRegisterService(ICashRegisterStore store, TimeProvider t
     )
     {
         if (request.ReconciledByMethod is null || request.ReconciledByMethod.Count == 0)
+        {
             return Validation("reconciledByMethod", "Debes conciliar todos los medios de cobro.");
+        }
+
         if (
             request.ReconciledByMethod.Any(x =>
                 string.IsNullOrWhiteSpace(x.Key) || x.Value is < 0 or > 1000000
             )
         )
+        {
             return Validation("reconciledByMethod", "Hay un importe de conciliación no válido.");
+        }
 
         CashRegisterSession? session = await store.GetSessionAsync(restaurantId, sessionId, ct);
         if (session is null)
+        {
             return new(CashRegisterOutcome.NotFound);
+        }
+
         DateTime now = time.GetUtcNow().UtcDateTime;
         if (session.Status != CashRegisterStatus.Open)
+        {
             return Conflict("Este turno de caja ya no está abierto.");
+        }
+
         if (session.BusinessDate != BusinessDate(now))
         {
             Expire(session, now);
@@ -112,10 +129,12 @@ public sealed class CashRegisterService(ICashRegisterStore store, TimeProvider t
         );
         string[] missing = expected.Keys.Where(method => !reconciled.ContainsKey(method)).ToArray();
         if (missing.Length > 0)
+        {
             return Validation(
                 "reconciledByMethod",
                 $"Falta conciliar: {string.Join(", ", missing)}."
             );
+        }
 
         foreach ((string method, decimal amount) in expected)
         {
@@ -161,9 +180,14 @@ public sealed class CashRegisterService(ICashRegisterStore store, TimeProvider t
             ct
         );
         foreach (CashRegisterSession session in stale)
+        {
             Expire(session, now);
+        }
+
         if (stale.Count > 0)
+        {
             await store.SaveChangesAsync(ct);
+        }
     }
 
     private static void Expire(CashRegisterSession session, DateTime now)
@@ -174,11 +198,17 @@ public sealed class CashRegisterService(ICashRegisterStore store, TimeProvider t
         session.Version++;
     }
 
-    private static DateOnly BusinessDate(DateTime utc) =>
-        DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(utc, MadridTimeZone));
+    private static DateOnly BusinessDate(DateTime utc)
+    {
+        return DateOnly.FromDateTime(
+            TimeZoneInfo.ConvertTimeBySystemTimeZoneId(utc, MadridTimeZone)
+        );
+    }
 
-    private static decimal Signed(CashMovement movement) =>
-        movement.Type == CashMovementType.Sale ? movement.Amount : -movement.Amount;
+    private static decimal Signed(CashMovement movement)
+    {
+        return movement.Type == CashMovementType.Sale ? movement.Amount : -movement.Amount;
+    }
 
     internal static Dictionary<string, decimal> ExpectedByMethod(CashRegisterSession session)
     {
@@ -262,14 +292,21 @@ public sealed class CashRegisterService(ICashRegisterStore store, TimeProvider t
         );
     }
 
-    private static CashRegisterResult Ok(object value) => new(CashRegisterOutcome.Ok, value);
+    private static CashRegisterResult Ok(object value)
+    {
+        return new(CashRegisterOutcome.Ok, value);
+    }
 
-    private static CashRegisterResult Conflict(string detail) =>
-        new(CashRegisterOutcome.Conflict, new { detail });
+    private static CashRegisterResult Conflict(string detail)
+    {
+        return new(CashRegisterOutcome.Conflict, new { detail });
+    }
 
-    private static CashRegisterResult Validation(string key, string message) =>
-        new(
+    private static CashRegisterResult Validation(string key, string message)
+    {
+        return new(
             CashRegisterOutcome.Validation,
             Errors: new Dictionary<string, string[]> { [key] = [message] }
         );
+    }
 }

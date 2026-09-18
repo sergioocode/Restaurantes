@@ -183,31 +183,50 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
     }
 
     public void Add<T>(T entity)
-        where T : class => db.Add(entity);
+        where T : class
+    {
+        db.Add(entity);
+    }
 
-    public void Detach(DiningSession session) => db.Entry(session).State = EntityState.Detached;
+    public void Detach(DiningSession session)
+    {
+        db.Entry(session).State = EntityState.Detached;
+    }
 
-    public Task LoadOrdersAsync(DiningSession session, CancellationToken ct) =>
-        db.Entry(session).Collection(x => x.Orders).LoadAsync(ct);
+    public Task LoadOrdersAsync(DiningSession session, CancellationToken ct)
+    {
+        return db.Entry(session).Collection(x => x.Orders).LoadAsync(ct);
+    }
 
-    public Task<bool> HasProcessedMessageAsync(Guid messageId, CancellationToken ct = default) =>
-        db.InboxMessages.AnyAsync(x => x.Id == messageId, ct);
+    public Task<bool> HasProcessedMessageAsync(Guid messageId, CancellationToken ct = default)
+    {
+        return db.InboxMessages.AnyAsync(x => x.Id == messageId, ct);
+    }
 
-    public void MarkMessageProcessed(Guid messageId, DateTime processedAtUtc) =>
+    public void MarkMessageProcessed(Guid messageId, DateTime processedAtUtc)
+    {
         db.InboxMessages.Add(
             new DiningInboxMessage { Id = messageId, ProcessedAtUtc = processedAtUtc }
         );
+    }
 
-    public Task<DiningSessionOrder?> FindOrderAsync(Guid orderId, CancellationToken ct = default) =>
-        db.SessionOrders.SingleOrDefaultAsync(x => x.OrderId == orderId, ct);
+    public Task<DiningSessionOrder?> FindOrderAsync(Guid orderId, CancellationToken ct = default)
+    {
+        return db.SessionOrders.SingleOrDefaultAsync(x => x.OrderId == orderId, ct);
+    }
 
     public Task<DiningPendingPayment?> FindPendingPaymentAsync(
         Guid orderId,
         CancellationToken ct = default
-    ) => db.PendingPayments.SingleOrDefaultAsync(x => x.OrderId == orderId, ct);
+    )
+    {
+        return db.PendingPayments.SingleOrDefaultAsync(x => x.OrderId == orderId, ct);
+    }
 
-    public void RemovePendingPayment(DiningPendingPayment payment) =>
+    public void RemovePendingPayment(DiningPendingPayment payment)
+    {
         db.PendingPayments.Remove(payment);
+    }
 
     public async Task SaveChangesAsync(CancellationToken ct = default)
     {
@@ -231,15 +250,26 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
         }
     }
 
-    public async Task<IDiningTransaction> BeginTransactionAsync(CancellationToken ct) =>
-        new DiningTransaction(await db.Database.BeginTransactionAsync(ct));
+    public async Task<IDiningTransaction> BeginTransactionAsync(CancellationToken ct)
+    {
+        return new DiningTransaction(await db.Database.BeginTransactionAsync(ct));
+    }
 
     private sealed class DiningTransaction(IDbContextTransaction transaction) : IDiningTransaction
     {
-        public Task CommitAsync(CancellationToken ct) => transaction.CommitAsync(ct);
+        public Task CommitAsync(CancellationToken ct)
+        {
+            return transaction.CommitAsync(ct);
+        }
 
-        public Task RollbackAsync(CancellationToken ct) => transaction.RollbackAsync(ct);
+        public Task RollbackAsync(CancellationToken ct)
+        {
+            return transaction.RollbackAsync(ct);
+        }
 
-        public ValueTask DisposeAsync() => transaction.DisposeAsync();
+        public ValueTask DisposeAsync()
+        {
+            return transaction.DisposeAsync();
+        }
     }
 }

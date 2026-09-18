@@ -54,11 +54,17 @@ public sealed class CashPaymentProjectionWorker(
     private async Task Handle(object sender, BasicDeliverEventArgs ea)
     {
         if (channel is null)
+        {
             return;
+        }
+
         try
         {
             if (!Guid.TryParse(ea.BasicProperties.MessageId, out Guid messageId))
+            {
                 throw new JsonException("Invalid payment event id.");
+            }
+
             PaymentProjection payment = ReadPayment(messageId, ea);
             await using AsyncServiceScope scope = scopes.CreateAsyncScope();
             await scope

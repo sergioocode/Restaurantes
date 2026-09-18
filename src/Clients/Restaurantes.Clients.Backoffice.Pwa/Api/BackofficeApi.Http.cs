@@ -1,7 +1,6 @@
-using System.Net.Http.Headers;
+﻿using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Restaurantes.Clients.Backoffice.Pwa.Models;
 
 namespace Restaurantes.Clients.Backoffice.Pwa.Api;
 

@@ -7,9 +7,8 @@ const restaurantKey = 'restaurantes.kds.restaurant';
 const apiBaseUrl = window.location.origin;
 const loginPanel = document.querySelector('#loginPanel');
 const monitorPanel = document.querySelector('#monitorPanel');
-const usernameInput = document.querySelector('#username');
-const passwordInput = document.querySelector('#password');
-const loginButton = document.querySelector('#login');
+const loginMicrosoft = document.querySelector('#loginMicrosoft');
+const loginGoogle = document.querySelector('#loginGoogle');
 const refreshButton = document.querySelector('#refresh');
 const logoutButton = document.querySelector('#logout');
 const restaurantSelect = document.querySelector('#restaurantId');
@@ -173,19 +172,15 @@ async function activateLogin(loginResponse) {
   await loadStationsAndConnect();
 }
 
-async function doLogin(event) {
-  event.preventDefault();
-  loginButton.disabled = true;
-  eventText.textContent = '';
-  try {
-    await activateLogin(await api.login(usernameInput.value, passwordInput.value));
-    passwordInput.value = '';
-  } catch (error) {
-    eventText.textContent = error.message;
-    setStatus(false, 'Inicio de sesión rechazado');
-  } finally {
-    loginButton.disabled = false;
-  }
+function startLogin(provider) {
+  const returnPath = encodeURIComponent('/kds/');
+  window.location.assign('/api/identity/auth/start/' + provider + '?returnPath=' + returnPath);
+}
+
+async function loadProvider() {
+  const settings = await api.provider();
+  loginMicrosoft.disabled = settings.activeProvider !== 'Microsoft' || !settings.microsoftConfigured;
+  loginGoogle.disabled = settings.activeProvider !== 'Google' || !settings.googleConfigured;
 }
 
 function logout() {
@@ -207,14 +202,17 @@ async function restoreLogin() {
   const storedLogin = sessionStorage.getItem(sessionKey);
   if (!storedLogin) return;
   try {
-    await activateLogin(JSON.parse(storedLogin));
+    const session = JSON.parse(storedLogin);
+    if (new Date(session.expiresAtUtc) <= new Date()) throw new Error('La sesión ha caducado.');
+    await activateLogin(session);
   } catch (error) {
     logout();
     eventText.textContent = error.message;
   }
 }
 
-loginPanel.addEventListener('submit', doLogin);
+loginMicrosoft.addEventListener('click', () => startLogin('Microsoft'));
+loginGoogle.addEventListener('click', () => startLogin('Google'));
 refreshButton.addEventListener('click', refreshMonitor);
 logoutButton.addEventListener('click', logout);
 restaurantSelect.addEventListener('change', loadStationsAndConnect);
@@ -224,7 +222,26 @@ stationSelect.addEventListener('change', () => {
   connect();
 });
 
-restoreLogin();
+async function initialize() {
+  try {
+    await loadProvider();
+    const query = new URLSearchParams(window.location.hash.slice(1));
+    const code = query.get('login_code');
+    if (code) {
+      history.replaceState(null, '', window.location.pathname);
+      await activateLogin(await api.exchange(code));
+      return;
+    }
+    if (query.has('login_error')) {
+      history.replaceState(null, '', window.location.pathname);
+      eventText.textContent = 'La cuenta no está autorizada o el proveedor rechazó el acceso.';
+    }
+    await restoreLogin();
+  } catch (error) {
+    eventText.textContent = error.message;
+  }
+}
+initialize();
 window.setInterval(async () => {
   if (!login || !restaurantSelect.value || !stationSelect.value) return;
   try {

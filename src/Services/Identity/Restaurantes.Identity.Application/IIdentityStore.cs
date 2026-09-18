@@ -4,46 +4,25 @@ namespace Restaurantes.Identity.Application;
 
 public interface IIdentityStore
 {
-    Task<ApplicationUser?> FindByNameAsync(string username);
-    Task<ApplicationUser?> FindByIdAsync(Guid userId);
-    Task<bool> CheckPasswordAsync(ApplicationUser user, string password);
-    Task LoadRestaurantAccessesAsync(ApplicationUser user, CancellationToken ct);
-    Task<string[]> GetRolesAsync(ApplicationUser user);
+    Task<AuthenticationSettings> GetSettingsAsync(CancellationToken ct);
+    Task<ApplicationUser?> FindByEmailAsync(string provider, string email, CancellationToken ct);
+    Task<ApplicationUser?> FindBySubjectAsync(
+        string provider,
+        string? tenantId,
+        string subject,
+        CancellationToken ct
+    );
+    Task<ApplicationUser?> FindByIdAsync(Guid id, CancellationToken ct);
     Task<List<ApplicationUser>> ListUsersAsync(CancellationToken ct);
-    Task<IdentityOperation> CreateUserAsync(ApplicationUser user, string password);
-    Task<bool> RoleExistsAsync(string role);
-    Task<IdentityOperation> CreateRoleAsync(string role);
-    Task<bool> IsInRoleAsync(ApplicationUser user, string role);
-    Task<IdentityOperation> AddToRoleAsync(ApplicationUser user, string role);
-    Task<IdentityOperation> RemoveFromRolesAsync(ApplicationUser user, IEnumerable<string> roles);
-    Task<IdentityOperation> UpdateSecurityStampAsync(ApplicationUser user);
-    Task<string[]> GetOtherActiveRolesAsync(Guid userId, Guid restaurantId, CancellationToken ct);
-    Task<UserRestaurantAssignment?> FindAssignmentAsync(
-        Guid userId,
-        Guid restaurantId,
-        CancellationToken ct
-    );
-    Task<string[]> GetDesiredGlobalRolesAsync(
-        Guid userId,
-        IReadOnlyCollection<string> globalRoles,
-        CancellationToken ct
-    );
-    void AddAssignment(UserRestaurantAssignment assignment);
-    Task SaveChangesAsync(CancellationToken ct = default);
-    Task<IIdentityTransaction> BeginTransactionAsync(CancellationToken ct);
-}
-
-public sealed record IdentityOperation(bool Succeeded, IReadOnlyCollection<string> Errors)
-{
-    public static IdentityOperation Success { get; } = new(true, []);
-}
-
-public interface IIdentityTransaction : IAsyncDisposable
-{
-    Task CommitAsync(CancellationToken ct);
+    Task<bool> AnyActiveAdminForProviderAsync(string provider, CancellationToken ct);
+    Task<bool> AnyActiveAdminExceptAsync(Guid id, string provider, CancellationToken ct);
+    Task AddUserAsync(ApplicationUser user, CancellationToken ct);
+    Task SaveChangesAsync(CancellationToken ct);
+    Task<string> CreateLoginTicketAsync(Guid userId, CancellationToken ct);
+    Task<ApplicationUser?> ConsumeLoginTicketAsync(string code, CancellationToken ct);
 }
 
 public interface IAccessTokenIssuer
 {
-    IssuedAccessToken Issue(ApplicationUser user, IReadOnlyCollection<string> globalRoles);
+    IssuedAccessToken Issue(ApplicationUser user);
 }

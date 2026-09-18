@@ -42,11 +42,9 @@ public sealed class ReportingController(
     [HttpGet("health")]
     public async Task<ActionResult> Health(CancellationToken ct)
     {
-        if (!User.HasAnyRestaurantPermission(RestaurantPermissions.DashboardRead))
-        {
-            return Forbid();
-        }
-        return Ok(await health.GetAsync(ct));
+        return !User.HasAnyRestaurantPermission(RestaurantPermissions.DashboardRead)
+            ? Forbid()
+            : Ok(await health.GetAsync(ct));
     }
 
     private static Guid[] AuthorizedRestaurants(ClaimsPrincipal user)

@@ -5,6 +5,7 @@
 @inject OrderRealtimeClient Realtime
 @inject DiningRealtimeClient DiningRealtime
 @inject IJSRuntime Js
+@inject NavigationManager Nav
 
 <PageTitle>TPV · Restaurantes</PageTitle>
 
@@ -16,13 +17,17 @@
             <p class="eyebrow">RESTAURANTES · PUNTO DE VENTA</p>
             <h1>Caja del local</h1>
             <p class="muted">Acceso exclusivo del personal autorizado.</p>
-            <form @onsubmit="DoLogin" @onsubmit:preventDefault>
-                <label>Usuario<input autocomplete="username" @bind="username" /></label>
-                <label>Contraseña<input type="password" autocomplete="current-password" @bind="password" /></label>
-                <button class="primary full" disabled="@busy">@(busy ? "Entrando…" : "Entrar al TPV")</button>
-            </form>
+            <div class="login-providers">
+                <button class="primary full" type="button" @onclick='() => StartLogin("Microsoft")'
+                        disabled="@(providerSettings is null || providerSettings.ActiveProvider != "Microsoft" || !providerSettings.MicrosoftConfigured)">
+                    Iniciar sesión con Microsoft
+                </button>
+                <button class="primary full" type="button" @onclick='() => StartLogin("Google")'
+                        disabled="@(providerSettings is null || providerSettings.ActiveProvider != "Google" || !providerSettings.GoogleConfigured)">
+                    Iniciar sesión con Google
+                </button>
+            </div>
             @if (!string.IsNullOrWhiteSpace(message)) { <p class="form-error">@message</p> }
-            <p class="dev-hint">Desarrollo: camarero1.mad-centro / Camarero-01-1-2026!</p>
         </section>
     }
     else
@@ -366,4 +371,3 @@
         }
     }
 </main>
-

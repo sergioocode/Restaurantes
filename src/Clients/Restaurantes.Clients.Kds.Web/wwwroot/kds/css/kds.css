@@ -56,3 +56,6 @@ small { color: #9ca3af; }
   .order { padding: .85rem; }
   .order h2, .pass header { flex-wrap: wrap; }
 }
+
+#loginPanel { display: grid; max-width: 380px; }
+#loginPanel button { width: 100%; }

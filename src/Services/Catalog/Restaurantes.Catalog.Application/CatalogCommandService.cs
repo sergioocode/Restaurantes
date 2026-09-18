@@ -1,4 +1,4 @@
-namespace Restaurantes.Catalog.Application;
+﻿namespace Restaurantes.Catalog.Application;
 
 public sealed partial class CatalogCommandService(
     ICatalogWriteStore store,
