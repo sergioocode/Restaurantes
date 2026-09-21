@@ -976,6 +976,10 @@ Las migraciones existentes cubren, entre otros cambios ya implementados:
 - eliminación lógica de ubicaciones y zonas;
 - número de comensales.
 
+`AddDiningZones` mantuvo la compatibilidad con los datos existentes: creó una zona `General` por restaurante con ubicaciones, asignó esas ubicaciones antes de exigir `ZoneId` y conservó sus identificadores, códigos QR, sesiones y pedidos. `RemoveLocationTypes` se mantuvo como una migración independiente porque la clasificación anterior no puede reconstruirse; su reversión solo puede restaurar el valor genérico `Table`.
+
+Las migraciones de eliminación lógica convierten la unicidad de nombres y códigos en índices parciales sobre registros vigentes. Su reversión se rechaza cuando existen zonas o ubicaciones eliminadas, evitando revivir configuración histórica o provocar colisiones con nombres y códigos reutilizados. La incorporación de comensales utiliza columnas nullable, por lo que las sesiones anteriores permanecen sin un valor inventado.
+
 ## Desarrollo local
 
 URL configurada actualmente:

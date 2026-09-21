@@ -686,6 +686,8 @@ RabbitMq:*
 
 Las migraciones EF Core se aplican actualmente al iniciar los procesos correspondientes mediante `Database.MigrateAsync()`.
 
+`AddOrderGuestCount` existe tanto en Orders Write como en la proyección Read utilizada por KDS. En ambos modelos el dato es nullable: los pedidos históricos permanecen sin cantidad de comensales y los pedidos nuevos conservan la copia validada de su sesión de Dining durante todo el ciclo de eventos y proyección.
+
 ## Desarrollo local
 
 Puertos configurados actualmente:
