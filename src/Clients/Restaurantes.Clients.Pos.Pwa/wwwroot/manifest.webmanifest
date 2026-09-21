@@ -1,22 +1,24 @@
 {
   "name": "TPV Restaurantes",
   "short_name": "TPV",
-  "id": "./",
-  "start_url": "./",
+  "description": "Punto de venta y cobro de Restaurantes.",
+  "id": "/pos/",
+  "start_url": "/pos/",
+  "scope": "/pos/",
   "display": "standalone",
   "background_color": "#e9ece8",
   "theme_color": "#173c2b",
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "icon-512.png",
-      "type": "image/png",
-      "sizes": "512x512"
-    },
-    {
-      "src": "icon-192.png",
+      "src": "./icons/icon-192.png",
       "type": "image/png",
       "sizes": "192x192"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
     }
   ]
 }

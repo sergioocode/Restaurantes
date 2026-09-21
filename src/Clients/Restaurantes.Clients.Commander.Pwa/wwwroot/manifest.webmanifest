@@ -1,22 +1,24 @@
 {
   "name": "Comandero Restaurantes",
   "short_name": "Comandero",
-  "id": "./",
-  "start_url": "./",
+  "description": "Toma de pedidos y envío de comandas a cocina.",
+  "id": "/commander/",
+  "start_url": "/commander/",
+  "scope": "/commander/",
   "display": "standalone",
   "background_color": "#f4f2eb",
   "theme_color": "#1f4b35",
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "icon-512.png",
-      "type": "image/png",
-      "sizes": "512x512"
-    },
-    {
-      "src": "icon-192.png",
+      "src": "./icons/icon-192.png",
       "type": "image/png",
       "sizes": "192x192"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
     }
   ]
 }
