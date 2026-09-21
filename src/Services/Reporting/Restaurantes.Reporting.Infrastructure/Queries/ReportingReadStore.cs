@@ -33,12 +33,7 @@ public sealed class ReportingReadStore(ReportingReadDbContext db) : IReportingRe
                 .ToListAsync(ct)
         ).ToHashSet();
         List<OrderReportingFact> orderFacts = await orderQuery
-            .Where(x =>
-                (x.CreatedAtUtc >= startUtc && x.CreatedAtUtc < endUtc)
-                || x.OrderStatus == "Submitted"
-                || x.OrderStatus == "InPreparation"
-                || x.OrderStatus == "Ready"
-            )
+            .Where(x => x.CreatedAtUtc >= startUtc && x.CreatedAtUtc < endUtc)
             .OrderByDescending(x => x.UpdatedAtUtc)
             .Take(orderLimit)
             .ToListAsync(ct);

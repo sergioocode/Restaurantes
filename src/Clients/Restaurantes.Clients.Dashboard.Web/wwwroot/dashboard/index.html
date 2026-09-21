@@ -3,7 +3,11 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="theme-color" content="#101419">
     <title>Restaurantes · Operación y ventas</title>
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="./icons/icon-192.png">
     <style>
         body {
             font: 14px system-ui;
@@ -24,7 +28,8 @@
             background: radial-gradient(circle at top right, #263746 0, #101419 34rem)
         }
 
-        #loginView {
+        #loginView,
+        #authLoading {
             width: min(430px, 100%);
             padding: 32px;
             border: 1px solid #2c3b49;
@@ -70,7 +75,21 @@
         #loginView button {
             background: #246b47;
             border-color: #2f8a5d;
-            font-weight: 850
+            font-weight: 850;
+            cursor: pointer;
+            transition: background .15s ease, border-color .15s ease, opacity .15s ease
+        }
+
+        #loginView button:hover:not(:disabled) {
+            background: #2f8a5d;
+            border-color: #62d98b
+        }
+
+        #loginView button:disabled {
+            cursor: not-allowed;
+            opacity: .55;
+            background: #34434f;
+            border-color: #496076
         }
 
         #loginError {
@@ -231,13 +250,17 @@
     </style>
 </head>
 <body class="login-mode">
-    <section id="loginView">
+    <section id="authLoading" aria-live="polite">
+        <small>RESTAURANTES · INFORMES</small>
+        <h1>Restaurando sesión…</h1>
+    </section>
+    <section id="loginView" hidden>
         <small>RESTAURANTES · INFORMES</small>
         <h1>Iniciar sesión</h1>
         <p>Accede para consultar la operación y las ventas de tus locales autorizados.</p>
         <div id="loginForm">
-            <button id="loginMicrosoft" type="button">Iniciar sesión con Microsoft</button>
-            <button id="loginGoogle" type="button">Iniciar sesión con Google</button>
+            <button id="loginMicrosoft" type="button" disabled>Iniciar sesión con Microsoft</button>
+            <button id="loginGoogle" type="button" disabled>Iniciar sesión con Google</button>
         </div>
         <p id="loginError"></p>
     </section>
@@ -329,6 +352,7 @@
         $('date').value = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
 
         function showLogin(message = '') {
+            $('authLoading').hidden = true;
             $('loginView').hidden = false;
             $('dashboardHeader').hidden = true;
             $('dashboardContent').hidden = true;
@@ -337,6 +361,7 @@
         }
 
         function showDashboard() {
+            $('authLoading').hidden = true;
             $('loginView').hidden = true;
             $('dashboardHeader').hidden = false;
             $('dashboardContent').hidden = false;
@@ -453,19 +478,20 @@
         $('logout').onclick = logout;
 
         async function openDashboard(session) {
+            const hasAllRestaurants = (session.allRestaurantsRoles || []).some(role => ['Admin', 'Gerente', 'Contabilidad', 'Marketing'].includes(role));
+            const allowed = new Set((session.restaurants || []).filter(x => (x.permissions || []).includes('dashboard.read')).map(x => x.restaurantId.toLowerCase()));
+            if (!hasAllRestaurants && allowed.size === 0) throw new Error('Este perfil no tiene acceso al Dashboard.');
             access = session;
-            const isAdmin = (access.globalRoles || []).some(role => ['Admin', 'Gerente', 'Contabilidad', 'Oficina'].includes(role));
-            const allowed = new Set((access.restaurants || []).filter(x => (x.permissions || []).includes('dashboard.read')).map(x => x.restaurantId.toLowerCase()));
-            if (!isAdmin && allowed.size === 0) throw new Error('Este perfil no tiene acceso al Dashboard.');
+            showDashboard();
 
             let knownRestaurants = [];
             try {
                 knownRestaurants = await authorizedFetch('/api/restaurant-operations/restaurants').then(r => r.json())
             } catch { }
-            const visible = knownRestaurants.filter(x => isAdmin || allowed.has(x.id.toLowerCase()));
+            const visible = knownRestaurants.filter(x => hasAllRestaurants || allowed.has(x.id.toLowerCase()));
             const missing = (access.restaurants || []).filter(x => allowed.has(x.restaurantId.toLowerCase()) && !visible.some(r => r.id.toLowerCase() === x.restaurantId.toLowerCase())).map(x => ({ id: x.restaurantId, name: 'Local ' + short(x.restaurantId) }));
             const restaurants = [...visible, ...missing].sort((a, b) => a.name.localeCompare(b.name));
-            $('restaurant').innerHTML = `<option value="">${isAdmin ? 'Todos los locales' : 'Todos mis locales'}</option>` + restaurants.map(x => `<option value="${escapeHtml(x.id)}">${escapeHtml(x.name)} · ${escapeHtml(x.id)}</option>`).join('');
+            $('restaurant').innerHTML = `<option value="">${hasAllRestaurants ? 'Todos los Locales' : 'Local asignado'}</option>` + restaurants.map(x => `<option value="${escapeHtml(x.id)}">${escapeHtml(x.name)} · ${escapeHtml(x.id)}</option>`).join('');
             $('currentUser').textContent = access.user.displayName;
             schedule();
             await load();
@@ -533,7 +559,6 @@
                     if (!response.ok) throw new Error('La cuenta no está autorizada.');
                     const session = await response.json();
                     sessionStorage.setItem(sessionKey, JSON.stringify(session));
-                    showDashboard();
                     await openDashboard(session);
                     return;
                 }
@@ -545,13 +570,24 @@
                 if (!saved) return showLogin();
                 const session = JSON.parse(saved);
                 if (new Date(session.expiresAtUtc) <= new Date()) return logout();
-                showDashboard();
                 await openDashboard(session);
             } catch (error) {
-                logout();
-                showLogin(error.message);
+                if (access) {
+                    showDashboard();
+                    $('state').textContent = error.message;
+                } else {
+                    sessionStorage.removeItem(sessionKey);
+                    showLogin(error.message);
+                }
             }
         })();
+    </script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./service-worker.js', { updateViaCache: 'none' });
+            });
+        }
     </script>
 </body>
 </html>
