@@ -447,7 +447,7 @@ Request:
 Comportamiento actual:
 
 - requiere usuario autenticado;
-- requiere rol global **`Admin`**;
+- requiere rol **`Admin`** con alcance **`Todos los Locales`**;
 - devuelve `202 Accepted` al crear correctamente;
 - devuelve `409 Conflict` cuando el código ya existe.
 
@@ -503,6 +503,16 @@ Devuelve:
 
 Las consultas utilizan `AsNoTracking()` porque la API Read no modifica las entidades consultadas.
 
+### Listar locales accesibles por aplicación
+
+```http
+GET /api/restaurant-operations/restaurants/accessible/commander
+GET /api/restaurant-operations/restaurants/accessible/pos
+GET /api/restaurant-operations/restaurants/accessible/kds
+```
+
+Estas rutas requieren autenticación y devuelven únicamente locales activos para los que el usuario tiene, respectivamente, `commander.use`, `pos.use` o `kds.use`. Una cuenta con alcance `Todos los Locales` obtiene todos los locales activos permitidos por su rol; una cuenta limitada obtiene como máximo su único local.
+
 ## Gateways
 
 ### Private Gateway
@@ -554,11 +564,7 @@ Issuer   = Restaurantes.Identity
 Audience = Restaurantes
 ```
 
-El modelo combina:
-
-- roles globales;
-- permisos asociados a un restaurante concreto;
-- claims de autorización con formato `restaurantId:permission`.
+El modelo separa rol y alcance. Cada cuenta aplica su rol a `Todos los Locales` o a exactamente un local; nunca a un subconjunto de varios locales. Los permisos de alcance único se emiten como claims con formato `restaurantId:permission`, mientras que el alcance total se representa mediante la claim de rol y se evalúa con la misma matriz de permisos.
 
 La API Read no registra autenticación directamente y está disponible a través del Public Gateway únicamente para operaciones `GET`.
 

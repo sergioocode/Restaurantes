@@ -18,7 +18,7 @@ select:disabled { opacity: .6; }
 button { padding: .75rem 1rem; border: 0; border-radius: 8px; background: #f97316; color: #111827; font-weight: 700; cursor: pointer; }
 button.secondary { background: #374151; color: #f9fafb; }
 button.danger { background: #b91c1c; color: #fff; }
-button:disabled { cursor: wait; opacity: .6; }
+button:disabled { cursor: not-allowed; opacity: .6; }
 .status { display: inline-flex; align-items: center; gap: .5rem; }
 .monitor-state { display: grid; gap: .3rem; min-width: 180px; align-self: center; }
 .identity { margin: 0; color: #9ca3af; font-size: .8rem; }
@@ -46,7 +46,7 @@ small { color: #9ca3af; }
 .pass ul { margin: 0; }
 .pass .actions { margin-top: .25rem; }
 .empty { color: #9ca3af; grid-column: 1 / -1; }
-.hidden { display: none; }
+.hidden, #loginPanel.hidden { display: none; }
 
 @media (max-width: 640px) {
   .controls { padding: .75rem; gap: .65rem; }
@@ -59,3 +59,4 @@ small { color: #9ca3af; }
 
 #loginPanel { display: grid; max-width: 380px; }
 #loginPanel button { width: 100%; }
+.auth-loading { max-width: 380px; color: #d1d5db; }

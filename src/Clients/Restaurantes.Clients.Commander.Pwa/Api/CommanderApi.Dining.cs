@@ -1,4 +1,4 @@
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using Restaurantes.Clients.Commander.Pwa.Models;
 
 namespace Restaurantes.Clients.Commander.Pwa.Api;
@@ -40,49 +40,5 @@ public sealed partial class CommanderApi
     public Task<SessionBillResponse> BillAsync(Guid sessionId)
     {
         return GetAsync<SessionBillResponse>($"/api/dining/sessions/{sessionId}/bill");
-    }
-
-    public async Task<SessionBillResponse> CheckoutAsync(
-        Guid sessionId,
-        Guid idempotencyKey,
-        string method,
-        string externalReference
-    )
-    {
-        using HttpRequestMessage request = Authorized(
-            HttpMethod.Post,
-            $"/api/dining/sessions/{sessionId}/checkout"
-        );
-        request.Content = JsonContent.Create(
-            new
-            {
-                idempotencyKey,
-                method,
-                externalReference,
-            }
-        );
-        using HttpResponseMessage response = await http.SendAsync(request);
-        return await ReadAsync<SessionBillResponse>(response);
-    }
-
-    public async Task<DiningSessionResponse> CancelSessionAsync(Guid sessionId, string reason)
-    {
-        using HttpRequestMessage request = Authorized(
-            HttpMethod.Post,
-            $"/api/dining/sessions/{sessionId}/cancel"
-        );
-        request.Content = JsonContent.Create(new { reason });
-        using HttpResponseMessage response = await http.SendAsync(request);
-        return await ReadAsync<DiningSessionResponse>(response);
-    }
-
-    public async Task<DiningSessionResponse> ReleaseSessionAsync(Guid sessionId)
-    {
-        using HttpRequestMessage request = Authorized(
-            HttpMethod.Post,
-            $"/api/dining/sessions/{sessionId}/close"
-        );
-        using HttpResponseMessage response = await http.SendAsync(request);
-        return await ReadAsync<DiningSessionResponse>(response);
     }
 }

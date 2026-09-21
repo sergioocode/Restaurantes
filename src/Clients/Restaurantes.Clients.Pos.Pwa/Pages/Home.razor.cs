@@ -14,9 +14,11 @@ public partial class Home
     private string? message;
     private bool busy;
     private bool success;
+    private bool initializing = true;
     private LoginResponse? login;
     private ProviderSettingsResponse? providerSettings;
     private Guid restaurantId;
+    private List<RestaurantResponse> restaurants = [];
     private List<TableResponse> tables = [];
     private string tableFilter = "All";
     private string serviceMode = "DineIn";
@@ -73,46 +75,47 @@ public partial class Home
     {
         Realtime.OrderUpdated += HandleOrderUpdated;
         DiningRealtime.TableChanged += HandleTableChanged;
-        providerSettings = await Api.ProviderAsync();
-        string? code = QueryValue("login_code");
-        if (!string.IsNullOrWhiteSpace(code))
-        {
-            Nav.NavigateTo(Nav.BaseUri, replace: true);
-            await Run(async () => await AcceptLogin(await Api.ExchangeAsync(code)));
-            return;
-        }
-        if (QueryValue("login_error") is not null)
-        {
-            message = "La cuenta no está autorizada o el proveedor rechazó el acceso.";
-        }
-
-        string? json = await Js.InvokeAsync<string?>("sessionStorage.getItem", SessionKey);
-        if (string.IsNullOrWhiteSpace(json))
-        {
-            return;
-        }
-
         try
         {
+            providerSettings = await Api.ProviderAsync();
+            string? code = QueryValue("login_code");
+            if (!string.IsNullOrWhiteSpace(code))
+            {
+                await Js.InvokeVoidAsync("history.replaceState", null, "", Nav.BaseUri);
+                await AcceptLogin(await Api.ExchangeAsync(code));
+                return;
+            }
+            if (QueryValue("login_error") is not null)
+            {
+                await Js.InvokeVoidAsync("history.replaceState", null, "", Nav.BaseUri);
+                message = "La cuenta no está autorizada o el proveedor rechazó el acceso.";
+            }
+
+            string? json = await Js.InvokeAsync<string?>("sessionStorage.getItem", SessionKey);
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return;
+            }
+
             login = JsonSerializer.Deserialize<LoginResponse>(json);
-            if (
-                login is null
-                || login.ExpiresAtUtc <= DateTime.UtcNow
-                || login.Restaurants.Count == 0
-            )
+            if (login is null || login.ExpiresAtUtc <= DateTime.UtcNow)
             {
                 await Logout();
                 return;
             }
             Api.AccessToken = login.AccessToken;
-            restaurantId = login.Restaurants[0].RestaurantId;
+            await LoadRestaurants();
             await LoadTables();
             await ConnectRealtimeAsync();
             StartReconciliation();
         }
-        catch (JsonException)
+        catch (Exception exception)
         {
-            await Logout();
+            message = exception.Message;
+        }
+        finally
+        {
+            initializing = false;
         }
     }
 
@@ -141,21 +144,13 @@ public partial class Home
     private async Task AcceptLogin(LoginResponse response)
     {
         login = response;
-        RestaurantAccess? allowed = login.Restaurants.FirstOrDefault(x =>
-            x.Permissions.Contains("orders.create") && x.Permissions.Contains("payments.capture")
-        );
-        if (allowed is null)
-        {
-            throw new InvalidOperationException("El usuario no tiene permisos para operar el TPV.");
-        }
-
         Api.AccessToken = login.AccessToken;
-        restaurantId = allowed.RestaurantId;
         await Js.InvokeVoidAsync(
             "sessionStorage.setItem",
             SessionKey,
             JsonSerializer.Serialize(login)
         );
+        await LoadRestaurants();
         await LoadOperationalData();
         await ConnectRealtimeAsync();
         StartReconciliation();
@@ -171,6 +166,7 @@ public partial class Home
         reconciliation = null;
         Api.AccessToken = null;
         login = null;
+        restaurants = [];
         cashRegister = null;
         tables = [];
         BackToTables();
@@ -193,6 +189,22 @@ public partial class Home
     private async Task LoadTables()
     {
         await Run(LoadOperationalData);
+    }
+
+    private async Task LoadRestaurants()
+    {
+        restaurants = await Api.RestaurantsAsync();
+        if (restaurants.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "El usuario no tiene permisos para operar el TPV en ningún local."
+            );
+        }
+
+        if (!restaurants.Any(restaurant => restaurant.Id == restaurantId))
+        {
+            restaurantId = restaurants[0].Id;
+        }
     }
 
     private async Task LoadOperationalData()

@@ -1,8 +1,9 @@
-namespace Restaurantes.Clients.Pos.Pwa.Models;
+﻿namespace Restaurantes.Clients.Pos.Pwa.Models;
 
 public sealed record LoginResponse(
     string AccessToken,
     DateTime ExpiresAtUtc,
     LoginUser User,
-    List<RestaurantAccess> Restaurants
+    List<RestaurantAccess> Restaurants,
+    List<string>? AllRestaurantsRoles = null
 );

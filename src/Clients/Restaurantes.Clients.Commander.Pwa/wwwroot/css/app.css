@@ -52,8 +52,8 @@ input:focus, select:focus { border-color: #2f684a; box-shadow: 0 0 0 3px #2f684a
 .stepper { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; text-align: center; border-radius: 13px; background: #eef0eb; }
 .stepper button { height: 44px; border: 0; color: #20452f; background: transparent; font-size: 24px; font-weight: 700; }
 .notes { padding: 11px 12px; }
-.checkout { position: fixed; z-index: 5; right: 20px; bottom: 18px; left: 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; width: min(1080px, calc(100% - 40px)); margin: auto; padding: 14px 16px; border: 1px solid #d5d4cb; border-radius: 20px; background: #fff; box-shadow: 0 16px 50px #26352b33; }
-.checkout div { display: grid; }.checkout span { color: #717772; font-size: 12px; }.checkout strong { font-size: 22px; }
+.order-submit { position: fixed; z-index: 5; right: 20px; bottom: 18px; left: 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; width: min(1080px, calc(100% - 40px)); margin: auto; padding: 14px 16px; border: 1px solid #d5d4cb; border-radius: 20px; background: #fff; box-shadow: 0 16px 50px #26352b33; }
+.order-submit div { display: grid; }.order-submit span { color: #717772; font-size: 12px; }.order-submit strong { font-size: 22px; }
 .toast { position: fixed; z-index: 10; top: 16px; left: 50%; width: min(520px, calc(100% - 32px)); transform: translateX(-50%); padding: 14px 18px; border-radius: 14px; color: #fff; box-shadow: 0 12px 34px #0003; }
 .toast.success { background: #236944; }.toast.error, .error { background: #a93d32; }.login-card .error { padding: 11px; border-radius: 10px; color: #fff; }
 .modal-backdrop { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; padding: 18px; background: #101711bb; backdrop-filter: blur(5px); }
@@ -67,7 +67,7 @@ input:focus, select:focus { border-color: #2f684a; box-shadow: 0 0 0 3px #2f684a
 .warning { padding: 12px; border-radius: 12px; color: #7b4a13; background: #fff0cf; line-height: 1.4; }.bill-actions { margin-top: 16px; }
 #blazor-error-ui { display: none; position: fixed; bottom: 0; width: 100%; padding: 1rem; background: #ffd6d1; }
 .loading-progress { position: absolute; width: 5rem; height: 5rem; inset: 30vh 0 auto; margin: auto; }
-@media (max-width: 620px) { .shell { padding: 14px; }.login-card { padding: 24px; border-radius: 22px; }.local-bar { align-items: end; }.local-bar .ghost { padding-inline: 12px; }.order-head { align-items: end; }.menu-grid { grid-template-columns: 1fr; }.checkout { right: 12px; left: 12px; width: calc(100% - 24px); }.checkout .primary { max-width: 55%; }.bill-card { padding: 18px; border-radius: 20px; }.bill-actions { align-items: stretch; flex-direction: column; } }
+@media (max-width: 620px) { .shell { padding: 14px; }.login-card { padding: 24px; border-radius: 22px; }.local-bar { align-items: end; }.local-bar .ghost { padding-inline: 12px; }.order-head { align-items: end; }.menu-grid { grid-template-columns: 1fr; }.order-submit { right: 12px; left: 12px; width: calc(100% - 24px); }.order-submit .primary { max-width: 55%; }.bill-card { padding: 18px; border-radius: 20px; }.bill-actions { align-items: stretch; flex-direction: column; } }
 
 .dining-zone { margin-bottom: 24px; }
 .dining-zone h3 { margin: 0 0 12px; }

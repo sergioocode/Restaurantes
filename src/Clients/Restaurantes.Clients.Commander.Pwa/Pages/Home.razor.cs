@@ -15,8 +15,10 @@ public partial class Home
     private bool busy;
     private bool success;
     private LoginResponse? login;
+    private bool initializing = true;
     private ProviderSettingsResponse? providerSettings;
     private Guid restaurantId;
+    private List<RestaurantResponse> restaurants = [];
 
     private List<TableResponse> FilteredTables { get; set; } = [];
     private List<OrderResponse> activeOrders = [];
@@ -28,9 +30,6 @@ public partial class Home
     private Dictionary<Guid, string> notes = [];
     private SessionBillResponse? bill;
     private bool billOpen;
-    private string paymentMethod = "Card";
-    private string paymentReference = string.Empty;
-    private Guid checkoutKey;
     private Dictionary<Guid, OrderDetailResponse> billOrders = [];
     private CancellationTokenSource? realtimeRefresh;
 
@@ -49,34 +48,30 @@ public partial class Home
     {
         Realtime.OrderUpdated += HandleOrderUpdated;
         DiningRealtime.TableChanged += HandleTableChanged;
-        providerSettings = await Api.ProviderAsync();
-        string? code = QueryValue("login_code");
-        if (!string.IsNullOrWhiteSpace(code))
+        try
         {
-            Nav.NavigateTo(Nav.BaseUri, replace: true);
-            await Run(async () => await AcceptLogin(await Api.ExchangeAsync(code)));
-            return;
-        }
-        if (QueryValue("login_error") is not null)
-        {
-            message = "La cuenta no está autorizada o el proveedor rechazó el acceso.";
-        }
+            providerSettings = await Api.ProviderAsync();
+            string? code = QueryValue("login_code");
+            if (!string.IsNullOrWhiteSpace(code))
+            {
+                await Js.InvokeVoidAsync("history.replaceState", null, "", Nav.BaseUri);
+                await AcceptLogin(await Api.ExchangeAsync(code));
+                return;
+            }
+            if (QueryValue("login_error") is not null)
+            {
+                await Js.InvokeVoidAsync("history.replaceState", null, "", Nav.BaseUri);
+                message = "La cuenta no está autorizada o el proveedor rechazó el acceso.";
+            }
 
-        string? json = await Js.InvokeAsync<string?>("sessionStorage.getItem", SessionKey);
-        if (!string.IsNullOrWhiteSpace(json))
-        {
-            try
+            string? json = await Js.InvokeAsync<string?>("sessionStorage.getItem", SessionKey);
+            if (!string.IsNullOrWhiteSpace(json))
             {
                 login = JsonSerializer.Deserialize<LoginResponse>(json);
-                if (
-                    login is not null
-                    && login.ExpiresAtUtc > DateTime.UtcNow
-                    && login.Restaurants.Count > 0
-                    && login.Restaurants.Any(x => x.Permissions.Contains("payments.capture"))
-                )
+                if (login is not null && login.ExpiresAtUtc > DateTime.UtcNow)
                 {
                     Api.AccessToken = login.AccessToken;
-                    restaurantId = login.Restaurants[0].RestaurantId;
+                    await LoadRestaurants();
                     await LoadTables();
                     await ConnectRealtimeAsync();
                 }
@@ -86,10 +81,14 @@ public partial class Home
                     await Js.InvokeVoidAsync("sessionStorage.removeItem", SessionKey);
                 }
             }
-            catch (JsonException)
-            {
-                login = null;
-            }
+        }
+        catch (Exception exception)
+        {
+            message = exception.Message;
+        }
+        finally
+        {
+            initializing = false;
         }
     }
 
@@ -118,18 +117,13 @@ public partial class Home
     private async Task AcceptLogin(LoginResponse response)
     {
         login = response;
-        if (login.Restaurants.Count == 0)
-        {
-            throw new InvalidOperationException("El usuario no tiene ningún local asignado.");
-        }
-
         Api.AccessToken = login.AccessToken;
-        restaurantId = login.Restaurants[0].RestaurantId;
         await Js.InvokeVoidAsync(
             "sessionStorage.setItem",
             SessionKey,
             JsonSerializer.Serialize(login)
         );
+        await LoadRestaurants();
         await LoadOperationalData();
         await ConnectRealtimeAsync();
     }
@@ -141,6 +135,7 @@ public partial class Home
         await DiningRealtime.DisconnectAsync();
         Api.AccessToken = null;
         login = null;
+        restaurants = [];
         FilteredTables = [];
         BackToTables();
         message = null;
@@ -160,6 +155,22 @@ public partial class Home
     private async Task LoadTables()
     {
         await Run(LoadOperationalData);
+    }
+
+    private async Task LoadRestaurants()
+    {
+        restaurants = await Api.RestaurantsAsync();
+        if (restaurants.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "El usuario no tiene permisos para operar el Comandero en ningún local."
+            );
+        }
+
+        if (!restaurants.Any(restaurant => restaurant.Id == restaurantId))
+        {
+            restaurantId = restaurants[0].Id;
+        }
     }
 
     private async Task LoadOperationalData()
@@ -293,60 +304,6 @@ public partial class Home
         billOpen = false;
     }
 
-    private async Task CheckoutSession()
-    {
-        if (busy)
-        {
-            return;
-        }
-
-        checkoutKey = checkoutKey == Guid.Empty ? Guid.NewGuid() : checkoutKey;
-        await Run(
-            async () =>
-            {
-                bill = await Api.CheckoutAsync(
-                    sessionId,
-                    checkoutKey,
-                    paymentMethod,
-                    paymentReference
-                );
-                success = true;
-                message = $"Cuenta cobrada: {bill.Total:0.00} €. Mesa liberada.";
-                checkoutKey = Guid.Empty;
-                billOpen = false;
-                BackToTables();
-                await LoadOperationalData();
-            },
-            clearMessage: false
-        );
-    }
-
-    private async Task ReleaseSession()
-    {
-        await Run(
-            async () =>
-            {
-                bool emptySession = bill?.Orders.Count == 0;
-                if (emptySession)
-                {
-                    await Api.CancelSessionAsync(sessionId, "Apertura sin pedidos");
-                }
-                else
-                {
-                    await Api.ReleaseSessionAsync(sessionId);
-                }
-                success = true;
-                message = emptySession
-                    ? "Apertura sin pedidos cancelada y ubicación liberada."
-                    : "Ubicación liberada por el camarero.";
-                billOpen = false;
-                BackToTables();
-                await LoadOperationalData();
-            },
-            clearMessage: false
-        );
-    }
-
     private void BackToTables()
     {
         selectedTable = null;
@@ -358,8 +315,6 @@ public partial class Home
         bill = null;
         billOrders = [];
         billOpen = false;
-        checkoutKey = Guid.Empty;
-        paymentReference = string.Empty;
     }
 
     private string CategoryClass(string? value)

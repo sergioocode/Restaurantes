@@ -12,9 +12,13 @@
 </head>
 <body>
   <main>
-    <form id="loginPanel" class="controls">
-      <button id="loginMicrosoft" type="button">Iniciar sesión con Microsoft</button>
-      <button id="loginGoogle" type="button">Iniciar sesión con Google</button>
+    <section id="authLoading" class="controls auth-loading" aria-live="polite">
+      Restaurando sesión…
+    </section>
+
+    <form id="loginPanel" class="controls hidden">
+      <button id="loginMicrosoft" type="button" disabled>Iniciar sesión con Microsoft</button>
+      <button id="loginGoogle" type="button" disabled>Iniciar sesión con Google</button>
     </form>
 
     <section id="monitorPanel" class="controls hidden">
