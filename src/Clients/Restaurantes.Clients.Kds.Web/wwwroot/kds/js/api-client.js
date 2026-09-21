@@ -38,6 +38,12 @@ export class KdsApiClient {
     return response.json();
   }
 
+  async getKdsRestaurants() {
+    const response = await this.fetch('/api/restaurant-operations/restaurants/accessible/kds');
+    if (!response.ok) throw new Error('No se pudieron cargar los locales KDS: HTTP ' + response.status);
+    return response.json();
+  }
+
   async sendOrderCommand(orderId, path) {
     const response = await this.fetch('/api/orders/' + orderId + '/' + path, { method: 'POST' });
     if (!response.ok) throw new Error('El comando fue rechazado: HTTP ' + response.status);

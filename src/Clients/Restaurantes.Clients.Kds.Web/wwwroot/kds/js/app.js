@@ -5,6 +5,7 @@ import { KdsRealtimeClient } from './realtime-client.js';
 const sessionKey = 'restaurantes.kds.login';
 const restaurantKey = 'restaurantes.kds.restaurant';
 const apiBaseUrl = window.location.origin;
+const authLoading = document.querySelector('#authLoading');
 const loginPanel = document.querySelector('#loginPanel');
 const monitorPanel = document.querySelector('#monitorPanel');
 const loginMicrosoft = document.querySelector('#loginMicrosoft');
@@ -109,9 +110,10 @@ function addOption(select, value, text, statusText = text) {
 }
 
 function updateRestaurantIdentity() {
-  const displayName = login?.user?.displayName?.trim() || '';
-  const localName = displayName.split(' · ').pop();
-  identityStatus.textContent = 'Local: ' + localName;
+  const access = restaurantAccesses.find(item => item.restaurantId === restaurantSelect.value);
+  identityStatus.textContent = access?.name
+    ? 'Local: ' + access.name
+    : 'Local: ' + (access?.restaurantId || '');
 }
 
 async function loadStationsAndConnect() {
@@ -149,21 +151,44 @@ async function loadStationsAndConnect() {
 }
 
 async function activateLogin(loginResponse) {
-  restaurantAccesses = Array.isArray(loginResponse.restaurants)
-    ? loginResponse.restaurants.filter(access => access.permissions.includes('kds.use'))
-    : [];
-  if (restaurantAccesses.length === 0) {
-    throw new Error('El usuario no tiene acceso KDS en ningún local.');
-  }
   login = loginResponse;
   api.setAccessToken(login.accessToken);
   sessionStorage.setItem(sessionKey, JSON.stringify(login));
+  authLoading.classList.add('hidden');
   loginPanel.classList.add('hidden');
   monitorPanel.classList.remove('hidden');
   refreshButton.disabled = false;
+  setStatus(false, 'Cargando monitor…');
+  const loginAccesses = Array.isArray(loginResponse.restaurants)
+    ? new Map(loginResponse.restaurants.map(access => [access.restaurantId, access]))
+    : new Map();
+  const allRestaurantsRole = Array.isArray(loginResponse.allRestaurantsRoles)
+    ? loginResponse.allRestaurantsRoles[0]
+    : null;
+  const restaurants = await api.getKdsRestaurants();
+  restaurantAccesses = restaurants.map(restaurant => {
+    const access = loginAccesses.get(restaurant.id);
+    return {
+      restaurantId: restaurant.id,
+      role: access?.role || allRestaurantsRole || 'Kds',
+      permissions: access?.permissions || (
+        allRestaurantsRole === 'Admin' || allRestaurantsRole === 'Manager'
+          ? ['kds.use', 'orders.recover']
+          : ['kds.use']
+      ),
+      name: restaurant.name,
+      code: restaurant.code
+    };
+  });
+  if (restaurantAccesses.length === 0) {
+    throw new Error('El usuario no tiene acceso KDS en ningún local.');
+  }
   restaurantSelect.replaceChildren();
   for (const access of restaurantAccesses) {
-    addOption(restaurantSelect, access.restaurantId, access.restaurantId + ' · ' + access.role);
+    const label = access.name
+      ? access.name + (access.code ? ' · ' + access.code : '')
+      : access.restaurantId + ' · ' + access.role;
+    addOption(restaurantSelect, access.restaurantId, label);
   }
   const remembered = localStorage.getItem(restaurantKey);
   if (restaurantAccesses.some(access => access.restaurantId === remembered)) {
@@ -189,6 +214,7 @@ function logout() {
   api.setAccessToken('');
   realtime.disconnect();
   sessionStorage.removeItem(sessionKey);
+  authLoading.classList.add('hidden');
   loginPanel.classList.remove('hidden');
   monitorPanel.classList.add('hidden');
   refreshButton.disabled = true;
@@ -200,13 +226,23 @@ function logout() {
 
 async function restoreLogin() {
   const storedLogin = sessionStorage.getItem(sessionKey);
-  if (!storedLogin) return;
+  if (!storedLogin) {
+    authLoading.classList.add('hidden');
+    loginPanel.classList.remove('hidden');
+    return;
+  }
   try {
     const session = JSON.parse(storedLogin);
     if (new Date(session.expiresAtUtc) <= new Date()) throw new Error('La sesión ha caducado.');
     await activateLogin(session);
   } catch (error) {
-    logout();
+    if (!login) {
+      logout();
+    } else {
+      authLoading.classList.add('hidden');
+      loginPanel.classList.add('hidden');
+      monitorPanel.classList.remove('hidden');
+    }
     eventText.textContent = error.message;
   }
 }
@@ -235,10 +271,21 @@ async function initialize() {
     if (query.has('login_error')) {
       history.replaceState(null, '', window.location.pathname);
       eventText.textContent = 'La cuenta no está autorizada o el proveedor rechazó el acceso.';
+      authLoading.classList.add('hidden');
+      loginPanel.classList.remove('hidden');
+      return;
     }
     await restoreLogin();
   } catch (error) {
     eventText.textContent = error.message;
+    authLoading.classList.add('hidden');
+    if (login) {
+      loginPanel.classList.add('hidden');
+      monitorPanel.classList.remove('hidden');
+    } else {
+      loginPanel.classList.remove('hidden');
+      monitorPanel.classList.add('hidden');
+    }
   }
 }
 initialize();

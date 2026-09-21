@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\Restaurantes.Security\Restaurantes.Security.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Restaurantes.ServiceDefaults\Restaurantes.ServiceDefaults.csproj" />
     <ProjectReference Include="..\Restaurantes.RestaurantOperations.Application\Restaurantes.RestaurantOperations.Application.csproj" />
     <ProjectReference Include="..\Restaurantes.RestaurantOperations.Contracts\Restaurantes.RestaurantOperations.Contracts.csproj" />

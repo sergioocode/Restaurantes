@@ -10,7 +10,14 @@
 <PageTitle>TPV · Restaurantes</PageTitle>
 
 <main class="pos-shell">
-    @if (login is null)
+    @if (initializing)
+    {
+        <section class="login-card" aria-live="polite">
+            <div class="brand-mark">TPV</div>
+            <p class="muted">Restaurando sesión…</p>
+        </section>
+    }
+    else if (login is null)
     {
         <section class="login-card">
             <div class="brand-mark">TPV</div>
@@ -39,9 +46,9 @@
             </div>
             <div class="top-actions">
                 <select aria-label="Local" value="@restaurantId" @onchange="RestaurantChanged">
-                    @foreach (RestaurantAccess access in login.Restaurants)
+                    @foreach (RestaurantResponse restaurant in restaurants)
                     {
-                        <option value="@access.RestaurantId">@access.RestaurantId · @access.Role</option>
+                        <option value="@restaurant.Id">@restaurant.Name · @restaurant.Code</option>
                     }
                 </select>
                 <button class="cash-status @(CashRegisterOpen ? "open" : "closed")" @onclick="OpenCashRegisterPanel">

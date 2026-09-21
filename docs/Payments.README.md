@@ -754,8 +754,7 @@ payments.capture
 Este permiso forma parte actualmente de:
 
 - `Admin`;
-- `Manager`;
-- `PosComandero`.
+- `Manager`.
 
 `refund` utiliza un permiso independiente:
 
