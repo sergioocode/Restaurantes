@@ -1,0 +1,24 @@
+{
+  "name": "Dashboard Restaurantes",
+  "short_name": "Dashboard",
+  "description": "Operación, ventas e indicadores de Restaurantes.",
+  "id": "/dashboard/",
+  "start_url": "/dashboard/",
+  "scope": "/dashboard/",
+  "display": "standalone",
+  "background_color": "#101419",
+  "theme_color": "#101419",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}
