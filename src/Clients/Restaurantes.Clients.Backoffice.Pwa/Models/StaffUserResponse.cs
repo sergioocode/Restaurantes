@@ -1,4 +1,4 @@
-namespace Restaurantes.Clients.Backoffice.Pwa.Models;
+﻿namespace Restaurantes.Clients.Backoffice.Pwa.Models;
 
 public sealed class StaffUserResponse
 {
@@ -7,6 +7,7 @@ public sealed class StaffUserResponse
     public string Provider { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty;
+    public bool AllRestaurants { get; set; }
     public Guid? RestaurantId { get; set; }
     public bool IsActive { get; set; }
     public bool IsLinked { get; set; }

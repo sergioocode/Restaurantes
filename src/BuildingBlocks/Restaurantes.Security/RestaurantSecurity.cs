@@ -26,6 +26,8 @@ public static class RestaurantClaimTypes
 public static class RestaurantPermissions
 {
     public const string BackofficeAccess = "backoffice.access";
+    public const string PosUse = "pos.use";
+    public const string CommanderUse = "commander.use";
     public const string IdentityManage = "identity.manage";
     public const string TablesRead = "tables.read";
     public const string TablesManage = "tables.manage";
@@ -51,6 +53,8 @@ public static class RestaurantPermissions
             "Admin" =>
             [
                 BackofficeAccess,
+                PosUse,
+                CommanderUse,
                 IdentityManage,
                 TablesRead,
                 TablesManage,
@@ -77,7 +81,7 @@ public static class RestaurantPermissions
                 FinancialReportsRead,
                 PaymentsRefund,
             ],
-            "Oficina" =>
+            "Marketing" =>
             [
                 BackofficeAccess,
                 DashboardRead,
@@ -87,6 +91,7 @@ public static class RestaurantPermissions
             "Manager" =>
             [
                 BackofficeAccess,
+                PosUse,
                 TablesRead,
                 TablesManage,
                 TablesRelease,
@@ -99,16 +104,7 @@ public static class RestaurantPermissions
                 KdsUse,
                 KitchenReportsRead,
             ],
-            "PosComandero" =>
-            [
-                BackofficeAccess,
-                TablesRead,
-                TablesRelease,
-                OrdersCreate,
-                OrdersManage,
-                PaymentsCapture,
-                CashRegisterManage,
-            ],
+            "Camarero" => [CommanderUse, TablesRead, OrdersCreate, OrdersManage],
             "Kds" => [KdsUse],
             _ => [],
         };
@@ -191,17 +187,9 @@ public static class RestaurantSecurityExtensions
             return false;
         }
 
-        if (user.IsInRole("Admin"))
+        foreach (Claim roleClaim in user.FindAll(ClaimTypes.Role))
         {
-            return true;
-        }
-
-        foreach (string globalRole in new[] { "Gerente", "Contabilidad", "Oficina" })
-        {
-            if (
-                user.IsInRole(globalRole)
-                && RestaurantPermissions.ForRole(globalRole).Contains(permission)
-            )
+            if (RestaurantPermissions.ForRole(roleClaim.Value).Contains(permission))
             {
                 return true;
             }
@@ -221,16 +209,9 @@ public static class RestaurantSecurityExtensions
 
     public static bool HasAnyRestaurantPermission(this ClaimsPrincipal user, string permission)
     {
-        if (user.IsInRole("Admin"))
+        foreach (Claim roleClaim in user.FindAll(ClaimTypes.Role))
         {
-            return true;
-        }
-        foreach (string globalRole in new[] { "Gerente", "Contabilidad", "Oficina" })
-        {
-            if (
-                user.IsInRole(globalRole)
-                && RestaurantPermissions.ForRole(globalRole).Contains(permission)
-            )
+            if (RestaurantPermissions.ForRole(roleClaim.Value).Contains(permission))
             {
                 return true;
             }

@@ -21,20 +21,13 @@ public sealed class IdentityController(IdentityService service, IConfiguration c
         && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Google:WorkspaceDomain"])
         && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Google:ClientId"])
         && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Google:ClientSecret"]);
+    private string ActiveProvider => ReadActiveProvider(configuration);
 
     [HttpGet("auth/provider")]
     public Task<IActionResult> Provider(CancellationToken ct)
     {
         return Execute(() =>
-            service.GetProviderSettings(MicrosoftConfigured, GoogleConfigured, ct)
-        );
-    }
-
-    [Authorize(Roles = "Admin"), HttpPut("auth/provider")]
-    public Task<IActionResult> ChangeProvider(ChangeProviderRequest request, CancellationToken ct)
-    {
-        return Execute(() =>
-            service.ChangeProvider(request, MicrosoftConfigured, GoogleConfigured, ct)
+            service.GetProviderSettings(ActiveProvider, MicrosoftConfigured, GoogleConfigured, ct)
         );
     }
 
@@ -51,7 +44,14 @@ public sealed class IdentityController(IdentityService service, IConfiguration c
         }
 
         ProviderSettingsResponse settings = (ProviderSettingsResponse)
-            (await service.GetProviderSettings(MicrosoftConfigured, GoogleConfigured, ct)).Value!;
+            (
+                await service.GetProviderSettings(
+                    ActiveProvider,
+                    MicrosoftConfigured,
+                    GoogleConfigured,
+                    ct
+                )
+            ).Value!;
         if (
             settings.ActiveProvider != provider
             || (provider == "Microsoft" && !MicrosoftConfigured)
@@ -148,6 +148,7 @@ public sealed class IdentityController(IdentityService service, IConfiguration c
         }
 
         IdentityResult result = await service.AuthorizeExternalAsync(
+            ActiveProvider,
             provider,
             email,
             subject,
@@ -162,7 +163,7 @@ public sealed class IdentityController(IdentityService service, IConfiguration c
     [HttpPost("auth/exchange")]
     public Task<IActionResult> Exchange(ExchangeRequest request, CancellationToken ct)
     {
-        return Execute(() => service.ExchangeAsync(request.Code, ct));
+        return Execute(() => service.ExchangeAsync(ActiveProvider, request.Code, ct));
     }
 
     [Authorize, HttpGet("me")]
@@ -173,7 +174,7 @@ public sealed class IdentityController(IdentityService service, IConfiguration c
             {
                 id = User.FindFirstValue(ClaimTypes.NameIdentifier),
                 name = User.Identity?.Name,
-                globalRoles = User.FindAll(ClaimTypes.Role).Select(x => x.Value).Distinct(),
+                allRestaurantsRoles = User.FindAll(ClaimTypes.Role).Select(x => x.Value).Distinct(),
                 restaurants = User.FindAll(RestaurantClaimTypes.RestaurantId)
                     .Select(x => x.Value)
                     .Distinct(),
@@ -181,31 +182,76 @@ public sealed class IdentityController(IdentityService service, IConfiguration c
         );
     }
 
-    [Authorize(Roles = "Admin"), HttpGet("users")]
+    [Authorize, HttpGet("users")]
     public Task<IActionResult> ListUsers(CancellationToken ct)
     {
-        return Execute(() => service.ListUsers(ct));
+        (bool allRestaurants, HashSet<Guid> restaurantIds) = IdentityManagementScope();
+        return !allRestaurants && restaurantIds.Count == 0
+            ? Task.FromResult<IActionResult>(Forbid())
+            : Execute(() => service.ListUsers(allRestaurants, restaurantIds, ct));
     }
 
-    [Authorize(Roles = "Admin"), HttpPost("users")]
+    [Authorize, HttpPost("users")]
     public Task<IActionResult> CreateUser(CreateAccountRequest request, CancellationToken ct)
     {
-        return Execute(() => service.CreateUser(request, ct));
+        (bool allRestaurants, HashSet<Guid> restaurantIds) = IdentityManagementScope();
+        return !allRestaurants && restaurantIds.Count == 0
+            ? Task.FromResult<IActionResult>(Forbid())
+            : Execute(() =>
+                service.CreateUser(ActiveProvider, allRestaurants, restaurantIds, request, ct)
+            );
     }
 
-    [Authorize(Roles = "Admin"), HttpPut("users/{id:guid}")]
+    [Authorize, HttpPut("users/{id:guid}")]
     public Task<IActionResult> UpdateUser(
         Guid id,
         UpdateAccountRequest request,
         CancellationToken ct
     )
     {
-        return Execute(() => service.UpdateUser(id, request, ct));
+        (bool allRestaurants, HashSet<Guid> restaurantIds) = IdentityManagementScope();
+        return !allRestaurants && restaurantIds.Count == 0
+            ? Task.FromResult<IActionResult>(Forbid())
+            : Execute(() => service.UpdateUser(id, allRestaurants, restaurantIds, request, ct));
+    }
+
+    private (bool AllRestaurants, HashSet<Guid> RestaurantIds) IdentityManagementScope()
+    {
+        bool allRestaurants = User.FindAll(ClaimTypes.Role)
+            .Any(claim =>
+                RestaurantPermissions
+                    .ForRole(claim.Value)
+                    .Contains(RestaurantPermissions.IdentityManage)
+            );
+        HashSet<Guid> restaurantIds = [];
+        string suffix = $":{RestaurantPermissions.IdentityManage}";
+        foreach (
+            Claim claim in User.FindAll(RestaurantClaimTypes.Permission)
+                .Where(claim => claim.Value.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+        )
+        {
+            if (Guid.TryParse(claim.Value[..^suffix.Length], out Guid restaurantId))
+            {
+                restaurantIds.Add(restaurantId);
+            }
+        }
+
+        return (allRestaurants, restaurantIds);
     }
 
     private static bool IsAllowedReturnPath(string path)
     {
         return path is "/backoffice/" or "/pos/" or "/commander/" or "/kds/" or "/dashboard/";
+    }
+
+    private static string ReadActiveProvider(IConfiguration configuration)
+    {
+        string? provider = configuration["ExternalAuth:Provider"];
+        return provider is "Microsoft" or "Google"
+            ? provider
+            : throw new InvalidOperationException(
+                "ExternalAuth:Provider must be Microsoft or Google."
+            );
     }
 
     private async Task<IActionResult> Execute(Func<Task<IdentityResult>> operation)

@@ -2,23 +2,10 @@
 else
 {
     <details class="admin-panel" open>
-        <summary>Proveedor de inicio de sesión</summary>
-        <p>Solo el proveedor activo puede iniciar sesión. El cambio afecta a todos los clientes.</p>
-        <select @bind="Host.providerDraft">
-            <option value="Microsoft" disabled="@(!Host.MicrosoftConfigured)">Microsoft corporativo</option>
-            <option value="Google" disabled="@(!Host.GoogleConfigured)">Google Workspace</option>
-        </select>
-        <button class="primary" @onclick="Host.SaveProvider" disabled="@Host.busy">Guardar proveedor</button>
-    </details>
-    <details class="admin-panel" open>
         <summary>Autorizar cuenta</summary>
         <form class="inline-form user-create-form" @onsubmit="Host.CreateUser" @onsubmit:preventDefault>
             <input type="email" autocomplete="off" placeholder="Correo corporativo" @bind="Host.userDraft.Email" />
             <input placeholder="Nombre visible" @bind="Host.userDraft.DisplayName" />
-            <select @bind="Host.userDraft.Provider">
-                <option value="Microsoft">Microsoft</option>
-                <option value="Google">Google Workspace</option>
-            </select>
             <select @bind="Host.userDraft.Role">
                 @foreach (string role in Host.AssignableRoles)
                 {
@@ -26,7 +13,10 @@ else
                 }
             </select>
             <select @bind="Host.userDraft.RestaurantId">
-                <option value="">Sin local (rol global)</option>
+                @if (Host.CanAssignAllRestaurants)
+                {
+                    <option value="">Todos los Locales</option>
+                }
                 @foreach (RestaurantResponse restaurant in Host.ManageableRestaurants)
                 {
                     <option value="@restaurant.Id">@restaurant.Name</option>
@@ -51,7 +41,10 @@ else
                         }
                     </select></label>
                     <label>Local<select @bind="user.RestaurantId">
-                        <option value="">Sin local (rol global)</option>
+                        @if (Host.CanAssignAllRestaurants)
+                        {
+                            <option value="">Todos los Locales</option>
+                        }
                         @foreach (RestaurantResponse restaurant in Host.ManageableRestaurants)
                         {
                             <option value="@restaurant.Id">@restaurant.Name</option>

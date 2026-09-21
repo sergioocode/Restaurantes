@@ -14,6 +14,7 @@ public partial class Home
     private string? message;
     internal bool busy;
     private bool ok;
+    private bool initializing = true;
     private LoginResponse? login;
     private Guid restaurantId;
     internal List<CategoryResponse> categories = [];
@@ -34,30 +35,41 @@ public partial class Home
     internal KitchenStationDraft stationDraft = new();
     internal StaffUserDraft userDraft = new();
     internal ProviderSettingsResponse? providerSettings;
-    internal string providerDraft = "Microsoft";
     internal bool MicrosoftConfigured => providerSettings?.MicrosoftConfigured == true;
     internal bool GoogleConfigured => providerSettings?.GoogleConfigured == true;
 
-    private static readonly string[] LocalRoles = ["Manager", "PosComandero", "Kds"];
-    private static readonly string[] GlobalRoles = ["Admin", "Gerente", "Contabilidad", "Oficina"];
+    private static readonly string[] Roles =
+    [
+        "Admin",
+        "Gerente",
+        "Contabilidad",
+        "Marketing",
+        "Manager",
+        "Camarero",
+        "Kds",
+    ];
 
-    internal bool IsAdmin => login?.GlobalRoles?.Contains("Admin") == true;
+    internal bool IsAdmin => login?.AllRestaurantsRoles?.Contains("Admin") == true;
     private bool HasBackofficeAccess =>
-        login?.GlobalRoles?.Any(x => GlobalRoles.Contains(x)) == true
+        login?.AllRestaurantsRoles?.Any(role => RoleHasPermission(role, "backoffice.access"))
+            == true
         || login?.Restaurants.Any(x => x.Permissions.Contains("backoffice.access")) == true;
-    internal bool CanManageUsers => IsAdmin;
-    internal IEnumerable<string> AssignableRoles => [.. GlobalRoles, .. LocalRoles];
+    internal bool CanManageUsers => HasGlobalPermission("identity.manage");
+    internal bool CanAssignAllRestaurants =>
+        login?.AllRestaurantsRoles?.Any(role => RoleHasPermission(role, "identity.manage")) == true;
+    internal IEnumerable<string> AssignableRoles => Roles;
     internal List<RestaurantResponse> ManageableRestaurants =>
         restaurants
             .Where(x =>
-                IsAdmin
+                CanAssignAllRestaurants
                 || login!.Restaurants.Any(a =>
                     a.RestaurantId == x.Id && a.Permissions.Contains("identity.manage")
                 )
             )
             .ToList();
     private List<RestaurantResponse> SelectableRestaurants =>
-        login?.GlobalRoles?.Any(x => GlobalRoles.Contains(x)) == true
+        login?.AllRestaurantsRoles?.Any(role => RoleHasPermission(role, "backoffice.access"))
+        == true
             ? restaurants
             : restaurants
                 .Where(x =>
@@ -100,36 +112,27 @@ public partial class Home
 
     protected override async Task OnInitializedAsync()
     {
-        providerSettings = await Api.ProviderAsync();
-        providerDraft = providerSettings.ActiveProvider;
-        userDraft.Provider = providerDraft;
-        string? code = QueryValue("login_code");
-        if (!string.IsNullOrWhiteSpace(code))
-        {
-            Nav.NavigateTo(Nav.BaseUri, replace: true);
-            try
-            {
-                await AcceptLogin(await Api.ExchangeAsync(code));
-            }
-            catch (Exception exception)
-            {
-                message = exception.Message;
-            }
-            return;
-        }
-        if (QueryValue("login_error") is not null)
-        {
-            message = "La cuenta no está autorizada o el proveedor rechazó el acceso.";
-        }
-
-        string? json = await Js.InvokeAsync<string?>("sessionStorage.getItem", SessionKey);
-        if (string.IsNullOrWhiteSpace(json))
-        {
-            return;
-        }
-
         try
         {
+            providerSettings = await Api.ProviderAsync();
+            string? code = QueryValue("login_code");
+            if (!string.IsNullOrWhiteSpace(code))
+            {
+                LoginResponse response = await Api.ExchangeAsync(code);
+                await Js.InvokeVoidAsync("history.replaceState", null, "", Nav.BaseUri);
+                await AcceptLogin(response);
+                return;
+            }
+            if (QueryValue("login_error") is not null)
+            {
+                message = "La cuenta no está autorizada o el proveedor rechazó el acceso.";
+            }
+
+            string? json = await Js.InvokeAsync<string?>("sessionStorage.getItem", SessionKey);
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return;
+            }
             login = JsonSerializer.Deserialize<LoginResponse>(json);
             if (login is null || login.ExpiresAtUtc <= DateTime.UtcNow || !HasBackofficeAccess)
             {
@@ -145,9 +148,13 @@ public partial class Home
                 ?? Guid.Empty;
             await LoadAllCore();
         }
-        catch
+        catch (Exception exception)
         {
-            await Logout();
+            message = exception.Message;
+        }
+        finally
+        {
+            initializing = false;
         }
     }
 
@@ -225,6 +232,11 @@ public partial class Home
         categories = await Api.CategoriesAsync();
         products = await Api.ProductsAsync();
         restaurants = await Api.RestaurantsAsync();
+        if (!CanAssignAllRestaurants && userDraft.RestaurantId is null)
+        {
+            userDraft.RestaurantId = ManageableRestaurants.FirstOrDefault()?.Id;
+            userDraft.AllRestaurants = false;
+        }
         if (!restaurants.Any(x => x.Id == restaurantId) && SelectableRestaurants.Count > 0)
         {
             restaurantId = SelectableRestaurants[0].Id;
@@ -245,7 +257,7 @@ public partial class Home
 
     private async Task LoadLocalCore()
     {
-        if (!IsAdmin && login?.Restaurants.Count == 0)
+        if (SelectableRestaurants.Count == 0)
         {
             menu = [];
             stations = [];
@@ -614,17 +626,19 @@ public partial class Home
         await Run(
             async () =>
             {
-                if (GlobalRoles.Contains(userDraft.Role))
-                {
-                    userDraft.RestaurantId = null;
-                }
-                else if (userDraft.RestaurantId is null || userDraft.RestaurantId == Guid.Empty)
+                if (!CanAssignAllRestaurants && userDraft.RestaurantId is null)
                 {
                     throw new InvalidOperationException("Selecciona un local.");
                 }
 
+                userDraft.AllRestaurants = userDraft.RestaurantId is null;
                 await Api.CreateUserAsync(userDraft);
-                userDraft = new() { Provider = providerDraft };
+                userDraft = new();
+                if (!CanAssignAllRestaurants)
+                {
+                    userDraft.RestaurantId = ManageableRestaurants.FirstOrDefault()?.Id;
+                    userDraft.AllRestaurants = false;
+                }
                 await LoadUsersCore();
                 ok = true;
                 message = "Cuenta autorizada.";
@@ -638,11 +652,12 @@ public partial class Home
         await Run(
             async () =>
             {
-                if (GlobalRoles.Contains(user.Role))
+                if (!CanAssignAllRestaurants && user.RestaurantId is null)
                 {
-                    user.RestaurantId = null;
+                    throw new InvalidOperationException("Selecciona un local.");
                 }
 
+                user.AllRestaurants = user.RestaurantId is null;
                 await Api.UpdateUserAsync(user);
                 await LoadUsersCore();
                 ok = true;
@@ -652,25 +667,9 @@ public partial class Home
         );
     }
 
-    internal async Task SaveProvider()
-    {
-        await Run(
-            async () =>
-            {
-                await Api.ChangeProviderAsync(providerDraft);
-                providerSettings = await Api.ProviderAsync();
-                userDraft.Provider = providerDraft;
-                ok = true;
-                message = "Proveedor activo actualizado.";
-            },
-            false
-        );
-    }
-
     internal bool HasLocalPermission(string permission)
     {
-        return IsAdmin
-            || GlobalRoleHasPermission(permission)
+        return GlobalRoleHasPermission(permission)
             || login
                 ?.Restaurants.FirstOrDefault(x => x.RestaurantId == restaurantId)
                 ?.Permissions.Contains(permission) == true;
@@ -678,33 +677,58 @@ public partial class Home
 
     internal bool HasGlobalPermission(string permission)
     {
-        return IsAdmin
-            || GlobalRoleHasPermission(permission)
+        return GlobalRoleHasPermission(permission)
             || login?.Restaurants.Any(x => x.Permissions.Contains(permission)) == true;
     }
 
     private bool GlobalRoleHasPermission(string permission)
     {
-        string? role = login?.GlobalRoles?.FirstOrDefault();
+        string? role = login?.AllRestaurantsRoles?.FirstOrDefault();
+        return role is not null && RoleHasPermission(role, permission);
+    }
+
+    private static bool RoleHasPermission(string role, string permission)
+    {
         return role switch
         {
+            "Admin" => true,
             "Gerente" or "Contabilidad" => permission
                 is "backoffice.access"
                     or "dashboard.read"
                     or "reports.financial.read"
                     or "payments.refund",
-            "Oficina" => permission
+            "Marketing" => permission
                 is "backoffice.access"
                     or "dashboard.read"
                     or "reports.financial.read"
                     or "reports.marketing.read",
+            "Manager" => permission
+                is "backoffice.access"
+                    or "pos.use"
+                    or "tables.read"
+                    or "tables.manage"
+                    or "tables.release"
+                    or "orders.create"
+                    or "orders.manage"
+                    or "orders.recover"
+                    or "payments.capture"
+                    or "cash-register.manage"
+                    or "catalog.manage"
+                    or "kds.use"
+                    or "reports.kitchen.read",
+            "Camarero" => permission
+                is "commander.use"
+                    or "tables.read"
+                    or "orders.create"
+                    or "orders.manage",
+            "Kds" => permission is "kds.use",
             _ => false,
         };
     }
 
     private string CurrentRoleFor(Guid id)
     {
-        return login?.GlobalRoles?.FirstOrDefault()
+        return login?.AllRestaurantsRoles?.FirstOrDefault()
             ?? login?.Restaurants.FirstOrDefault(x => x.RestaurantId == id)?.Role
             ?? "Sin asignar";
     }
@@ -743,9 +767,9 @@ public partial class Home
             "Admin" => "Administrador",
             "Gerente" => "Gerencia",
             "Contabilidad" => "Contabilidad",
-            "Oficina" => "Oficina",
-            "Manager" => "Encargado de local",
-            "PosComandero" => "Caja / Camarero",
+            "Marketing" => "Marketing",
+            "Manager" => "Manager Local",
+            "Camarero" => "Camarero",
             "Kds" => "Cocina",
             _ => role,
         };

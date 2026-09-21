@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Restaurantes.Identity.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using Restaurantes.Identity.Infrastructure.Persistence;
 namespace Restaurantes.Identity.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(IdentityWriteDbContext))]
-    partial class IdentityWriteDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260921190633_AddExplicitRestaurantScope")]
+    partial class AddExplicitRestaurantScope
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

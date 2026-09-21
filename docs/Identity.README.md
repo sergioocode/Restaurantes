@@ -1,6 +1,6 @@
 # Identity
 
-Identity autentica al personal con cuentas corporativas de Microsoft o Google Workspace. La aplicación no crea contraseñas ni permite el registro libre. Un Admin autoriza previamente cada correo en Backoffice y le asigna un rol y, para los roles locales, un único restaurante.
+Identity autentica al personal con cuentas corporativas de Microsoft o Google Workspace. La aplicación no crea contraseñas ni permite el registro libre. Un Admin autoriza previamente cada correo en Backoffice y le asigna un rol y un alcance: `Todos los Locales` o exactamente un local.
 
 ## Flujo
 
@@ -14,20 +14,35 @@ El código de intercambio caduca a los dos minutos y se consume de forma atómic
 
 ## Cuentas y roles
 
-La tabla authorized_accounts contiene ID, correo, proveedor, identificador del proveedor, tenant, nombre, rol, local opcional y estado. El correo permite el alta previa; tras el primer acceso se vincula el identificador estable de la cuenta externa.
+La tabla `authorized_accounts` contiene ID, correo, proveedor, identificador del proveedor, tenant, nombre, rol, alcance, local opcional y estado. El correo permite el alta previa; tras el primer acceso se vincula el identificador estable de la cuenta externa.
 
-Admin, Gerente, Contabilidad y Oficina son globales y no tienen local. Manager, PosComandero y Kds requieren exactamente un local. Una cuenta local no puede operar en otro restaurante.
+En Microsoft Entra ID, el `TenantId` es la restricción principal: solo se aceptan miembros del tenant configurado (`acct = 0`) y se rechazan invitados. El sufijo del correo no está fijado en el código; al crear el usuario en Entra ID debe usarse uno de los dominios verificados del tenant y el correo debe coincidir exactamente con la cuenta autorizada en Backoffice. Por tanto, `kds-local01@restaurante.es` solo será válido si `restaurante.es` está verificado en ese tenant. Google sí restringe explícitamente el dominio mediante `ExternalAuth:Google:WorkspaceDomain`.
 
-La tabla authentication_settings almacena el proveedor activo. Solo el Admin puede cambiarlo y debe existir un Admin activo del proveedor de destino. Las cuentas del proveedor inactivo no pueden iniciar sesión.
+El rol y el alcance son conceptos independientes. Cualquiera de los roles `Admin`, `Gerente`, `Contabilidad`, `Marketing`, `Manager`, `Camarero` y `Kds` puede asignarse a `Todos los Locales` o a un único local. No existe una selección de varios locales concretos.
 
-La migración ReplacePasswordIdentityWithExternalAccounts descarta todos los usuarios y asignaciones anteriores, elimina las tablas de ASP.NET Core Identity y crea las tablas de cuentas autorizadas, configuración y códigos de intercambio.
+El alcance se modela explícitamente en PostgreSQL mediante `AllRestaurants` y `RestaurantId`. La restricción `CK_authorized_accounts_restaurant_scope` admite únicamente estas combinaciones:
+
+- `AllRestaurants = true` y `RestaurantId = NULL`: el rol y sus permisos se aplican a todos los locales;
+- `AllRestaurants = false` y `RestaurantId` informado: el rol y sus permisos se aplican solo a ese local.
+
+La migración `AddExplicitRestaurantScope` conserva las cuentas existentes y explicita su alcance. La migración posterior `ResetAuthorizedAccounts` elimina todas las cuentas autorizadas y sus tickets de acceso asociados para reiniciar la autorización. En el siguiente arranque, al quedar la tabla vacía, Identity crea únicamente el Admin definido por `IdentityBootstrap:AdminEmail`, con el proveedor de `ExternalAuth:Provider` y alcance `Todos los Locales`.
+
+En el JWT, un alcance `Todos los Locales` se representa con una claim de rol. Un alcance de un solo local se representa con claims `restaurant_id`, `restaurant_role` y `restaurant_permission` vinculadas a ese identificador. Las API evalúan los mismos permisos de rol en ambos alcances.
+
+El Backoffice presenta `Todos los Locales` como primera opción del selector. Un Admin con alcance total puede asignar cualquier alcance; un Admin limitado a un local solo puede consultar y administrar cuentas de ese mismo local y no puede elevarlas a `Todos los Locales`.
+
+Manager opera el TPV/POS, registra los pagos y libera las mesas al completar el cobro. Camarero opera el Comandero, toma pedidos y los envía a cocina, pero no registra pagos ni libera mesas.
+
+La tabla authentication_settings conserva el proveedor activo para compatibilidad y auditoría. El proveedor efectivo se define en `ExternalAuth:Provider`; las cuentas del proveedor distinto no pueden iniciar sesión.
+
+La migración histórica `ReplacePasswordIdentityWithExternalAccounts` descartó el modelo de usuarios anterior y creó las tablas actuales de cuentas autorizadas, configuración y códigos de intercambio. No debe confundirse con `AddExplicitRestaurantScope`, que conserva las cuentas y explicita su alcance.
 
 ## Configuración fuera de Git
 
 El proyecto Restaurantes.Identity.Api.Write tiene un UserSecretsId. En desarrollo se pueden configurar estas claves mediante .NET User Secrets; en producción, mediante un almacén de secretos o variables de entorno:
 
-- IdentityBootstrap:AdminEmail: correo corporativo del primer Admin. Solo se usa cuando la tabla de cuentas está vacía.
-- IdentityBootstrap:Provider: Microsoft o Google.
+- IdentityBootstrap:AdminEmail: correo corporativo del primer Admin. Solo se usa cuando la tabla de cuentas está vacía; la cuenta bootstrap se crea con alcance `Todos los Locales`.
+- ExternalAuth:Provider: Microsoft o Google. Es el proveedor efectivo del despliegue y debe coincidir con las credenciales configuradas.
 - ExternalAuth:PublicOrigin: origen público del gateway.
 - ExternalAuth:DataProtectionKeysPath: directorio privado y persistente para las claves que protegen la sesión temporal OIDC. En despliegues con varias réplicas debe ser compartido por ellas.
 - ExternalAuth:Microsoft:TenantId: identificador del tenant de trabajo.
@@ -40,7 +55,7 @@ El proyecto Restaurantes.Identity.Api.Write tiene un UserSecretsId. En desarroll
 
 En .NET, una variable de entorno representa los dos puntos con doble guion bajo, por ejemplo ExternalAuth__Microsoft__TenantId. No se deben colocar valores reales en appsettings.json, documentación, código, imágenes ni archivos versionados.
 
-La aplicación de Microsoft se registra para cuentas de esta organización únicamente, con plataforma Web. Hay que incluir la claim opcional acct en el ID token; Identity exige acct = 0 (miembro del tenant) y rechaza invitados. Su URI de retorno es:
+La aplicación de Microsoft se registra para cuentas de esta organización únicamente, con plataforma Web. El sufijo disponible al crear usuarios depende de los dominios verificados del tenant. Hay que incluir la claim opcional acct en el ID token; Identity exige acct = 0 (miembro del tenant) y rechaza invitados. Su URI de retorno es:
 
     {ExternalAuth:PublicOrigin}/api/identity/auth/callback/microsoft
 
@@ -60,4 +75,4 @@ El inicio de sesión acepta solo estos destinos internos: /backoffice/, /pos/, /
 - Restaurantes.Identity.Api.Write: endpoints y OIDC.
 - Restaurantes.Security: permisos, claims y validación del JWT en las API.
 
-La API aplica migraciones al arrancar. Antes de usar una base existente, se debe considerar que esta migración elimina los usuarios anteriores.
+La API aplica las migraciones pendientes al arrancar. `ResetAuthorizedAccounts` elimina las cuentas autorizadas para reiniciar su configuración; esta operación no es reversible porque la migración no conserva sus datos.

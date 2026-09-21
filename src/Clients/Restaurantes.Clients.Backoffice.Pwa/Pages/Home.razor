@@ -7,7 +7,11 @@
 
 <PageTitle>Backoffice · Restaurantes</PageTitle>
 
-@if (login is null)
+@if (initializing)
+{
+    <main class="loading">Cargando Backoffice…</main>
+}
+else if (login is null)
 {
     <main class="login-shell">
         <section class="login-card">

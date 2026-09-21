@@ -27,7 +27,11 @@ public sealed class AccessTokenService(
             new("preferred_username", user.Email),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
         ];
-        if (user.RestaurantId is Guid restaurantId)
+        if (user.AllRestaurants)
+        {
+            claims.Add(new Claim(ClaimTypes.Role, user.Role));
+        }
+        else if (user.RestaurantId is Guid restaurantId)
         {
             claims.Add(new Claim(RestaurantClaimTypes.RestaurantId, restaurantId.ToString()));
             claims.Add(
@@ -42,10 +46,6 @@ public sealed class AccessTokenService(
                     )
                 );
             }
-        }
-        else
-        {
-            claims.Add(new Claim(ClaimTypes.Role, user.Role));
         }
 
         SigningCredentials credentials = new(

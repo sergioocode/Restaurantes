@@ -9,63 +9,32 @@ public sealed class IdentityService(
     TimeProvider time
 )
 {
-    private static readonly string[] GlobalRoles = ["Admin", "Gerente", "Contabilidad", "Oficina"];
-    private static readonly string[] LocalRoles = ["Manager", "PosComandero", "Kds"];
+    private static readonly string[] Roles =
+    [
+        "Admin",
+        "Gerente",
+        "Contabilidad",
+        "Marketing",
+        "Manager",
+        "Camarero",
+        "Kds",
+    ];
 
     public async Task<IdentityResult> GetProviderSettings(
+        string activeProvider,
         bool microsoftConfigured,
         bool googleConfigured,
         CancellationToken ct
     )
     {
-        AuthenticationSettings settings = await store.GetSettingsAsync(ct);
+        await store.GetSettingsAsync(ct);
         return Ok(
-            new ProviderSettingsResponse(
-                settings.ActiveProvider,
-                microsoftConfigured,
-                googleConfigured
-            )
-        );
-    }
-
-    public async Task<IdentityResult> ChangeProvider(
-        ChangeProviderRequest request,
-        bool microsoftConfigured,
-        bool googleConfigured,
-        CancellationToken ct
-    )
-    {
-        if (!ValidProvider(request.ActiveProvider))
-        {
-            return BadRequest("Proveedor no válido.");
-        }
-
-        if (
-            (request.ActiveProvider == "Microsoft" && !microsoftConfigured)
-            || (request.ActiveProvider == "Google" && !googleConfigured)
-        )
-        {
-            return BadRequest("El proveedor aún no está configurado.");
-        }
-
-        if (!await store.AnyActiveAdminForProviderAsync(request.ActiveProvider, ct))
-        {
-            return BadRequest("Autoriza primero un Admin del proveedor de destino.");
-        }
-
-        AuthenticationSettings settings = await store.GetSettingsAsync(ct);
-        settings.ActiveProvider = request.ActiveProvider;
-        await store.SaveChangesAsync(ct);
-        return Ok(
-            new ProviderSettingsResponse(
-                settings.ActiveProvider,
-                microsoftConfigured,
-                googleConfigured
-            )
+            new ProviderSettingsResponse(activeProvider, microsoftConfigured, googleConfigured)
         );
     }
 
     public async Task<IdentityResult> AuthorizeExternalAsync(
+        string activeProvider,
         string provider,
         string email,
         string subject,
@@ -73,8 +42,7 @@ public sealed class IdentityService(
         CancellationToken ct
     )
     {
-        AuthenticationSettings settings = await store.GetSettingsAsync(ct);
-        if (!string.Equals(settings.ActiveProvider, provider, StringComparison.Ordinal))
+        if (!string.Equals(activeProvider, provider, StringComparison.Ordinal))
         {
             return new(IdentityOutcome.Unauthorized);
         }
@@ -112,7 +80,11 @@ public sealed class IdentityService(
         return Ok(code);
     }
 
-    public async Task<IdentityResult> ExchangeAsync(string code, CancellationToken ct)
+    public async Task<IdentityResult> ExchangeAsync(
+        string activeProvider,
+        string code,
+        CancellationToken ct
+    )
     {
         ApplicationUser? user = await store.ConsumeLoginTicketAsync(code, ct);
         if (user is null || !user.IsActive)
@@ -120,19 +92,15 @@ public sealed class IdentityService(
             return new(IdentityOutcome.Unauthorized);
         }
 
-        AuthenticationSettings settings = await store.GetSettingsAsync(ct);
-        if (settings.ActiveProvider != user.Provider)
+        if (activeProvider != user.Provider)
         {
             return new(IdentityOutcome.Unauthorized);
         }
 
         IssuedAccessToken token = tokens.Issue(user);
-        string[] globalRoles = GlobalRoles.Contains(user.Role, StringComparer.Ordinal)
-            ? [user.Role]
-            : [];
+        string[] allRestaurantsRoles = user.AllRestaurants ? [user.Role] : [];
         LoginRestaurantResponse[] restaurants =
-            user.RestaurantId is Guid restaurantId
-            && LocalRoles.Contains(user.Role, StringComparer.Ordinal)
+            !user.AllRestaurants && user.RestaurantId is Guid restaurantId
                 ?
                 [
                     new(
@@ -150,24 +118,46 @@ public sealed class IdentityService(
                 "Bearer",
                 token.ExpiresAtUtc,
                 new(user.Id, user.Email, user.DisplayName),
-                globalRoles,
+                allRestaurantsRoles,
                 restaurants
             )
         );
     }
 
-    public async Task<IdentityResult> ListUsers(CancellationToken ct)
+    public async Task<IdentityResult> ListUsers(
+        bool canManageAllRestaurants,
+        IReadOnlySet<Guid> managedRestaurantIds,
+        CancellationToken ct
+    )
     {
-        return Ok((await store.ListUsersAsync(ct)).Select(ToResponse).ToArray());
+        return Ok(
+            (await store.ListUsersAsync(ct))
+                .Where(user =>
+                    CanManageScope(
+                        canManageAllRestaurants,
+                        managedRestaurantIds,
+                        user.AllRestaurants,
+                        user.RestaurantId
+                    )
+                )
+                .Select(ToResponse)
+                .ToArray()
+        );
     }
 
-    public async Task<IdentityResult> CreateUser(CreateAccountRequest request, CancellationToken ct)
+    public async Task<IdentityResult> CreateUser(
+        string activeProvider,
+        bool canManageAllRestaurants,
+        IReadOnlySet<Guid> managedRestaurantIds,
+        CreateAccountRequest request,
+        CancellationToken ct
+    )
     {
         string? error = Validate(
             request.Email,
-            request.Provider,
             request.DisplayName,
             request.Role,
+            request.AllRestaurants,
             request.RestaurantId
         );
         if (error is not null)
@@ -175,8 +165,20 @@ public sealed class IdentityService(
             return BadRequest(error);
         }
 
+        if (
+            !CanManageScope(
+                canManageAllRestaurants,
+                managedRestaurantIds,
+                request.AllRestaurants,
+                request.RestaurantId
+            )
+        )
+        {
+            return new(IdentityOutcome.Forbidden);
+        }
+
         string email = request.Email.Trim().ToLowerInvariant();
-        if (await store.FindByEmailAsync(request.Provider, email, ct) is not null)
+        if (await store.FindByEmailAsync(activeProvider, email, ct) is not null)
         {
             return new(IdentityOutcome.Conflict, new { detail = "La cuenta ya está autorizada." });
         }
@@ -185,9 +187,10 @@ public sealed class IdentityService(
         {
             Id = Guid.NewGuid(),
             Email = email,
-            Provider = request.Provider,
+            Provider = activeProvider,
             DisplayName = request.DisplayName.Trim(),
             Role = request.Role,
+            AllRestaurants = request.AllRestaurants,
             RestaurantId = request.RestaurantId,
             IsActive = true,
             CreatedAtUtc = time.GetUtcNow().UtcDateTime,
@@ -198,6 +201,8 @@ public sealed class IdentityService(
 
     public async Task<IdentityResult> UpdateUser(
         Guid id,
+        bool canManageAllRestaurants,
+        IReadOnlySet<Guid> managedRestaurantIds,
         UpdateAccountRequest request,
         CancellationToken ct
     )
@@ -208,11 +213,29 @@ public sealed class IdentityService(
             return new(IdentityOutcome.NotFound);
         }
 
+        if (
+            !CanManageScope(
+                canManageAllRestaurants,
+                managedRestaurantIds,
+                user.AllRestaurants,
+                user.RestaurantId
+            )
+            || !CanManageScope(
+                canManageAllRestaurants,
+                managedRestaurantIds,
+                request.AllRestaurants,
+                request.RestaurantId
+            )
+        )
+        {
+            return new(IdentityOutcome.Forbidden);
+        }
+
         string? error = Validate(
             user.Email,
-            user.Provider,
             request.DisplayName,
             request.Role,
+            request.AllRestaurants,
             request.RestaurantId
         );
         if (error is not null)
@@ -231,6 +254,7 @@ public sealed class IdentityService(
 
         user.DisplayName = request.DisplayName.Trim();
         user.Role = request.Role;
+        user.AllRestaurants = request.AllRestaurants;
         user.RestaurantId = request.RestaurantId;
         user.IsActive = request.IsActive;
         await store.SaveChangesAsync(ct);
@@ -239,32 +263,33 @@ public sealed class IdentityService(
 
     private static string? Validate(
         string email,
-        string provider,
         string displayName,
         string role,
+        bool allRestaurants,
         Guid? restaurantId
     )
     {
-        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@') || email.Length > 320)
-        {
-            return "Introduce un correo válido.";
-        }
-
-        return !ValidProvider(provider) ? "Proveedor no válido."
+        return string.IsNullOrWhiteSpace(email) || !email.Contains('@') || email.Length > 320
+                ? "Introduce un correo válido."
             : string.IsNullOrWhiteSpace(displayName) || displayName.Length > 120
                 ? "Introduce un nombre visible."
-            : GlobalRoles.Contains(role, StringComparer.Ordinal)
-                ? restaurantId is null ? null
-                    : "Los roles globales no tienen local."
-            : LocalRoles.Contains(role, StringComparer.Ordinal)
-                ? restaurantId is Guid id && id != Guid.Empty ? null
-                    : "El rol local requiere un local."
-            : "Rol no válido.";
+            : !Roles.Contains(role, StringComparer.Ordinal) ? "Rol no válido."
+            : allRestaurants && restaurantId is not null
+                ? "Todos los Locales no admite un local concreto."
+            : !allRestaurants && (restaurantId is null || restaurantId == Guid.Empty)
+                ? "Selecciona un local o Todos los Locales."
+            : null;
     }
 
-    private static bool ValidProvider(string provider)
+    private static bool CanManageScope(
+        bool canManageAllRestaurants,
+        IReadOnlySet<Guid> managedRestaurantIds,
+        bool allRestaurants,
+        Guid? restaurantId
+    )
     {
-        return provider is "Microsoft" or "Google";
+        return canManageAllRestaurants
+            || (!allRestaurants && restaurantId is Guid id && managedRestaurantIds.Contains(id));
     }
 
     private static AccountResponse ToResponse(ApplicationUser user)
@@ -275,6 +300,7 @@ public sealed class IdentityService(
             user.Provider,
             user.DisplayName,
             user.Role,
+            user.AllRestaurants,
             user.RestaurantId,
             user.IsActive,
             user.ProviderSubject is not null

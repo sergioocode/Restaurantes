@@ -36,25 +36,23 @@ public static class DependencyInjection
         IdentityWriteDbContext db =
             scope.ServiceProvider.GetRequiredService<IdentityWriteDbContext>();
         await db.Database.MigrateAsync(ct);
-        if (!await db.AuthenticationSettings.AnyAsync(ct))
+        string activeProvider = ReadActiveProvider(configuration);
+        AuthenticationSettings settings;
+        if (await db.AuthenticationSettings.SingleOrDefaultAsync(x => x.Id == 1, ct) is null)
         {
-            db.AuthenticationSettings.Add(
-                new AuthenticationSettings { Id = 1, ActiveProvider = "Microsoft" }
-            );
-            await db.SaveChangesAsync(ct);
+            settings = new AuthenticationSettings { Id = 1, ActiveProvider = activeProvider };
+            db.AuthenticationSettings.Add(settings);
         }
+        else
+        {
+            settings = await db.AuthenticationSettings.SingleAsync(x => x.Id == 1, ct);
+            settings.ActiveProvider = activeProvider;
+        }
+        await db.SaveChangesAsync(ct);
         string? bootstrapEmail = configuration["IdentityBootstrap:AdminEmail"];
-        string? bootstrapProvider = configuration["IdentityBootstrap:Provider"];
         if (await db.Users.AnyAsync(ct) || string.IsNullOrWhiteSpace(bootstrapEmail))
         {
             return;
-        }
-
-        if (bootstrapProvider is not ("Microsoft" or "Google"))
-        {
-            throw new InvalidOperationException(
-                "IdentityBootstrap:Provider must be Microsoft or Google."
-            );
         }
 
         db.Users.Add(
@@ -62,15 +60,25 @@ public static class DependencyInjection
             {
                 Id = Guid.NewGuid(),
                 Email = bootstrapEmail.Trim().ToLowerInvariant(),
-                Provider = bootstrapProvider,
+                Provider = activeProvider,
                 DisplayName = "Administrador",
                 Role = "Admin",
+                AllRestaurants = true,
                 IsActive = true,
                 CreatedAtUtc = DateTime.UtcNow,
             }
         );
-        AuthenticationSettings settings = await db.AuthenticationSettings.SingleAsync(ct);
-        settings.ActiveProvider = bootstrapProvider;
+        settings.ActiveProvider = activeProvider;
         await db.SaveChangesAsync(ct);
+    }
+
+    private static string ReadActiveProvider(IConfiguration configuration)
+    {
+        string? provider = configuration["ExternalAuth:Provider"];
+        return provider is "Microsoft" or "Google"
+            ? provider
+            : throw new InvalidOperationException(
+                "ExternalAuth:Provider must be Microsoft or Google."
+            );
     }
 }

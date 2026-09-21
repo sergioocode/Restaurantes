@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Restaurantes.Identity.Domain;
 
 namespace Restaurantes.Identity.Infrastructure.Persistence;
@@ -22,6 +22,12 @@ public sealed class IdentityWriteDbContext(DbContextOptions<IdentityWriteDbConte
             user.Property(x => x.TenantId).HasMaxLength(64);
             user.Property(x => x.DisplayName).HasMaxLength(120).IsRequired();
             user.Property(x => x.Role).HasMaxLength(40).IsRequired();
+            user.ToTable(table =>
+                table.HasCheckConstraint(
+                    "CK_authorized_accounts_restaurant_scope",
+                    "(\"AllRestaurants\" AND \"RestaurantId\" IS NULL) OR (NOT \"AllRestaurants\" AND \"RestaurantId\" IS NOT NULL)"
+                )
+            );
             user.HasIndex(x => new { x.Provider, x.Email }).IsUnique();
             user.HasIndex(x => new
                 {
