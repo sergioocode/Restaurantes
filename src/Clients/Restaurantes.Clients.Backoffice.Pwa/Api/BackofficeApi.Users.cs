@@ -13,7 +13,16 @@ public sealed partial class BackofficeApi
     public async Task CreateUserAsync(StaffUserDraft draft)
     {
         using HttpRequestMessage request = Authorized(HttpMethod.Post, "/api/identity/users");
-        request.Content = JsonContent.Create(draft);
+        request.Content = JsonContent.Create(
+            new
+            {
+                draft.Email,
+                draft.DisplayName,
+                draft.Role,
+                AllRestaurants = draft.RestaurantId is null,
+                draft.RestaurantId,
+            }
+        );
         using HttpResponseMessage response = await http.SendAsync(request);
         await EnsureSuccessAsync(response);
     }
@@ -29,6 +38,7 @@ public sealed partial class BackofficeApi
             {
                 user.DisplayName,
                 user.Role,
+                AllRestaurants = user.RestaurantId is null,
                 user.RestaurantId,
                 user.IsActive,
             }

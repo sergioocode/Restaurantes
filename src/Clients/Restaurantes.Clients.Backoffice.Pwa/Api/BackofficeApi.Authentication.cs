@@ -18,15 +18,4 @@ public sealed partial class BackofficeApi
         );
         return await ReadAsync<LoginResponse>(response);
     }
-
-    public async Task ChangeProviderAsync(string activeProvider)
-    {
-        using HttpRequestMessage request = Authorized(
-            HttpMethod.Put,
-            "/api/identity/auth/provider"
-        );
-        request.Content = JsonContent.Create(new { activeProvider });
-        using HttpResponseMessage response = await http.SendAsync(request);
-        await EnsureSuccessAsync(response);
-    }
 }

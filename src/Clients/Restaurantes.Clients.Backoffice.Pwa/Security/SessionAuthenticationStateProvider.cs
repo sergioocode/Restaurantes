@@ -26,7 +26,7 @@ public sealed class SessionAuthenticationStateProvider : AuthenticationStateProv
                 new(ClaimTypes.NameIdentifier, login.User.Id.ToString()),
                 new(ClaimTypes.Name, login.User.DisplayName),
             ];
-            foreach (string role in login.GlobalRoles ?? [])
+            foreach (string role in login.AllRestaurantsRoles ?? [])
             {
                 claims.Add(new Claim(ClaimTypes.Role, role));
             }

@@ -239,6 +239,8 @@ Esto permite que cocina, camareros, caja y paneles de seguimiento puedan refresc
 
 La autenticación se basa en **ASP.NET Core Identity y JWT**.
 
+Las restricciones de Microsoft Entra ID, dominios verificados, Google Workspace y autorización por correo están documentadas en [Identity](docs/Identity.README.md).
+
 La autorización contempla tanto roles como permisos asociados al contexto del restaurante. El objetivo es evitar que un usuario autenticado pueda operar sobre un restaurante únicamente por conocer su identificador.
 
 Los gateways actúan como punto de entrada, pero las reglas de autorización relevantes permanecen en los servicios responsables del dominio.

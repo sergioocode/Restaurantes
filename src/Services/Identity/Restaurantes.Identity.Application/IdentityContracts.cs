@@ -1,16 +1,17 @@
-namespace Restaurantes.Identity.Application;
+﻿namespace Restaurantes.Identity.Application;
 
 public sealed record CreateAccountRequest(
     string Email,
-    string Provider,
     string DisplayName,
     string Role,
+    bool AllRestaurants,
     Guid? RestaurantId
 );
 
 public sealed record UpdateAccountRequest(
     string DisplayName,
     string Role,
+    bool AllRestaurants,
     Guid? RestaurantId,
     bool IsActive
 );
@@ -21,14 +22,13 @@ public sealed record ProviderSettingsResponse(
     bool GoogleConfigured
 );
 
-public sealed record ChangeProviderRequest(string ActiveProvider);
-
 public sealed record AccountResponse(
     Guid Id,
     string Email,
     string Provider,
     string DisplayName,
     string Role,
+    bool AllRestaurants,
     Guid? RestaurantId,
     bool IsActive,
     bool IsLinked
@@ -51,7 +51,7 @@ public sealed record LoginResponse(
     string TokenType,
     DateTime ExpiresAtUtc,
     LoginUserResponse User,
-    IReadOnlyCollection<string> GlobalRoles,
+    IReadOnlyCollection<string> AllRestaurantsRoles,
     IReadOnlyCollection<LoginRestaurantResponse> Restaurants
 );
 
