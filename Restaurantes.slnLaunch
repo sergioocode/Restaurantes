@@ -1,4 +1,4 @@
-[
+﻿[
   {
     "Name": "Backoffice · Con navegador",
     "Projects": [
@@ -47,8 +47,49 @@
         "Action": "Start"
       },
       {
+        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Write\\Restaurantes.Orders.Api.Write.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Read\\Restaurantes.Orders.Api.Read.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Publisher\\Restaurantes.Orders.Publisher.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Consumer\\Restaurantes.Orders.Consumer.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Api.Write\\Restaurantes.Payments.Api.Write.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Publisher\\Restaurantes.Payments.Publisher.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Consumer\\Restaurantes.Payments.Consumer.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Api\\Restaurantes.CashRegister.Api.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Consumer\\Restaurantes.CashRegister.Consumer.csproj",
+        "Action": "Start"
+      },
+      {
         "Path": "src\\ApiGateways\\Restaurantes.Gateway.Private\\Restaurantes.Gateway.Private.csproj",
         "Action": "Start"
+      },
+      {
+        "Path": "src\\Clients\\Restaurantes.Clients.CustomerQr.Pwa\\Restaurantes.Clients.CustomerQr.Pwa.csproj",
+        "Action": "Start",
+        "DebugTarget": "http"
       },
       {
         "Path": "src\\Clients\\Restaurantes.Clients.Backoffice.Pwa\\Restaurantes.Clients.Backoffice.Pwa.csproj",
@@ -105,8 +146,49 @@
         "Action": "Start"
       },
       {
+        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Write\\Restaurantes.Orders.Api.Write.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Read\\Restaurantes.Orders.Api.Read.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Publisher\\Restaurantes.Orders.Publisher.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Consumer\\Restaurantes.Orders.Consumer.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Api.Write\\Restaurantes.Payments.Api.Write.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Publisher\\Restaurantes.Payments.Publisher.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Consumer\\Restaurantes.Payments.Consumer.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Api\\Restaurantes.CashRegister.Api.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Consumer\\Restaurantes.CashRegister.Consumer.csproj",
+        "Action": "Start"
+      },
+      {
         "Path": "src\\ApiGateways\\Restaurantes.Gateway.Private\\Restaurantes.Gateway.Private.csproj",
         "Action": "Start"
+      },
+      {
+        "Path": "src\\Clients\\Restaurantes.Clients.CustomerQr.Pwa\\Restaurantes.Clients.CustomerQr.Pwa.csproj",
+        "Action": "Start",
+        "DebugTarget": "http"
       },
       {
         "Path": "src\\Clients\\Restaurantes.Clients.Backoffice.Pwa\\Restaurantes.Clients.Backoffice.Pwa.csproj",
@@ -350,146 +432,6 @@
       },
       {
         "Path": "src\\Clients\\Restaurantes.Clients.Commander.Pwa\\Restaurantes.Clients.Commander.Pwa.csproj",
-        "Action": "Start",
-        "DebugTarget": "http"
-      }
-    ]
-  },
-  {
-    "Name": "Customer QR · Con navegador",
-    "Projects": [
-      {
-        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api.Write\\Restaurantes.Identity.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Api.Write\\Restaurantes.Dining.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Consumer\\Restaurantes.Dining.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api.Read\\Restaurantes.Catalog.Api.Read.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Api.Read\\Restaurantes.RestaurantOperations.Api.Read.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Write\\Restaurantes.Orders.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Read\\Restaurantes.Orders.Api.Read.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Publisher\\Restaurantes.Orders.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Consumer\\Restaurantes.Orders.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Api.Write\\Restaurantes.Payments.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Publisher\\Restaurantes.Payments.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Consumer\\Restaurantes.Payments.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Api\\Restaurantes.CashRegister.Api.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Consumer\\Restaurantes.CashRegister.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\ApiGateways\\Restaurantes.Gateway.Public\\Restaurantes.Gateway.Public.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Clients\\Restaurantes.Clients.CustomerQr.Pwa\\Restaurantes.Clients.CustomerQr.Pwa.csproj",
-        "Action": "Start",
-        "DebugTarget": "http"
-      }
-    ]
-  },
-  {
-    "Name": "Customer QR · Sin navegador",
-    "Projects": [
-      {
-        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api.Write\\Restaurantes.Identity.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Api.Write\\Restaurantes.Dining.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Consumer\\Restaurantes.Dining.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api.Read\\Restaurantes.Catalog.Api.Read.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Api.Read\\Restaurantes.RestaurantOperations.Api.Read.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Write\\Restaurantes.Orders.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Read\\Restaurantes.Orders.Api.Read.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Publisher\\Restaurantes.Orders.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Consumer\\Restaurantes.Orders.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Api.Write\\Restaurantes.Payments.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Publisher\\Restaurantes.Payments.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Consumer\\Restaurantes.Payments.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Api\\Restaurantes.CashRegister.Api.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Consumer\\Restaurantes.CashRegister.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\ApiGateways\\Restaurantes.Gateway.Public\\Restaurantes.Gateway.Public.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Clients\\Restaurantes.Clients.CustomerQr.Pwa\\Restaurantes.Clients.CustomerQr.Pwa.csproj",
         "Action": "Start",
         "DebugTarget": "http"
       }
