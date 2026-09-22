@@ -17,6 +17,7 @@ public interface IIdentityStore
     Task<bool> AnyActiveAdminForProviderAsync(string provider, CancellationToken ct);
     Task<bool> AnyActiveAdminExceptAsync(Guid id, string provider, CancellationToken ct);
     Task AddUserAsync(ApplicationUser user, CancellationToken ct);
+    Task DeleteUserAsync(ApplicationUser user, CancellationToken ct);
     Task SaveChangesAsync(CancellationToken ct);
     Task<string> CreateLoginTicketAsync(Guid userId, CancellationToken ct);
     Task<ApplicationUser?> ConsumeLoginTicketAsync(string code, CancellationToken ct);

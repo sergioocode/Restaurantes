@@ -50,6 +50,7 @@ public partial class Home
     ];
 
     internal bool IsAdmin => login?.AllRestaurantsRoles?.Contains("Admin") == true;
+    internal Guid? CurrentUserId => login?.User.Id;
     private bool HasBackofficeAccess =>
         login?.AllRestaurantsRoles?.Any(role => RoleHasPermission(role, "backoffice.access"))
             == true
@@ -662,6 +663,29 @@ public partial class Home
                 await LoadUsersCore();
                 ok = true;
                 message = "Cuenta actualizada.";
+            },
+            false
+        );
+    }
+
+    internal async Task DeleteUser(StaffUserResponse user)
+    {
+        bool confirmed = await Js.InvokeAsync<bool>(
+            "confirm",
+            $"¿Eliminar la cuenta {user.DisplayName} ({user.Email})?"
+        );
+        if (!confirmed)
+        {
+            return;
+        }
+
+        await Run(
+            async () =>
+            {
+                await Api.DeleteUserAsync(user.Id);
+                await LoadUsersCore();
+                ok = true;
+                message = "Cuenta eliminada.";
             },
             false
         );

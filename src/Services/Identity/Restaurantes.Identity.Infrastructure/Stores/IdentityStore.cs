@@ -68,6 +68,12 @@ public sealed class IdentityStore(IdentityWriteDbContext db, TimeProvider time) 
         await db.SaveChangesAsync(ct);
     }
 
+    public async Task DeleteUserAsync(ApplicationUser user, CancellationToken ct)
+    {
+        db.Users.Remove(user);
+        await db.SaveChangesAsync(ct);
+    }
+
     public Task SaveChangesAsync(CancellationToken ct)
     {
         return db.SaveChangesAsync(ct);
