@@ -846,7 +846,7 @@ Reporting consume los hechos de pago para construir métricas y proyecciones ori
 }
 ```
 
-La API requiere además la configuración de `Security`.
+La API requiere además la configuración compartida de `Restaurantes.Security`; la clave de firma se proporciona mediante `Security__SigningKey`, según [Configuración JWT compartida](../README.md#configuración-jwt-compartida).
 
 ### Consumer / Publisher
 

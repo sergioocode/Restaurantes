@@ -928,10 +928,10 @@ QrAccess:TrustedProxyAddresses
 Seguridad:
 
 ```text
-Security:Issuer
-Security:Audience
-Security:SigningKey
+Security__SigningKey
 ```
+
+El emisor y la audiencia utilizan los valores predeterminados de `RestaurantSecurityOptions`. La clave se comparte con las demás API fuera de Git, según [Configuración JWT compartida](../README.md#configuración-jwt-compartida).
 
 ### Consumer
 
