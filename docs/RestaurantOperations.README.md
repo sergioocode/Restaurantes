@@ -555,7 +555,7 @@ La propiedad funcional de mesas, pedidos, pagos o catálogo continúa pertenecie
 
 ## Seguridad
 
-`Api.Write` utiliza JWT emitido por `Restaurantes.Identity` y el building block `Restaurantes.Security`.
+`Api.Write` y `Api.Read` utilizan JWT emitido por `Restaurantes.Identity` y el building block `Restaurantes.Security`.
 
 Configuración relevante:
 
@@ -566,7 +566,7 @@ Audience = Restaurantes
 
 El modelo separa rol y alcance. Cada cuenta aplica su rol a `Todos los Locales` o a exactamente un local; nunca a un subconjunto de varios locales. Los permisos de alcance único se emiten como claims con formato `restaurantId:permission`, mientras que el alcance total se representa mediante la claim de rol y se evalúa con la misma matriz de permisos.
 
-La API Read no registra autenticación directamente y está disponible a través del Public Gateway únicamente para operaciones `GET`.
+La API Read permite consultar públicamente la lista y el detalle de restaurantes, pero exige autenticación en las rutas `accessible/commander`, `accessible/pos` y `accessible/kds`. La clave compartida se proporciona mediante `Security__SigningKey`, según [Configuración JWT compartida](../README.md#configuración-jwt-compartida).
 
 ## Relación con otros servicios
 
@@ -593,6 +593,8 @@ La API Write utiliza además la configuración compartida de `Restaurantes.Secur
 ```text
 ConnectionStrings:RestaurantOperationsRead
 ```
+
+Las dos API reciben la clave JWT compartida mediante `Security__SigningKey`.
 
 ### Consumer
 

@@ -640,6 +640,8 @@ Issuer   = Restaurantes.Identity
 Audience = Restaurantes
 ```
 
+Estos valores proceden de los valores predeterminados de `RestaurantSecurityOptions`. La clave compartida se proporciona fuera de Git mediante `Security__SigningKey`, según [Configuración JWT compartida](../README.md#configuración-jwt-compartida).
+
 Las operaciones administrativas verifican acceso al restaurante con:
 
 ```text
@@ -702,12 +704,6 @@ Los movimientos almacenan `OrderId` como referencia lógica recibida desde Payme
 {
   "ConnectionStrings": {
     "CashRegisterWrite": "..."
-  },
-  "Security": {
-    "Issuer": "Restaurantes.Identity",
-    "Audience": "Restaurantes",
-    "SigningKey": "...",
-    "AccessTokenMinutes": 480
   }
 }
 ```

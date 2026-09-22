@@ -245,6 +245,24 @@ La autorización contempla tanto roles como permisos asociados al contexto del r
 
 Los gateways actúan como punto de entrada, pero las reglas de autorización relevantes permanecen en los servicios responsables del dominio.
 
+### Configuración JWT compartida
+
+`Restaurantes.Security` centraliza los valores predeterminados de emisor, audiencia y duración del token mediante `RestaurantSecurityOptions`. La clave de firma no se almacena en código ni en los `appsettings.json`: todos los procesos que emiten o validan el JWT deben recibir el mismo valor mediante `Security:SigningKey`.
+
+En desarrollo local sobre Windows se configura una sola vez como variable de entorno del usuario:
+
+```powershell
+[Environment]::SetEnvironmentVariable(
+    "Security__SigningKey",
+    "<clave-local-de-al-menos-32-bytes>",
+    "User"
+)
+```
+
+Después de crear o cambiar la variable hay que cerrar y volver a abrir Visual Studio, Rider o la terminal que inicia las API, ya que los procesos existentes no actualizan automáticamente su entorno.
+
+En producción, la clave debe residir en el almacén de secretos del despliegue, como Azure Key Vault, y proporcionarse a cada API como `Security__SigningKey`. No debe incluirse en archivos versionados ni en imágenes de contenedor.
+
 ## Servicios
 
 | Servicio | Responsabilidad | Persistencia |
