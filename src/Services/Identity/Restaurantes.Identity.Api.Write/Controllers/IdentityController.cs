@@ -215,6 +215,25 @@ public sealed class IdentityController(IdentityService service, IConfiguration c
             : Execute(() => service.UpdateUser(id, allRestaurants, restaurantIds, request, ct));
     }
 
+    [Authorize, HttpDelete("users/{id:guid}")]
+    public Task<IActionResult> DeleteUser(Guid id, CancellationToken ct)
+    {
+        if (
+            Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out Guid currentUserId)
+            && currentUserId == id
+        )
+        {
+            return Task.FromResult<IActionResult>(
+                BadRequest(new { detail = "No puedes eliminar tu propia cuenta." })
+            );
+        }
+
+        (bool allRestaurants, HashSet<Guid> restaurantIds) = IdentityManagementScope();
+        return !allRestaurants && restaurantIds.Count == 0
+            ? Task.FromResult<IActionResult>(Forbid())
+            : Execute(() => service.DeleteUser(id, allRestaurants, restaurantIds, ct));
+    }
+
     private (bool AllRestaurants, HashSet<Guid> RestaurantIds) IdentityManagementScope()
     {
         bool allRestaurants = User.FindAll(ClaimTypes.Role)

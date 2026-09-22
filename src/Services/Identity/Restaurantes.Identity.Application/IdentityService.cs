@@ -261,6 +261,40 @@ public sealed class IdentityService(
         return Ok(ToResponse(user));
     }
 
+    public async Task<IdentityResult> DeleteUser(
+        Guid id,
+        bool canManageAllRestaurants,
+        IReadOnlySet<Guid> managedRestaurantIds,
+        CancellationToken ct
+    )
+    {
+        ApplicationUser? user = await store.FindByIdAsync(id, ct);
+        if (user is null)
+        {
+            return new(IdentityOutcome.NotFound);
+        }
+
+        if (
+            !CanManageScope(
+                canManageAllRestaurants,
+                managedRestaurantIds,
+                user.AllRestaurants,
+                user.RestaurantId
+            )
+        )
+        {
+            return new(IdentityOutcome.Forbidden);
+        }
+
+        if (user.Role == "Admin" && !await store.AnyActiveAdminExceptAsync(id, user.Provider, ct))
+        {
+            return BadRequest("No se puede eliminar el último Admin.");
+        }
+
+        await store.DeleteUserAsync(user, ct);
+        return new(IdentityOutcome.NoContent);
+    }
+
     private static string? Validate(
         string email,
         string displayName,

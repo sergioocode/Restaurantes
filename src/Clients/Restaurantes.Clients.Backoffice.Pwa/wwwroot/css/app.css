@@ -9,8 +9,8 @@ button { cursor: pointer; } button:disabled { cursor: not-allowed; opacity: .55;
 h1, h2, h3, p { margin-top: 0; }.login-card h1 { margin-bottom: 8px; font-size: 42px; }
 form, label { display: grid; gap: 7px; }.login-card form { gap: 14px; margin: 24px 0 14px; }
 input, select { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #cbd2cc; border-radius: 11px; background: #fff; }
-.primary, .secondary { min-height: 43px; padding: 10px 16px; border: 0; border-radius: 11px; font-weight: 850; }
-.primary { color: #fff; background: #1f6545; }.secondary { color: #173d2a; background: #e3ebe5; }
+.primary, .secondary, .danger { min-height: 43px; padding: 10px 16px; border: 0; border-radius: 11px; font-weight: 850; }
+.primary { color: #fff; background: #1f6545; }.secondary { color: #173d2a; background: #e3ebe5; }.danger { color: #fff; background: #a43a32; }
 .error { color: #a43a32; }.topbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px 28px; color: #fff; background: #163f2c; }
 .topbar .eyebrow { margin: 0 0 4px; color: #ffad82; }.top-actions { display: flex; align-items: center; gap: 10px; }.top-actions select { min-width: 360px; color: #fff; border-color: #ffffff35; background: #ffffff12; }
 .top-actions select option { color: #18211d; background: #fff; }

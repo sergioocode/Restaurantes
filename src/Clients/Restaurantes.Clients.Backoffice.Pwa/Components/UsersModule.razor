@@ -52,6 +52,7 @@ else
                     </select></label>
                     <label class="availability"><input type="checkbox" @bind="user.IsActive" /> Activa</label>
                     <button class="primary" @onclick="() => Host.SaveUser(user)" disabled="@Host.busy">Guardar</button>
+                    <button class="danger" @onclick="() => Host.DeleteUser(user)" disabled="@(Host.busy || user.Id == Host.CurrentUserId)">Eliminar</button>
                 </div>
             </article>
         }

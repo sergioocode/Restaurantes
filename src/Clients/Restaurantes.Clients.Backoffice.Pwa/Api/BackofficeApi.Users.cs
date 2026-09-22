@@ -46,4 +46,14 @@ public sealed partial class BackofficeApi
         using HttpResponseMessage response = await http.SendAsync(request);
         await EnsureSuccessAsync(response);
     }
+
+    public async Task DeleteUserAsync(Guid id)
+    {
+        using HttpRequestMessage request = Authorized(
+            HttpMethod.Delete,
+            $"/api/identity/users/{id}"
+        );
+        using HttpResponseMessage response = await http.SendAsync(request);
+        await EnsureSuccessAsync(response);
+    }
 }
