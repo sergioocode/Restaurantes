@@ -3,6 +3,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>952599ba-cfcf-45fd-ae22-3646f852f75d</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Restaurantes.Identity.Application\Restaurantes.Identity.Application.csproj" />
