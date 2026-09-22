@@ -122,6 +122,10 @@ static void SetPublicRedirect(
     options.Events.OnRedirectToIdentityProvider = context =>
     {
         context.ProtocolMessage.RedirectUri = redirect;
+        if (provider.Equals("microsoft", StringComparison.OrdinalIgnoreCase))
+        {
+            context.ProtocolMessage.Prompt = "select_account";
+        }
         return Task.CompletedTask;
     };
     options.Events.OnAuthorizationCodeReceived = context =>
