@@ -10,7 +10,7 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 Uri applicationUri = new(builder.HostEnvironment.BaseAddress);
 builder.Services.AddScoped(_ => new HttpClient
 {
-    BaseAddress = new Uri(applicationUri.GetLeftPart(UriPartial.Authority))
+    BaseAddress = new Uri(applicationUri.GetLeftPart(UriPartial.Authority)),
 });
 builder.Services.AddScoped<CustomerQrApi>();
 
