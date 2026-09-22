@@ -1,6 +1,5 @@
 ﻿using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Restaurantes.Identity.Application;
 using Restaurantes.Identity.Infrastructure;
@@ -11,15 +10,7 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.AddServiceDefaults();
-string? keyRingPath = builder.Configuration["ExternalAuth:DataProtectionKeysPath"];
-if (!string.IsNullOrWhiteSpace(keyRingPath))
-{
-    Directory.CreateDirectory(keyRingPath);
-    builder
-        .Services.AddDataProtection()
-        .SetApplicationName("Restaurantes.Identity")
-        .PersistKeysToFileSystem(new DirectoryInfo(keyRingPath));
-}
+
 builder.Services.AddScoped<IdentityService>();
 builder.Services.AddIdentityInfrastructure(builder.Configuration);
 builder.Services.AddRestaurantSecurity(builder.Configuration);
