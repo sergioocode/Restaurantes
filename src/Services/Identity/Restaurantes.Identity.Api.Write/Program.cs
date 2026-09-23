@@ -7,6 +7,7 @@ using Restaurantes.Security;
 using Restaurantes.ServiceDefaults;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+builder.AddVaultConfiguration();
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.AddServiceDefaults();

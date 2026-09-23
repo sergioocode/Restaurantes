@@ -2,8 +2,10 @@
 using Restaurantes.Dining.Consumer;
 using Restaurantes.Dining.Infrastructure;
 using Restaurantes.Messaging.RabbitMq;
+using Restaurantes.ServiceDefaults;
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
+builder.AddVaultConfiguration();
 builder.Services.AddDiningPersistence(builder.Configuration);
 builder.Services.AddScoped<DiningIntegrationService>();
 builder

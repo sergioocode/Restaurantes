@@ -14,10 +14,10 @@ public sealed class RabbitMqOptions
     public int Port { get; init; } = 5672;
 
     [Required]
-    public string UserName { get; init; } = "restaurants";
+    public string UserName { get; init; } = string.Empty;
 
     [Required]
-    public string Password { get; init; } = "restaurants_dev";
+    public string Password { get; init; } = string.Empty;
 
     [Required]
     public string VirtualHost { get; init; } = "/";

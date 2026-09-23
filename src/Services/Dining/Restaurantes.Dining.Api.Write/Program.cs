@@ -8,6 +8,7 @@ using Restaurantes.Security;
 using Restaurantes.ServiceDefaults;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+builder.AddVaultConfiguration();
 builder.AddServiceDefaults();
 string[] trustedProxyAddresses =
     builder.Configuration.GetSection("QrAccess:TrustedProxyAddresses").Get<string[]>() ?? [];

@@ -2,8 +2,10 @@ using Restaurantes.CashRegister.Application;
 using Restaurantes.CashRegister.Consumer;
 using Restaurantes.CashRegister.Infrastructure;
 using Restaurantes.Messaging.RabbitMq;
+using Restaurantes.ServiceDefaults;
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
+builder.AddVaultConfiguration();
 builder.Services.AddCashRegisterInfrastructure(builder.Configuration);
 builder.Services.AddScoped<CashPaymentProjectionService>();
 builder

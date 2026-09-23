@@ -4,6 +4,7 @@ using Restaurantes.Sales.Infrastructure.Persistence.Read;
 using Restaurantes.ServiceDefaults;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+builder.AddVaultConfiguration();
 builder.AddServiceDefaults();
 builder.Services.AddControllers();
 builder.Services.AddSalesReadInfrastructure(builder.Configuration);

@@ -1,8 +1,10 @@
 ﻿using Restaurantes.Catalog.Consumer;
 using Restaurantes.Catalog.Infrastructure;
 using Restaurantes.Messaging.RabbitMq;
+using Restaurantes.ServiceDefaults;
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
+builder.AddVaultConfiguration();
 builder.Services.AddCatalogReadInfrastructure(builder.Configuration);
 builder.Services.AddSingleton(TimeProvider.System);
 builder

@@ -4,6 +4,7 @@ using Restaurantes.Security;
 using Restaurantes.ServiceDefaults;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+builder.AddVaultConfiguration();
 builder.AddServiceDefaults();
 builder.Services.AddScoped<CashRegisterService>();
 builder.Services.AddCashRegisterInfrastructure(builder.Configuration);
