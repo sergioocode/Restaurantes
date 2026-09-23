@@ -405,6 +405,19 @@ docker compose up -d
 
 Las migraciones de Entity Framework Core son aplicadas por los servicios correspondientes durante su inicialización.
 
+### Datos de desarrollo opcionales
+
+Los datos de ejemplo de `tools/postgres/seed/01-development-catalog.sql` son opcionales y **no se insertan automáticamente** al iniciar Docker ni las aplicaciones. El seed agrega locales, categorías, productos, estaciones KDS, zonas y mesas; no crea usuarios de Identity. El usuario administrador se inicializa por separado al arrancar Identity.
+
+Para cargar estos datos una sola vez, inicia PostgreSQL y arranca al menos `RestaurantOperations.Api.Write` y `Catalog.Api.Write` para que apliquen las migraciones. Después, desde PowerShell en la raíz del repositorio, copia y ejecuta el archivo:
+
+```powershell
+docker cp .\tools\postgres\seed\01-development-catalog.sql restaurantes-postgres:/tmp/01-development-catalog.sql
+docker exec -i restaurantes-postgres psql -U restaurants -d restaurant_operations_write -v ON_ERROR_STOP=1 -f /tmp/01-development-catalog.sql
+```
+
+Si eliminas el volumen de PostgreSQL, tendrás que ejecutar de nuevo el seed. Reiniciar los contenedores no elimina estos datos.
+
 ### Restaurar herramientas y dependencias
 
 ```bash
