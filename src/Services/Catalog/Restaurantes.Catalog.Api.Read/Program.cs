@@ -5,6 +5,7 @@ using Restaurantes.Security;
 using Restaurantes.ServiceDefaults;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+builder.AddVaultConfiguration();
 builder.AddServiceDefaults();
 builder.Services.AddControllers();
 builder.Services.AddCatalogReadInfrastructure(builder.Configuration);

@@ -2,8 +2,10 @@
 using Restaurantes.Sales.Application;
 using Restaurantes.Sales.Consumer;
 using Restaurantes.Sales.Infrastructure;
+using Restaurantes.ServiceDefaults;
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
+builder.AddVaultConfiguration();
 builder.Services.AddSalesWriteInfrastructure(builder.Configuration);
 builder.Services.AddSalesReadInfrastructure(builder.Configuration);
 builder.Services.AddSingleton(TimeProvider.System);

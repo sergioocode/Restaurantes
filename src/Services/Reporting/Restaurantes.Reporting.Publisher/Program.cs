@@ -2,8 +2,10 @@
 using Restaurantes.Messaging.RabbitMq;
 using Restaurantes.Reporting.Infrastructure.Persistence.Read;
 using Restaurantes.Reporting.Publisher;
+using Restaurantes.ServiceDefaults;
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
+builder.AddVaultConfiguration();
 builder.Services.AddDbContext<ReportingReadDbContext>(o =>
     o.UseNpgsql(builder.Configuration.GetConnectionString("ReportingRead"))
 );

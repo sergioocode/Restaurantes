@@ -54,7 +54,51 @@ services:
       retries: 12
       start_period: 20s
 
+  vault:
+    image: hashicorp/vault:1.21.4
+    container_name: restaurantes-vault
+    command: server -dev -dev-listen-address=0.0.0.0:8200
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_DEV_ROOT_TOKEN_ID:?Local Vault bootstrap token is missing}
+      VAULT_ADDR: http://127.0.0.1:8200
+    ports:
+      - "127.0.0.1:8200:8200"
+    healthcheck:
+      test: [ "CMD", "vault", "status" ]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+  vault-init:
+    image: hashicorp/vault:1.21.4
+    container_name: restaurantes-vault-init
+    environment:
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: ${VAULT_DEV_ROOT_TOKEN_ID:?Local Vault bootstrap token is missing}
+    volumes:
+      - ./tools/vault/init.sh:/vault/init/init.sh:ro
+      - restaurant-vault-proxy-auth:/vault/auth
+    depends_on:
+      vault:
+        condition: service_healthy
+    entrypoint: [ "/bin/sh", "/vault/init/init.sh" ]
+
+  vault-proxy:
+    image: hashicorp/vault:1.21.4
+    container_name: restaurantes-vault-proxy
+    command: proxy -config=/vault/config/proxy.hcl
+    ports:
+      - "127.0.0.1:8201:8100"
+    volumes:
+      - ./tools/vault/proxy.hcl:/vault/config/proxy.hcl:ro
+      - restaurant-vault-proxy-auth:/vault/auth:ro
+    depends_on:
+      vault-init:
+        condition: service_completed_successfully
+
+
 volumes:
   restaurant-postgres-data:
   restaurant-pgadmin-data:
   restaurant-rabbitmq-data:
+  restaurant-vault-proxy-auth:

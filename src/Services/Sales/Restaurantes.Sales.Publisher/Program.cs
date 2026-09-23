@@ -1,8 +1,10 @@
 ﻿using Restaurantes.Messaging.RabbitMq;
 using Restaurantes.Sales.Infrastructure;
 using Restaurantes.Sales.Publisher;
+using Restaurantes.ServiceDefaults;
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
+builder.AddVaultConfiguration();
 builder.Services.AddSalesWriteInfrastructure(builder.Configuration);
 builder.Services.AddSingleton(TimeProvider.System);
 builder
