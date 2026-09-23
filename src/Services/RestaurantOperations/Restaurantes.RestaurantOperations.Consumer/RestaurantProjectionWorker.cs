@@ -64,7 +64,10 @@ public sealed class RestaurantProjectionWorker(
             "restaurant-operations-read-model-consumer",
             cancellationToken
         );
-        _channel = await _connection.CreateChannelAsync(cancellationToken: cancellationToken);
+        _channel = await _connection.CreateChannelAsync(
+            new CreateChannelOptions(true, true),
+            cancellationToken
+        );
 
         await RestaurantOperationsTopology.DeclareAsync(_channel, cancellationToken);
         await _channel.BasicQosAsync(
@@ -177,8 +180,21 @@ public sealed class RestaurantProjectionWorker(
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Could not project RabbitMQ message. It will be retried.");
-            await _channel.BasicNackAsync(eventArgs.DeliveryTag, multiple: false, requeue: true);
+            RabbitMqRetryResult retry = await RabbitMqRetry.ScheduleOrDeadLetterAsync(
+                _channel,
+                eventArgs,
+                RestaurantOperationsTopology.ReadModelQueueName,
+                exception,
+                eventArgs.CancellationToken
+            );
+            logger.LogError(
+                exception,
+                "Restaurant projection message failed. Retry scheduled: {RetryScheduled}; attempt {RetryAttempt}/{MaximumAttempts}; delay {RetryDelay}.",
+                retry.Scheduled,
+                retry.Attempt,
+                RabbitMqRetry.MaximumAttempts,
+                retry.Delay
+            );
         }
     }
 

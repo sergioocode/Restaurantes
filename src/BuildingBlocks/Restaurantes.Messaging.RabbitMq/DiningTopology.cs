@@ -54,6 +54,7 @@ public static class DiningTopology
             ["x-dead-letter-exchange"] = DeadLetterExchangeName,
         };
         await channel.QueueDeclareAsync(QueueName, true, false, false, args, cancellationToken: ct);
+        await RabbitMqRetry.DeclareAsync(channel, QueueName, ct);
         await channel.QueueBindAsync(
             QueueName,
             OrdersTopology.ExchangeName,

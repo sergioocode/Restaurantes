@@ -48,7 +48,10 @@ public sealed class KdsSignalRWorker(
     {
         ConnectionFactory factory = RabbitMqConnectionFactory.Create(rabbitMqOptions);
         _connection = await factory.CreateConnectionAsync("orders-kds-signalr", cancellationToken);
-        _channel = await _connection.CreateChannelAsync(cancellationToken: cancellationToken);
+        _channel = await _connection.CreateChannelAsync(
+            new CreateChannelOptions(true, true),
+            cancellationToken
+        );
         await OrdersTopology.DeclareAsync(_channel, cancellationToken);
         await _channel.BasicQosAsync(0, 20, false, cancellationToken);
 
@@ -103,8 +106,21 @@ public sealed class KdsSignalRWorker(
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "KDS SignalR notification failed and will be requeued.");
-            await _channel.BasicNackAsync(eventArgs.DeliveryTag, false, requeue: true);
+            RabbitMqRetryResult retry = await RabbitMqRetry.ScheduleOrDeadLetterAsync(
+                _channel,
+                eventArgs,
+                OrdersTopology.KdsSignalRQueueName,
+                exception,
+                eventArgs.CancellationToken
+            );
+            logger.LogError(
+                exception,
+                "KDS SignalR notification failed. Retry scheduled: {RetryScheduled}; attempt {RetryAttempt}/{MaximumAttempts}; delay {RetryDelay}.",
+                retry.Scheduled,
+                retry.Attempt,
+                RabbitMqRetry.MaximumAttempts,
+                retry.Delay
+            );
         }
     }
 

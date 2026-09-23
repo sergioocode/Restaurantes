@@ -36,7 +36,10 @@ public sealed class PayableOrderProjectionWorker(
             {
                 ConnectionFactory f = RabbitMqConnectionFactory.Create(options.Value);
                 connection = await f.CreateConnectionAsync("payments-payable-orders", ct);
-                channel = await connection.CreateChannelAsync(cancellationToken: ct);
+                channel = await connection.CreateChannelAsync(
+                    new CreateChannelOptions(true, true),
+                    ct
+                );
                 await PaymentsTopology.DeclareAsync(channel, ct);
                 AsyncEventingBasicConsumer consumer = new(channel);
                 consumer.ReceivedAsync += Handle;
@@ -129,8 +132,21 @@ public sealed class PayableOrderProjectionWorker(
         }
         catch (Exception e)
         {
-            log.LogError(e, "Payable order event will retry");
-            await channel.BasicNackAsync(ea.DeliveryTag, false, true);
+            RabbitMqRetryResult retry = await RabbitMqRetry.ScheduleOrDeadLetterAsync(
+                channel,
+                ea,
+                PaymentsTopology.PayableOrdersQueueName,
+                e,
+                ea.CancellationToken
+            );
+            log.LogError(
+                e,
+                "Payable order event failed. Retry scheduled: {RetryScheduled}; attempt {RetryAttempt}/{MaximumAttempts}; delay {RetryDelay}.",
+                retry.Scheduled,
+                retry.Attempt,
+                RabbitMqRetry.MaximumAttempts,
+                retry.Delay
+            );
         }
     }
 

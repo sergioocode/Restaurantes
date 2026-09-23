@@ -36,7 +36,10 @@ public sealed class CheckoutProcessWorker(
                 connection = await RabbitMqConnectionFactory
                     .Create(options.Value)
                     .CreateConnectionAsync("sales-checkout", ct);
-                channel = await connection.CreateChannelAsync(cancellationToken: ct);
+                channel = await connection.CreateChannelAsync(
+                    new CreateChannelOptions(true, true),
+                    ct
+                );
                 await SalesTopology.DeclareAsync(channel, ct);
                 await channel.BasicQosAsync(0, 20, false, ct);
                 AsyncEventingBasicConsumer consumer = new(channel);
@@ -114,8 +117,21 @@ public sealed class CheckoutProcessWorker(
         }
         catch (Exception e)
         {
-            log.LogError(e, "Sales event will retry");
-            await channel.BasicNackAsync(ea.DeliveryTag, false, true);
+            RabbitMqRetryResult retry = await RabbitMqRetry.ScheduleOrDeadLetterAsync(
+                channel,
+                ea,
+                SalesTopology.CheckoutQueueName,
+                e,
+                ea.CancellationToken
+            );
+            log.LogError(
+                e,
+                "Sales checkout event failed. Retry scheduled: {RetryScheduled}; attempt {RetryAttempt}/{MaximumAttempts}; delay {RetryDelay}.",
+                retry.Scheduled,
+                retry.Attempt,
+                RabbitMqRetry.MaximumAttempts,
+                retry.Delay
+            );
         }
     }
 

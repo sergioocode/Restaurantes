@@ -80,6 +80,7 @@ public static class ReportingTopology
             arguments,
             cancellationToken: ct
         );
+        await RabbitMqRetry.DeclareAsync(channel, ReadModelQueueName, ct);
         foreach (
             string key in new[]
             {
@@ -131,6 +132,7 @@ public static class ReportingTopology
             arguments,
             cancellationToken: ct
         );
+        await RabbitMqRetry.DeclareAsync(channel, SignalRQueueName, ct);
         await channel.QueueBindAsync(
             SignalRQueueName,
             ExchangeName,

@@ -66,6 +66,7 @@ public static class OrdersTopology
             arguments: queueArguments,
             cancellationToken: cancellationToken
         );
+        await RabbitMqRetry.DeclareAsync(channel, KdsQueueName, cancellationToken);
         await channel.QueueBindAsync(
             KdsQueueName,
             ExchangeName,
@@ -130,6 +131,7 @@ public static class OrdersTopology
             arguments: queueArguments,
             cancellationToken: cancellationToken
         );
+        await RabbitMqRetry.DeclareAsync(channel, KdsSignalRQueueName, cancellationToken);
         await channel.QueueBindAsync(
             KdsSignalRQueueName,
             ExchangeName,

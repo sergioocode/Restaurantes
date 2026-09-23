@@ -60,6 +60,7 @@ public static class RestaurantOperationsTopology
             arguments: queueArguments,
             cancellationToken: cancellationToken
         );
+        await RabbitMqRetry.DeclareAsync(channel, ReadModelQueueName, cancellationToken);
 
         await channel.QueueBindAsync(
             queue: ReadModelQueueName,

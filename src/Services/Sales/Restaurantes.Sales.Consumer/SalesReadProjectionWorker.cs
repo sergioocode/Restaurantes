@@ -36,7 +36,10 @@ public sealed class SalesReadProjectionWorker(
                 connection = await RabbitMqConnectionFactory
                     .Create(options.Value)
                     .CreateConnectionAsync("sales-read-model", ct);
-                channel = await connection.CreateChannelAsync(cancellationToken: ct);
+                channel = await connection.CreateChannelAsync(
+                    new CreateChannelOptions(true, true),
+                    ct
+                );
                 await SalesTopology.DeclareAsync(channel, ct);
                 AsyncEventingBasicConsumer consumer = new(channel);
                 consumer.ReceivedAsync += Handle;
@@ -118,8 +121,21 @@ public sealed class SalesReadProjectionWorker(
         }
         catch (Exception e)
         {
-            log.LogError(e, "Sales read event will retry");
-            await channel.BasicNackAsync(ea.DeliveryTag, false, true);
+            RabbitMqRetryResult retry = await RabbitMqRetry.ScheduleOrDeadLetterAsync(
+                channel,
+                ea,
+                SalesTopology.ReadModelQueueName,
+                e,
+                ea.CancellationToken
+            );
+            log.LogError(
+                e,
+                "Sales read event failed. Retry scheduled: {RetryScheduled}; attempt {RetryAttempt}/{MaximumAttempts}; delay {RetryDelay}.",
+                retry.Scheduled,
+                retry.Attempt,
+                RabbitMqRetry.MaximumAttempts,
+                retry.Delay
+            );
         }
     }
 

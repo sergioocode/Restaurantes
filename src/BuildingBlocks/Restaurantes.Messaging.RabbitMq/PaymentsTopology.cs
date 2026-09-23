@@ -66,6 +66,7 @@ public static class PaymentsTopology
             arguments: arguments,
             cancellationToken: ct
         );
+        await RabbitMqRetry.DeclareAsync(channel, OrdersIntegrationQueueName, ct);
         await channel.QueueBindAsync(
             OrdersIntegrationQueueName,
             ExchangeName,
@@ -81,6 +82,7 @@ public static class PaymentsTopology
             arguments: arguments,
             cancellationToken: ct
         );
+        await RabbitMqRetry.DeclareAsync(channel, CashRegisterQueueName, ct);
         await channel.QueueBindAsync(
             CashRegisterQueueName,
             ExchangeName,
@@ -110,6 +112,7 @@ public static class PaymentsTopology
             arguments: arguments,
             cancellationToken: ct
         );
+        await RabbitMqRetry.DeclareAsync(channel, PayableOrdersQueueName, ct);
         await channel.QueueBindAsync(
             PayableOrdersQueueName,
             OrdersTopology.ExchangeName,

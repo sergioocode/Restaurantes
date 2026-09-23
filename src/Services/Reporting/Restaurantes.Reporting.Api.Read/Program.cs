@@ -1,4 +1,5 @@
 ﻿using Restaurantes.Messaging.RabbitMq;
+using Restaurantes.Reporting.Api.Read.DeadLetters;
 using Restaurantes.Reporting.Api.Read.Realtime;
 using Restaurantes.Reporting.Application.Dashboard;
 using Restaurantes.Reporting.Application.Health;
@@ -12,6 +13,8 @@ builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<DashboardQueryService>();
 builder.Services.AddScoped<ReportingHealthService>();
+builder.Services.AddSingleton<RabbitMqDeadLetterService>();
+builder.Services.AddHostedService<DeadLetterQueueMonitor>();
 builder.Services.AddReportingInfrastructure(builder.Configuration);
 builder.Services.AddRestaurantSecurity(builder.Configuration);
 builder
