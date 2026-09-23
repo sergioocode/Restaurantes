@@ -24,7 +24,10 @@ public sealed class DiningIntegrationWorker(
             {
                 ConnectionFactory factory = RabbitMqConnectionFactory.Create(options.Value);
                 connection = await factory.CreateConnectionAsync("dining-table-sessions", ct);
-                channel = await connection.CreateChannelAsync(cancellationToken: ct);
+                channel = await connection.CreateChannelAsync(
+                    new CreateChannelOptions(true, true),
+                    ct
+                );
                 await DiningTopology.DeclareAsync(channel, ct);
                 AsyncEventingBasicConsumer consumer = new(channel);
                 consumer.ReceivedAsync += Handle;
@@ -71,8 +74,21 @@ public sealed class DiningIntegrationWorker(
         }
         catch (Exception e)
         {
-            log.LogError(e, "Dining integration event will retry.");
-            await channel.BasicNackAsync(ea.DeliveryTag, false, true);
+            RabbitMqRetryResult retry = await RabbitMqRetry.ScheduleOrDeadLetterAsync(
+                channel,
+                ea,
+                DiningTopology.QueueName,
+                e,
+                ea.CancellationToken
+            );
+            log.LogError(
+                e,
+                "Dining integration event failed. Retry scheduled: {RetryScheduled}; attempt {RetryAttempt}/{MaximumAttempts}; delay {RetryDelay}.",
+                retry.Scheduled,
+                retry.Attempt,
+                RabbitMqRetry.MaximumAttempts,
+                retry.Delay
+            );
         }
     }
 

@@ -61,7 +61,10 @@ public sealed class KdsProjectionWorker(
     {
         ConnectionFactory factory = RabbitMqConnectionFactory.Create(rabbitMqOptions);
         _connection = await factory.CreateConnectionAsync("orders-kds-consumer", cancellationToken);
-        _channel = await _connection.CreateChannelAsync(cancellationToken: cancellationToken);
+        _channel = await _connection.CreateChannelAsync(
+            new CreateChannelOptions(true, true),
+            cancellationToken
+        );
         _notificationChannel = await _connection.CreateChannelAsync(
             new CreateChannelOptions(true, true),
             cancellationToken
@@ -117,8 +120,21 @@ public sealed class KdsProjectionWorker(
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Orders message failed and will be requeued.");
-            await _channel.BasicNackAsync(eventArgs.DeliveryTag, false, requeue: true);
+            RabbitMqRetryResult retry = await RabbitMqRetry.ScheduleOrDeadLetterAsync(
+                _channel,
+                eventArgs,
+                OrdersTopology.KdsQueueName,
+                exception,
+                eventArgs.CancellationToken
+            );
+            logger.LogError(
+                exception,
+                "Orders KDS message failed. Retry scheduled: {RetryScheduled}; attempt {RetryAttempt}/{MaximumAttempts}; delay {RetryDelay}.",
+                retry.Scheduled,
+                retry.Attempt,
+                RabbitMqRetry.MaximumAttempts,
+                retry.Delay
+            );
         }
     }
 

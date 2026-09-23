@@ -67,6 +67,7 @@ public static class SalesTopology
             args,
             cancellationToken: ct
         );
+        await RabbitMqRetry.DeclareAsync(channel, CheckoutQueueName, ct);
         await channel.QueueBindAsync(
             CheckoutQueueName,
             PaymentsTopology.ExchangeName,
@@ -96,6 +97,7 @@ public static class SalesTopology
             args,
             cancellationToken: ct
         );
+        await RabbitMqRetry.DeclareAsync(channel, ReadModelQueueName, ct);
         await channel.QueueBindAsync(
             ReadModelQueueName,
             ExchangeName,

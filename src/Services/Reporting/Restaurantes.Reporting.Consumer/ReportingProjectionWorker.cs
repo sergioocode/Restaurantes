@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
@@ -33,7 +33,10 @@ public sealed class ReportingProjectionWorker(
             {
                 ConnectionFactory f = RabbitMqConnectionFactory.Create(options.Value);
                 connection = await f.CreateConnectionAsync("reporting-dashboard", ct);
-                channel = await connection.CreateChannelAsync(cancellationToken: ct);
+                channel = await connection.CreateChannelAsync(
+                    new CreateChannelOptions(true, true),
+                    ct
+                );
                 await ReportingTopology.DeclareAsync(channel, ct);
                 await channel.BasicQosAsync(0, 20, false, ct);
                 AsyncEventingBasicConsumer consumer = new(channel);
@@ -91,8 +94,21 @@ public sealed class ReportingProjectionWorker(
         }
         catch (Exception exception)
         {
-            log.LogError(exception, "Reporting event will retry");
-            await channel.BasicNackAsync(eventArgs.DeliveryTag, false, true);
+            RabbitMqRetryResult retry = await RabbitMqRetry.ScheduleOrDeadLetterAsync(
+                channel,
+                eventArgs,
+                ReportingTopology.ReadModelQueueName,
+                exception,
+                eventArgs.CancellationToken
+            );
+            log.LogError(
+                exception,
+                "Reporting event failed. Retry scheduled: {RetryScheduled}; attempt {RetryAttempt}/{MaximumAttempts}; delay {RetryDelay}.",
+                retry.Scheduled,
+                retry.Attempt,
+                RabbitMqRetry.MaximumAttempts,
+                retry.Delay
+            );
         }
     }
 

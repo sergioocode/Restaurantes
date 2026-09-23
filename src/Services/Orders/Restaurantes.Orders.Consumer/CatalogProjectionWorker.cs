@@ -33,7 +33,10 @@ public sealed class CatalogProjectionWorker(
             {
                 ConnectionFactory f = RabbitMqConnectionFactory.Create(options.Value);
                 connection = await f.CreateConnectionAsync("orders-catalog-projection", ct);
-                channel = await connection.CreateChannelAsync(cancellationToken: ct);
+                channel = await connection.CreateChannelAsync(
+                    new CreateChannelOptions(true, true),
+                    ct
+                );
                 await CatalogTopology.DeclareAsync(channel, ct);
                 await channel.BasicQosAsync(0, 10, false, ct);
                 AsyncEventingBasicConsumer consumer = new(channel);
@@ -165,8 +168,21 @@ public sealed class CatalogProjectionWorker(
         }
         catch (Exception e)
         {
-            log.LogError(e, "Catalog integration event will be retried.");
-            await channel.BasicNackAsync(ea.DeliveryTag, false, true);
+            RabbitMqRetryResult retry = await RabbitMqRetry.ScheduleOrDeadLetterAsync(
+                channel,
+                ea,
+                CatalogTopology.OrdersIntegrationQueueName,
+                e,
+                ea.CancellationToken
+            );
+            log.LogError(
+                e,
+                "Catalog integration event failed. Retry scheduled: {RetryScheduled}; attempt {RetryAttempt}/{MaximumAttempts}; delay {RetryDelay}.",
+                retry.Scheduled,
+                retry.Attempt,
+                RabbitMqRetry.MaximumAttempts,
+                retry.Delay
+            );
         }
     }
 

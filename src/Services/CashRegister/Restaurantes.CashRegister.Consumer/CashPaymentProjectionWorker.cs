@@ -26,7 +26,10 @@ public sealed class CashPaymentProjectionWorker(
                 connection = await RabbitMqConnectionFactory
                     .Create(options.Value)
                     .CreateConnectionAsync("cash-register", ct);
-                channel = await connection.CreateChannelAsync(cancellationToken: ct);
+                channel = await connection.CreateChannelAsync(
+                    new CreateChannelOptions(true, true),
+                    ct
+                );
                 await PaymentsTopology.DeclareAsync(channel, ct);
                 AsyncEventingBasicConsumer consumer = new(channel);
                 consumer.ReceivedAsync += Handle;
@@ -79,8 +82,21 @@ public sealed class CashPaymentProjectionWorker(
         }
         catch (Exception ex)
         {
-            log.LogError(ex, "Cash-register event will retry.");
-            await channel.BasicNackAsync(ea.DeliveryTag, false, true);
+            RabbitMqRetryResult retry = await RabbitMqRetry.ScheduleOrDeadLetterAsync(
+                channel,
+                ea,
+                PaymentsTopology.CashRegisterQueueName,
+                ex,
+                ea.CancellationToken
+            );
+            log.LogError(
+                ex,
+                "Cash-register event failed. Retry scheduled: {RetryScheduled}; attempt {RetryAttempt}/{MaximumAttempts}; delay {RetryDelay}.",
+                retry.Scheduled,
+                retry.Attempt,
+                RabbitMqRetry.MaximumAttempts,
+                retry.Delay
+            );
         }
     }
 

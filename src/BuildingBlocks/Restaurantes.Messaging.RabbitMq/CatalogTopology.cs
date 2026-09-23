@@ -59,6 +59,7 @@ public static class CatalogTopology
             arguments: arguments,
             cancellationToken: cancellationToken
         );
+        await RabbitMqRetry.DeclareAsync(channel, ReadModelQueueName, cancellationToken);
         foreach (
             string key in new[]
             {
@@ -86,6 +87,7 @@ public static class CatalogTopology
             arguments: arguments,
             cancellationToken: cancellationToken
         );
+        await RabbitMqRetry.DeclareAsync(channel, OrdersIntegrationQueueName, cancellationToken);
         await channel.QueueBindAsync(
             OrdersIntegrationQueueName,
             ExchangeName,

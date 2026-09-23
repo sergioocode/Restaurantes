@@ -211,6 +211,31 @@
             background: #304050
         }
 
+        .health-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px
+        }
+
+        .dead-letter-alert {
+            padding: 4px 9px;
+            border-radius: 99px;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: help
+        }
+
+        .dead-letter-alert.ok {
+            color: #b7f7cd;
+            background: #17603c
+        }
+
+        .dead-letter-alert.bad {
+            color: #ffd4d1;
+            background: #7b2b3c
+        }
+
         .Submitted,
         .Pending {
             background: #66521f
@@ -319,7 +344,7 @@
             </table>
         </section>
         <section class="card wide">
-            <h3>Salud</h3>
+            <h3 class="health-title">Salud <span id="deadLetterAlert" class="dead-letter-alert" hidden aria-live="polite"></span></h3>
             <table>
                 <tbody id="health"></tbody>
             </table>
@@ -347,7 +372,7 @@
             }),
             gatewayOrigin = location.origin,
             sessionKey = 'restaurantes.dashboard.login';
-        let timer, access, socket, realtimeGeneration = 0;
+        let timer, access, socket, realtimeGeneration = 0, deadLetterRefreshAt = 0;
         const today = new Date();
         $('date').value = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
 
@@ -388,7 +413,7 @@
                 if ($('date').value) params.set('date', $('date').value);
                 if ($('restaurant').value) params.set('restaurantId', $('restaurant').value);
                 params.set('orderLimit', $('orderLimit').value);
-                const [d, h] = await Promise.all([authorizedFetch('/api/reporting/dashboard/daily?' + params).then(r => r.json()), authorizedFetch('/api/reporting/health').then(r => r.json())]);
+                const [d, h] = await Promise.all([authorizedFetch('/api/reporting/dashboard/daily?' + params).then(r => r.json()), authorizedFetch('/api/reporting/health').then(r => r.json()), loadDeadLetters()]);
                 $('sales').textContent = money.format(d.totalSales);
                 $('orders').textContent = d.completedSales;
                 $('average').textContent = money.format(d.averageTicket);
@@ -401,6 +426,39 @@
                 $('state').textContent = 'Actualizado ' + new Date().toLocaleTimeString();
             } catch (e) {
                 $('state').textContent = 'Error: ' + e.message
+            }
+        }
+
+        async function loadDeadLetters() {
+            const alert = $('deadLetterAlert');
+            if (!(access?.allRestaurantsRoles || []).includes('Admin')) {
+                alert.hidden = true;
+                return
+            }
+
+            const now = Date.now();
+            if (now < deadLetterRefreshAt) return;
+            deadLetterRefreshAt = now + 30000;
+
+            try {
+                const queues = await authorizedFetch('/api/reporting/dead-letters').then(r => r.json()),
+                    pending = queues.filter(x => x.available && x.messageCount > 0),
+                    unavailable = queues.filter(x => !x.available),
+                    total = pending.reduce((sum, x) => sum + x.messageCount, 0),
+                    hasAlert = total > 0 || unavailable.length > 0;
+
+                alert.hidden = false;
+                alert.className = 'dead-letter-alert ' + (hasAlert ? 'bad' : 'ok');
+                alert.textContent = total > 0 ? `⚠ DLQ ${total}` : unavailable.length > 0 ? '⚠ DLQ ?' : '✓ DLQ 0';
+                alert.title = [
+                    ...pending.map(x => `${x.queue}: ${x.messageCount} pendiente${x.messageCount === 1 ? '' : 's'}`),
+                    ...unavailable.map(x => `${x.queue}: no disponible`)
+                ].join('\n') || 'No hay mensajes muertos pendientes.'
+            } catch (error) {
+                alert.hidden = false;
+                alert.className = 'dead-letter-alert bad';
+                alert.textContent = '⚠ DLQ ?';
+                alert.title = 'No se pudo consultar el estado de las colas de mensajes muertos.'
             }
         }
 
@@ -482,6 +540,7 @@
             const allowed = new Set((session.restaurants || []).filter(x => (x.permissions || []).includes('dashboard.read')).map(x => x.restaurantId.toLowerCase()));
             if (!hasAllRestaurants && allowed.size === 0) throw new Error('Este perfil no tiene acceso al Dashboard.');
             access = session;
+            deadLetterRefreshAt = 0;
             showDashboard();
 
             let knownRestaurants = [];
@@ -503,6 +562,7 @@
             if (socket) socket.close();
             socket = null;
             access = null;
+            deadLetterRefreshAt = 0;
             clearInterval(timer);
             sessionStorage.removeItem(sessionKey);
             showLogin()
