@@ -96,9 +96,47 @@ services:
       vault-init:
         condition: service_completed_successfully
 
+  prometheus:
+    image: prom/prometheus:v3.8.0
+    container_name: restaurantes-prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./tools/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - restaurant-prometheus-data:/prometheus
+    depends_on:
+      - otel-collector
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.120.0
+    container_name: restaurantes-otel-collector
+    command: [ "--config=/etc/otelcol-contrib/config.yaml" ]
+    ports:
+      - "127.0.0.1:4317:4317"
+    volumes:
+      - ./tools/observability/otel-collector/config.yaml:/etc/otelcol-contrib/config.yaml:ro
+
+  grafana:
+    image: grafana/grafana:12.3.0
+    container_name: restaurantes-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: grafana_dev
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - restaurant-grafana-data:/var/lib/grafana
+      - ./tools/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./tools/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+
 
 volumes:
   restaurant-postgres-data:
   restaurant-pgadmin-data:
   restaurant-rabbitmq-data:
   restaurant-vault-proxy-auth:
+  restaurant-prometheus-data:
+  restaurant-grafana-data:

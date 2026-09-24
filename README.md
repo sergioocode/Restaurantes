@@ -387,6 +387,7 @@ El `docker-compose.yml` levanta:
 - RabbitMQ con Management UI;
 - pgAdmin.
 - Vault de desarrollo, su inicialización y el proxy de autenticación local.
+- Prometheus y Grafana para métricas y dashboards locales.
 
 Las bases de datos lógicas necesarias se crean mediante los scripts de `tools/postgres/init`.
 
@@ -397,6 +398,47 @@ docker compose --env-file tools/vault/.env up -d
 El archivo `tools/vault/.env` contiene el token de arranque local de Vault y no se versiona. No uses `docker compose up -d` sin `--env-file`, porque Compose no carga automáticamente archivos `.env` ubicados en subcarpetas.
 
 Las migraciones de Entity Framework Core son aplicadas por los servicios correspondientes durante su inicialización.
+
+### Observabilidad local
+
+Las APIs que usan `AddServiceDefaults()` envían métricas mediante OTLP al OpenTelemetry Collector local. El collector expone esas métricas para Prometheus, evitando incluir un exportador Prometheus en beta dentro de cada aplicación. En producción, configura `OTEL_EXPORTER_OTLP_ENDPOINT` hacia el collector de ese entorno.
+
+Prometheus recoge el collector en `http://otel-collector:9464/metrics`. Con una API en ejecución, abre:
+
+- Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3000` (`admin` / `grafana_dev`, sólo para desarrollo local)
+
+Grafana aprovisiona automáticamente la fuente Prometheus y el dashboard **Restaurantes · Operación HTTP**. El stack inicial cubre actividad de las APIs, tráfico HTTP, latencia p95, respuestas y errores 5xx por servicio; las métricas de negocio, alertas, logs centralizados y trazas persistidas se incorporarán en fases posteriores.
+
+#### Prueba limpia de una operación
+
+Para aislar las métricas de una prueba, primero detén todos los procesos de las aplicaciones en Visual Studio. Después, desde la raíz del repositorio, elimina sólo el historial de Prometheus y reinicia el Collector:
+
+```powershell
+docker compose --env-file tools/vault/.env stop prometheus
+docker compose --env-file tools/vault/.env rm -f prometheus
+docker volume rm restaurantes_restaurant-prometheus-data
+docker compose --env-file tools/vault/.env up -d prometheus
+docker compose --env-file tools/vault/.env up -d --force-recreate otel-collector
+```
+
+Este procedimiento no toca PostgreSQL, RabbitMQ ni Vault. No uses `docker compose down -v`, porque eliminaría también sus datos locales. A continuación inicia la solución, toma una línea base en Prometheus y ejecuta el flujo que deseas observar. Es normal que existan llamadas de carga o actualización de los clientes; para aislar una acción, consulta las métricas por servicio y ruta:
+
+```promql
+sum by (service_name, http_route, http_request_method, http_response_status_code) (
+  http_server_request_duration_seconds_count
+)
+```
+
+#### Evidencias visuales
+
+El dashboard consolidado permite detectar actividad, latencia p95 y errores HTTP por servicio durante una operación completa.
+
+![Dashboard de Grafana con operación HTTP](assets/observability/grafana-operacion-http.jpg)
+
+Prometheus permite inspeccionar la evidencia de cada transición: apertura de mesa, creación y envío de pedido, preparación KDS, captura de pago y cierre de sesión.
+
+![Consulta de Prometheus con el flujo completo](assets/observability/prometheus-flujo-completo.jpg)
 
 ### Datos de desarrollo opcionales
 

@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: Restaurantes
+    orgId: 1
+    folder: Restaurantes
+    type: file
+    disableDeletion: true
+    editable: false
+    options:
+      path: /var/lib/grafana/dashboards
