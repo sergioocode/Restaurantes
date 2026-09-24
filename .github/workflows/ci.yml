@@ -1,0 +1,66 @@
+name: Integración continua
+
+on:
+  push:
+    branches:
+      - develop
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Compilar y probar la solución
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Obtener el código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Instalar .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restaurar herramientas locales
+        run: dotnet tool restore
+
+      - name: Restaurar dependencias
+        run: dotnet restore Restaurantes.slnx
+
+      - name: Preparar el análisis de SonarQube Cloud
+        run: >-
+          dotnet tool run dotnet-sonarscanner -- begin
+          /k:"sergioocode_Restaurantes"
+          /o:"sergioocode"
+          /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+          /d:sonar.cs.opencover.reportsPaths="TestResults/**/coverage.opencover.xml"
+          /d:sonar.qualitygate.wait=true
+          /d:sonar.qualitygate.timeout=300
+
+      - name: Compilar la solución
+        run: dotnet build Restaurantes.slnx --configuration Release --no-restore
+
+      - name: Ejecutar pruebas y generar cobertura
+        run: >-
+          dotnet test Restaurantes.slnx --configuration Release --no-build
+          --collect:"XPlat Code Coverage"
+          --results-directory TestResults
+          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+
+      - name: Publicar análisis en SonarQube Cloud
+        run: >-
+          dotnet tool run dotnet-sonarscanner -- end
+          /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+
+      - name: Publicar informe de cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cobertura-opencover
+          path: TestResults/**/coverage.opencover.xml
+          if-no-files-found: error

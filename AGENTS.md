@@ -35,9 +35,10 @@
 
 ### SonarQube y cobertura
 
-- Las pruebas deben generar cobertura OpenCover antes del análisis; el script `tools/quality/Invoke-SonarQubeAnalysis.ps1` centraliza el análisis local.
+- Las pruebas deben generar cobertura OpenCover antes del análisis. `tools/sonar/Invoke-SonarQubeAnalysis.ps1` mantiene el análisis local; `tools/sonar/Invoke-SonarQubeCloudAnalysis.ps1` ejecuta el análisis equivalente contra SonarQube Cloud.
 - No guardar tokens de SonarQube en archivos versionados, logs ni documentación. En GitHub se configurarán como secretos del repositorio.
-- Mientras se use SonarQube Community local con un único proyecto, el análisis publicado y de referencia se ejecutará desde `master`. El CI de `develop` valida compilación, pruebas y cobertura sin reemplazar la línea base de SonarQube.
+- SonarQube Community local sigue disponible como entorno opcional de aprendizaje y diagnóstico. SonarQube Cloud es la fuente de referencia de CI; la organización es `sergioocode` y el proyecto es `sergioocode_Restaurantes`; sus tokens se mantienen fuera del repositorio.
+- El análisis de `develop` y `master` se publica en la rama correspondiente de SonarQube Cloud. Un Quality Gate fallido impide considerar `master` candidata a release.
 - Corregir primero incidencias de seguridad y fiabilidad. Las mejoras de mantenibilidad se agrupan en commits funcionales separados cuando no formen parte de la misma corrección.
 
 ### CI/CD para una solución con varias APIs y clientes

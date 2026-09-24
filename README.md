@@ -388,7 +388,8 @@ El `docker-compose.yml` levanta:
 - pgAdmin.
 - Vault de desarrollo, su inicialización y el proxy de autenticación local.
 - Prometheus y Grafana para métricas y dashboards locales.
-- SonarQube Community Build bajo el perfil opcional `quality` para análisis estático, seguridad y Quality Gate.
+- SonarQube Community Build bajo el perfil opcional `quality` para análisis estático, seguridad y Quality Gate locales.
+- SonarQube Cloud como referencia de CI para análisis estático, seguridad, cobertura y Quality Gate.
 
 Las bases de datos lógicas necesarias se crean mediante los scripts de `tools/postgres/init`.
 
@@ -453,7 +454,7 @@ Cuando el contenedor esté disponible, abre `http://localhost:9001`, inicia sesi
 
 ```powershell
 $env:SONAR_TOKEN = "<token-de-analisis>"
-.\tools\quality\Invoke-SonarQubeAnalysis.ps1
+.\tools\sonar\Invoke-SonarQubeAnalysis.ps1
 ```
 
 El script restaura el escáner local, ejecuta el análisis alrededor de una compilación completa y espera el resultado del **Quality Gate**. Un Gate fallido devuelve un error, por lo que el mismo comando puede usarse posteriormente en CI/CD. Para detener únicamente esta infraestructura:
@@ -463,6 +464,18 @@ El script restaura el escáner local, ejecuta el análisis alrededor de una comp
 ```powershell
 docker compose --env-file tools/vault/.env --profile quality stop sonarqube sonarqube-db
 ```
+
+### Calidad continua en Cloud
+
+[SonarQube Cloud](https://sonarcloud.io/project/overview?id=sergioocode_Restaurantes) es la referencia de CI para el repositorio. GitHub Actions ejecuta el análisis automáticamente al subir cambios a `develop` o `master`.
+
+Para reproducir ese análisis desde un equipo local, usa un token personal de SonarQube Cloud mediante `SONAR_TOKEN` y ejecuta:
+
+```powershell
+.\tools\sonar\Invoke-SonarQubeCloudAnalysis.ps1
+```
+
+El token no se versiona ni se registra en la salida. Este segundo script usa la organización `sergioocode` y el proyecto `sergioocode_Restaurantes`, compila la solución, ejecuta las pruebas con cobertura OpenCover y espera el resultado del **Quality Gate**.
 
 ### Datos de desarrollo opcionales
 
