@@ -1,4 +1,4 @@
-﻿<Solution>
+<Solution>
   <Configurations>
     <Platform Name="Any CPU" />
     <Platform Name="x64" />
@@ -15,13 +15,17 @@
     <Project Path="src/BuildingBlocks/Restaurantes.Security/Restaurantes.Security.csproj" />
   </Folder>
   <Folder Name="/src/Clients/">
+    <Project Path="src/Clients/Restaurantes.Clients.Shared.Operations/Restaurantes.Clients.Shared.Operations.csproj" />
+  </Folder>
+  <Folder Name="/src/Clients/Static/">
+    <Project Path="src/Clients/Restaurantes.Clients.Dashboard.Web/Restaurantes.Clients.Dashboard.Web.csproj" />
     <Project Path="src/Clients/Restaurantes.Clients.Kds.Web/Restaurantes.Clients.Kds.Web.csproj" />
+  </Folder>
+  <Folder Name="/src/Clients/Wasm/">
     <Project Path="src/Clients/Restaurantes.Clients.Backoffice.Pwa/Restaurantes.Clients.Backoffice.Pwa.csproj" />
     <Project Path="src/Clients/Restaurantes.Clients.Commander.Pwa/Restaurantes.Clients.Commander.Pwa.csproj" />
     <Project Path="src/Clients/Restaurantes.Clients.CustomerQr.Pwa/Restaurantes.Clients.CustomerQr.Pwa.csproj" />
-    <Project Path="src/Clients/Restaurantes.Clients.Dashboard.Web/Restaurantes.Clients.Dashboard.Web.csproj" />
     <Project Path="src/Clients/Restaurantes.Clients.Pos.Pwa/Restaurantes.Clients.Pos.Pwa.csproj" />
-    <Project Path="src/Clients/Restaurantes.Clients.Shared.Operations/Restaurantes.Clients.Shared.Operations.csproj" />
   </Folder>
   <Folder Name="/src/Services/" />
   <Folder Name="/src/Services/CashRegister/">

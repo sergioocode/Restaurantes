@@ -247,21 +247,11 @@ Los gateways actúan como punto de entrada, pero las reglas de autorización rel
 
 ### Configuración JWT compartida
 
-`Restaurantes.Security` centraliza los valores predeterminados de emisor, audiencia y duración del token mediante `RestaurantSecurityOptions`. La clave de firma no se almacena en código ni en los `appsettings.json`: todos los procesos que emiten o validan el JWT deben recibir el mismo valor mediante `Security:SigningKey`.
+`Restaurantes.Security` centraliza los valores predeterminados de emisor, audiencia y duración del token mediante `RestaurantSecurityOptions`. La clave de firma no se almacena en código ni en los `appsettings.json`: todos los procesos que emiten o validan el JWT reciben el mismo valor desde Vault mediante `Security:SigningKey`.
 
-En desarrollo local sobre Windows se configura una sola vez como variable de entorno del usuario:
+En desarrollo local, la inicialización de Vault genera una clave compartida y la guarda en `secret/restaurantes/local`. Cada proceso que llama a `AddVaultConfiguration()` la obtiene desde el proxy local de Vault antes de configurar sus servicios. No se configura `Security__SigningKey` como variable de entorno del usuario ni mediante .NET User Secrets.
 
-```powershell
-[Environment]::SetEnvironmentVariable(
-    "Security__SigningKey",
-    "<clave-local-de-al-menos-32-bytes>",
-    "User"
-)
-```
-
-Después de crear o cambiar la variable hay que cerrar y volver a abrir Visual Studio, Rider o la terminal que inicia las API, ya que los procesos existentes no actualizan automáticamente su entorno.
-
-En producción, la clave debe residir en el almacén de secretos del despliegue, como Azure Key Vault, y proporcionarse a cada API como `Security__SigningKey`. No debe incluirse en archivos versionados ni en imágenes de contenedor.
+En producción, la clave debe residir en el almacén de secretos del despliegue y el proveedor de Vault debe proporcionar el mismo valor a cada API. No debe incluirse en archivos versionados ni en imágenes de contenedor.
 
 ## Servicios
 
@@ -396,12 +386,15 @@ El `docker-compose.yml` levanta:
 - PostgreSQL 18;
 - RabbitMQ con Management UI;
 - pgAdmin.
+- Vault de desarrollo, su inicialización y el proxy de autenticación local.
 
 Las bases de datos lógicas necesarias se crean mediante los scripts de `tools/postgres/init`.
 
 ```bash
-docker compose up -d
+docker compose --env-file tools/vault/.env up -d
 ```
+
+El archivo `tools/vault/.env` contiene el token de arranque local de Vault y no se versiona. No uses `docker compose up -d` sin `--env-file`, porque Compose no carga automáticamente archivos `.env` ubicados en subcarpetas.
 
 Las migraciones de Entity Framework Core son aplicadas por los servicios correspondientes durante su inicialización.
 

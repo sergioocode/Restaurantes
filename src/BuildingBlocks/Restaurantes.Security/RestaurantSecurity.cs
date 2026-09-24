@@ -74,20 +74,8 @@ public static class RestaurantPermissions
                 KitchenReportsRead,
             ],
             "Gerente" => [BackofficeAccess, DashboardRead, FinancialReportsRead, PaymentsRefund],
-            "Contabilidad" =>
-            [
-                BackofficeAccess,
-                DashboardRead,
-                FinancialReportsRead,
-                PaymentsRefund,
-            ],
-            "Marketing" =>
-            [
-                BackofficeAccess,
-                DashboardRead,
-                FinancialReportsRead,
-                MarketingReportsRead,
-            ],
+            "Contabilidad" => [DashboardRead, FinancialReportsRead, PaymentsRefund],
+            "Marketing" => [DashboardRead, FinancialReportsRead, MarketingReportsRead],
             "Manager" =>
             [
                 BackofficeAccess,
