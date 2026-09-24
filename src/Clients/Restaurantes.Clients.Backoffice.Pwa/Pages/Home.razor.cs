@@ -16,12 +16,12 @@ public partial class Home
     private bool ok;
     private bool initializing = true;
     private LoginResponse? login;
-    private Guid restaurantId;
+    internal Guid restaurantId;
     internal List<CategoryResponse> categories = [];
     internal List<ProductResponse> products = [];
     private List<MenuItemResponse> menu = [];
     internal List<KitchenStationResponse> stations = [];
-    private List<RestaurantResponse> restaurants = [];
+    internal List<RestaurantResponse> restaurants = [];
     internal List<TableResponse> tables = [];
     internal DiningPolicyResponse policy = new();
     internal List<StaffUserResponse> users = [];
@@ -68,7 +68,7 @@ public partial class Home
                 )
             )
             .ToList();
-    private List<RestaurantResponse> SelectableRestaurants =>
+    internal List<RestaurantResponse> SelectableRestaurants =>
         login?.AllRestaurantsRoles?.Any(role => RoleHasPermission(role, "backoffice.access"))
         == true
             ? restaurants
@@ -213,7 +213,7 @@ public partial class Home
         message = null;
     }
 
-    private async Task RestaurantChanged(ChangeEventArgs args)
+    internal async Task RestaurantChanged(ChangeEventArgs args)
     {
         if (!Guid.TryParse(args.Value?.ToString(), out restaurantId))
         {
@@ -223,9 +223,64 @@ public partial class Home
         await LoadLocal();
     }
 
-    private async Task LoadAll()
+    internal bool HasAnyLocalPermission(string permission) =>
+        GlobalRoleHasPermission(permission)
+        || SelectableRestaurants.Any(restaurant =>
+            login
+                ?.Restaurants.FirstOrDefault(x => x.RestaurantId == restaurant.Id)
+                ?.Permissions.Contains(permission) == true
+        );
+
+    internal Task RefreshModule() =>
+        module switch
+        {
+            "menu" => Run(RefreshMenuCore),
+            "stations" => Run(RefreshStationsCore),
+            "tables" => Run(RefreshTablesCore),
+            "categories" => Run(RefreshCategoriesCore),
+            "products" => Run(RefreshProductsCore),
+            "restaurants" => Run(RefreshRestaurantsCore),
+            "users" => Run(LoadUsersCore),
+            _ => Task.CompletedTask,
+        };
+
+    private async Task RefreshMenuCore()
     {
-        await Run(LoadAllCore);
+        categories = await Api.CategoriesAsync();
+        products = await Api.ProductsAsync();
+        await LoadLocalCore();
+    }
+
+    private async Task RefreshStationsCore()
+    {
+        stations = await Api.StationsAsync(restaurantId);
+    }
+
+    private async Task RefreshTablesCore()
+    {
+        await RefreshZones();
+        policy = await Api.DiningPolicyAsync(restaurantId);
+        allowedNetworksText = string.Join(Environment.NewLine, policy.QrAllowedNetworks);
+    }
+
+    private async Task RefreshCategoriesCore()
+    {
+        categories = await Api.CategoriesAsync();
+        stations =
+            SelectableRestaurants.Count > 0 && HasLocalPermission("kds.use")
+                ? await Api.StationsAsync(restaurantId)
+                : [];
+    }
+
+    private async Task RefreshProductsCore()
+    {
+        categories = await Api.CategoriesAsync();
+        products = await Api.ProductsAsync();
+    }
+
+    private async Task RefreshRestaurantsCore()
+    {
+        restaurants = await Api.RestaurantsAsync();
     }
 
     private async Task LoadAllCore()
@@ -459,17 +514,12 @@ public partial class Home
         );
     }
 
-    internal async Task SaveRestaurant()
+    internal async Task SaveRestaurant(RestaurantResponse restaurant)
     {
-        if (CurrentRestaurant is null)
-        {
-            return;
-        }
-
         await Run(
             async () =>
             {
-                await Api.UpdateRestaurantAsync(CurrentRestaurant);
+                await Api.UpdateRestaurantAsync(restaurant);
                 await Task.Delay(600);
                 restaurants = await Api.RestaurantsAsync();
                 ok = true;
@@ -750,7 +800,7 @@ public partial class Home
         };
     }
 
-    private string CurrentRoleFor(Guid id)
+    internal string CurrentRoleFor(Guid id)
     {
         return login?.AllRestaurantsRoles?.FirstOrDefault()
             ?? login?.Restaurants.FirstOrDefault(x => x.RestaurantId == id)?.Role

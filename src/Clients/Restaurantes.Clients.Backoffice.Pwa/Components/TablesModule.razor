@@ -1,6 +1,8 @@
+<RestaurantContextSelector Host="Host" />
 @if (!Host.HasLocalPermission("tables.manage")) { <NoAccessPanel /> }
 else
 {
+    <div class="module-toolbar"><button class="secondary" @onclick="Host.RefreshModule" disabled="@Host.busy">Actualizar mesas</button></div>
     <section class="settings-panel policy-panel">
         <h2>Política del local</h2>
         <label class="check-line"><input type="checkbox" @bind="Host.policy.QrRequiresImmediatePayment" /> El cliente QR paga antes de enviar a cocina</label>
