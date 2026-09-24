@@ -88,8 +88,7 @@
       },
       {
         "Path": "src\\Clients\\Restaurantes.Clients.CustomerQr.Pwa\\Restaurantes.Clients.CustomerQr.Pwa.csproj",
-        "Action": "Start",
-        "DebugTarget": "http"
+        "Action": "Start"
       },
       {
         "Path": "src\\Clients\\Restaurantes.Clients.Backoffice.Pwa\\Restaurantes.Clients.Backoffice.Pwa.csproj",
@@ -187,8 +186,7 @@
       },
       {
         "Path": "src\\Clients\\Restaurantes.Clients.CustomerQr.Pwa\\Restaurantes.Clients.CustomerQr.Pwa.csproj",
-        "Action": "Start",
-        "DebugTarget": "http"
+        "Action": "Start"
       },
       {
         "Path": "src\\Clients\\Restaurantes.Clients.Backoffice.Pwa\\Restaurantes.Clients.Backoffice.Pwa.csproj",
