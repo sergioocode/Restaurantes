@@ -143,7 +143,7 @@ public sealed class RabbitMqDeadLetterService(IOptions<RabbitMqOptions> options)
 
             remaining = message.MessageCount;
             if (
-                !TryGetOriginalQueue(message.BasicProperties.Headers, out string? originalQueue)
+                !TryGetOriginalQueue(message.BasicProperties.Headers, out string originalQueue)
                 || !allowedOrigins.Contains(originalQueue)
             )
             {
@@ -187,10 +187,10 @@ public sealed class RabbitMqDeadLetterService(IOptions<RabbitMqOptions> options)
 
     private static bool TryGetOriginalQueue(
         IDictionary<string, object?>? headers,
-        out string? originalQueue
+        out string originalQueue
     )
     {
-        originalQueue = null;
+        originalQueue = string.Empty;
         if (headers is null)
         {
             return false;
@@ -198,7 +198,7 @@ public sealed class RabbitMqDeadLetterService(IOptions<RabbitMqOptions> options)
 
         if (headers.TryGetValue(OriginalQueueHeader, out object? configured))
         {
-            originalQueue = GetString(configured);
+            originalQueue = GetString(configured) ?? string.Empty;
         }
 
         if (
@@ -206,7 +206,7 @@ public sealed class RabbitMqDeadLetterService(IOptions<RabbitMqOptions> options)
             && headers.TryGetValue("x-first-death-queue", out object? firstDeathQueue)
         )
         {
-            originalQueue = GetString(firstDeathQueue);
+            originalQueue = GetString(firstDeathQueue) ?? string.Empty;
         }
 
         return !string.IsNullOrWhiteSpace(originalQueue);

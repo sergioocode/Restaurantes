@@ -1,0 +1,82 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "decimals": 0, "mappings": [], "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "value_and_name" },
+      "targets": [{ "expr": "count(count by (service_name) (http_server_request_duration_seconds_count))", "refId": "A" }],
+      "title": "APIs con actividad",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "decimals": 0, "mappings": [], "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+      "id": 2,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "value_and_name" },
+      "targets": [{ "expr": "sum(increase(http_server_request_duration_seconds_count[5m]))", "refId": "A" }],
+      "title": "Peticiones en 5 min",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "decimals": 0, "mappings": [], "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+      "id": 3,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "value_and_name" },
+      "targets": [{ "expr": "sum(increase(http_server_request_duration_seconds_count{http_response_status_code=~\"5..\"}[5m]))", "refId": "A" }],
+      "title": "Errores HTTP 5xx en 5 min",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 8 },
+      "id": 4,
+      "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true },
+      "targets": [{ "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count[5m]))", "legendFormat": "{{service_name}}", "refId": "A" }],
+      "title": "Tráfico HTTP por servicio",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 8 },
+      "id": 5,
+      "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum by (le, service_name) (rate(http_server_request_duration_seconds_bucket[5m])))", "legendFormat": "{{service_name}}", "refId": "A" }],
+      "title": "Latencia HTTP p95 por servicio",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 18 },
+      "id": 6,
+      "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true },
+      "targets": [{ "expr": "sum by (http_response_status_code) (increase(http_server_request_duration_seconds_count[5m]))", "legendFormat": "HTTP {{http_response_status_code}}", "refId": "A" }],
+      "title": "Respuestas HTTP en 5 min",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 18 },
+      "id": 7,
+      "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true },
+      "targets": [{ "expr": "sum by (service_name) (increase(http_server_request_duration_seconds_count{http_response_status_code=~\"5..\"}[5m]))", "legendFormat": "{{service_name}}", "refId": "A" }],
+      "title": "Errores HTTP 5xx por servicio en 5 min",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 41,
+  "tags": ["observability", "restaurantes", "http"],
+  "time": { "from": "now-30m", "to": "now" },
+  "title": "Restaurantes · Operación HTTP",
+  "uid": "restaurantes-gateway",
+  "version": 2
+}
