@@ -5,6 +5,9 @@ button, input, select { font: inherit; }
 button { cursor: pointer; }
 .shell { width: min(1120px, 100%); min-height: 100vh; margin: auto; padding: 20px; }
 .login-card { width: min(440px, 100%); margin: 8vh auto; padding: 34px; border: 1px solid #d5d4cb; border-radius: 28px; background: rgba(255,255,255,.88); box-shadow: 0 22px 70px rgba(38,52,42,.12); }
+.session-check-card { width: min(460px, calc(100% - 32px)); margin: 7vh auto; padding: 36px; border: 1px solid #d0d5d0; border-radius: 28px; background: #fffc; box-shadow: 0 24px 80px #23322925; }
+.session-check-card .brand-mark { width: 64px; height: 52px; border-radius: 16px; color: #fff; background: #153e2c; font-size: 16px; font-weight: 950; }
+.session-check-card p { margin: 8px 0 0; color: #69716c; line-height: 1.5; }
 .brand-mark { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 15px; color: #fff; background: #1f4b35; font-weight: 900; font-size: 24px; }
 h1 { margin: 6px 0; font-size: clamp(38px, 8vw, 62px); letter-spacing: -.05em; }
 h2 { margin: 2px 0; font-size: 28px; }

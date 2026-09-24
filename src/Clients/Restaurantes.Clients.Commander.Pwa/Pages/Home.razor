@@ -12,9 +12,9 @@
 <main class="shell">
     @if (initializing)
     {
-        <section class="login-card" aria-live="polite">
-            <span class="brand">R</span>
-            <p>Comprobando sesión…</p>
+        <section class="login-card session-check-card" aria-live="polite">
+            <div class="brand-mark">R</div>
+            <p class="muted">Comprobando sesión…</p>
         </section>
     }
     else if (login is null)
