@@ -64,7 +64,10 @@ public sealed class RabbitMqDeadLetterService(IOptions<RabbitMqOptions> options)
             ],
         };
 
-    public bool IsKnownQueue(string queue) => QueueOrigins.ContainsKey(queue);
+    public bool IsKnownQueue(string queue)
+    {
+        return QueueOrigins.ContainsKey(queue);
+    }
 
     public async Task<IReadOnlyCollection<DeadLetterQueueStatus>> GetStatusAsync(
         CancellationToken cancellationToken
@@ -159,7 +162,7 @@ public sealed class RabbitMqDeadLetterService(IOptions<RabbitMqOptions> options)
             {
                 Expiration = null,
                 Headers = message.BasicProperties.Headers is null
-                    ? new Dictionary<string, object?>()
+                    ? []
                     : new Dictionary<string, object?>(message.BasicProperties.Headers),
             };
             properties.Headers.Remove(RetryCountHeader);
@@ -209,11 +212,13 @@ public sealed class RabbitMqDeadLetterService(IOptions<RabbitMqOptions> options)
         return !string.IsNullOrWhiteSpace(originalQueue);
     }
 
-    private static string? GetString(object? value) =>
-        value switch
+    private static string? GetString(object? value)
+    {
+        return value switch
         {
             byte[] bytes => Encoding.UTF8.GetString(bytes),
             string text => text,
             _ => null,
         };
+    }
 }
