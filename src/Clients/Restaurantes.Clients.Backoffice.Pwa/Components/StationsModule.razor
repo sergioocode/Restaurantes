@@ -1,6 +1,8 @@
+<RestaurantContextSelector Host="Host" />
 @if (!Host.HasLocalPermission("catalog.manage")) { <NoAccessPanel /> }
 else
 {
+    <div class="module-toolbar"><button class="secondary" @onclick="Host.RefreshModule" disabled="@Host.busy">Actualizar estaciones</button></div>
     <details class="admin-panel" open><summary>Nueva estación KDS</summary>
         <form class="inline-form" @onsubmit="Host.CreateStation" @onsubmit:preventDefault>
             <input placeholder="Código, ej. PIZZA" @bind="Host.stationDraft.Code" />

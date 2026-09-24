@@ -1,6 +1,7 @@
 @if (!Host.CanManageUsers) { <NoAccessPanel /> }
 else
 {
+    <div class="module-toolbar"><button class="secondary" @onclick="Host.RefreshModule" disabled="@Host.busy">Actualizar usuarios</button></div>
     <details class="admin-panel" open>
         <summary>Autorizar cuenta</summary>
         <form class="inline-form user-create-form" @onsubmit="Host.CreateUser" @onsubmit:preventDefault>

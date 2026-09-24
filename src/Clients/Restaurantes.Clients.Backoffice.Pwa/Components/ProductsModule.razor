@@ -4,6 +4,7 @@
 }
 else
 {
+    <div class="module-toolbar"><button class="secondary" @onclick="Host.RefreshModule" disabled="@Host.busy">Actualizar productos</button></div>
     <details class="admin-panel" open>
         <summary>Nuevo producto</summary>
         <form class="inline-form" @onsubmit="Host.CreateProduct" @onsubmit:preventDefault>

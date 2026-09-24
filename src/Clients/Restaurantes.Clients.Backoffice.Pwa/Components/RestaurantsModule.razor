@@ -7,15 +7,18 @@
         </form>
     </details>
 }
-@if (Host.CurrentRestaurant is not null)
-{
-    <section class="settings-panel">
-        <div><strong>@Host.CurrentRestaurant.Code</strong><small>ID @Host.CurrentRestaurant.Id</small></div>
-        <label>Nombre<input @bind="Host.CurrentRestaurant.Name" /></label><label>Dirección<input @bind="Host.CurrentRestaurant.Address" /></label>
-        <label class="availability"><input type="checkbox" @bind="Host.CurrentRestaurant.IsActive" /> Local activo</label>
-        <button class="primary" @onclick="Host.SaveRestaurant" disabled="@Host.busy">Guardar local</button>
-    </section>
-}
+<div class="module-toolbar"><button class="secondary" @onclick="Host.RefreshModule" disabled="@Host.busy">Actualizar locales</button></div>
+<div class="restaurant-list">
+    @foreach (RestaurantResponse restaurant in Host.restaurants.OrderBy(x => x.Name))
+    {
+        <section class="settings-panel restaurant-settings" @key="restaurant.Id">
+            <div><strong>@restaurant.Code</strong><small>ID @restaurant.Id</small></div>
+            <label>Nombre<input @bind="restaurant.Name" /></label><label>Dirección<input @bind="restaurant.Address" /></label>
+            <label class="availability"><input type="checkbox" @bind="restaurant.IsActive" /> Local activo</label>
+            <button class="primary" @onclick="() => Host.SaveRestaurant(restaurant)" disabled="@Host.busy">Guardar local</button>
+        </section>
+    }
+</div>
 
 @code {
     [Parameter, EditorRequired]

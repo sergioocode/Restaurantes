@@ -1,9 +1,11 @@
-﻿@if (!Host.HasLocalPermission("catalog.manage"))
+﻿<RestaurantContextSelector Host="Host" />
+@if (!Host.HasLocalPermission("catalog.manage"))
 {
     <NoAccessPanel />
 }
 else
 {
+    <div class="module-toolbar"><button class="secondary" @onclick="Host.RefreshModule" disabled="@Host.busy">Actualizar menú</button></div>
     <div class="catalog-toolbar"><input type="search" placeholder="Buscar producto o SKU" @bind="Host.search" @bind:event="oninput" /><span>@Host.VisibleProducts.Count producto(s)</span></div>
     <div class="product-list">
         @foreach (ProductResponse product in Host.VisibleProducts)

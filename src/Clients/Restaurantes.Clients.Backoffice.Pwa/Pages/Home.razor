@@ -36,13 +36,6 @@ else
     <header class="topbar">
         <div><p class="eyebrow">RESTAURANTES · BACKOFFICE</p><strong>@login.User.DisplayName</strong></div>
         <div class="top-actions">
-            <select value="@restaurantId" @onchange="RestaurantChanged">
-                @foreach (RestaurantResponse restaurant in SelectableRestaurants)
-                {
-                    <option value="@restaurant.Id">@restaurant.Name · @RoleLabel(CurrentRoleFor(restaurant.Id))</option>
-                }
-            </select>
-            <button class="secondary" @onclick="LoadAll" disabled="@busy">Actualizar</button>
             <button class="secondary" @onclick="Logout">Salir</button>
         </div>
     </header>
@@ -50,9 +43,9 @@ else
     <main class="workspace">
         <aside class="sidebar">
             <h2>Módulos</h2>
-            @if (HasLocalPermission("catalog.manage")) { <button class="@NavClass("menu")" @onclick='() => module = "menu"'>Menú por local</button> }
-            @if (HasLocalPermission("kds.use")) { <button class="@NavClass("stations")" @onclick='() => module = "stations"'>Estaciones KDS</button> }
-            @if (HasLocalPermission("tables.read")) { <button class="@NavClass("tables")" @onclick='() => module = "tables"'>Mesas y configuración</button> }
+            @if (HasAnyLocalPermission("catalog.manage")) { <button class="@NavClass("menu")" @onclick='() => module = "menu"'>Menú por local</button> }
+            @if (HasAnyLocalPermission("kds.use")) { <button class="@NavClass("stations")" @onclick='() => module = "stations"'>Estaciones KDS</button> }
+            @if (HasAnyLocalPermission("tables.read")) { <button class="@NavClass("tables")" @onclick='() => module = "tables"'>Mesas y configuración</button> }
             @if (IsAdmin) { <button class="@NavClass("restaurants")" @onclick='() => module = "restaurants"'>Locales</button> }
             @if (IsAdmin) { <button class="@NavClass("categories")" @onclick='() => module = "categories"'>Categorías</button> }
             @if (IsAdmin) { <button class="@NavClass("products")" @onclick='() => module = "products"'>Productos</button> }
@@ -69,7 +62,6 @@ else
         <section class="content">
             <div class="page-title">
                 <div><p class="eyebrow">@ModuleEyebrow</p><h1>@ModuleTitle</h1></div>
-                <span class="role-chip">@RoleLabel(CurrentRoleFor(restaurantId))</span>
             </div>
 
             @if (module == "menu")
