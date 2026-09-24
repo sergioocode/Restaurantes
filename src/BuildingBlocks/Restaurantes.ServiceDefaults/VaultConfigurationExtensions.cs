@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
@@ -169,14 +169,11 @@ public static class VaultConfigurationExtensions
                 .Where(line => line.StartsWith($"{key}=", StringComparison.Ordinal))
                 .Select(line => line[(key.Length + 1)..].Trim().Trim('"', '\''))
                 .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
-            if (token is not null)
-            {
-                return token;
-            }
-
-            throw new InvalidOperationException(
-                $"'{envFilePath}' exists but does not define {key}."
-            );
+            return token is not null
+                ? token
+                : throw new InvalidOperationException(
+                    $"'{envFilePath}' exists but does not define {key}."
+                );
         }
 
         string newToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
