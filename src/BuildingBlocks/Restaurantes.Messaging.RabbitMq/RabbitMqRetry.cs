@@ -77,7 +77,7 @@ public static class RabbitMqRetry
         {
             Expiration = null,
             Headers = delivery.BasicProperties.Headers is null
-                ? new Dictionary<string, object?>()
+                ? []
                 : new Dictionary<string, object?>(delivery.BasicProperties.Headers),
         };
         properties.Headers[RetryCountHeader] = attempt;
@@ -102,33 +102,32 @@ public static class RabbitMqRetry
         return new RabbitMqRetryResult(attempt, Delays[completedAttempts]);
     }
 
-    private static string GetRetryQueueName(string sourceQueue, int attempt) =>
-        $"{sourceQueue}.retry.{attempt}";
+    private static string GetRetryQueueName(string sourceQueue, int attempt)
+    {
+        return $"{sourceQueue}.retry.{attempt}";
+    }
 
     private static int GetRetryCount(IDictionary<string, object?>? headers)
     {
-        if (headers is null || !headers.TryGetValue(RetryCountHeader, out object? value))
-        {
-            return 0;
-        }
-
-        return value switch
-        {
-            byte number => number,
-            sbyte number => number,
-            short number => number,
-            ushort number => number,
-            int number => number,
-            uint number when number <= int.MaxValue => (int)number,
-            long number when number is >= 0 and <= int.MaxValue => (int)number,
-            byte[] bytes
-                when int.TryParse(
-                    Encoding.UTF8.GetString(bytes),
-                    NumberStyles.None,
-                    CultureInfo.InvariantCulture,
-                    out int number
-                ) => number,
-            _ => 0,
-        };
+        return headers is null || !headers.TryGetValue(RetryCountHeader, out object? value)
+            ? 0
+            : value switch
+            {
+                byte number => number,
+                sbyte number => number,
+                short number => number,
+                ushort number => number,
+                int number => number,
+                uint number when number <= int.MaxValue => (int)number,
+                long number when number is >= 0 and <= int.MaxValue => (int)number,
+                byte[] bytes
+                    when int.TryParse(
+                        Encoding.UTF8.GetString(bytes),
+                        NumberStyles.None,
+                        CultureInfo.InvariantCulture,
+                        out int number
+                    ) => number,
+                _ => 0,
+            };
     }
 }

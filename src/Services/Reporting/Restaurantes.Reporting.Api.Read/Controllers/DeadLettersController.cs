@@ -10,7 +10,10 @@ public sealed class DeadLettersController(RabbitMqDeadLetterService deadLetters)
     [HttpGet]
     public async Task<ActionResult<IReadOnlyCollection<DeadLetterQueueStatus>>> Get(
         CancellationToken cancellationToken
-    ) => Ok(await deadLetters.GetStatusAsync(cancellationToken));
+    )
+    {
+        return Ok(await deadLetters.GetStatusAsync(cancellationToken));
+    }
 
     [HttpPost("{queue}/replay")]
     public async Task<ActionResult<DeadLetterReplayResult>> Replay(
