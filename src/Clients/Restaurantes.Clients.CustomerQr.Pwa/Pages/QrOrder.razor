@@ -22,6 +22,15 @@ else if (!string.IsNullOrWhiteSpace(error))
         <button class="primary-button" @onclick="LoadAsync">Reintentar</button>
     </section>
 }
+else if (context is not null && !context.IsRestaurantOpen)
+{
+    <section class="empty-page">
+        <div class="brand-mark">R</div>
+        <h1>El local aún no está disponible</h1>
+        <p>Espera a que el local habilite el sistema.</p>
+        <button class="primary-button" @onclick="LoadAsync">Volver a comprobar</button>
+    </section>
+}
 else if (context is not null)
 {
     @if (NeedsGuestCount)

@@ -66,6 +66,13 @@ public partial class QrOrder
             Guid? previousSessionId = context?.Session?.Id;
             Guid? previousTableId = context?.Table.Id;
             context = await Api.PreviewAsync(QrCode, savedToken);
+            if (!context.IsRestaurantOpen)
+            {
+                menu = [];
+                customerOrders = [];
+                ordersStorageKey = string.Empty;
+                return;
+            }
             if (previousTableId.HasValue && previousTableId != context.Table.Id)
             {
                 quantities.Clear();
