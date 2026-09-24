@@ -116,6 +116,7 @@ public sealed partial class DiningService
             session.Id,
             session.RestaurantId,
             session.TableId,
+            session.OpenedByUserId,
             session.RequestGuestCount,
             session.GuestCount,
             session.Source,
@@ -127,7 +128,6 @@ public sealed partial class DiningService
             session.PaymentMethod,
             session.CancelledAtUtc,
             session.CancelledByUserId,
-            session.CancellationReason,
             orders = session
                 .Orders.OrderBy(x => x.AddedAtUtc)
                 .Select(x => new

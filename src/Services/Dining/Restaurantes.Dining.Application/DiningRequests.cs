@@ -42,12 +42,6 @@ public sealed class CheckoutSessionRequest
     public string ExternalReference { get; init; } = string.Empty;
 }
 
-public sealed class CancelSessionRequest
-{
-    [Required, StringLength(200, MinimumLength = 3)]
-    public string Reason { get; init; } = string.Empty;
-}
-
 public sealed class UpdateDiningPolicyRequest
 {
     public bool QrRequiresImmediatePayment { get; init; } = true;

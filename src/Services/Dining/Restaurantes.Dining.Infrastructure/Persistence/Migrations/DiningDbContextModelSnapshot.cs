@@ -104,11 +104,6 @@ namespace Restaurantes.Dining.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("CancellationReason")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
                     b.Property<DateTime?>("CancelledAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -128,6 +123,9 @@ namespace Restaurantes.Dining.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime>("OpenedAtUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("OpenedByUserId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime?>("PaidAtUtc")
                         .HasColumnType("timestamp with time zone");

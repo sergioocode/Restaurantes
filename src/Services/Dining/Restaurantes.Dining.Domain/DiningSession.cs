@@ -7,6 +7,7 @@ public sealed class DiningSession
     public Guid Id { get; set; }
     public Guid RestaurantId { get; set; }
     public Guid TableId { get; set; }
+    public Guid? OpenedByUserId { get; set; }
     public string Source { get; set; } = string.Empty;
     public string Status { get; set; } = "Open";
     public int Version { get; set; } = 1;
@@ -18,7 +19,6 @@ public sealed class DiningSession
     public DateTime? PaidAtUtc { get; set; }
     public DateTime? CancelledAtUtc { get; set; }
     public Guid? CancelledByUserId { get; set; }
-    public string CancellationReason { get; set; } = string.Empty;
     public List<DiningSessionOrder> Orders { get; set; } = [];
 
     public bool CanCheckout(bool allowBeforeKitchenCompletion)
@@ -46,10 +46,9 @@ public sealed class DiningSession
         Version++;
     }
 
-    public void Cancel(string reason, Guid userId, DateTime now)
+    public void Cancel(Guid userId, DateTime now)
     {
         Status = "Cancelled";
-        CancellationReason = reason;
         CancelledByUserId = userId;
         CancelledAtUtc = now;
         ClosedAtUtc = now;
