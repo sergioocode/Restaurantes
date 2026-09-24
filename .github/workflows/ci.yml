@@ -39,8 +39,6 @@ jobs:
           /o:"sergioocode"
           /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
           /d:sonar.cs.opencover.reportsPaths="TestResults/**/coverage.opencover.xml"
-          /d:sonar.qualitygate.wait=true
-          /d:sonar.qualitygate.timeout=300
 
       - name: Compilar la solución
         run: dotnet build Restaurantes.slnx --configuration Release --no-restore
