@@ -458,6 +458,8 @@ $env:SONAR_TOKEN = "<token-de-analisis>"
 
 El script restaura el escáner local, ejecuta el análisis alrededor de una compilación completa y espera el resultado del **Quality Gate**. Un Gate fallido devuelve un error, por lo que el mismo comando puede usarse posteriormente en CI/CD. Para detener únicamente esta infraestructura:
 
+![Quality Gate inicial de SonarQube](assets/observability/sonarqube-quality-gate.jpg)
+
 ```powershell
 docker compose --env-file tools/vault/.env --profile quality stop sonarqube sonarqube-db
 ```

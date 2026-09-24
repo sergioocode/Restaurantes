@@ -5,6 +5,9 @@
     <Platform Name="x86" />
   </Configurations>
   <Folder Name="/src/" />
+  <Folder Name="/tests/">
+    <Project Path="tests/Restaurantes.Orders.Domain.Tests/Restaurantes.Orders.Domain.Tests.csproj" />
+  </Folder>
   <Folder Name="/src/ApiGateways/">
     <Project Path="src/ApiGateways/Restaurantes.Gateway.Private/Restaurantes.Gateway.Private.csproj" />
     <Project Path="src/ApiGateways/Restaurantes.Gateway.Public/Restaurantes.Gateway.Public.csproj" />

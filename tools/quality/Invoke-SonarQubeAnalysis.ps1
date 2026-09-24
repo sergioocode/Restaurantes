@@ -23,6 +23,14 @@ function Invoke-DotNet {
     }
 }
 
+$repositoryRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
+$coverageDirectory = Join-Path $repositoryRoot "TestResults"
+if (Test-Path -LiteralPath $coverageDirectory) {
+    Remove-Item -LiteralPath $coverageDirectory -Recurse -Force
+}
+New-Item -ItemType Directory -Path $coverageDirectory -Force | Out-Null
+$coverageReportPattern = Join-Path $coverageDirectory "**\coverage.opencover.xml"
+
 Invoke-DotNet @("tool", "restore")
 
 $beginArguments = @(
@@ -35,10 +43,21 @@ $beginArguments = @(
     "/n:$ProjectName",
     "/d:sonar.host.url=$ServerUrl",
     "/d:sonar.token=$Token",
+    "/d:sonar.cs.opencover.reportsPaths=$coverageReportPattern",
     "/d:sonar.qualitygate.wait=true",
     "/d:sonar.qualitygate.timeout=$QualityGateTimeoutSeconds"
 )
 
 Invoke-DotNet $beginArguments
 Invoke-DotNet @("build", "Restaurantes.slnx", "--no-incremental")
+Invoke-DotNet @(
+    "test",
+    "Restaurantes.slnx",
+    "--no-build",
+    "--collect:XPlat Code Coverage",
+    "--results-directory",
+    $coverageDirectory,
+    "--",
+    "DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover"
+)
 Invoke-DotNet @("tool", "run", "dotnet-sonarscanner", "--", "end", "/d:sonar.token=$Token")
