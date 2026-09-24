@@ -18,6 +18,7 @@ const status = document.querySelector('#connectionStatus');
 const identityStatus = document.querySelector('#identityStatus');
 const eventText = document.querySelector('#event');
 const ordersElement = document.querySelector('#orders');
+const orderPollingIntervalMilliseconds = 30_000;
 
 const api = new KdsApiClient(apiBaseUrl);
 let login;
@@ -296,7 +297,7 @@ window.setInterval(async () => {
   } catch {
     // SignalR mostrará el estado de conexión.
   }
-}, 15000);
+}, orderPollingIntervalMilliseconds);
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
