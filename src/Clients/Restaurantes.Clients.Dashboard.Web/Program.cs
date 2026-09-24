@@ -3,7 +3,6 @@ WebApplication app = builder.Build();
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
-app.MapGet("/", () => Results.Redirect("/dashboard/"));
 app.MapGet(
     "/health",
     () => Results.Ok(new { service = "Restaurantes.Clients.Dashboard.Web", status = "Healthy" })

@@ -223,16 +223,19 @@ public partial class Home
         await LoadLocal();
     }
 
-    internal bool HasAnyLocalPermission(string permission) =>
-        GlobalRoleHasPermission(permission)
-        || SelectableRestaurants.Any(restaurant =>
-            login
-                ?.Restaurants.FirstOrDefault(x => x.RestaurantId == restaurant.Id)
-                ?.Permissions.Contains(permission) == true
-        );
+    internal bool HasAnyLocalPermission(string permission)
+    {
+        return GlobalRoleHasPermission(permission)
+            || SelectableRestaurants.Any(restaurant =>
+                login
+                    ?.Restaurants.FirstOrDefault(x => x.RestaurantId == restaurant.Id)
+                    ?.Permissions.Contains(permission) == true
+            );
+    }
 
-    internal Task RefreshModule() =>
-        module switch
+    internal Task RefreshModule()
+    {
+        return module switch
         {
             "menu" => Run(RefreshMenuCore),
             "stations" => Run(RefreshStationsCore),
@@ -243,6 +246,7 @@ public partial class Home
             "users" => Run(LoadUsersCore),
             _ => Task.CompletedTask,
         };
+    }
 
     private async Task RefreshMenuCore()
     {

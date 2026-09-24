@@ -5,6 +5,7 @@ public sealed record DiningSessionResponse(
     Guid RestaurantId,
     Guid TableId,
     string Status,
+    Guid? OpenedByUserId = null,
     bool RequestGuestCount = false,
     int? GuestCount = null
 );

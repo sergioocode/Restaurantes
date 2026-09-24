@@ -28,6 +28,7 @@ public partial class Home
     private string? category;
     private Dictionary<Guid, int> quantities = [];
     private Dictionary<Guid, string> notes = [];
+    private bool hasSubmittedOrder;
     private SessionBillResponse? bill;
     private bool billOpen;
     private Dictionary<Guid, OrderDetailResponse> billOrders = [];
@@ -43,6 +44,10 @@ public partial class Home
             .OrderBy(x => x.CategoryName)
             .ThenBy(x => x.ProductName)
             .ToList();
+    private bool CanShowCancelOwnSession =>
+        diningSession is not null && diningSession.OpenedByUserId == login?.User.Id;
+    private bool HasSessionOrders =>
+        hasSubmittedOrder || activeOrders.Any(order => order.DiningSessionId == sessionId);
 
     protected override async Task OnInitializedAsync()
     {
@@ -189,6 +194,7 @@ public partial class Home
             selectedTable = table;
             sessionId = session.Id;
             diningSession = session;
+            hasSubmittedOrder = activeOrders.Any(order => order.DiningSessionId == sessionId);
             guestCount = session.GuestCount;
             menu = await Api.MenuAsync(restaurantId);
             category = null;
@@ -224,6 +230,7 @@ public partial class Home
                     quantities,
                     notes
                 );
+                hasSubmittedOrder = true;
                 foreach (Guid id in quantities.Keys.ToArray())
                 {
                     quantities[id] = 0;
@@ -241,6 +248,26 @@ public partial class Home
     {
         billOpen = true;
         await Run(LoadBill);
+    }
+
+    private async Task CancelSession()
+    {
+        if (diningSession is null)
+        {
+            return;
+        }
+
+        await Run(
+            async () =>
+            {
+                await Api.CancelSessionAsync(diningSession.Id);
+                success = true;
+                message = "Apertura cancelada y ubicación liberada.";
+                BackToTables();
+                await LoadOperationalData();
+            },
+            false
+        );
     }
 
     private async Task LoadBill()
@@ -308,6 +335,7 @@ public partial class Home
     {
         selectedTable = null;
         sessionId = Guid.Empty;
+        hasSubmittedOrder = false;
         menu = [];
         category = null;
         quantities = [];

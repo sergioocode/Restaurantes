@@ -33,7 +33,6 @@ public partial class Home
     private Dictionary<Guid, int> quantities = [];
     private Dictionary<Guid, string> notes = [];
     private string? category;
-    private string cancelReason = "Apertura accidental";
     private SessionBillResponse? bill;
     private bool billOpen;
     private string paymentMethod = "Card";
@@ -63,11 +62,8 @@ public partial class Home
     private int ItemCount => quantities.Values.Sum();
     private decimal Total => menu.Sum(x => x.Price * quantities.GetValueOrDefault(x.ProductId));
     private bool HasPhysicalLocation => serviceMode is "DineIn" or "Bar";
-    private bool CanCancelSession
-    {
-        get => HasPhysicalLocation && session is not null && session.Orders.Count == 0 && !field;
-        set;
-    }
+    private bool hasSessionOrders;
+    private bool CanCancelSession => HasPhysicalLocation && session is not null;
     private string CurrentLabel =>
         HasPhysicalLocation ? selectedTable?.Label ?? "Ubicación" : "Pedido para llevar";
 
@@ -246,7 +242,7 @@ public partial class Home
                 : await Api.OpenSessionAsync(table.Id);
             guestCount = session.GuestCount;
             selectedTable = table;
-            CanCancelSession = session.Orders.Count > 0;
+            hasSessionOrders = session.Orders.Count > 0;
             menu = await Api.MenuAsync(restaurantId);
             quantities = menu.ToDictionary(x => x.ProductId, _ => 0);
             notes = menu.ToDictionary(x => x.ProductId, _ => string.Empty);
@@ -361,7 +357,7 @@ public partial class Home
                     quantities[id] = 0;
                     notes[id] = string.Empty;
                 }
-                CanCancelSession = HasPhysicalLocation;
+                hasSessionOrders = HasPhysicalLocation;
                 success = true;
                 message =
                     HasPhysicalLocation ? $"Comanda {order.Id.ToString()[..8]} enviada a cocina."
@@ -424,7 +420,7 @@ public partial class Home
         await Run(
             async () =>
             {
-                await Api.CancelSessionAsync(session.Id, cancelReason);
+                await Api.CancelSessionAsync(session.Id);
                 success = true;
                 message = "Apertura cancelada y ubicación liberada.";
                 BackToTables();
@@ -571,8 +567,7 @@ public partial class Home
         quantities = [];
         notes = [];
         category = null;
-        CanCancelSession = false;
-        cancelReason = "Apertura accidental";
+        hasSessionOrders = false;
         bill = null;
         billOrders = [];
         billOpen = false;

@@ -47,13 +47,12 @@ public sealed partial class PosApi
         return GetAsync<SessionBillResponse>($"/api/dining/sessions/{sessionId}/bill");
     }
 
-    public async Task<DiningSessionResponse> CancelSessionAsync(Guid sessionId, string reason)
+    public async Task<DiningSessionResponse> CancelSessionAsync(Guid sessionId)
     {
         using HttpRequestMessage request = Authorized(
             HttpMethod.Post,
             $"/api/dining/sessions/{sessionId}/cancel"
         );
-        request.Content = JsonContent.Create(new { reason });
         using HttpResponseMessage response = await http.SendAsync(request);
         return await ReadAsync<DiningSessionResponse>(response);
     }

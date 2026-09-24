@@ -1,4 +1,4 @@
-@page "/"
+﻿@page "/"
 @using System.Text.Json
 @implements IAsyncDisposable
 @inject PosApi Api
@@ -13,17 +13,17 @@
     @if (initializing)
     {
         <section class="login-card session-check-card" aria-live="polite">
-            <div class="brand-mark">TPV</div>
+            <img class="brand-icon" src="icons/icon-192.png" alt="" />
             <p class="muted">Comprobando sesión…</p>
         </section>
     }
     else if (login is null)
     {
         <section class="login-card">
-            <div class="brand-mark">TPV</div>
+            <img class="brand-icon" src="icons/icon-192.png" alt="" />
             <p class="eyebrow">RESTAURANTES · PUNTO DE VENTA</p>
             <h1>Caja del local</h1>
-            <p class="muted">Acceso exclusivo del personal autorizado.</p>
+            <p class="muted">Acceso exclusivo/default perfil Manager.</p>
             <div class="login-providers">
                 <button class="primary full" type="button" @onclick='() => StartLogin("Microsoft")'
                         disabled="@(providerSettings is null || providerSettings.ActiveProvider != "Microsoft" || !providerSettings.MicrosoftConfigured)">
@@ -143,6 +143,10 @@
                             <p class="eyebrow">@ModeLabel(serviceMode) · ORIGEN POS</p>
                             <h2>@CurrentLabel</h2>
                         </div>
+                        @if (CanCancelSession)
+                        {
+                            <button class="danger cancel-opening" disabled="@(busy || hasSessionOrders)" @onclick="CancelSession">Cancelar apertura</button>
+                        }
                         @if (HasPhysicalLocation)
                         {
                             <button class="ghost" @onclick="OpenBill">Cuenta</button>
@@ -221,15 +225,6 @@
                     <button class="primary full" disabled="@(busy || !CashRegisterOpen || ItemCount == 0 || (!HasPhysicalLocation && string.IsNullOrWhiteSpace(customerName)))" @onclick="SendOrder">
                         @(busy ? "Procesando…" : HasPhysicalLocation ? "Enviar a cocina" : takeawayRequiresPrepayment ? "Confirmar cobro y enviar" : "Enviar a cocina · cobrar al recoger")
                     </button>
-                    @if (CanCancelSession)
-                    {
-                        <div class="cancel-box">
-                            <input placeholder="Motivo para cancelar la apertura" @bind="cancelReason" />
-                            <button class="danger full" disabled="@(busy || cancelReason.Trim().Length < 3)" @onclick="CancelSession">
-                                Cancelar ubicación vacía
-                            </button>
-                        </div>
-                    }
                 </aside>
             </section>
 

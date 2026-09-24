@@ -1,4 +1,4 @@
-@page "/"
+﻿@page "/"
 @using System.Text.Json
 @inject BackofficeApi Api
 @inject IJSRuntime Js
@@ -9,14 +9,19 @@
 
 @if (initializing)
 {
-    <main class="loading">Cargando Backoffice…</main>
+    <main class="login-shell">
+        <section class="login-card session-check-card" aria-live="polite">
+            <img class="brand-icon" src="icons/icon-192.png" alt="" />
+            <p class="muted">Comprobando sesión…</p>
+        </section>
+    </main>
 }
 else if (login is null)
 {
     <main class="login-shell">
         <section class="login-card">
-            <span class="brand">R</span><p class="eyebrow">ADMINISTRACIÓN</p><h1>Backoffice</h1>
-            <p>Configuración central y por local.</p>
+            <img class="brand-icon" src="icons/icon-192.png" alt="" /><p class="eyebrow">ADMINISTRACIÓN</p><h1>Backoffice</h1>
+            <p>Acceso exclusivo/default perfil Manager.</p>
             <div class="login-providers">
                 <button class="primary" type="button" @onclick='() => StartLogin("Microsoft")'
                         disabled="@(providerSettings is null || providerSettings.ActiveProvider != "Microsoft" || !MicrosoftConfigured)">
