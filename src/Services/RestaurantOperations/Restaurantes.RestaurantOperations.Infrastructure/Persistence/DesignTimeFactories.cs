@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore.Design;
 using Restaurantes.RestaurantOperations.Infrastructure.Persistence.Read;
 using Restaurantes.RestaurantOperations.Infrastructure.Persistence.Write;
+using Restaurantes.ServiceDefaults;
 
 namespace Restaurantes.RestaurantOperations.Infrastructure.Persistence;
 
@@ -13,7 +14,9 @@ public sealed class RestaurantWriteDbContextFactory
         DbContextOptions<RestaurantWriteDbContext> options =
             new DbContextOptionsBuilder<RestaurantWriteDbContext>()
                 .UseNpgsql(
-                    "Host=localhost;Port=5432;Database=restaurant_operations_write;Username=restaurants;Password=restaurants_dev"
+                    VaultConfigurationExtensions.GetDesignTimeConnectionString(
+                        "RestaurantOperationsWrite"
+                    )
                 )
                 .Options;
         return new RestaurantWriteDbContext(options);
@@ -28,7 +31,9 @@ public sealed class RestaurantReadDbContextFactory
         DbContextOptions<RestaurantReadDbContext> options =
             new DbContextOptionsBuilder<RestaurantReadDbContext>()
                 .UseNpgsql(
-                    "Host=localhost;Port=5432;Database=restaurant_operations_read;Username=restaurants;Password=restaurants_dev"
+                    VaultConfigurationExtensions.GetDesignTimeConnectionString(
+                        "RestaurantOperationsRead"
+                    )
                 )
                 .Options;
         return new RestaurantReadDbContext(options);

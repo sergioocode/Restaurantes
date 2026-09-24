@@ -22,6 +22,7 @@ public sealed class OrdersController(
     [ProducesResponseType<OrderResponse>(StatusCodes.Status202Accepted)]
     public async Task<ActionResult<OrderResponse>> Create(
         CreateOrderRequest request,
+        [FromHeader(Name = "X-Customer-Session-Token")] string? customerAccessToken,
         CancellationToken cancellationToken
     )
     {
@@ -42,11 +43,9 @@ public sealed class OrdersController(
         try
         {
             await cashRegister.EnsureOpenAsync(request.RestaurantId, cancellationToken);
-            string customerAccessToken =
-                Request.Headers["X-Customer-Session-Token"].FirstOrDefault() ?? string.Empty;
             OrderResponse order = await commandService.CreateAsync(
                 request,
-                customerAccessToken,
+                customerAccessToken ?? string.Empty,
                 cancellationToken
             );
             return Accepted($"/api/orders/{order.Id}", order);
@@ -92,6 +91,7 @@ public sealed class OrdersController(
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<OrderResponse>> Submit(
         Guid id,
+        [FromHeader(Name = "X-Customer-Session-Token")] string? customerAccessToken,
         CancellationToken cancellationToken
     )
     {
@@ -117,15 +117,13 @@ public sealed class OrdersController(
         }
         else
         {
-            string customerAccessToken =
-                Request.Headers["X-Customer-Session-Token"].FirstOrDefault() ?? string.Empty;
             await dining.EnsureOpenAsync(
                 existing.DiningSessionId!.Value,
                 existing.RestaurantId,
                 existing.TableId!.Value,
                 nameof(OrderSource.CustomerQr),
                 nameof(ServiceMode.DineIn),
-                customerAccessToken,
+                customerAccessToken ?? string.Empty,
                 cancellationToken
             );
         }
