@@ -64,7 +64,8 @@ public sealed partial class DiningService
     private static object QrSessionResponse(
         RestaurantTable table,
         DiningSession session,
-        DiningRestaurantPolicy? policy
+        DiningRestaurantPolicy? policy,
+        bool isRestaurantOpen = true
     )
     {
         return new
@@ -81,6 +82,7 @@ public sealed partial class DiningService
             session = SessionResponse(session),
             customerAccessToken = session.CustomerAccessToken,
             qrRequiresImmediatePayment = policy?.QrRequiresImmediatePayment ?? true,
+            isRestaurantOpen,
         };
     }
 

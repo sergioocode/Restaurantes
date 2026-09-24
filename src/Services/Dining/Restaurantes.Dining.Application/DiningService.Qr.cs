@@ -29,12 +29,22 @@ public sealed partial class DiningService
             );
         }
 
+        bool restaurantOpen = true;
+        try
+        {
+            await cashRegister.EnsureOpenAsync(table.RestaurantId, ct);
+        }
+        catch (DiningCashRegisterClosedException)
+        {
+            restaurantOpen = false;
+        }
+
         DiningSession? session = await db.ReadActiveSessionWithOrdersAsync(table.Id, ct);
         // Only the holder of this session's token may recover its private account.
         return
             session?.Source == "CustomerQr"
             && TokenEquals(session.CustomerAccessToken, httpContext.CustomerSessionToken)
-            ? DiningResults.Ok(QrSessionResponse(table, session, policy))
+            ? DiningResults.Ok(QrSessionResponse(table, session, policy, restaurantOpen))
             : DiningResults.Ok(
                 new
                 {
@@ -49,6 +59,7 @@ public sealed partial class DiningService
                     session = (object?)null,
                     customerAccessToken = string.Empty,
                     qrRequiresImmediatePayment = policy?.QrRequiresImmediatePayment ?? true,
+                    isRestaurantOpen = restaurantOpen,
                 }
             );
     }
