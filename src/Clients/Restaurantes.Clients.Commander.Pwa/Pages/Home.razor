@@ -1,4 +1,4 @@
-@page "/"
+﻿@page "/"
 @using System.Text.Json
 @implements IAsyncDisposable
 @inject CommanderApi Api
@@ -13,17 +13,17 @@
     @if (initializing)
     {
         <section class="login-card session-check-card" aria-live="polite">
-            <div class="brand-mark">R</div>
+            <img class="brand-icon" src="icons/icon-192.png" alt="" />
             <p class="muted">Comprobando sesión…</p>
         </section>
     }
     else if (login is null)
     {
         <section class="login-card">
-            <div class="brand-mark">R</div>
+            <img class="brand-icon" src="icons/icon-192.png" alt="" />
             <p class="eyebrow">RESTAURANTES · OPERACIONES</p>
             <h1>Comandero</h1>
-            <p class="muted">Acceso del personal. Cada usuario solo recibe sus locales y permisos.</p>
+            <p class="muted">Acceso exclusivo/default perfil Camarero.</p>
             <div class="login-providers">
                 <button class="primary full" type="button" @onclick='() => StartLogin("Microsoft")'
                         disabled="@(providerSettings is null || providerSettings.ActiveProvider != "Microsoft" || !providerSettings.MicrosoftConfigured)">
@@ -103,6 +103,10 @@
             <section class="order-head">
                 <button class="back" @onclick="BackToTables">← Mesas</button>
                 <div><p class="eyebrow">PEDIDO EN CURSO</p><h2>@selectedTable.Label</h2></div>
+                @if (CanShowCancelOwnSession)
+                {
+                    <button class="danger cancel-opening" disabled="@(busy || HasSessionOrders)" @onclick="CancelSession">Cancelar apertura</button>
+                }
                 <button class="ghost" @onclick="OpenBill">Ver consumo</button>
             </section>
 
@@ -188,7 +192,7 @@
                             </div>
                             <div class="bill-total"><span>Total de la sesión</span><strong>@bill.Total.ToString("0.00") €</strong></div>
                             <div class="bill-total outstanding"><span>Pendiente</span><strong>@bill.Outstanding.ToString("0.00") €</strong></div>
-                            <p class="muted">El cobro y la liberación de la mesa se realizan exclusivamente desde el TPV.</p>
+                            <p class="muted">El cobro se realiza exclusivamente desde el TPV. Sólo puedes cancelar una apertura vacía creada por ti.</p>
                             <div class="bill-actions">
                                 <button class="ghost" @onclick="OpenBill" disabled="@busy">Actualizar</button>
                             </div>

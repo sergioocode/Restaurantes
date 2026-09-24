@@ -1,54 +1,60 @@
 <!doctype html>
 <html lang="es">
+
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#111827">
-  <title>KDS · Restaurantes</title>
-  <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
-  <link rel="apple-touch-icon" sizes="192x192" href="./icons/icon-192.png">
-  <link rel="stylesheet" href="./css/kds.css">
+    <meta charset="utf-8">
+    <title>KDS · Restaurantes</title>
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#111827">
+
+    <link rel="stylesheet" href="css/kds.css">
+    <link rel="manifest" href="manifest.webmanifest">
+
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192.png">
 </head>
+
 <body>
-  <main>
-    <section id="authLoading" class="controls auth-loading" aria-live="polite">
-      Comprobando sesión…
-    </section>
+    <main>
+        <section id="authLoading" class="controls auth-loading" aria-live="polite">
+            Comprobando sesión…
+        </section>
 
-    <form id="loginPanel" class="controls hidden">
-      <button id="loginMicrosoft" type="button" disabled>Iniciar sesión con Microsoft</button>
-      <button id="loginGoogle" type="button" disabled>Iniciar sesión con Google</button>
-    </form>
+        <form id="loginPanel" class="controls hidden">
+            <button id="loginMicrosoft" type="button" disabled>Iniciar sesión con Microsoft</button>
+            <button id="loginGoogle" type="button" disabled>Iniciar sesión con Google</button>
+        </form>
 
-    <section id="monitorPanel" class="controls hidden">
-      <label class="field">
-        <span>Local autorizado</span>
-        <select id="restaurantId" aria-label="Local autorizado"></select>
-      </label>
-      <label class="field">
-        <span>Estación KDS</span>
-        <select id="stationCode" aria-label="Estación KDS" disabled></select>
-      </label>
-      <div class="monitor-state">
-        <div id="connectionStatus" class="status" role="status">
-          <span class="dot"></span>
-          <span>Inicia sesión</span>
-        </div>
-        <p id="identityStatus" class="identity"></p>
-      </div>
-      <div class="toolbar">
-        <button id="refresh" type="button" disabled>Actualizar</button>
-        <button id="logout" class="secondary" type="button">Salir</button>
-      </div>
-    </section>
+        <section id="monitorPanel" class="controls hidden">
+            <label class="field">
+                <span>Local autorizado</span>
+                <select id="restaurantId" aria-label="Local autorizado"></select>
+            </label>
+            <label class="field">
+                <span>Estación KDS</span>
+                <select id="stationCode" aria-label="Estación KDS" disabled></select>
+            </label>
+            <div class="monitor-state">
+                <div id="connectionStatus" class="status" role="status">
+                    <span class="dot"></span>
+                    <span>Inicia sesión</span>
+                </div>
+                <p id="identityStatus" class="identity"></p>
+            </div>
+            <div class="toolbar">
+                <button id="refresh" type="button" disabled>Actualizar</button>
+                <button id="logout" class="secondary" type="button">Salir</button>
+            </div>
+        </section>
 
-    <p id="event"></p>
-    <section id="orders">
-      <p class="empty">Inicia sesión para cargar el monitor.</p>
-    </section>
-  </main>
+        <p id="event"></p>
+        <section id="orders">
+            <p class="empty">Inicia sesión para cargar el monitor.</p>
+        </section>
+    </main>
 
-  <script type="module" src="./js/app.js"></script>
+    <script type="module" src="./js/app.js"></script>
 </body>
+
 </html>

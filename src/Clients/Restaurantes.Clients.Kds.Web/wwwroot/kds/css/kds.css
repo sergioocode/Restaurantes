@@ -60,3 +60,6 @@ small { color: #9ca3af; }
 #loginPanel { display: grid; max-width: 380px; }
 #loginPanel button { width: 100%; }
 .auth-loading { max-width: 380px; color: #d1d5db; }
+#authLoading:not(.hidden) { position: fixed; top: 50%; left: 50%; width: min(380px, calc(100% - 2rem)); margin: 0; justify-content: center; transform: translate(-50%, -50%); }
+#loginPanel:not(.hidden) { position: fixed; top: 50%; left: 50%; width: min(380px, calc(100% - 2rem)); margin: 0; transform: translate(-50%, -50%); }
+#authLoading:not(.hidden) ~ #orders, #loginPanel:not(.hidden) ~ #orders { display: none; }
