@@ -35,6 +35,16 @@ public sealed partial class DiningService
             return DiningResults.Conflict(new { detail = "The table is not active." });
         }
 
+        if (
+            !Guid.TryParse(
+                principal.FindFirst(ClaimTypes.NameIdentifier)?.Value,
+                out Guid openedByUserId
+            )
+        )
+        {
+            return DiningResults.Forbid();
+        }
+
         try
         {
             await cashRegister.EnsureOpenAsync(table.RestaurantId, ct);
@@ -49,6 +59,7 @@ public sealed partial class DiningService
             Id = Guid.NewGuid(),
             RestaurantId = table.RestaurantId,
             TableId = table.Id,
+            OpenedByUserId = openedByUserId,
             RequestGuestCount = table.RequestGuestCount,
             Source = request.Source,
             OpenedAtUtc = time.GetUtcNow().UtcDateTime,
@@ -209,7 +220,6 @@ public sealed partial class DiningService
 
     public async Task<DiningResult> CancelSession(
         Guid sessionId,
-        CancelSessionRequest request,
         ClaimsPrincipal principal,
         CancellationToken ct
     )
@@ -221,12 +231,28 @@ public sealed partial class DiningService
         }
 
         if (
-            !access.CanAccessRestaurant(
-                principal,
-                session.RestaurantId,
-                DiningPermission.TablesRelease
+            !Guid.TryParse(
+                principal.FindFirst(ClaimTypes.NameIdentifier)?.Value,
+                out Guid cancelledByUserId
             )
         )
+        {
+            return DiningResults.Forbid();
+        }
+
+        bool canReleaseAnySession = access.CanAccessRestaurant(
+            principal,
+            session.RestaurantId,
+            DiningPermission.TablesRelease
+        );
+        bool canCancelOwnEmptySession =
+            session.OpenedByUserId == cancelledByUserId
+            && access.CanAccessRestaurant(
+                principal,
+                session.RestaurantId,
+                DiningPermission.OrdersCreate
+            );
+        if (!canReleaseAnySession && !canCancelOwnEmptySession)
         {
             return DiningResults.Forbid();
         }
@@ -248,26 +274,8 @@ public sealed partial class DiningService
             );
         }
 
-        string reason = request.Reason.Trim();
-        if (reason.Length is < 3 or > 200)
-        {
-            return DiningResults.BadRequest(
-                new { detail = "A cancellation reason between 3 and 200 characters is required." }
-            );
-        }
-
-        if (
-            !Guid.TryParse(
-                principal.FindFirst(ClaimTypes.NameIdentifier)?.Value,
-                out Guid cancelledByUserId
-            )
-        )
-        {
-            return DiningResults.Forbid();
-        }
-
         DateTime now = time.GetUtcNow().UtcDateTime;
-        session.Cancel(reason, cancelledByUserId, now);
+        session.Cancel(cancelledByUserId, now);
         await db.SaveChangesAsync(ct);
         await PublishTableChanged(realtime, session, "Available", time);
         return DiningResults.Ok(SessionResponse(session));

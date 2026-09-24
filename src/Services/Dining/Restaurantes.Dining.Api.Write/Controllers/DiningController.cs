@@ -179,13 +179,9 @@ public sealed class DiningController(DiningService service) : ControllerBase
     }
 
     [HttpPost("sessions/{sessionId:guid}/cancel")]
-    public Task<IActionResult> CancelSession(
-        Guid sessionId,
-        CancelSessionRequest request,
-        CancellationToken ct
-    )
+    public Task<IActionResult> CancelSession(Guid sessionId, CancellationToken ct)
     {
-        return Execute(() => service.CancelSession(sessionId, request, User, ct));
+        return Execute(() => service.CancelSession(sessionId, User, ct));
     }
 
     [HttpGet("restaurants/{restaurantId:guid}/zones")]

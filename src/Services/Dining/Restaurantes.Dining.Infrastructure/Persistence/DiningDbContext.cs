@@ -61,7 +61,6 @@ public sealed class DiningDbContext(DbContextOptions<DiningDbContext> options) :
         session.Property(x => x.Status).HasMaxLength(20).IsRequired();
         session.Property(x => x.PaymentMethod).HasMaxLength(30);
         session.Property(x => x.CustomerAccessToken).HasMaxLength(64).IsRequired();
-        session.Property(x => x.CancellationReason).HasMaxLength(200).IsRequired();
         session.Property(x => x.Version).IsConcurrencyToken();
         session
             .HasIndex(x => new { x.TableId, x.Status })
