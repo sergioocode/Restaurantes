@@ -10,5 +10,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Restaurantes.CashRegister.Application\Restaurantes.CashRegister.Application.csproj" />
     <ProjectReference Include="..\Restaurantes.CashRegister.Domain\Restaurantes.CashRegister.Domain.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Restaurantes.ServiceDefaults\Restaurantes.ServiceDefaults.csproj" />
   </ItemGroup>
 </Project>

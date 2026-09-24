@@ -36,6 +36,31 @@ public static class VaultConfigurationExtensions
         return builder;
     }
 
+    public static string GetDesignTimeConnectionString(string name)
+    {
+        IConfigurationRoot environmentConfiguration = new ConfigurationBuilder()
+            .AddEnvironmentVariables()
+            .Build();
+
+        string? address = environmentConfiguration["Vault:Address"];
+        if (string.IsNullOrWhiteSpace(address))
+        {
+            address = DefaultLocalAddress;
+            StartLocalVault(Directory.GetCurrentDirectory());
+        }
+
+        string secretPath = environmentConfiguration["Vault:SecretPath"] ?? DefaultSecretPath;
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddConfiguration(environmentConfiguration)
+            .AddInMemoryCollection(ReadSecrets(address, secretPath))
+            .Build();
+
+        return configuration.GetConnectionString(name)
+            ?? throw new InvalidOperationException(
+                $"Vault does not define the connection string '{name}' for design-time EF operations."
+            );
+    }
+
     private static void StartLocalVault(string contentRootPath)
     {
         if (IsLocalVaultProxyAvailable())

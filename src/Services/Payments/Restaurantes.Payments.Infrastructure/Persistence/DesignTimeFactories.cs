@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Restaurantes.Payments.Infrastructure.Persistence.Write;
+using Restaurantes.ServiceDefaults;
 
 namespace Restaurantes.Payments.Infrastructure.Persistence;
 
@@ -12,7 +13,7 @@ public sealed class PaymentWriteDbContextFactory
         return new(
             new DbContextOptionsBuilder<PaymentWriteDbContext>()
                 .UseNpgsql(
-                    "Host=localhost;Port=5432;Database=payments_write;Username=restaurants;Password=restaurants_dev"
+                    VaultConfigurationExtensions.GetDesignTimeConnectionString("PaymentsWrite")
                 )
                 .Options
         );

@@ -11,5 +11,6 @@
     <ProjectReference Include="..\Restaurantes.Catalog.Application\Restaurantes.Catalog.Application.csproj" />
     <ProjectReference Include="..\Restaurantes.Catalog.Contracts\Restaurantes.Catalog.Contracts.csproj" />
     <ProjectReference Include="..\Restaurantes.Catalog.Domain\Restaurantes.Catalog.Domain.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Restaurantes.ServiceDefaults\Restaurantes.ServiceDefaults.csproj" />
   </ItemGroup>
 </Project>

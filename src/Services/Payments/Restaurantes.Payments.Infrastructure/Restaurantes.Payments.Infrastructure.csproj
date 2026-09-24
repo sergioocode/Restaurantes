@@ -14,5 +14,6 @@
     <ProjectReference Include="..\Restaurantes.Payments.Application\Restaurantes.Payments.Application.csproj" />
     <ProjectReference Include="..\Restaurantes.Payments.Contracts\Restaurantes.Payments.Contracts.csproj" />
     <ProjectReference Include="..\Restaurantes.Payments.Domain\Restaurantes.Payments.Domain.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Restaurantes.ServiceDefaults\Restaurantes.ServiceDefaults.csproj" />
   </ItemGroup>
 </Project>

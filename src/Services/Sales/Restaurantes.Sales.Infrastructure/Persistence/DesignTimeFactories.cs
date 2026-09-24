@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore.Design;
 using Restaurantes.Sales.Infrastructure.Persistence.Read;
 using Restaurantes.Sales.Infrastructure.Persistence.Write;
+using Restaurantes.ServiceDefaults;
 
 namespace Restaurantes.Sales.Infrastructure.Persistence;
 
@@ -11,9 +12,7 @@ public sealed class SalesWriteDbContextFactory : IDesignTimeDbContextFactory<Sal
     {
         DbContextOptions<SaleWriteDbContext> options =
             new DbContextOptionsBuilder<SaleWriteDbContext>()
-                .UseNpgsql(
-                    "Host=localhost;Port=5432;Database=sales_write;Username=restaurants;Password=restaurants_dev"
-                )
+                .UseNpgsql(VaultConfigurationExtensions.GetDesignTimeConnectionString("SalesWrite"))
                 .Options;
         return new SaleWriteDbContext(options);
     }
@@ -25,9 +24,7 @@ public sealed class SalesReadDbContextFactory : IDesignTimeDbContextFactory<Sale
     {
         DbContextOptions<SaleReadDbContext> options =
             new DbContextOptionsBuilder<SaleReadDbContext>()
-                .UseNpgsql(
-                    "Host=localhost;Port=5432;Database=sales_read;Username=restaurants;Password=restaurants_dev"
-                )
+                .UseNpgsql(VaultConfigurationExtensions.GetDesignTimeConnectionString("SalesRead"))
                 .Options;
         return new SaleReadDbContext(options);
     }

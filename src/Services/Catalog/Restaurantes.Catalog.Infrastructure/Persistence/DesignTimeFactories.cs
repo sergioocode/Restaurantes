@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore.Design;
 using Restaurantes.Catalog.Infrastructure.Persistence.Read;
 using Restaurantes.Catalog.Infrastructure.Persistence.Write;
+using Restaurantes.ServiceDefaults;
 
 namespace Restaurantes.Catalog.Infrastructure.Persistence;
 
@@ -13,7 +14,7 @@ public sealed class CatalogWriteDbContextFactory
         return new(
             new DbContextOptionsBuilder<CatalogWriteDbContext>()
                 .UseNpgsql(
-                    "Host=localhost;Port=5432;Database=catalog_write;Username=restaurants;Password=restaurants_dev"
+                    VaultConfigurationExtensions.GetDesignTimeConnectionString("CatalogWrite")
                 )
                 .Options
         );
@@ -27,7 +28,7 @@ public sealed class CatalogReadDbContextFactory : IDesignTimeDbContextFactory<Ca
         return new(
             new DbContextOptionsBuilder<CatalogReadDbContext>()
                 .UseNpgsql(
-                    "Host=localhost;Port=5432;Database=catalog_read;Username=restaurants;Password=restaurants_dev"
+                    VaultConfigurationExtensions.GetDesignTimeConnectionString("CatalogRead")
                 )
                 .Options
         );

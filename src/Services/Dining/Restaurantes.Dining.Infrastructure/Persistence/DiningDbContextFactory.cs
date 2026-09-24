@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Restaurantes.ServiceDefaults;
 
 namespace Restaurantes.Dining.Infrastructure.Persistence;
 
@@ -7,9 +8,9 @@ public sealed class DiningDbContextFactory : IDesignTimeDbContextFactory<DiningD
 {
     public DiningDbContext CreateDbContext(string[] args)
     {
-        string connectionString =
-            Environment.GetEnvironmentVariable("ConnectionStrings__DiningWrite")
-            ?? "Host=localhost;Port=5432;Database=dining_write;Username=restaurants;Password=restaurants_dev";
+        string connectionString = VaultConfigurationExtensions.GetDesignTimeConnectionString(
+            "DiningWrite"
+        );
         return new DiningDbContext(
             new DbContextOptionsBuilder<DiningDbContext>().UseNpgsql(connectionString).Options
         );

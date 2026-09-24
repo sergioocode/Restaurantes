@@ -13,5 +13,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Restaurantes.Dining.Application\Restaurantes.Dining.Application.csproj" />
     <ProjectReference Include="..\Restaurantes.Dining.Domain\Restaurantes.Dining.Domain.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Restaurantes.ServiceDefaults\Restaurantes.ServiceDefaults.csproj" />
   </ItemGroup>
 </Project>
