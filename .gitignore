@@ -485,6 +485,7 @@ $RECYCLE.BIN/
 *.swp
 
 /.artifacts/
+/.sonarqube/
 
 # Local Codex conversation artifacts and configuration
 /.codex/

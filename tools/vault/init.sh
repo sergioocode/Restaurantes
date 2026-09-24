@@ -1,5 +1,5 @@
 #!/bin/sh
-set -eu
+set -e -u
 
 : "${VAULT_ADDR:?VAULT_ADDR is required}"
 : "${VAULT_TOKEN:?VAULT_TOKEN is required}"

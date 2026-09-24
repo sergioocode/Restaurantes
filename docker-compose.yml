@@ -1,4 +1,4 @@
-﻿name: restaurantes
+name: restaurantes
 
 services:
   postgres:
@@ -132,6 +132,40 @@ services:
     depends_on:
       - prometheus
 
+  sonarqube-db:
+    image: postgres:17-alpine
+    container_name: restaurantes-sonarqube-db
+    profiles: [ "quality" ]
+    environment:
+      POSTGRES_USER: sonarqube
+      POSTGRES_PASSWORD: sonarqube_dev
+      POSTGRES_DB: sonarqube
+    volumes:
+      - restaurant-sonarqube-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U sonarqube -d sonarqube" ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  sonarqube:
+    image: sonarqube:26.9.0.129388-community
+    container_name: restaurantes-sonarqube
+    profiles: [ "quality" ]
+    environment:
+      SONAR_JDBC_URL: jdbc:postgresql://sonarqube-db:5432/sonarqube
+      SONAR_JDBC_USERNAME: sonarqube
+      SONAR_JDBC_PASSWORD: sonarqube_dev
+    ports:
+      - "127.0.0.1:9001:9000"
+    volumes:
+      - restaurant-sonarqube-data:/opt/sonarqube/data
+      - restaurant-sonarqube-extensions:/opt/sonarqube/extensions
+      - restaurant-sonarqube-logs:/opt/sonarqube/logs
+    depends_on:
+      sonarqube-db:
+        condition: service_healthy
+
 
 volumes:
   restaurant-postgres-data:
@@ -140,3 +174,7 @@ volumes:
   restaurant-vault-proxy-auth:
   restaurant-prometheus-data:
   restaurant-grafana-data:
+  restaurant-sonarqube-postgres-data:
+  restaurant-sonarqube-data:
+  restaurant-sonarqube-extensions:
+  restaurant-sonarqube-logs:

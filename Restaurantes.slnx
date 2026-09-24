@@ -11,8 +11,8 @@
   </Folder>
   <Folder Name="/src/BuildingBlocks/">
     <Project Path="src/BuildingBlocks/Restaurantes.Messaging.RabbitMq/Restaurantes.Messaging.RabbitMq.csproj" />
-    <Project Path="src/BuildingBlocks/Restaurantes.ServiceDefaults/Restaurantes.ServiceDefaults.csproj" />
     <Project Path="src/BuildingBlocks/Restaurantes.Security/Restaurantes.Security.csproj" />
+    <Project Path="src/BuildingBlocks/Restaurantes.ServiceDefaults/Restaurantes.ServiceDefaults.csproj" />
   </Folder>
   <Folder Name="/src/Clients/">
     <Project Path="src/Clients/Restaurantes.Clients.Shared.Operations/Restaurantes.Clients.Shared.Operations.csproj" />
@@ -36,8 +36,8 @@
     <Project Path="src/Services/CashRegister/Restaurantes.CashRegister.Infrastructure/Restaurantes.CashRegister.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/src/Services/Catalog/">
-    <Project Path="src/Services/Catalog/Restaurantes.Catalog.Api.Write/Restaurantes.Catalog.Api.Write.csproj" />
     <Project Path="src/Services/Catalog/Restaurantes.Catalog.Api.Read/Restaurantes.Catalog.Api.Read.csproj" />
+    <Project Path="src/Services/Catalog/Restaurantes.Catalog.Api.Write/Restaurantes.Catalog.Api.Write.csproj" />
     <Project Path="src/Services/Catalog/Restaurantes.Catalog.Application/Restaurantes.Catalog.Application.csproj" />
     <Project Path="src/Services/Catalog/Restaurantes.Catalog.Consumer/Restaurantes.Catalog.Consumer.csproj" />
     <Project Path="src/Services/Catalog/Restaurantes.Catalog.Contracts/Restaurantes.Catalog.Contracts.csproj" />
@@ -62,8 +62,8 @@
     <Project Path="src/Services/Integrations/Restaurantes.Integrations.Api/Restaurantes.Integrations.Api.csproj" />
   </Folder>
   <Folder Name="/src/Services/Orders/">
-    <Project Path="src/Services/Orders/Restaurantes.Orders.Api.Write/Restaurantes.Orders.Api.Write.csproj" />
     <Project Path="src/Services/Orders/Restaurantes.Orders.Api.Read/Restaurantes.Orders.Api.Read.csproj" />
+    <Project Path="src/Services/Orders/Restaurantes.Orders.Api.Write/Restaurantes.Orders.Api.Write.csproj" />
     <Project Path="src/Services/Orders/Restaurantes.Orders.Application/Restaurantes.Orders.Application.csproj" />
     <Project Path="src/Services/Orders/Restaurantes.Orders.Consumer/Restaurantes.Orders.Consumer.csproj" />
     <Project Path="src/Services/Orders/Restaurantes.Orders.Contracts/Restaurantes.Orders.Contracts.csproj" />
