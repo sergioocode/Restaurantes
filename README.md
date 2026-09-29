@@ -1,10 +1,19 @@
 # 🍽️ Restaurantes
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![Blazor WebAssembly](https://img.shields.io/badge/Blazor_WebAssembly-10.0.12-512BD4?style=for-the-badge&logo=blazor&logoColor=white)](https://dotnet.microsoft.com/apps/aspnet/web-apps/blazor)
+[![EF Core](https://img.shields.io/badge/EF_Core-10.0.4-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://learn.microsoft.com/ef/core/)
+[![YARP](https://img.shields.io/badge/YARP-2.3.0-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://microsoft.github.io/reverse-proxy/)
+
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![RabbitMQ](https://img.shields.io/badge/RabbitMQ-4.x-FF6600?style=for-the-badge&logo=rabbitmq&logoColor=white)](https://www.rabbitmq.com/)
-[![YARP](https://img.shields.io/badge/YARP-2.3-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://microsoft.github.io/reverse-proxy/)
-[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+[![RabbitMQ](https://img.shields.io/badge/RabbitMQ-4.3.4-FF6600?style=for-the-badge&logo=rabbitmq&logoColor=white)](https://www.rabbitmq.com/)
+[![Vault](https://img.shields.io/badge/Vault-1.21.4-000000?style=for-the-badge&logo=vault&logoColor=white)](https://developer.hashicorp.com/vault)
+[![Docker Compose](https://img.shields.io/badge/Docker%20Compose-5.5.1-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docs.docker.com/compose/)
+
+[![OpenTelemetry .NET](https://img.shields.io/badge/OpenTelemetry_.NET-1.19.x-000000?style=for-the-badge&logo=opentelemetry&logoColor=white)](https://opentelemetry.io/)
+[![OTel Collector](https://img.shields.io/badge/OTel_Collector-0.120.0-000000?style=for-the-badge&logo=opentelemetry&logoColor=white)](https://opentelemetry.io/docs/collector/)
+[![Prometheus](https://img.shields.io/badge/Prometheus-3.8.0-E6522C?style=for-the-badge&logo=prometheus&logoColor=white)](https://prometheus.io/)
+[![Grafana](https://img.shields.io/badge/Grafana-12.3.0-F46800?style=for-the-badge&logo=grafana&logoColor=white)](https://grafana.com/)
 
 **Restaurantes** es una plataforma distribuida para la operación y gestión de una cadena de restaurantes, construida sobre **.NET 10** y diseñada alrededor de dominios independientes, separación de lectura y escritura, mensajería asíncrona y persistencia aislada por servicio.
 
@@ -384,22 +393,20 @@ Los servicios con mayor complejidad se subdividen en proyectos de **Domain, Appl
 
 El `docker-compose.yml` levanta:
 
-- PostgreSQL 18;
-- RabbitMQ con Management UI;
+- PostgreSQL 18.
+- RabbitMQ con Management UI.
 - pgAdmin.
 - Vault de desarrollo, su inicialización y el proxy de autenticación local.
 - Prometheus y Grafana para métricas y dashboards locales.
 - SonarQube Community Build bajo el perfil opcional `quality` para análisis estático, seguridad y Quality Gate locales.
-- SonarQube Cloud como referencia de CI para análisis estático, seguridad, cobertura y Quality Gate.
 
 Las bases de datos lógicas necesarias se crean mediante los scripts de `tools/postgres/init`.
 
-Antes de iniciar Compose, copia `tools/vault/.env.example` a `tools/vault/.env` y completa sus variables con valores propios. El archivo `.env` es local y está ignorado por Git.
+Antes de iniciar Compose, copia `tools/vault/.env.example` a `tools/vault/.env` y define valores locales distintos para Vault, PostgreSQL, pgAdmin, RabbitMQ, Grafana y la base de datos de SonarQube. El archivo `.env` está ignorado por Git. Pasa siempre `--env-file tools/vault/.env`: Compose no carga automáticamente un `.env` ubicado en esa subcarpeta.
 
 ```bash
 docker compose --env-file tools/vault/.env up -d
 ```
-
 
 Las migraciones de Entity Framework Core son aplicadas por los servicios correspondientes durante su inicialización.
 
@@ -459,25 +466,21 @@ $env:SONAR_TOKEN = "<token-de-analisis>"
 .\tools\sonar\Invoke-SonarQubeLocalAnalysis.ps1
 ```
 
-El script restaura el escáner local, ejecuta el análisis alrededor de una compilación completa y espera el resultado del **Quality Gate**. Un Gate fallido devuelve un error, por lo que el mismo comando puede usarse posteriormente en CI/CD. Para detener únicamente esta infraestructura:
-
-![Quality Gate inicial de SonarQube](assets/sonar/sonarqube-quality-gate.jpg)
+El script restaura el escáner local, ejecuta el análisis alrededor de una compilación completa y espera el resultado del **Quality Gate**. Un Gate fallido devuelve un error. Para detener únicamente esta infraestructura:
 
 ```powershell
 docker compose --env-file tools/vault/.env --profile quality stop sonarqube sonarqube-db
 ```
 
+![Quality Gate inicial de SonarQube](assets/sonar/sonarqube-quality-gate.jpg)
+
 ### Calidad continua en Cloud
 
-[SonarQube Cloud](https://sonarcloud.io/project/overview?id=restaurantes) analiza `master`, la rama principal del proyecto Cloud. El trabajo se integra primero en `develop` desde una rama corta; sus pushes no ejecutan GitHub Actions. Tras avanzar `master` por merge directo, el push ejecuta la compilación, las pruebas con cobertura OpenCover y el análisis Cloud. El commit solo es candidato a release si pasan el CI y el Quality Gate.
+[SonarQube Cloud](https://sonarcloud.io/) analiza `master`, la rama principal configurada para este proyecto. `develop` es la rama habitual de trabajo e integración; sus pushes no ejecutan GitHub Actions. Los cambios se promueven a `master` mediante un commit de merge con mensaje de resumen, incluso si se incorpora un solo commit.
 
-Para reproducir ese análisis desde `master` en un equipo local, define `SONAR_TOKEN` con un token de SonarQube Cloud y ejecuta:
+El [workflow de CI](.github/workflows/ci.yml) se ejecuta al subir `master` o manualmente. Compila la solución, ejecuta las pruebas con cobertura OpenCover, publica el análisis Cloud y espera el resultado del **Quality Gate**. Solo un commit de `master` que supere esas comprobaciones es candidato a release.
 
-```powershell
-.\tools\sonar\Invoke-SonarQubeCloudAnalysis.ps1
-```
-
-El valor del token no se versiona. Este segundo script usa la organización `sergioocode` y el proyecto `restaurantes`, compila la solución, ejecuta las pruebas con cobertura OpenCover y espera el resultado del **Quality Gate**. En GitHub, el token se configura como secreto del repositorio llamado `SONAR_TOKEN`.
+El workflow usa `SONAR_TOKEN` como secreto del repositorio en GitHub. La organización y la clave del proyecto están configuradas allí; el valor del token no se versiona.
 
 ### Datos de desarrollo opcionales
 
