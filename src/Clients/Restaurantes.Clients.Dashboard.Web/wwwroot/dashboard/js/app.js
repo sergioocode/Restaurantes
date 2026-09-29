@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id),
-    sep = String.fromCharCode(30),
+    sep = String.fromCodePoint(30),
     money = new Intl.NumberFormat('es-ES', {
         style: 'currency',
         currency: 'EUR'
