@@ -6,7 +6,7 @@ services:
     container_name: restaurantes-postgres
     environment:
       POSTGRES_USER: restaurants
-      POSTGRES_PASSWORD: restaurants_dev
+      POSTGRES_PASSWORD: ${RESTAURANTES_POSTGRES_PASSWORD:?Local PostgreSQL password is missing}
       POSTGRES_DB: restaurant_operations_write
     ports:
       - "5432:5432"
@@ -24,7 +24,7 @@ services:
     container_name: restaurantes-pgadmin
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@restaurants.com
-      PGADMIN_DEFAULT_PASSWORD: restaurants_dev
+      PGADMIN_DEFAULT_PASSWORD: ${RESTAURANTES_PGADMIN_PASSWORD:?Local pgAdmin password is missing}
       PGADMIN_REPLACE_SERVERS_ON_STARTUP: "True"
     ports:
       - "5050:80"
@@ -41,7 +41,7 @@ services:
     hostname: rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: restaurants
-      RABBITMQ_DEFAULT_PASS: restaurants_dev
+      RABBITMQ_DEFAULT_PASS: ${RESTAURANTES_RABBITMQ_PASSWORD:?Local RabbitMQ password is missing}
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -75,6 +75,8 @@ services:
     environment:
       VAULT_ADDR: http://vault:8200
       VAULT_TOKEN: ${VAULT_DEV_ROOT_TOKEN_ID:?Local Vault bootstrap token is missing}
+      RESTAURANTES_POSTGRES_PASSWORD: ${RESTAURANTES_POSTGRES_PASSWORD:?Local PostgreSQL password is missing}
+      RESTAURANTES_RABBITMQ_PASSWORD: ${RESTAURANTES_RABBITMQ_PASSWORD:?Local RabbitMQ password is missing}
     volumes:
       - ./tools/vault/init.sh:/vault/init/init.sh:ro
       - restaurant-vault-proxy-auth:/vault/auth
@@ -121,7 +123,7 @@ services:
     container_name: restaurantes-grafana
     environment:
       GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: grafana_dev
+      GF_SECURITY_ADMIN_PASSWORD: ${RESTAURANTES_GRAFANA_ADMIN_PASSWORD:?Local Grafana admin password is missing}
       GF_USERS_ALLOW_SIGN_UP: "false"
     ports:
       - "127.0.0.1:3000:3000"
@@ -138,7 +140,7 @@ services:
     profiles: [ "quality" ]
     environment:
       POSTGRES_USER: sonarqube
-      POSTGRES_PASSWORD: sonarqube_dev
+      POSTGRES_PASSWORD: ${RESTAURANTES_SONARQUBE_POSTGRES_PASSWORD:?Local SonarQube PostgreSQL password is missing}
       POSTGRES_DB: sonarqube
     volumes:
       - restaurant-sonarqube-postgres-data:/var/lib/postgresql/data
@@ -155,7 +157,7 @@ services:
     environment:
       SONAR_JDBC_URL: jdbc:postgresql://sonarqube-db:5432/sonarqube
       SONAR_JDBC_USERNAME: sonarqube
-      SONAR_JDBC_PASSWORD: sonarqube_dev
+      SONAR_JDBC_PASSWORD: ${RESTAURANTES_SONARQUBE_POSTGRES_PASSWORD:?Local SonarQube PostgreSQL password is missing}
     ports:
       - "127.0.0.1:9001:9000"
     volumes:

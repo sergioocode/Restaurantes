@@ -1,8 +1,10 @@
 #!/bin/sh
-set -eu
+set -e -u
 
 : "${VAULT_ADDR:?VAULT_ADDR is required}"
 : "${VAULT_TOKEN:?VAULT_TOKEN is required}"
+: "${RESTAURANTES_POSTGRES_PASSWORD:?RESTAURANTES_POSTGRES_PASSWORD is required}"
+: "${RESTAURANTES_RABBITMQ_PASSWORD:?RESTAURANTES_RABBITMQ_PASSWORD is required}"
 
 umask 077
 mkdir -p /vault/auth
@@ -31,21 +33,21 @@ chmod 0444 /vault/auth/role-id /vault/auth/secret-id
 signing_key="$(dd if=/dev/urandom bs=48 count=1 2>/dev/null | base64 | tr -d '\n')"
 
 vault kv put secret/restaurantes/local \
-  "ConnectionStrings__CashRegisterWrite=Host=localhost;Port=5432;Database=cash_register_write;Username=restaurants;Password=restaurants_dev" \
-  "ConnectionStrings__CatalogRead=Host=localhost;Port=5432;Database=catalog_read;Username=restaurants;Password=restaurants_dev" \
-  "ConnectionStrings__CatalogWrite=Host=localhost;Port=5432;Database=catalog_write;Username=restaurants;Password=restaurants_dev" \
-  "ConnectionStrings__DiningWrite=Host=localhost;Port=5432;Database=dining_write;Username=restaurants;Password=restaurants_dev" \
-  "ConnectionStrings__IdentityWrite=Host=localhost;Port=5432;Database=identity_write;Username=restaurants;Password=restaurants_dev" \
-  "ConnectionStrings__OrdersRead=Host=localhost;Port=5432;Database=orders_read;Username=restaurants;Password=restaurants_dev" \
-  "ConnectionStrings__OrdersWrite=Host=localhost;Port=5432;Database=orders_write;Username=restaurants;Password=restaurants_dev" \
-  "ConnectionStrings__PaymentsWrite=Host=localhost;Port=5432;Database=payments_write;Username=restaurants;Password=restaurants_dev" \
-  "ConnectionStrings__ReportingRead=Host=localhost;Port=5432;Database=reporting_read;Username=restaurants;Password=restaurants_dev" \
-  "ConnectionStrings__RestaurantOperationsRead=Host=localhost;Port=5432;Database=restaurant_operations_read;Username=restaurants;Password=restaurants_dev" \
-  "ConnectionStrings__RestaurantOperationsWrite=Host=localhost;Port=5432;Database=restaurant_operations_write;Username=restaurants;Password=restaurants_dev" \
-  "ConnectionStrings__SalesRead=Host=localhost;Port=5432;Database=sales_read;Username=restaurants;Password=restaurants_dev" \
-  "ConnectionStrings__SalesWrite=Host=localhost;Port=5432;Database=sales_write;Username=restaurants;Password=restaurants_dev" \
+  "ConnectionStrings__CashRegisterWrite=Host=localhost;Port=5432;Database=cash_register_write;Username=restaurants;Password=${RESTAURANTES_POSTGRES_PASSWORD}" \
+  "ConnectionStrings__CatalogRead=Host=localhost;Port=5432;Database=catalog_read;Username=restaurants;Password=${RESTAURANTES_POSTGRES_PASSWORD}" \
+  "ConnectionStrings__CatalogWrite=Host=localhost;Port=5432;Database=catalog_write;Username=restaurants;Password=${RESTAURANTES_POSTGRES_PASSWORD}" \
+  "ConnectionStrings__DiningWrite=Host=localhost;Port=5432;Database=dining_write;Username=restaurants;Password=${RESTAURANTES_POSTGRES_PASSWORD}" \
+  "ConnectionStrings__IdentityWrite=Host=localhost;Port=5432;Database=identity_write;Username=restaurants;Password=${RESTAURANTES_POSTGRES_PASSWORD}" \
+  "ConnectionStrings__OrdersRead=Host=localhost;Port=5432;Database=orders_read;Username=restaurants;Password=${RESTAURANTES_POSTGRES_PASSWORD}" \
+  "ConnectionStrings__OrdersWrite=Host=localhost;Port=5432;Database=orders_write;Username=restaurants;Password=${RESTAURANTES_POSTGRES_PASSWORD}" \
+  "ConnectionStrings__PaymentsWrite=Host=localhost;Port=5432;Database=payments_write;Username=restaurants;Password=${RESTAURANTES_POSTGRES_PASSWORD}" \
+  "ConnectionStrings__ReportingRead=Host=localhost;Port=5432;Database=reporting_read;Username=restaurants;Password=${RESTAURANTES_POSTGRES_PASSWORD}" \
+  "ConnectionStrings__RestaurantOperationsRead=Host=localhost;Port=5432;Database=restaurant_operations_read;Username=restaurants;Password=${RESTAURANTES_POSTGRES_PASSWORD}" \
+  "ConnectionStrings__RestaurantOperationsWrite=Host=localhost;Port=5432;Database=restaurant_operations_write;Username=restaurants;Password=${RESTAURANTES_POSTGRES_PASSWORD}" \
+  "ConnectionStrings__SalesRead=Host=localhost;Port=5432;Database=sales_read;Username=restaurants;Password=${RESTAURANTES_POSTGRES_PASSWORD}" \
+  "ConnectionStrings__SalesWrite=Host=localhost;Port=5432;Database=sales_write;Username=restaurants;Password=${RESTAURANTES_POSTGRES_PASSWORD}" \
   RabbitMq__UserName=restaurants \
-  RabbitMq__Password=restaurants_dev \
+  "RabbitMq__Password=${RESTAURANTES_RABBITMQ_PASSWORD}" \
   "Security__SigningKey=${signing_key}" >/dev/null
 
 echo "Vault local secrets are ready."

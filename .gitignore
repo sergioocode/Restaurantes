@@ -6,6 +6,7 @@
 # dotenv files
 .env
 .env.*
+!tools/vault/.env.example
 appsettings.Development.json
 *.secrets.json
 
