@@ -14,4 +14,4 @@ app.MapGet(
 );
 app.MapReverseProxy();
 
-app.Run();
+await app.RunAsync();

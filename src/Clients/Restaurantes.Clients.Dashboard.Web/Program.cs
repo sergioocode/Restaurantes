@@ -8,4 +8,4 @@ app.MapGet(
     () => Results.Ok(new { service = "Restaurantes.Clients.Dashboard.Web", status = "Healthy" })
 );
 
-app.Run();
+await app.RunAsync();

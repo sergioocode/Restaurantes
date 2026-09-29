@@ -8,4 +8,4 @@ WebApplication app = builder.Build();
 app.MapServiceDefaults();
 app.MapControllers();
 
-app.Run();
+await app.RunAsync();
