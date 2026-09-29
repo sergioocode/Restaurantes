@@ -26,8 +26,24 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Restaurar herramientas locales
+        if: github.ref == 'refs/heads/master'
+        run: dotnet tool restore
+
       - name: Restaurar dependencias
         run: dotnet restore Restaurantes.slnx
+
+      - name: Preparar el análisis de SonarQube Cloud
+        if: github.ref == 'refs/heads/master'
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: >-
+          dotnet tool run dotnet-sonarscanner -- begin
+          /k:"restaurantes"
+          /o:"sergioocode"
+          /d:sonar.token="$SONAR_TOKEN"
+          /d:sonar.cs.opencover.reportsPaths="TestResults/coverage.opencover*.xml"
+          /d:sonar.qualitygate.wait=true
 
       - name: Compilar la solución
         run: dotnet build Restaurantes.slnx --configuration Release --no-restore
@@ -38,6 +54,14 @@ jobs:
           --results-directory TestResults
           -- --coverlet --coverlet-output-format opencover
           --coverlet-include "[Restaurantes.*]*"
+
+      - name: Publicar análisis en SonarQube Cloud
+        if: github.ref == 'refs/heads/master'
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: >-
+          dotnet tool run dotnet-sonarscanner -- end
+          /d:sonar.token="$SONAR_TOKEN"
 
       - name: Publicar informe de cobertura
         if: always()
