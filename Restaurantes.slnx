@@ -9,6 +9,7 @@
     <Project Path="tests/Restaurantes.CashRegister.Api.Tests/Restaurantes.CashRegister.Api.Tests.csproj" />
     <Project Path="tests/Restaurantes.Clients.Pwa.Tests/Restaurantes.Clients.Pwa.Tests.csproj" />
     <Project Path="tests/Restaurantes.Hosts.Tests/Restaurantes.Hosts.Tests.csproj" />
+    <Project Path="tests/Restaurantes.Reporting.Consumer.Tests/Restaurantes.Reporting.Consumer.Tests.csproj" />
   </Folder>
   <Folder Name="/src/ApiGateways/">
     <Project Path="src/ApiGateways/Restaurantes.Gateway.Private/Restaurantes.Gateway.Private.csproj" />

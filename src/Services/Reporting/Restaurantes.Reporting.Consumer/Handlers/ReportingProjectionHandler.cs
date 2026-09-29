@@ -18,7 +18,7 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
         CancellationToken cancellationToken
     )
     {
-        if (!await db.InboxMessages.AnyAsync(x => x.Id == messageId))
+        if (!await db.InboxMessages.AnyAsync(x => x.Id == messageId, cancellationToken))
         {
             Guid affectedOrderId;
             Guid affectedRestaurantId;
@@ -28,7 +28,7 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
                 affectedOrderId = data.OrderId;
                 affectedRestaurantId = data.RestaurantId;
                 OrderReportingFact fact =
-                    await db.Orders.FindAsync([data.OrderId])
+                    await db.Orders.FindAsync([data.OrderId], cancellationToken)
                     ?? new OrderReportingFact { OrderId = data.OrderId, PaymentStatus = "Unpaid" };
                 if (db.Entry(fact).State == EntityState.Detached)
                 {
@@ -64,7 +64,7 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
                 affectedOrderId = e.OrderId;
                 affectedRestaurantId = e.RestaurantId;
                 OrderReportingFact fact =
-                    await db.Orders.FindAsync([e.OrderId])
+                    await db.Orders.FindAsync([e.OrderId], cancellationToken)
                     ?? new OrderReportingFact
                     {
                         OrderId = e.OrderId,
@@ -99,7 +99,7 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
                 affectedOrderId = e.OrderId;
                 affectedRestaurantId = e.RestaurantId;
                 OrderReportingFact fact =
-                    await db.Orders.FindAsync([e.OrderId])
+                    await db.Orders.FindAsync([e.OrderId], cancellationToken)
                     ?? throw new JsonException("Refunded order is missing");
                 fact.PaymentStatus = "Refunded";
                 fact.RefundedAtUtc = e.RefundedAtUtc;
@@ -115,7 +115,7 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
                 affectedRestaurantId = e.RestaurantId;
                 List<OrderReportingFact> saleOrders = await db
                     .Orders.Where(item => e.OrderIds.Contains(item.OrderId))
-                    .ToListAsync();
+                    .ToListAsync(cancellationToken);
                 if (saleOrders.Count != e.OrderIds.Distinct().Count())
                 {
                     throw new InvalidOperationException(
@@ -137,7 +137,7 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
                     ))
                     .ToList();
                 CompletedSaleFact fact =
-                    await db.Sales.FindAsync([e.SaleId])
+                    await db.Sales.FindAsync([e.SaleId], cancellationToken)
                     ?? new CompletedSaleFact { SaleId = e.SaleId };
                 if (db.Entry(fact).State == EntityState.Detached)
                 {
