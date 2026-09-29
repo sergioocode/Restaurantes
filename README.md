@@ -393,11 +393,12 @@ El `docker-compose.yml` levanta:
 
 Las bases de datos lógicas necesarias se crean mediante los scripts de `tools/postgres/init`.
 
+Antes de iniciar Compose, copia `tools/vault/.env.example` a `tools/vault/.env` y completa sus variables con valores propios. El archivo `.env` es local y está ignorado por Git.
+
 ```bash
 docker compose --env-file tools/vault/.env up -d
 ```
 
-El archivo `tools/vault/.env` contiene el token de arranque local de Vault y no se versiona. No uses `docker compose up -d` sin `--env-file`, porque Compose no carga automáticamente archivos `.env` ubicados en subcarpetas.
 
 Las migraciones de Entity Framework Core son aplicadas por los servicios correspondientes durante su inicialización.
 
@@ -408,7 +409,7 @@ Las APIs que usan `AddServiceDefaults()` envían métricas mediante OTLP al Open
 Prometheus recoge el collector en `http://otel-collector:9464/metrics`. Con una API en ejecución, abre:
 
 - Prometheus: `http://localhost:9090`
-- Grafana: `http://localhost:3000` (`admin` / `grafana_dev`, sólo para desarrollo local)
+- Grafana: `http://localhost:3000` (usuario `admin`; contraseña configurada en `tools/vault/.env`).
 
 Grafana aprovisiona automáticamente la fuente Prometheus y el dashboard **Restaurantes · Operación HTTP**. El stack inicial cubre actividad de las APIs, tráfico HTTP, latencia p95, respuestas y errores 5xx por servicio; las métricas de negocio, alertas, logs centralizados y trazas persistidas se incorporarán en fases posteriores.
 
