@@ -38,4 +38,4 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<ReportingHub>("/hubs/reporting").RequireAuthorization();
-app.Run();
+await app.RunAsync();

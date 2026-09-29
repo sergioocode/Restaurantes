@@ -19,4 +19,4 @@ await using (AsyncServiceScope scope = app.Services.CreateAsyncScope())
 
 app.MapServiceDefaults();
 app.MapControllers();
-app.Run();
+await app.RunAsync();

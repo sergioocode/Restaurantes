@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="coverlet.MTP" Version="10.1.0" PrivateAssets="all" />
+    <PackageReference Include="xunit.v3.mtp-v2" Version="4.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ApiGateways\Restaurantes.Gateway.Private\Restaurantes.Gateway.Private.csproj" />
+    <ProjectReference Include="..\..\src\ApiGateways\Restaurantes.Gateway.Public\Restaurantes.Gateway.Public.csproj" />
+    <ProjectReference Include="..\..\src\Clients\Restaurantes.Clients.Dashboard.Web\Restaurantes.Clients.Dashboard.Web.csproj" />
+    <ProjectReference Include="..\..\src\Clients\Restaurantes.Clients.Kds.Web\Restaurantes.Clients.Kds.Web.csproj" />
+    <ProjectReference Include="..\..\src\Services\Integrations\Restaurantes.Integrations.Api\Restaurantes.Integrations.Api.csproj" />
+  </ItemGroup>
+</Project>

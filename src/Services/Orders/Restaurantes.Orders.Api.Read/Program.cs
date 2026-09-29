@@ -39,4 +39,4 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<KdsHub>("/hubs/kds");
-app.Run();
+await app.RunAsync();

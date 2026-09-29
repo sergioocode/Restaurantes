@@ -48,4 +48,4 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<DiningHub>("/hubs/dining");
-app.Run();
+await app.RunAsync();

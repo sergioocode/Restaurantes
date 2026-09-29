@@ -86,7 +86,7 @@ app.MapServiceDefaults();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-app.Run();
+await app.RunAsync();
 
 static bool Configured(IConfiguration configuration, string provider)
 {
