@@ -1,4 +1,4 @@
-const separator = String.fromCharCode(30);
+const separator = String.fromCodePoint(30);
 
 function send(socket, message) {
   socket.send(JSON.stringify(message) + separator);
