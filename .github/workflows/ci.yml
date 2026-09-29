@@ -3,7 +3,6 @@ name: Integración continua
 on:
   push:
     branches:
-      - develop
       - master
   workflow_dispatch:
 
