@@ -329,6 +329,8 @@ La publicación y consumo de eventos introduce consistencia eventual entre servi
 
 ```text
 Restaurantes/
+├── .config/
+│   └── dotnet-tools.json
 ├── src/
 │   ├── ApiGateways/
 │   │   ├── Restaurantes.Gateway.Public
@@ -364,7 +366,6 @@ Restaurantes/
 │   ├── pgadmin/
 │   └── postgres/init/
 ├── docker-compose.yml
-├── dotnet-tools.json
 ├── Restaurantes.slnLaunch
 └── Restaurantes.slnx
 ```
@@ -388,6 +389,7 @@ El `docker-compose.yml` levanta:
 - pgAdmin.
 - Vault de desarrollo, su inicialización y el proxy de autenticación local.
 - Prometheus y Grafana para métricas y dashboards locales.
+- SonarQube Community Build bajo el perfil opcional `quality` para análisis estático, seguridad y Quality Gate.
 
 Las bases de datos lógicas necesarias se crean mediante los scripts de `tools/postgres/init`.
 
@@ -440,6 +442,29 @@ Prometheus permite inspeccionar la evidencia de cada transición: apertura de me
 
 ![Consulta de Prometheus con el flujo completo](assets/prometheus/prometheus-flujo-completo.jpg)
 
+### Calidad y seguridad local
+
+SonarQube Community Build permite analizar mantenibilidad, fiabilidad y reglas básicas de seguridad antes de integrar cambios. Se mantiene en un perfil Compose independiente para no cargar su base de datos ni su imagen cuando sólo se necesita la infraestructura operativa:
+
+```powershell
+docker compose --env-file tools/vault/.env --profile quality up -d sonarqube
+```
+
+Cuando el contenedor esté disponible, abre `http://localhost:9001`, inicia sesión inicialmente con `admin` / `admin`, cambia esa contraseña y crea un token de análisis para el proyecto `restaurantes`. El token no se versiona: decláralo sólo en la sesión de PowerShell actual.
+
+```powershell
+$env:SONAR_TOKEN = "<token-de-analisis>"
+.\tools\sonar\Invoke-SonarQubeLocalAnalysis.ps1
+```
+
+El script restaura el escáner local, ejecuta el análisis alrededor de una compilación completa y espera el resultado del **Quality Gate**. Un Gate fallido devuelve un error, por lo que el mismo comando puede usarse posteriormente en CI/CD. Para detener únicamente esta infraestructura:
+
+![Quality Gate inicial de SonarQube](assets/sonar/sonarqube-quality-gate.jpg)
+
+```powershell
+docker compose --env-file tools/vault/.env --profile quality stop sonarqube sonarqube-db
+```
+
 ### Datos de desarrollo opcionales
 
 Los datos de ejemplo de `tools/postgres/seed/01-development-catalog.sql` son opcionales y **no se insertan automáticamente** al iniciar Docker ni las aplicaciones. El seed agrega locales, categorías, productos, estaciones KDS, zonas y mesas; no crea usuarios de Identity. El usuario administrador se inicializa por separado al arrancar Identity.
@@ -471,6 +496,7 @@ El manifiesto local de herramientas .NET incluye:
 
 - `dotnet-ef`
 - `csharpier`
+- `dotnet-sonarscanner`
 
 Para aplicar formato al código:
 

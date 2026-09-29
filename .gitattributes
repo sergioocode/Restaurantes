@@ -1,7 +1,10 @@
-﻿###############################################################################
+###############################################################################
 # Set default behavior to automatically normalize line endings.
 ###############################################################################
 * text=auto
+
+# Los scripts montados en contenedores Linux deben conservar finales de línea Unix.
+tools/vault/*.sh text eol=lf
 
 ###############################################################################
 # Set default behavior for command prompt diff.
