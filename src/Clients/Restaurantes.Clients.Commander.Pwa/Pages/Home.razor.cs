@@ -28,7 +28,6 @@ public partial class Home
     private string? category;
     private Dictionary<Guid, int> quantities = [];
     private Dictionary<Guid, string> notes = [];
-    private bool hasSubmittedOrder;
     private SessionBillResponse? bill;
     private bool billOpen;
     private Dictionary<Guid, OrderDetailResponse> billOrders = [];
@@ -46,8 +45,11 @@ public partial class Home
             .ToList();
     private bool CanShowCancelOwnSession =>
         diningSession is not null && diningSession.OpenedByUserId == login?.User.Id;
-    private bool HasSessionOrders =>
-        hasSubmittedOrder || activeOrders.Any(order => order.DiningSessionId == sessionId);
+    private bool HasSessionOrders
+    {
+        get => field || activeOrders.Any(order => order.DiningSessionId == sessionId);
+        set;
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -194,7 +196,7 @@ public partial class Home
             selectedTable = table;
             sessionId = session.Id;
             diningSession = session;
-            hasSubmittedOrder = activeOrders.Any(order => order.DiningSessionId == sessionId);
+            HasSessionOrders = activeOrders.Any(order => order.DiningSessionId == sessionId);
             guestCount = session.GuestCount;
             menu = await Api.MenuAsync(restaurantId);
             category = null;
@@ -230,7 +232,7 @@ public partial class Home
                     quantities,
                     notes
                 );
-                hasSubmittedOrder = true;
+                HasSessionOrders = true;
                 foreach (Guid id in quantities.Keys.ToArray())
                 {
                     quantities[id] = 0;
@@ -317,7 +319,7 @@ public partial class Home
             async () =>
             {
                 await Api.CancelOrderLineAsync(order.OrderId, line.Id, reason.Trim());
-                await Task.Delay(500);
+                await Task.Delay(500, realtimeRefresh?.Token ?? CancellationToken.None);
                 await LoadBill();
                 success = true;
                 message = $"{line.ProductName} cancelado antes de preparación.";
@@ -335,7 +337,7 @@ public partial class Home
     {
         selectedTable = null;
         sessionId = Guid.Empty;
-        hasSubmittedOrder = false;
+        HasSessionOrders = false;
         menu = [];
         category = null;
         quantities = [];
@@ -471,7 +473,11 @@ public partial class Home
     {
         Realtime.OrderUpdated -= HandleOrderUpdated;
         DiningRealtime.TableChanged -= HandleTableChanged;
-        realtimeRefresh?.Cancel();
+        if (realtimeRefresh is not null)
+        {
+            await realtimeRefresh.CancelAsync();
+        }
+
         realtimeRefresh?.Dispose();
         await Realtime.DisconnectAsync();
         await DiningRealtime.DisconnectAsync();

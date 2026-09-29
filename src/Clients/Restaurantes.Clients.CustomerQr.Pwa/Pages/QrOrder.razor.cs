@@ -55,7 +55,11 @@ public partial class QrOrder
 
     private async Task LoadAsync()
     {
-        statusPolling?.Cancel();
+        if (statusPolling is not null)
+        {
+            await statusPolling.CancelAsync();
+        }
+
         loading = true;
         error = string.Empty;
         success = string.Empty;

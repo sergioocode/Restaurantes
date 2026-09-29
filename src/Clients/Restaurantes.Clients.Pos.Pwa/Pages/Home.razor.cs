@@ -157,7 +157,11 @@ public partial class Home
         await Js.InvokeVoidAsync("sessionStorage.removeItem", SessionKey);
         await Realtime.DisconnectAsync();
         await DiningRealtime.DisconnectAsync();
-        reconciliation?.Cancel();
+        if (reconciliation is not null)
+        {
+            await reconciliation.CancelAsync();
+        }
+
         reconciliation?.Dispose();
         reconciliation = null;
         Api.AccessToken = null;
@@ -367,7 +371,7 @@ public partial class Home
                 if (!HasPhysicalLocation)
                 {
                     BackToTables();
-                    await Task.Delay(400);
+                    await Task.Delay(400, realtimeRefresh?.Token ?? CancellationToken.None);
                     await LoadPickupOrdersCore();
                 }
             },
@@ -403,7 +407,7 @@ public partial class Home
                 message = requiresPayment
                     ? $"Pedido cobrado y entregado a {pickup.CustomerName}."
                     : $"Pedido entregado a {pickup.CustomerName}.";
-                await Task.Delay(400);
+                await Task.Delay(400, realtimeRefresh?.Token ?? CancellationToken.None);
                 await LoadPickupOrdersCore();
             },
             false
@@ -493,7 +497,7 @@ public partial class Home
             async () =>
             {
                 await Api.CancelOrderLineAsync(order.OrderId, line.Id, reason.Trim());
-                await Task.Delay(500);
+                await Task.Delay(500, realtimeRefresh?.Token ?? CancellationToken.None);
                 await LoadBill();
                 success = true;
                 message = $"{line.ProductName} cancelado antes de preparación.";
@@ -873,9 +877,17 @@ public partial class Home
     {
         Realtime.OrderUpdated -= HandleOrderUpdated;
         DiningRealtime.TableChanged -= HandleTableChanged;
-        realtimeRefresh?.Cancel();
+        if (realtimeRefresh is not null)
+        {
+            await realtimeRefresh.CancelAsync();
+        }
+
         realtimeRefresh?.Dispose();
-        reconciliation?.Cancel();
+        if (reconciliation is not null)
+        {
+            await reconciliation.CancelAsync();
+        }
+
         reconciliation?.Dispose();
         await Realtime.DisconnectAsync();
         await DiningRealtime.DisconnectAsync();
