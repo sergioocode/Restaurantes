@@ -389,7 +389,8 @@ El `docker-compose.yml` levanta:
 - pgAdmin.
 - Vault de desarrollo, su inicialización y el proxy de autenticación local.
 - Prometheus y Grafana para métricas y dashboards locales.
-- SonarQube Community Build bajo el perfil opcional `quality` para análisis estático, seguridad y Quality Gate.
+- SonarQube Community Build bajo el perfil opcional `quality` para análisis estático, seguridad y Quality Gate locales.
+- SonarQube Cloud como referencia de CI para análisis estático, seguridad, cobertura y Quality Gate.
 
 Las bases de datos lógicas necesarias se crean mediante los scripts de `tools/postgres/init`.
 
@@ -465,6 +466,18 @@ El script restaura el escáner local, ejecuta el análisis alrededor de una comp
 ```powershell
 docker compose --env-file tools/vault/.env --profile quality stop sonarqube sonarqube-db
 ```
+
+### Calidad continua en Cloud
+
+[SonarQube Cloud](https://sonarcloud.io/project/overview?id=restaurantes) analiza `master`, la rama principal del proyecto Cloud. El trabajo se integra primero en `develop` desde una rama corta; sus pushes no ejecutan GitHub Actions. Tras avanzar `master` por merge directo, el push ejecuta la compilación, las pruebas con cobertura OpenCover y el análisis Cloud. El commit solo es candidato a release si pasan el CI y el Quality Gate.
+
+Para reproducir ese análisis desde `master` en un equipo local, define `SONAR_TOKEN` con un token de SonarQube Cloud y ejecuta:
+
+```powershell
+.\tools\sonar\Invoke-SonarQubeCloudAnalysis.ps1
+```
+
+El valor del token no se versiona. Este segundo script usa la organización `sergioocode` y el proyecto `restaurantes`, compila la solución, ejecuta las pruebas con cobertura OpenCover y espera el resultado del **Quality Gate**. En GitHub, el token se configura como secreto del repositorio llamado `SONAR_TOKEN`.
 
 ### Datos de desarrollo opcionales
 
