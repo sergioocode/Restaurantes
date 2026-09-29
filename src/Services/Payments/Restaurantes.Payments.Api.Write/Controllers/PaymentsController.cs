@@ -24,6 +24,7 @@ public sealed class PaymentsController(
     public async Task<ActionResult<PaymentResponse>> CaptureCustomerQr(
         Guid orderId,
         CaptureCustomerQrPaymentRequest request,
+        [FromHeader(Name = "X-Customer-Session-Token")] string? customerAccessToken,
         CancellationToken ct
     )
     {
@@ -77,15 +78,13 @@ public sealed class PaymentsController(
             return Forbid();
         }
 
-        string customerAccessToken =
-            Request.Headers["X-Customer-Session-Token"].FirstOrDefault() ?? string.Empty;
         if (
             !await dining.IsValidAsync(
                 payable.DiningSessionId!.Value,
                 payable.RestaurantId,
                 payable.TableId.Value,
                 payable.ServiceMode,
-                customerAccessToken,
+                customerAccessToken ?? string.Empty,
                 ct
             )
         )
