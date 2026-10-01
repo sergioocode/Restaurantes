@@ -24,11 +24,17 @@ const api = new KdsApiClient(apiBaseUrl);
 let login;
 let restaurantAccesses = [];
 let primaryStationCode = '';
+const pendingOrders = new Map();
+let renderedOrders = [];
+let renderedView = '';
+let ordersRequestNumber = 0;
+let lastAppliedRequestNumber = 0;
 
 const renderer = new OrderRenderer(ordersElement, {
   getStationCode: () => stationSelect.value,
   getPrimaryStationCode: () => primaryStationCode,
   canRecover: canConfirmDelivery,
+  isOrderPending: orderId => pendingOrders.has(orderId),
   onAdvance: advanceOrder,
   onRecover: recoverDelivery
 });
@@ -50,8 +56,39 @@ function setStatus(connected, text) {
 }
 
 async function loadOrders() {
-  if (!restaurantSelect.value || !stationSelect.value) return;
-  renderer.render(await api.getOrders(restaurantSelect.value, stationSelect.value));
+  if (!login || !restaurantSelect.value || !stationSelect.value) return;
+  const restaurantId = restaurantSelect.value;
+  const stationCode = stationSelect.value;
+  const view = restaurantId + '/' + stationCode;
+  if (renderedView !== view) {
+    renderedView = view;
+    renderedOrders = [];
+  }
+  const requestNumber = ++ordersRequestNumber;
+  const response = await api.getOrders(restaurantId, stationCode);
+  if (!login || requestNumber < lastAppliedRequestNumber
+    || restaurantId !== restaurantSelect.value || stationCode !== stationSelect.value) return;
+  lastAppliedRequestNumber = requestNumber;
+
+  const previousOrders = new Map(renderedOrders.map(order => [order.id, order]));
+  const orders = response.map(order => {
+    const previous = previousOrders.get(order.id);
+    return previous && previous.version > order.version ? previous : order;
+  });
+  for (const [orderId, pending] of pendingOrders) {
+    if (pending.minimumVersion === null) continue;
+    const current = orders.find(order => order.id === orderId);
+    if (!current || current.version >= pending.minimumVersion) pendingOrders.delete(orderId);
+  }
+  renderedOrders = orders;
+  renderer.render(orders);
+}
+
+function clearOrdersView(message) {
+  lastAppliedRequestNumber = ++ordersRequestNumber;
+  renderedOrders = [];
+  renderedView = '';
+  renderer.showEmpty(message);
 }
 
 async function refreshMonitor() {
@@ -75,14 +112,31 @@ function canConfirmDelivery(order) {
 }
 
 async function advanceOrder(order, action, actionButton) {
-  actionButton.disabled = true;
+  if (pendingOrders.has(order.id)) return;
+  const pending = { minimumVersion: null };
+  pendingOrders.set(order.id, pending);
+  for (const button of actionButton.closest('article.order')?.querySelectorAll('button') || []) {
+    button.disabled = true;
+  }
   eventText.textContent = 'Enviando comando para ' + orderDestinationLabel(order) + '…';
   try {
-    await api.sendOrderCommand(order.id, action.path);
-    eventText.textContent = 'Comando aceptado; esperando la actualización en tiempo real…';
+    const updatedOrder = await api.sendOrderCommand(order.id, action.path);
+    pending.minimumVersion = Math.max(order.version + 1, updatedOrder.version);
+    eventText.textContent = 'Comando aceptado; actualizando el pedido…';
   } catch (error) {
-    eventText.textContent = error.message;
-    actionButton.disabled = false;
+    if (error.status === 409) {
+      pending.minimumVersion = order.version + 1;
+      eventText.textContent = 'El estado del pedido cambió; esperando la actualización…';
+    } else {
+      pendingOrders.delete(order.id);
+      eventText.textContent = error.message;
+    }
+  }
+  try {
+    await loadOrders();
+  } catch (error) {
+    if (!pendingOrders.has(order.id)) renderer.render(renderedOrders);
+    eventText.textContent += ' No se pudo actualizar el monitor: ' + error.message;
   }
 }
 
@@ -120,6 +174,7 @@ function updateRestaurantIdentity() {
 async function loadStationsAndConnect() {
   const restaurantId = restaurantSelect.value;
   if (!restaurantId) return;
+  clearOrdersView('Cargando pedidos…');
   localStorage.setItem(restaurantKey, restaurantId);
   updateRestaurantIdentity();
   stationSelect.disabled = true;
@@ -212,6 +267,7 @@ async function loadProvider() {
 function logout() {
   login = null;
   restaurantAccesses = [];
+  pendingOrders.clear();
   api.setAccessToken('');
   realtime.disconnect();
   sessionStorage.removeItem(sessionKey);
@@ -221,7 +277,7 @@ function logout() {
   refreshButton.disabled = true;
   identityStatus.textContent = '';
   eventText.textContent = '';
-  renderer.showEmpty('Inicia sesión para cargar el monitor.');
+  clearOrdersView('Inicia sesión para cargar el monitor.');
   setStatus(false, 'Inicia sesión');
 }
 
@@ -256,6 +312,7 @@ restaurantSelect.addEventListener('change', loadStationsAndConnect);
 stationSelect.addEventListener('change', () => {
   localStorage.setItem('restaurantes.kds.station.' + restaurantSelect.value, stationSelect.value);
   eventText.textContent = '';
+  clearOrdersView('Cargando pedidos…');
   connect();
 });
 
