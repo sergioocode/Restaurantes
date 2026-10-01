@@ -1,0 +1,812 @@
+{
+  "annotations": { "list": [] },
+  "description": "Recursos y actividad del runtime .NET por servicio e instancia.",
+  "editable": false,
+  "links": [
+    {
+      "title": "Dashboards de Restaurantes",
+      "type": "dashboards",
+      "tags": [ "restaurantes", "observability" ],
+      "asDropdown": true,
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false
+    }
+  ],
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Comprueba el scrape del Collector; no comprueba la salud de las aplicaciones.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sin datos",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "No accesible",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Accesible",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [ "lastNotNull" ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"otel-collector\"}",
+          "refId": "A",
+          "legendFormat": "Collector · acceso desde Prometheus",
+          "instant": true,
+          "range": false,
+          "format": "time_series",
+          "interval": "1m"
+        }
+      ],
+      "title": "Collector · acceso desde Prometheus",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Cuenta las instancias seleccionadas que aún tienen series runtime publicadas en el Collector. No es una prueba de salud ni garantiza que el proceso siga vivo: el Collector conserva temporalmente las últimas métricas. Sin series, se muestra «Sin datos».",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sin datos",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [ "lastNotNull" ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "expr": "(count(dotnet_assembly_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"})) and on() (up{job=\"otel-collector\"} == 1)",
+          "refId": "A",
+          "legendFormat": "Instancias con series runtime disponibles",
+          "instant": true,
+          "range": false,
+          "format": "time_series",
+          "interval": "1m"
+        }
+      ],
+      "title": "Instancias con series runtime disponibles",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Segundos de CPU por segundo; 1 equivale a un núcleo ocupado. Suma los modos user y system de las instancias seleccionadas.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sin datos",
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          {"matcher":{"id":"byName","options":"Restaurantes.Gateway.Private"},"properties":[{"id":"displayName","value":"localhost:5001 (Restaurantes.Gateway.Private)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Gateway.Public"},"properties":[{"id":"displayName","value":"localhost:5000 (Restaurantes.Gateway.Public)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Backoffice.Pwa"},"properties":[{"id":"displayName","value":"localhost:5500 (Restaurantes.Clients.Backoffice.Pwa)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Commander.Pwa"},"properties":[{"id":"displayName","value":"localhost:5200 (Restaurantes.Clients.Commander.Pwa)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.CustomerQr.Pwa"},"properties":[{"id":"displayName","value":"localhost:5300 (Restaurantes.Clients.CustomerQr.Pwa)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Dashboard.Web"},"properties":[{"id":"displayName","value":"localhost:5600 (Restaurantes.Clients.Dashboard.Web)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Kds.Web"},"properties":[{"id":"displayName","value":"localhost:5700 (Restaurantes.Clients.Kds.Web)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Pos.Pwa"},"properties":[{"id":"displayName","value":"localhost:5400 (Restaurantes.Clients.Pos.Pwa)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.CashRegister.Api"},"properties":[{"id":"displayName","value":"localhost:5105 (Restaurantes.CashRegister.Api)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Catalog.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5132 (Restaurantes.Catalog.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Catalog.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5131 (Restaurantes.Catalog.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Dining.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5102 (Restaurantes.Dining.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Identity.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5106 (Restaurantes.Identity.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Integrations.Api"},"properties":[{"id":"displayName","value":"localhost:5107 (Restaurantes.Integrations.Api)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Orders.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5122 (Restaurantes.Orders.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Orders.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5121 (Restaurantes.Orders.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Payments.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5151 (Restaurantes.Payments.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Reporting.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5142 (Restaurantes.Reporting.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.RestaurantOperations.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5112 (Restaurantes.RestaurantOperations.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.RestaurantOperations.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5111 (Restaurantes.RestaurantOperations.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Sales.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5162 (Restaurantes.Sales.Api.Read)"}]}
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [ "lastNotNull" ],
+          "height": 80
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (service_name) (((rate(dotnet_process_cpu_time_seconds_total{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"}[$__rate_interval])) and on (service_name, exported_instance) dotnet_assembly_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"}) and on() (up{job=\"otel-collector\"} == 1))",
+          "refId": "A",
+          "legendFormat": "{{service_name}}",
+          "instant": false,
+          "range": true,
+          "format": "time_series",
+          "interval": "1m"
+        }
+      ],
+      "title": "CPU consumida",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Working set del proceso, sumado por servicio.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "noValue": "Sin datos",
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          {"matcher":{"id":"byName","options":"Restaurantes.Gateway.Private"},"properties":[{"id":"displayName","value":"localhost:5001 (Restaurantes.Gateway.Private)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Gateway.Public"},"properties":[{"id":"displayName","value":"localhost:5000 (Restaurantes.Gateway.Public)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Backoffice.Pwa"},"properties":[{"id":"displayName","value":"localhost:5500 (Restaurantes.Clients.Backoffice.Pwa)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Commander.Pwa"},"properties":[{"id":"displayName","value":"localhost:5200 (Restaurantes.Clients.Commander.Pwa)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.CustomerQr.Pwa"},"properties":[{"id":"displayName","value":"localhost:5300 (Restaurantes.Clients.CustomerQr.Pwa)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Dashboard.Web"},"properties":[{"id":"displayName","value":"localhost:5600 (Restaurantes.Clients.Dashboard.Web)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Kds.Web"},"properties":[{"id":"displayName","value":"localhost:5700 (Restaurantes.Clients.Kds.Web)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Pos.Pwa"},"properties":[{"id":"displayName","value":"localhost:5400 (Restaurantes.Clients.Pos.Pwa)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.CashRegister.Api"},"properties":[{"id":"displayName","value":"localhost:5105 (Restaurantes.CashRegister.Api)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Catalog.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5132 (Restaurantes.Catalog.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Catalog.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5131 (Restaurantes.Catalog.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Dining.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5102 (Restaurantes.Dining.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Identity.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5106 (Restaurantes.Identity.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Integrations.Api"},"properties":[{"id":"displayName","value":"localhost:5107 (Restaurantes.Integrations.Api)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Orders.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5122 (Restaurantes.Orders.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Orders.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5121 (Restaurantes.Orders.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Payments.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5151 (Restaurantes.Payments.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Reporting.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5142 (Restaurantes.Reporting.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.RestaurantOperations.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5112 (Restaurantes.RestaurantOperations.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.RestaurantOperations.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5111 (Restaurantes.RestaurantOperations.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Sales.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5162 (Restaurantes.Sales.Api.Read)"}]}
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [ "lastNotNull" ],
+          "height": 80
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (service_name) (((dotnet_process_memory_working_set_bytes{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"}) and on (service_name, exported_instance) dotnet_assembly_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"}) and on() (up{job=\"otel-collector\"} == 1))",
+          "refId": "A",
+          "legendFormat": "{{service_name}}",
+          "instant": false,
+          "range": true,
+          "format": "time_series",
+          "interval": "1m"
+        }
+      ],
+      "title": "Memoria del proceso",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Tamaño del heap observado en la última recolección de cada generación.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "noValue": "Sin datos",
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Gateway[.]Private · .+$"},"properties":[{"id":"displayName","value":"localhost:5001 (Restaurantes.Gateway.Private) · ${__field.labels.gc_heap_generation}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Gateway[.]Public · .+$"},"properties":[{"id":"displayName","value":"localhost:5000 (Restaurantes.Gateway.Public) · ${__field.labels.gc_heap_generation}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Clients[.]Backoffice[.]Pwa · .+$"},"properties":[{"id":"displayName","value":"localhost:5500 (Restaurantes.Clients.Backoffice.Pwa) · ${__field.labels.gc_heap_generation}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Clients[.]Commander[.]Pwa · .+$"},"properties":[{"id":"displayName","value":"localhost:5200 (Restaurantes.Clients.Commander.Pwa) · ${__field.labels.gc_heap_generation}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Clients[.]CustomerQr[.]Pwa · .+$"},"properties":[{"id":"displayName","value":"localhost:5300 (Restaurantes.Clients.CustomerQr.Pwa) · ${__field.labels.gc_heap_generation}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Clients[.]Dashboard[.]Web · .+$"},"properties":[{"id":"displayName","value":"localhost:5600 (Restaurantes.Clients.Dashboard.Web) · ${__field.labels.gc_heap_generation}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Clients[.]Kds[.]Web · .+$"},"properties":[{"id":"displayName","value":"localhost:5700 (Restaurantes.Clients.Kds.Web) · ${__field.labels.gc_heap_generation}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Clients[.]Pos[.]Pwa · .+$"},"properties":[{"id":"displayName","value":"localhost:5400 (Restaurantes.Clients.Pos.Pwa) · ${__field.labels.gc_heap_generation}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]CashRegister[.]Api · .+$"},"properties":[{"id":"displayName","value":"localhost:5105 (Restaurantes.CashRegister.Api) · ${__field.labels.gc_heap_generation}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Catalog[.]Api[.]Read · .+$"},"properties":[{"id":"displayName","value":"localhost:5132 (Restaurantes.Catalog.Api.Read) · ${__field.labels.gc_heap_generation}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Catalog[.]Api[.]Write · .+$"},"properties":[{"id":"displayName","value":"localhost:5131 (Restaurantes.Catalog.Api.Write) · ${__field.labels.gc_heap_generation}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Dining[.]Api[.]Write · .+$"},"properties":[{"id":"displayName","value":"localhost:5102 (Restaurantes.Dining.Api.Write) · ${__field.labels.gc_heap_generation}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Identity[.]Api[.]Write · .+$"},"properties":[{"id":"displayName","value":"localhost:5106 (Restaurantes.Identity.Api.Write) · ${__field.labels.gc_heap_generation}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Integrations[.]Api · .+$"},"properties":[{"id":"displayName","value":"localhost:5107 (Restaurantes.Integrations.Api) · ${__field.labels.gc_heap_generation}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Orders[.]Api[.]Read · .+$"},"properties":[{"id":"displayName","value":"localhost:5122 (Restaurantes.Orders.Api.Read) · ${__field.labels.gc_heap_generation}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Orders[.]Api[.]Write · .+$"},"properties":[{"id":"displayName","value":"localhost:5121 (Restaurantes.Orders.Api.Write) · ${__field.labels.gc_heap_generation}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Payments[.]Api[.]Write · .+$"},"properties":[{"id":"displayName","value":"localhost:5151 (Restaurantes.Payments.Api.Write) · ${__field.labels.gc_heap_generation}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Reporting[.]Api[.]Read · .+$"},"properties":[{"id":"displayName","value":"localhost:5142 (Restaurantes.Reporting.Api.Read) · ${__field.labels.gc_heap_generation}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]RestaurantOperations[.]Api[.]Read · .+$"},"properties":[{"id":"displayName","value":"localhost:5112 (Restaurantes.RestaurantOperations.Api.Read) · ${__field.labels.gc_heap_generation}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]RestaurantOperations[.]Api[.]Write · .+$"},"properties":[{"id":"displayName","value":"localhost:5111 (Restaurantes.RestaurantOperations.Api.Write) · ${__field.labels.gc_heap_generation}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Sales[.]Api[.]Read · .+$"},"properties":[{"id":"displayName","value":"localhost:5162 (Restaurantes.Sales.Api.Read) · ${__field.labels.gc_heap_generation}"}]}
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 13
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [ "lastNotNull" ],
+          "height": 80
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (service_name, gc_heap_generation) (((dotnet_gc_last_collection_heap_size_bytes{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"}) and on (service_name, exported_instance) dotnet_assembly_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"}) and on() (up{job=\"otel-collector\"} == 1))",
+          "refId": "A",
+          "legendFormat": "{{service_name}} · {{gc_heap_generation}}",
+          "instant": false,
+          "range": true,
+          "format": "time_series",
+          "interval": "1m"
+        }
+      ],
+      "title": "Heap por generación",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Ritmo de asignación de memoria administrada.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "noValue": "Sin datos",
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          {"matcher":{"id":"byName","options":"Restaurantes.Gateway.Private"},"properties":[{"id":"displayName","value":"localhost:5001 (Restaurantes.Gateway.Private)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Gateway.Public"},"properties":[{"id":"displayName","value":"localhost:5000 (Restaurantes.Gateway.Public)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Backoffice.Pwa"},"properties":[{"id":"displayName","value":"localhost:5500 (Restaurantes.Clients.Backoffice.Pwa)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Commander.Pwa"},"properties":[{"id":"displayName","value":"localhost:5200 (Restaurantes.Clients.Commander.Pwa)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.CustomerQr.Pwa"},"properties":[{"id":"displayName","value":"localhost:5300 (Restaurantes.Clients.CustomerQr.Pwa)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Dashboard.Web"},"properties":[{"id":"displayName","value":"localhost:5600 (Restaurantes.Clients.Dashboard.Web)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Kds.Web"},"properties":[{"id":"displayName","value":"localhost:5700 (Restaurantes.Clients.Kds.Web)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Pos.Pwa"},"properties":[{"id":"displayName","value":"localhost:5400 (Restaurantes.Clients.Pos.Pwa)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.CashRegister.Api"},"properties":[{"id":"displayName","value":"localhost:5105 (Restaurantes.CashRegister.Api)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Catalog.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5132 (Restaurantes.Catalog.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Catalog.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5131 (Restaurantes.Catalog.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Dining.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5102 (Restaurantes.Dining.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Identity.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5106 (Restaurantes.Identity.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Integrations.Api"},"properties":[{"id":"displayName","value":"localhost:5107 (Restaurantes.Integrations.Api)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Orders.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5122 (Restaurantes.Orders.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Orders.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5121 (Restaurantes.Orders.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Payments.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5151 (Restaurantes.Payments.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Reporting.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5142 (Restaurantes.Reporting.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.RestaurantOperations.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5112 (Restaurantes.RestaurantOperations.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.RestaurantOperations.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5111 (Restaurantes.RestaurantOperations.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Sales.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5162 (Restaurantes.Sales.Api.Read)"}]}
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 13
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [ "lastNotNull" ],
+          "height": 80
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (service_name) (((rate(dotnet_gc_heap_allocated_bytes_total{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"}[$__rate_interval])) and on (service_name, exported_instance) dotnet_assembly_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"}) and on() (up{job=\"otel-collector\"} == 1))",
+          "refId": "A",
+          "legendFormat": "{{service_name}}",
+          "instant": false,
+          "range": true,
+          "format": "time_series",
+          "interval": "1m"
+        }
+      ],
+      "title": "Asignación de memoria",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Fracción de tiempo en pausa de GC; promedio de las instancias seleccionadas por servicio.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "Sin datos",
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          {"matcher":{"id":"byName","options":"Restaurantes.Gateway.Private"},"properties":[{"id":"displayName","value":"localhost:5001 (Restaurantes.Gateway.Private)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Gateway.Public"},"properties":[{"id":"displayName","value":"localhost:5000 (Restaurantes.Gateway.Public)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Backoffice.Pwa"},"properties":[{"id":"displayName","value":"localhost:5500 (Restaurantes.Clients.Backoffice.Pwa)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Commander.Pwa"},"properties":[{"id":"displayName","value":"localhost:5200 (Restaurantes.Clients.Commander.Pwa)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.CustomerQr.Pwa"},"properties":[{"id":"displayName","value":"localhost:5300 (Restaurantes.Clients.CustomerQr.Pwa)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Dashboard.Web"},"properties":[{"id":"displayName","value":"localhost:5600 (Restaurantes.Clients.Dashboard.Web)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Kds.Web"},"properties":[{"id":"displayName","value":"localhost:5700 (Restaurantes.Clients.Kds.Web)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Pos.Pwa"},"properties":[{"id":"displayName","value":"localhost:5400 (Restaurantes.Clients.Pos.Pwa)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.CashRegister.Api"},"properties":[{"id":"displayName","value":"localhost:5105 (Restaurantes.CashRegister.Api)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Catalog.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5132 (Restaurantes.Catalog.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Catalog.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5131 (Restaurantes.Catalog.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Dining.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5102 (Restaurantes.Dining.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Identity.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5106 (Restaurantes.Identity.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Integrations.Api"},"properties":[{"id":"displayName","value":"localhost:5107 (Restaurantes.Integrations.Api)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Orders.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5122 (Restaurantes.Orders.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Orders.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5121 (Restaurantes.Orders.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Payments.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5151 (Restaurantes.Payments.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Reporting.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5142 (Restaurantes.Reporting.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.RestaurantOperations.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5112 (Restaurantes.RestaurantOperations.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.RestaurantOperations.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5111 (Restaurantes.RestaurantOperations.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Sales.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5162 (Restaurantes.Sales.Api.Read)"}]}
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 22
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [ "lastNotNull" ],
+          "height": 80
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "avg by (service_name) (((rate(dotnet_gc_pause_time_seconds_total{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"}[$__rate_interval])) and on (service_name, exported_instance) dotnet_assembly_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"}) and on() (up{job=\"otel-collector\"} == 1))",
+          "refId": "A",
+          "legendFormat": "{{service_name}}",
+          "instant": false,
+          "range": true,
+          "format": "time_series",
+          "interval": "1m"
+        }
+      ],
+      "title": "Pausas de GC",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Excepciones lanzadas por segundo, separadas por servicio y tipo, incluidas las capturadas por la aplicación. No equivale a errores HTTP.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "noValue": "Sin datos",
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Gateway[.]Private · .+$"},"properties":[{"id":"displayName","value":"localhost:5001 (Restaurantes.Gateway.Private) · ${__field.labels.error_type}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Gateway[.]Public · .+$"},"properties":[{"id":"displayName","value":"localhost:5000 (Restaurantes.Gateway.Public) · ${__field.labels.error_type}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Clients[.]Backoffice[.]Pwa · .+$"},"properties":[{"id":"displayName","value":"localhost:5500 (Restaurantes.Clients.Backoffice.Pwa) · ${__field.labels.error_type}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Clients[.]Commander[.]Pwa · .+$"},"properties":[{"id":"displayName","value":"localhost:5200 (Restaurantes.Clients.Commander.Pwa) · ${__field.labels.error_type}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Clients[.]CustomerQr[.]Pwa · .+$"},"properties":[{"id":"displayName","value":"localhost:5300 (Restaurantes.Clients.CustomerQr.Pwa) · ${__field.labels.error_type}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Clients[.]Dashboard[.]Web · .+$"},"properties":[{"id":"displayName","value":"localhost:5600 (Restaurantes.Clients.Dashboard.Web) · ${__field.labels.error_type}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Clients[.]Kds[.]Web · .+$"},"properties":[{"id":"displayName","value":"localhost:5700 (Restaurantes.Clients.Kds.Web) · ${__field.labels.error_type}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Clients[.]Pos[.]Pwa · .+$"},"properties":[{"id":"displayName","value":"localhost:5400 (Restaurantes.Clients.Pos.Pwa) · ${__field.labels.error_type}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]CashRegister[.]Api · .+$"},"properties":[{"id":"displayName","value":"localhost:5105 (Restaurantes.CashRegister.Api) · ${__field.labels.error_type}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Catalog[.]Api[.]Read · .+$"},"properties":[{"id":"displayName","value":"localhost:5132 (Restaurantes.Catalog.Api.Read) · ${__field.labels.error_type}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Catalog[.]Api[.]Write · .+$"},"properties":[{"id":"displayName","value":"localhost:5131 (Restaurantes.Catalog.Api.Write) · ${__field.labels.error_type}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Dining[.]Api[.]Write · .+$"},"properties":[{"id":"displayName","value":"localhost:5102 (Restaurantes.Dining.Api.Write) · ${__field.labels.error_type}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Identity[.]Api[.]Write · .+$"},"properties":[{"id":"displayName","value":"localhost:5106 (Restaurantes.Identity.Api.Write) · ${__field.labels.error_type}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Integrations[.]Api · .+$"},"properties":[{"id":"displayName","value":"localhost:5107 (Restaurantes.Integrations.Api) · ${__field.labels.error_type}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Orders[.]Api[.]Read · .+$"},"properties":[{"id":"displayName","value":"localhost:5122 (Restaurantes.Orders.Api.Read) · ${__field.labels.error_type}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Orders[.]Api[.]Write · .+$"},"properties":[{"id":"displayName","value":"localhost:5121 (Restaurantes.Orders.Api.Write) · ${__field.labels.error_type}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Payments[.]Api[.]Write · .+$"},"properties":[{"id":"displayName","value":"localhost:5151 (Restaurantes.Payments.Api.Write) · ${__field.labels.error_type}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Reporting[.]Api[.]Read · .+$"},"properties":[{"id":"displayName","value":"localhost:5142 (Restaurantes.Reporting.Api.Read) · ${__field.labels.error_type}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]RestaurantOperations[.]Api[.]Read · .+$"},"properties":[{"id":"displayName","value":"localhost:5112 (Restaurantes.RestaurantOperations.Api.Read) · ${__field.labels.error_type}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]RestaurantOperations[.]Api[.]Write · .+$"},"properties":[{"id":"displayName","value":"localhost:5111 (Restaurantes.RestaurantOperations.Api.Write) · ${__field.labels.error_type}"}]},
+          {"matcher":{"id":"byRegexp","options":"^Restaurantes[.]Sales[.]Api[.]Read · .+$"},"properties":[{"id":"displayName","value":"localhost:5162 (Restaurantes.Sales.Api.Read) · ${__field.labels.error_type}"}]}
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 22
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [ "lastNotNull" ],
+          "height": 80
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (service_name, error_type) (((rate(dotnet_exceptions_total{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"}[$__rate_interval])) and on (service_name, exported_instance) dotnet_assembly_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"}) and on() (up{job=\"otel-collector\"} == 1))",
+          "refId": "A",
+          "legendFormat": "{{service_name}} · {{error_type}}",
+          "instant": false,
+          "range": true,
+          "format": "time_series",
+          "interval": "1m"
+        }
+      ],
+      "title": "Excepciones",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Valor actual de la cola, no una tasa. El sufijo _total procede de la exportación de esta métrica; no se aplica rate().",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sin datos",
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          {"matcher":{"id":"byName","options":"Restaurantes.Gateway.Private"},"properties":[{"id":"displayName","value":"localhost:5001 (Restaurantes.Gateway.Private)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Gateway.Public"},"properties":[{"id":"displayName","value":"localhost:5000 (Restaurantes.Gateway.Public)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Backoffice.Pwa"},"properties":[{"id":"displayName","value":"localhost:5500 (Restaurantes.Clients.Backoffice.Pwa)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Commander.Pwa"},"properties":[{"id":"displayName","value":"localhost:5200 (Restaurantes.Clients.Commander.Pwa)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.CustomerQr.Pwa"},"properties":[{"id":"displayName","value":"localhost:5300 (Restaurantes.Clients.CustomerQr.Pwa)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Dashboard.Web"},"properties":[{"id":"displayName","value":"localhost:5600 (Restaurantes.Clients.Dashboard.Web)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Kds.Web"},"properties":[{"id":"displayName","value":"localhost:5700 (Restaurantes.Clients.Kds.Web)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Pos.Pwa"},"properties":[{"id":"displayName","value":"localhost:5400 (Restaurantes.Clients.Pos.Pwa)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.CashRegister.Api"},"properties":[{"id":"displayName","value":"localhost:5105 (Restaurantes.CashRegister.Api)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Catalog.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5132 (Restaurantes.Catalog.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Catalog.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5131 (Restaurantes.Catalog.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Dining.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5102 (Restaurantes.Dining.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Identity.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5106 (Restaurantes.Identity.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Integrations.Api"},"properties":[{"id":"displayName","value":"localhost:5107 (Restaurantes.Integrations.Api)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Orders.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5122 (Restaurantes.Orders.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Orders.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5121 (Restaurantes.Orders.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Payments.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5151 (Restaurantes.Payments.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Reporting.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5142 (Restaurantes.Reporting.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.RestaurantOperations.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5112 (Restaurantes.RestaurantOperations.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.RestaurantOperations.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5111 (Restaurantes.RestaurantOperations.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Sales.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5162 (Restaurantes.Sales.Api.Read)"}]}
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 31
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [ "lastNotNull" ],
+          "height": 80
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (service_name) (((dotnet_thread_pool_queue_length_total{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"}) and on (service_name, exported_instance) dotnet_assembly_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"}) and on() (up{job=\"otel-collector\"} == 1))",
+          "refId": "A",
+          "legendFormat": "{{service_name}}",
+          "instant": false,
+          "range": true,
+          "format": "time_series",
+          "interval": "1m"
+        }
+      ],
+      "title": "Trabajo en cola del ThreadPool",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Número actual de hilos, sumado por servicio.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sin datos",
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          {"matcher":{"id":"byName","options":"Restaurantes.Gateway.Private"},"properties":[{"id":"displayName","value":"localhost:5001 (Restaurantes.Gateway.Private)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Gateway.Public"},"properties":[{"id":"displayName","value":"localhost:5000 (Restaurantes.Gateway.Public)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Backoffice.Pwa"},"properties":[{"id":"displayName","value":"localhost:5500 (Restaurantes.Clients.Backoffice.Pwa)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Commander.Pwa"},"properties":[{"id":"displayName","value":"localhost:5200 (Restaurantes.Clients.Commander.Pwa)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.CustomerQr.Pwa"},"properties":[{"id":"displayName","value":"localhost:5300 (Restaurantes.Clients.CustomerQr.Pwa)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Dashboard.Web"},"properties":[{"id":"displayName","value":"localhost:5600 (Restaurantes.Clients.Dashboard.Web)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Kds.Web"},"properties":[{"id":"displayName","value":"localhost:5700 (Restaurantes.Clients.Kds.Web)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Clients.Pos.Pwa"},"properties":[{"id":"displayName","value":"localhost:5400 (Restaurantes.Clients.Pos.Pwa)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.CashRegister.Api"},"properties":[{"id":"displayName","value":"localhost:5105 (Restaurantes.CashRegister.Api)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Catalog.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5132 (Restaurantes.Catalog.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Catalog.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5131 (Restaurantes.Catalog.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Dining.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5102 (Restaurantes.Dining.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Identity.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5106 (Restaurantes.Identity.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Integrations.Api"},"properties":[{"id":"displayName","value":"localhost:5107 (Restaurantes.Integrations.Api)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Orders.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5122 (Restaurantes.Orders.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Orders.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5121 (Restaurantes.Orders.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Payments.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5151 (Restaurantes.Payments.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Reporting.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5142 (Restaurantes.Reporting.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.RestaurantOperations.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5112 (Restaurantes.RestaurantOperations.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.RestaurantOperations.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5111 (Restaurantes.RestaurantOperations.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Sales.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5162 (Restaurantes.Sales.Api.Read)"}]}
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 31
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [ "lastNotNull" ],
+          "height": 80
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (service_name) (((dotnet_thread_pool_thread_count_total{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"}) and on (service_name, exported_instance) dotnet_assembly_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"}) and on() (up{job=\"otel-collector\"} == 1))",
+          "refId": "A",
+          "legendFormat": "{{service_name}}",
+          "instant": false,
+          "range": true,
+          "format": "time_series",
+          "interval": "1m"
+        }
+      ],
+      "title": "Hilos del ThreadPool",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 41,
+  "tags": [ "observability", "restaurantes", "dotnet", "runtime" ],
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "label": "Servicio",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(dotnet_assembly_count{job=\"otel-collector\",service_name!=\"\"}, service_name)",
+        "query": {
+          "query": "label_values(dotnet_assembly_count{job=\"otel-collector\",service_name!=\"\"}, service_name)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "Restaurantes.Orders.Api.Write",
+          "value": "Restaurantes.Orders.Api.Write"
+        },
+        "options": []
+      },
+      {
+        "name": "process",
+        "label": "Instancia",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(dotnet_assembly_count{job=\"otel-collector\",service_name=~\"${service}\"}, exported_instance)",
+        "query": {
+          "query": "label_values(dotnet_assembly_count{job=\"otel-collector\",service_name=~\"${service}\"}, exported_instance)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": []
+      }
+    ]
+  },
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [ "30s", "1m", "5m" ]
+  },
+  "timezone": "browser",
+  "title": "Restaurantes · Runtime · .NET",
+  "uid": "restaurantes-runtime",
+  "version": 4
+}

@@ -1,0 +1,577 @@
+{
+  "annotations": { "list": [] },
+  "description": "Duración y errores de las operaciones HTTP que forman el flujo de pedidos, cocina y pagos. Los servicios conocidos muestran dirección:puerto (Proyecto) según sus perfiles de inicio locales.",
+  "editable": false,
+  "links": [
+    {
+      "title": "Dashboards de Restaurantes",
+      "type": "dashboards",
+      "tags": [ "restaurantes", "observability" ],
+      "asDropdown": true,
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false
+    }
+  ],
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "p95 de cada tramo HTTP. El gateway y la API pueden observar la misma operación; no se suman.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "Sin datos"
+        },
+        "overrides": [
+          {"matcher":{"id":"byName","options":"Crear pedido · Restaurantes.Dining.Api.Write"},"properties":[{"id":"displayName","value":"Crear pedido · localhost:5102 (Restaurantes.Dining.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Crear pedido · Restaurantes.Gateway.Public"},"properties":[{"id":"displayName","value":"Crear pedido · localhost:5000 (Restaurantes.Gateway.Public)"}]},
+          {"matcher":{"id":"byName","options":"Crear pedido · Restaurantes.Orders.Api.Write"},"properties":[{"id":"displayName","value":"Crear pedido · localhost:5121 (Restaurantes.Orders.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Crear pedido · Restaurantes.Gateway.Private"},"properties":[{"id":"displayName","value":"Crear pedido · localhost:5001 (Restaurantes.Gateway.Private)"}]},
+          {"matcher":{"id":"byName","options":"Crear pedido · Restaurantes.Orders.Api.Read"},"properties":[{"id":"displayName","value":"Crear pedido · localhost:5122 (Restaurantes.Orders.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Crear pedido · Restaurantes.Payments.Api.Write"},"properties":[{"id":"displayName","value":"Crear pedido · localhost:5151 (Restaurantes.Payments.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Enviar a cocina · Restaurantes.Dining.Api.Write"},"properties":[{"id":"displayName","value":"Enviar a cocina · localhost:5102 (Restaurantes.Dining.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Enviar a cocina · Restaurantes.Gateway.Public"},"properties":[{"id":"displayName","value":"Enviar a cocina · localhost:5000 (Restaurantes.Gateway.Public)"}]},
+          {"matcher":{"id":"byName","options":"Enviar a cocina · Restaurantes.Orders.Api.Write"},"properties":[{"id":"displayName","value":"Enviar a cocina · localhost:5121 (Restaurantes.Orders.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Enviar a cocina · Restaurantes.Gateway.Private"},"properties":[{"id":"displayName","value":"Enviar a cocina · localhost:5001 (Restaurantes.Gateway.Private)"}]},
+          {"matcher":{"id":"byName","options":"Enviar a cocina · Restaurantes.Orders.Api.Read"},"properties":[{"id":"displayName","value":"Enviar a cocina · localhost:5122 (Restaurantes.Orders.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Enviar a cocina · Restaurantes.Payments.Api.Write"},"properties":[{"id":"displayName","value":"Enviar a cocina · localhost:5151 (Restaurantes.Payments.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Cocina · Restaurantes.Dining.Api.Write"},"properties":[{"id":"displayName","value":"Cocina · localhost:5102 (Restaurantes.Dining.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Cocina · Restaurantes.Gateway.Public"},"properties":[{"id":"displayName","value":"Cocina · localhost:5000 (Restaurantes.Gateway.Public)"}]},
+          {"matcher":{"id":"byName","options":"Cocina · Restaurantes.Orders.Api.Write"},"properties":[{"id":"displayName","value":"Cocina · localhost:5121 (Restaurantes.Orders.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Cocina · Restaurantes.Gateway.Private"},"properties":[{"id":"displayName","value":"Cocina · localhost:5001 (Restaurantes.Gateway.Private)"}]},
+          {"matcher":{"id":"byName","options":"Cocina · Restaurantes.Orders.Api.Read"},"properties":[{"id":"displayName","value":"Cocina · localhost:5122 (Restaurantes.Orders.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Cocina · Restaurantes.Payments.Api.Write"},"properties":[{"id":"displayName","value":"Cocina · localhost:5151 (Restaurantes.Payments.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Capturar pago · Restaurantes.Dining.Api.Write"},"properties":[{"id":"displayName","value":"Capturar pago · localhost:5102 (Restaurantes.Dining.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Capturar pago · Restaurantes.Gateway.Public"},"properties":[{"id":"displayName","value":"Capturar pago · localhost:5000 (Restaurantes.Gateway.Public)"}]},
+          {"matcher":{"id":"byName","options":"Capturar pago · Restaurantes.Orders.Api.Write"},"properties":[{"id":"displayName","value":"Capturar pago · localhost:5121 (Restaurantes.Orders.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Capturar pago · Restaurantes.Gateway.Private"},"properties":[{"id":"displayName","value":"Capturar pago · localhost:5001 (Restaurantes.Gateway.Private)"}]},
+          {"matcher":{"id":"byName","options":"Capturar pago · Restaurantes.Orders.Api.Read"},"properties":[{"id":"displayName","value":"Capturar pago · localhost:5122 (Restaurantes.Orders.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Capturar pago · Restaurantes.Payments.Api.Write"},"properties":[{"id":"displayName","value":"Capturar pago · localhost:5151 (Restaurantes.Payments.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Cerrar cuenta · Restaurantes.Dining.Api.Write"},"properties":[{"id":"displayName","value":"Cerrar cuenta · localhost:5102 (Restaurantes.Dining.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Cerrar cuenta · Restaurantes.Gateway.Public"},"properties":[{"id":"displayName","value":"Cerrar cuenta · localhost:5000 (Restaurantes.Gateway.Public)"}]},
+          {"matcher":{"id":"byName","options":"Cerrar cuenta · Restaurantes.Orders.Api.Write"},"properties":[{"id":"displayName","value":"Cerrar cuenta · localhost:5121 (Restaurantes.Orders.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Cerrar cuenta · Restaurantes.Gateway.Private"},"properties":[{"id":"displayName","value":"Cerrar cuenta · localhost:5001 (Restaurantes.Gateway.Private)"}]},
+          {"matcher":{"id":"byName","options":"Cerrar cuenta · Restaurantes.Orders.Api.Read"},"properties":[{"id":"displayName","value":"Cerrar cuenta · localhost:5122 (Restaurantes.Orders.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Cerrar cuenta · Restaurantes.Payments.Api.Write"},"properties":[{"id":"displayName","value":"Cerrar cuenta · localhost:5151 (Restaurantes.Payments.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"KDS · consultar lista · Restaurantes.Dining.Api.Write"},"properties":[{"id":"displayName","value":"KDS · consultar lista · localhost:5102 (Restaurantes.Dining.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"KDS · consultar lista · Restaurantes.Gateway.Public"},"properties":[{"id":"displayName","value":"KDS · consultar lista · localhost:5000 (Restaurantes.Gateway.Public)"}]},
+          {"matcher":{"id":"byName","options":"KDS · consultar lista · Restaurantes.Orders.Api.Write"},"properties":[{"id":"displayName","value":"KDS · consultar lista · localhost:5121 (Restaurantes.Orders.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"KDS · consultar lista · Restaurantes.Gateway.Private"},"properties":[{"id":"displayName","value":"KDS · consultar lista · localhost:5001 (Restaurantes.Gateway.Private)"}]},
+          {"matcher":{"id":"byName","options":"KDS · consultar lista · Restaurantes.Orders.Api.Read"},"properties":[{"id":"displayName","value":"KDS · consultar lista · localhost:5122 (Restaurantes.Orders.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"KDS · consultar lista · Restaurantes.Payments.Api.Write"},"properties":[{"id":"displayName","value":"KDS · consultar lista · localhost:5151 (Restaurantes.Payments.Api.Write)"}]}
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": [ "lastNotNull", "max" ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, service_name) (rate(http_server_request_duration_seconds_bucket{job=\"otel-collector\",service_name=~\"$service\",http_request_method=\"POST\",http_route=~\"/?api/orders\"}[$__rate_interval])))",
+          "legendFormat": "Crear pedido · {{service_name}}",
+          "refId": "A",
+          "range": true
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, service_name) (rate(http_server_request_duration_seconds_bucket{job=\"otel-collector\",service_name=~\"$service\",http_request_method=\"POST\",http_route=~\"/?api/orders/.+/submit\"}[$__rate_interval])))",
+          "legendFormat": "Enviar a cocina · {{service_name}}",
+          "refId": "B",
+          "range": true
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, service_name) (rate(http_server_request_duration_seconds_bucket{job=\"otel-collector\",service_name=~\"$service\",http_request_method=\"POST\",http_route=~\"/?api/orders/.+/stations/.+/(start-preparation|ready|dispatch)\"}[$__rate_interval])))",
+          "legendFormat": "Cocina · {{service_name}}",
+          "refId": "C",
+          "range": true
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, service_name) (rate(http_server_request_duration_seconds_bucket{job=\"otel-collector\",service_name=~\"$service\",http_request_method=\"POST\",http_route=~\"/?api/payments/orders/.+/capture\"}[$__rate_interval])))",
+          "legendFormat": "Capturar pago · {{service_name}}",
+          "refId": "D",
+          "range": true
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, service_name) (rate(http_server_request_duration_seconds_bucket{job=\"otel-collector\",service_name=~\"$service\",http_request_method=\"POST\",http_route=~\"/?api/dining/sessions/.+/checkout\"}[$__rate_interval])))",
+          "legendFormat": "Cerrar cuenta · {{service_name}}",
+          "refId": "E",
+          "range": true
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, service_name) (rate(http_server_request_duration_seconds_bucket{job=\"otel-collector\",service_name=~\"$service\",http_request_method=\"GET\",http_route=~\"/?api/orders\"}[$__rate_interval])))",
+          "legendFormat": "KDS · consultar lista · {{service_name}}",
+          "refId": "F",
+          "range": true
+        }
+      ],
+      "title": "Latencia p95 por operación HTTP",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Volumen observado por operación. El intervalo es el elegido en Grafana.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "Sin datos"
+        },
+        "overrides": [
+          {"matcher":{"id":"byName","options":"Crear pedido · Restaurantes.Dining.Api.Write"},"properties":[{"id":"displayName","value":"Crear pedido · localhost:5102 (Restaurantes.Dining.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Crear pedido · Restaurantes.Gateway.Public"},"properties":[{"id":"displayName","value":"Crear pedido · localhost:5000 (Restaurantes.Gateway.Public)"}]},
+          {"matcher":{"id":"byName","options":"Crear pedido · Restaurantes.Orders.Api.Write"},"properties":[{"id":"displayName","value":"Crear pedido · localhost:5121 (Restaurantes.Orders.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Crear pedido · Restaurantes.Gateway.Private"},"properties":[{"id":"displayName","value":"Crear pedido · localhost:5001 (Restaurantes.Gateway.Private)"}]},
+          {"matcher":{"id":"byName","options":"Crear pedido · Restaurantes.Orders.Api.Read"},"properties":[{"id":"displayName","value":"Crear pedido · localhost:5122 (Restaurantes.Orders.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Crear pedido · Restaurantes.Payments.Api.Write"},"properties":[{"id":"displayName","value":"Crear pedido · localhost:5151 (Restaurantes.Payments.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Enviar a cocina · Restaurantes.Dining.Api.Write"},"properties":[{"id":"displayName","value":"Enviar a cocina · localhost:5102 (Restaurantes.Dining.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Enviar a cocina · Restaurantes.Gateway.Public"},"properties":[{"id":"displayName","value":"Enviar a cocina · localhost:5000 (Restaurantes.Gateway.Public)"}]},
+          {"matcher":{"id":"byName","options":"Enviar a cocina · Restaurantes.Orders.Api.Write"},"properties":[{"id":"displayName","value":"Enviar a cocina · localhost:5121 (Restaurantes.Orders.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Enviar a cocina · Restaurantes.Gateway.Private"},"properties":[{"id":"displayName","value":"Enviar a cocina · localhost:5001 (Restaurantes.Gateway.Private)"}]},
+          {"matcher":{"id":"byName","options":"Enviar a cocina · Restaurantes.Orders.Api.Read"},"properties":[{"id":"displayName","value":"Enviar a cocina · localhost:5122 (Restaurantes.Orders.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Enviar a cocina · Restaurantes.Payments.Api.Write"},"properties":[{"id":"displayName","value":"Enviar a cocina · localhost:5151 (Restaurantes.Payments.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Cocina · Restaurantes.Dining.Api.Write"},"properties":[{"id":"displayName","value":"Cocina · localhost:5102 (Restaurantes.Dining.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Cocina · Restaurantes.Gateway.Public"},"properties":[{"id":"displayName","value":"Cocina · localhost:5000 (Restaurantes.Gateway.Public)"}]},
+          {"matcher":{"id":"byName","options":"Cocina · Restaurantes.Orders.Api.Write"},"properties":[{"id":"displayName","value":"Cocina · localhost:5121 (Restaurantes.Orders.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Cocina · Restaurantes.Gateway.Private"},"properties":[{"id":"displayName","value":"Cocina · localhost:5001 (Restaurantes.Gateway.Private)"}]},
+          {"matcher":{"id":"byName","options":"Cocina · Restaurantes.Orders.Api.Read"},"properties":[{"id":"displayName","value":"Cocina · localhost:5122 (Restaurantes.Orders.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Cocina · Restaurantes.Payments.Api.Write"},"properties":[{"id":"displayName","value":"Cocina · localhost:5151 (Restaurantes.Payments.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Capturar pago · Restaurantes.Dining.Api.Write"},"properties":[{"id":"displayName","value":"Capturar pago · localhost:5102 (Restaurantes.Dining.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Capturar pago · Restaurantes.Gateway.Public"},"properties":[{"id":"displayName","value":"Capturar pago · localhost:5000 (Restaurantes.Gateway.Public)"}]},
+          {"matcher":{"id":"byName","options":"Capturar pago · Restaurantes.Orders.Api.Write"},"properties":[{"id":"displayName","value":"Capturar pago · localhost:5121 (Restaurantes.Orders.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Capturar pago · Restaurantes.Gateway.Private"},"properties":[{"id":"displayName","value":"Capturar pago · localhost:5001 (Restaurantes.Gateway.Private)"}]},
+          {"matcher":{"id":"byName","options":"Capturar pago · Restaurantes.Orders.Api.Read"},"properties":[{"id":"displayName","value":"Capturar pago · localhost:5122 (Restaurantes.Orders.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Capturar pago · Restaurantes.Payments.Api.Write"},"properties":[{"id":"displayName","value":"Capturar pago · localhost:5151 (Restaurantes.Payments.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Cerrar cuenta · Restaurantes.Dining.Api.Write"},"properties":[{"id":"displayName","value":"Cerrar cuenta · localhost:5102 (Restaurantes.Dining.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Cerrar cuenta · Restaurantes.Gateway.Public"},"properties":[{"id":"displayName","value":"Cerrar cuenta · localhost:5000 (Restaurantes.Gateway.Public)"}]},
+          {"matcher":{"id":"byName","options":"Cerrar cuenta · Restaurantes.Orders.Api.Write"},"properties":[{"id":"displayName","value":"Cerrar cuenta · localhost:5121 (Restaurantes.Orders.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Cerrar cuenta · Restaurantes.Gateway.Private"},"properties":[{"id":"displayName","value":"Cerrar cuenta · localhost:5001 (Restaurantes.Gateway.Private)"}]},
+          {"matcher":{"id":"byName","options":"Cerrar cuenta · Restaurantes.Orders.Api.Read"},"properties":[{"id":"displayName","value":"Cerrar cuenta · localhost:5122 (Restaurantes.Orders.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Cerrar cuenta · Restaurantes.Payments.Api.Write"},"properties":[{"id":"displayName","value":"Cerrar cuenta · localhost:5151 (Restaurantes.Payments.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"KDS · consultar lista · Restaurantes.Dining.Api.Write"},"properties":[{"id":"displayName","value":"KDS · consultar lista · localhost:5102 (Restaurantes.Dining.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"KDS · consultar lista · Restaurantes.Gateway.Public"},"properties":[{"id":"displayName","value":"KDS · consultar lista · localhost:5000 (Restaurantes.Gateway.Public)"}]},
+          {"matcher":{"id":"byName","options":"KDS · consultar lista · Restaurantes.Orders.Api.Write"},"properties":[{"id":"displayName","value":"KDS · consultar lista · localhost:5121 (Restaurantes.Orders.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"KDS · consultar lista · Restaurantes.Gateway.Private"},"properties":[{"id":"displayName","value":"KDS · consultar lista · localhost:5001 (Restaurantes.Gateway.Private)"}]},
+          {"matcher":{"id":"byName","options":"KDS · consultar lista · Restaurantes.Orders.Api.Read"},"properties":[{"id":"displayName","value":"KDS · consultar lista · localhost:5122 (Restaurantes.Orders.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"KDS · consultar lista · Restaurantes.Payments.Api.Write"},"properties":[{"id":"displayName","value":"KDS · consultar lista · localhost:5151 (Restaurantes.Payments.Api.Write)"}]}
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 10
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": [ "lastNotNull", "max" ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{job=\"otel-collector\",service_name=~\"$service\",http_request_method=\"POST\",http_route=~\"/?api/orders\"}[$__rate_interval]))",
+          "legendFormat": "Crear pedido · {{service_name}}",
+          "refId": "A",
+          "range": true
+        },
+        {
+          "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{job=\"otel-collector\",service_name=~\"$service\",http_request_method=\"POST\",http_route=~\"/?api/orders/.+/submit\"}[$__rate_interval]))",
+          "legendFormat": "Enviar a cocina · {{service_name}}",
+          "refId": "B",
+          "range": true
+        },
+        {
+          "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{job=\"otel-collector\",service_name=~\"$service\",http_request_method=\"POST\",http_route=~\"/?api/orders/.+/stations/.+/(start-preparation|ready|dispatch)\"}[$__rate_interval]))",
+          "legendFormat": "Cocina · {{service_name}}",
+          "refId": "C",
+          "range": true
+        },
+        {
+          "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{job=\"otel-collector\",service_name=~\"$service\",http_request_method=\"POST\",http_route=~\"/?api/payments/orders/.+/capture\"}[$__rate_interval]))",
+          "legendFormat": "Capturar pago · {{service_name}}",
+          "refId": "D",
+          "range": true
+        },
+        {
+          "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{job=\"otel-collector\",service_name=~\"$service\",http_request_method=\"POST\",http_route=~\"/?api/dining/sessions/.+/checkout\"}[$__rate_interval]))",
+          "legendFormat": "Cerrar cuenta · {{service_name}}",
+          "refId": "E",
+          "range": true
+        },
+        {
+          "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{job=\"otel-collector\",service_name=~\"$service\",http_request_method=\"GET\",http_route=~\"/?api/orders\"}[$__rate_interval]))",
+          "legendFormat": "KDS · consultar lista · {{service_name}}",
+          "refId": "F",
+          "range": true
+        }
+      ],
+      "title": "Tráfico por operación",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Respuestas 4xx y 5xx por operación. Sin series significa que no hay muestras para la selección.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "Sin datos"
+        },
+        "overrides": [
+          {"matcher":{"id":"byName","options":"Crear pedido · Restaurantes.Dining.Api.Write"},"properties":[{"id":"displayName","value":"Crear pedido · localhost:5102 (Restaurantes.Dining.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Crear pedido · Restaurantes.Gateway.Public"},"properties":[{"id":"displayName","value":"Crear pedido · localhost:5000 (Restaurantes.Gateway.Public)"}]},
+          {"matcher":{"id":"byName","options":"Crear pedido · Restaurantes.Orders.Api.Write"},"properties":[{"id":"displayName","value":"Crear pedido · localhost:5121 (Restaurantes.Orders.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Crear pedido · Restaurantes.Gateway.Private"},"properties":[{"id":"displayName","value":"Crear pedido · localhost:5001 (Restaurantes.Gateway.Private)"}]},
+          {"matcher":{"id":"byName","options":"Crear pedido · Restaurantes.Orders.Api.Read"},"properties":[{"id":"displayName","value":"Crear pedido · localhost:5122 (Restaurantes.Orders.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Crear pedido · Restaurantes.Payments.Api.Write"},"properties":[{"id":"displayName","value":"Crear pedido · localhost:5151 (Restaurantes.Payments.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Enviar a cocina · Restaurantes.Dining.Api.Write"},"properties":[{"id":"displayName","value":"Enviar a cocina · localhost:5102 (Restaurantes.Dining.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Enviar a cocina · Restaurantes.Gateway.Public"},"properties":[{"id":"displayName","value":"Enviar a cocina · localhost:5000 (Restaurantes.Gateway.Public)"}]},
+          {"matcher":{"id":"byName","options":"Enviar a cocina · Restaurantes.Orders.Api.Write"},"properties":[{"id":"displayName","value":"Enviar a cocina · localhost:5121 (Restaurantes.Orders.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Enviar a cocina · Restaurantes.Gateway.Private"},"properties":[{"id":"displayName","value":"Enviar a cocina · localhost:5001 (Restaurantes.Gateway.Private)"}]},
+          {"matcher":{"id":"byName","options":"Enviar a cocina · Restaurantes.Orders.Api.Read"},"properties":[{"id":"displayName","value":"Enviar a cocina · localhost:5122 (Restaurantes.Orders.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Enviar a cocina · Restaurantes.Payments.Api.Write"},"properties":[{"id":"displayName","value":"Enviar a cocina · localhost:5151 (Restaurantes.Payments.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Cocina · Restaurantes.Dining.Api.Write"},"properties":[{"id":"displayName","value":"Cocina · localhost:5102 (Restaurantes.Dining.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Cocina · Restaurantes.Gateway.Public"},"properties":[{"id":"displayName","value":"Cocina · localhost:5000 (Restaurantes.Gateway.Public)"}]},
+          {"matcher":{"id":"byName","options":"Cocina · Restaurantes.Orders.Api.Write"},"properties":[{"id":"displayName","value":"Cocina · localhost:5121 (Restaurantes.Orders.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Cocina · Restaurantes.Gateway.Private"},"properties":[{"id":"displayName","value":"Cocina · localhost:5001 (Restaurantes.Gateway.Private)"}]},
+          {"matcher":{"id":"byName","options":"Cocina · Restaurantes.Orders.Api.Read"},"properties":[{"id":"displayName","value":"Cocina · localhost:5122 (Restaurantes.Orders.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Cocina · Restaurantes.Payments.Api.Write"},"properties":[{"id":"displayName","value":"Cocina · localhost:5151 (Restaurantes.Payments.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Capturar pago · Restaurantes.Dining.Api.Write"},"properties":[{"id":"displayName","value":"Capturar pago · localhost:5102 (Restaurantes.Dining.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Capturar pago · Restaurantes.Gateway.Public"},"properties":[{"id":"displayName","value":"Capturar pago · localhost:5000 (Restaurantes.Gateway.Public)"}]},
+          {"matcher":{"id":"byName","options":"Capturar pago · Restaurantes.Orders.Api.Write"},"properties":[{"id":"displayName","value":"Capturar pago · localhost:5121 (Restaurantes.Orders.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Capturar pago · Restaurantes.Gateway.Private"},"properties":[{"id":"displayName","value":"Capturar pago · localhost:5001 (Restaurantes.Gateway.Private)"}]},
+          {"matcher":{"id":"byName","options":"Capturar pago · Restaurantes.Orders.Api.Read"},"properties":[{"id":"displayName","value":"Capturar pago · localhost:5122 (Restaurantes.Orders.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Capturar pago · Restaurantes.Payments.Api.Write"},"properties":[{"id":"displayName","value":"Capturar pago · localhost:5151 (Restaurantes.Payments.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Cerrar cuenta · Restaurantes.Dining.Api.Write"},"properties":[{"id":"displayName","value":"Cerrar cuenta · localhost:5102 (Restaurantes.Dining.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Cerrar cuenta · Restaurantes.Gateway.Public"},"properties":[{"id":"displayName","value":"Cerrar cuenta · localhost:5000 (Restaurantes.Gateway.Public)"}]},
+          {"matcher":{"id":"byName","options":"Cerrar cuenta · Restaurantes.Orders.Api.Write"},"properties":[{"id":"displayName","value":"Cerrar cuenta · localhost:5121 (Restaurantes.Orders.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Cerrar cuenta · Restaurantes.Gateway.Private"},"properties":[{"id":"displayName","value":"Cerrar cuenta · localhost:5001 (Restaurantes.Gateway.Private)"}]},
+          {"matcher":{"id":"byName","options":"Cerrar cuenta · Restaurantes.Orders.Api.Read"},"properties":[{"id":"displayName","value":"Cerrar cuenta · localhost:5122 (Restaurantes.Orders.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Cerrar cuenta · Restaurantes.Payments.Api.Write"},"properties":[{"id":"displayName","value":"Cerrar cuenta · localhost:5151 (Restaurantes.Payments.Api.Write)"}]}
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 10
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "calcs": [ "lastNotNull", "max" ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{job=\"otel-collector\",service_name=~\"$service\",http_request_method=\"POST\",http_route=~\"/?api/orders\",http_response_status_code=~\"4..|5..\"}[$__rate_interval]))",
+          "legendFormat": "Crear pedido · {{service_name}}",
+          "refId": "A",
+          "range": true
+        },
+        {
+          "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{job=\"otel-collector\",service_name=~\"$service\",http_request_method=\"POST\",http_route=~\"/?api/orders/.+/submit\",http_response_status_code=~\"4..|5..\"}[$__rate_interval]))",
+          "legendFormat": "Enviar a cocina · {{service_name}}",
+          "refId": "B",
+          "range": true
+        },
+        {
+          "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{job=\"otel-collector\",service_name=~\"$service\",http_request_method=\"POST\",http_route=~\"/?api/orders/.+/stations/.+/(start-preparation|ready|dispatch)\",http_response_status_code=~\"4..|5..\"}[$__rate_interval]))",
+          "legendFormat": "Cocina · {{service_name}}",
+          "refId": "C",
+          "range": true
+        },
+        {
+          "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{job=\"otel-collector\",service_name=~\"$service\",http_request_method=\"POST\",http_route=~\"/?api/payments/orders/.+/capture\",http_response_status_code=~\"4..|5..\"}[$__rate_interval]))",
+          "legendFormat": "Capturar pago · {{service_name}}",
+          "refId": "D",
+          "range": true
+        },
+        {
+          "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{job=\"otel-collector\",service_name=~\"$service\",http_request_method=\"POST\",http_route=~\"/?api/dining/sessions/.+/checkout\",http_response_status_code=~\"4..|5..\"}[$__rate_interval]))",
+          "legendFormat": "Cerrar cuenta · {{service_name}}",
+          "refId": "E",
+          "range": true
+        }
+      ],
+      "title": "Errores HTTP por operación",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Latencia p95 agregada por servicio para las operaciones del flujo. No mezcla Gateway con API si se selecciona un servicio concreto.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "Sin datos"
+        },
+        "overrides": [
+          {"matcher":{"id":"byName","options":"Restaurantes.Dining.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5102 (Restaurantes.Dining.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Gateway.Public"},"properties":[{"id":"displayName","value":"localhost:5000 (Restaurantes.Gateway.Public)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Orders.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5121 (Restaurantes.Orders.Api.Write)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Gateway.Private"},"properties":[{"id":"displayName","value":"localhost:5001 (Restaurantes.Gateway.Private)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Orders.Api.Read"},"properties":[{"id":"displayName","value":"localhost:5122 (Restaurantes.Orders.Api.Read)"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Payments.Api.Write"},"properties":[{"id":"displayName","value":"localhost:5151 (Restaurantes.Payments.Api.Write)"}]}
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 19
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "calcs": [ "lastNotNull", "max" ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, service_name) (rate(http_server_request_duration_seconds_bucket{job=\"otel-collector\",service_name=~\"$service\",http_request_method=\"POST\",http_route=~\"/?api/(orders|payments/orders|dining/sessions)/.*\"}[$__rate_interval])))",
+          "legendFormat": "{{service_name}}",
+          "refId": "A",
+          "range": true
+        }
+      ],
+      "title": "Latencia p95 del servidor por servicio",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Consulta agregada de la lista KDS. Sirve para observar el coste de lectura, pero no prueba por sí sola cuándo apareció un pedido concreto.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "Sin datos"
+        },
+        "overrides": [
+          {"matcher":{"id":"byName","options":"Restaurantes.Dining.Api.Write · GET lista"},"properties":[{"id":"displayName","value":"localhost:5102 (Restaurantes.Dining.Api.Write) · GET lista"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Gateway.Public · GET lista"},"properties":[{"id":"displayName","value":"localhost:5000 (Restaurantes.Gateway.Public) · GET lista"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Orders.Api.Write · GET lista"},"properties":[{"id":"displayName","value":"localhost:5121 (Restaurantes.Orders.Api.Write) · GET lista"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Gateway.Private · GET lista"},"properties":[{"id":"displayName","value":"localhost:5001 (Restaurantes.Gateway.Private) · GET lista"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Orders.Api.Read · GET lista"},"properties":[{"id":"displayName","value":"localhost:5122 (Restaurantes.Orders.Api.Read) · GET lista"}]},
+          {"matcher":{"id":"byName","options":"Restaurantes.Payments.Api.Write · GET lista"},"properties":[{"id":"displayName","value":"localhost:5151 (Restaurantes.Payments.Api.Write) · GET lista"}]},
+          {"matcher":{"id":"byName","options":"GET lista · req/s · Restaurantes.Dining.Api.Write"},"properties":[{"id":"displayName","value":"GET lista · req/s · localhost:5102 (Restaurantes.Dining.Api.Write)"},{"id":"unit","value":"reqps"}]},
+          {"matcher":{"id":"byName","options":"GET lista · req/s · Restaurantes.Gateway.Public"},"properties":[{"id":"displayName","value":"GET lista · req/s · localhost:5000 (Restaurantes.Gateway.Public)"},{"id":"unit","value":"reqps"}]},
+          {"matcher":{"id":"byName","options":"GET lista · req/s · Restaurantes.Orders.Api.Write"},"properties":[{"id":"displayName","value":"GET lista · req/s · localhost:5121 (Restaurantes.Orders.Api.Write)"},{"id":"unit","value":"reqps"}]},
+          {"matcher":{"id":"byName","options":"GET lista · req/s · Restaurantes.Gateway.Private"},"properties":[{"id":"displayName","value":"GET lista · req/s · localhost:5001 (Restaurantes.Gateway.Private)"},{"id":"unit","value":"reqps"}]},
+          {"matcher":{"id":"byName","options":"GET lista · req/s · Restaurantes.Orders.Api.Read"},"properties":[{"id":"displayName","value":"GET lista · req/s · localhost:5122 (Restaurantes.Orders.Api.Read)"},{"id":"unit","value":"reqps"}]},
+          {"matcher":{"id":"byName","options":"GET lista · req/s · Restaurantes.Payments.Api.Write"},"properties":[{"id":"displayName","value":"GET lista · req/s · localhost:5151 (Restaurantes.Payments.Api.Write)"},{"id":"unit","value":"reqps"}]}
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 19
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [ "lastNotNull", "max" ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, service_name) (rate(http_server_request_duration_seconds_bucket{job=\"otel-collector\",service_name=~\"$service\",http_request_method=\"GET\",http_route=~\"/?api/orders\"}[$__rate_interval])))",
+          "legendFormat": "{{service_name}} · GET lista",
+          "refId": "A",
+          "range": true
+        },
+        {
+          "expr": "sum by (service_name) (rate(http_server_request_duration_seconds_count{job=\"otel-collector\",service_name=~\"$service\",http_request_method=\"GET\",http_route=~\"/?api/orders\"}[$__rate_interval]))",
+          "legendFormat": "GET lista · req/s · {{service_name}}",
+          "refId": "B",
+          "range": true
+        }
+      ],
+      "title": "Lectura de la lista KDS",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Detalle de respuestas no exitosas dentro del flujo seleccionado.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sin datos"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "service_name"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "Restaurantes.Dining.Api.Write": { "text": "localhost:5102 (Restaurantes.Dining.Api.Write)" },
+                      "Restaurantes.Gateway.Public": { "text": "localhost:5000 (Restaurantes.Gateway.Public)" },
+                      "Restaurantes.Orders.Api.Write": { "text": "localhost:5121 (Restaurantes.Orders.Api.Write)" },
+                      "Restaurantes.Gateway.Private": { "text": "localhost:5001 (Restaurantes.Gateway.Private)" },
+                      "Restaurantes.Orders.Api.Read": { "text": "localhost:5122 (Restaurantes.Orders.Api.Read)" },
+                      "Restaurantes.Payments.Api.Write": { "text": "localhost:5151 (Restaurantes.Payments.Api.Write)" }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 28
+      },
+      "id": 6,
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "sortBy": [
+          {
+            "displayName": "Valor",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "expr": "sum by (service_name, http_request_method, http_route, http_response_status_code) (increase(http_server_request_duration_seconds_count{job=\"otel-collector\",service_name=~\"$service\",http_request_method=\"POST\",http_route=~\"/?api/(orders|payments/orders|dining/sessions)/.*\",http_response_status_code=~\"4..|5..\"}[$__range]))",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "{{service_name}} {{http_route}}",
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true },
+            "renameByName": {
+              "service_name": "Servicio",
+              "http_request_method": "Método",
+              "http_route": "Ruta",
+              "http_response_status_code": "Estado",
+              "Value": "Peticiones"
+            },
+            "indexByName": {
+              "service_name": 0,
+              "http_request_method": 1,
+              "http_route": 2,
+              "http_response_status_code": 3,
+              "Value": 4
+            }
+          }
+        }
+      ],
+      "title": "Errores del flujo por ruta",
+      "type": "table"
+    }
+  ],
+  "schemaVersion": 41,
+  "tags": [ "restaurantes", "observability", "orders", "kds", "payments", "http" ],
+  "templating": {
+    "list": [
+      {
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(http_server_request_duration_seconds_count{job=\"otel-collector\",service_name=~\"Restaurantes[.](Gateway|Orders|Payments|Dining)[.].*\"}, service_name)",
+        "includeAll": true,
+        "label": "Servicio",
+        "multi": true,
+        "name": "service",
+        "options": [],
+        "query": {
+          "query": "label_values(http_server_request_duration_seconds_count{job=\"otel-collector\",service_name=~\"Restaurantes[.](Gateway|Orders|Payments|Dining)[.].*\"}, service_name)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timepicker": { "refresh_intervals": [ "30s", "1m", "5m" ] },
+  "timezone": "browser",
+  "title": "Restaurantes · Flujo de pedidos",
+  "uid": "restaurantes-order-flow",
+  "version": 4
+}

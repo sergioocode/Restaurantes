@@ -1,0 +1,1235 @@
+{
+  "annotations": { "list": [] },
+  "description": "Llamadas HTTP salientes de APIs y gateways. Selección de servicio, instancia y destino; tráfico OTLP oculto por defecto.",
+  "editable": false,
+  "links": [
+    {
+      "title": "Dashboards de Restaurantes",
+      "type": "dashboards",
+      "tags": [ "restaurantes", "observability" ],
+      "asDropdown": true,
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false
+    }
+  ],
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Comprueba el scrape del Collector; no comprueba la salud de las aplicaciones.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sin datos",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "No accesible",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Accesible",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [ "lastNotNull" ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"otel-collector\"}",
+          "refId": "A",
+          "legendFormat": "Collector · acceso desde Prometheus",
+          "instant": true,
+          "range": false,
+          "format": "time_series",
+          "interval": "1m"
+        }
+      ],
+      "title": "Collector · acceso desde Prometheus",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Cuenta las instancias seleccionadas que aún tienen series runtime publicadas en el Collector. No es una prueba de salud ni garantiza que el proceso siga vivo: el Collector conserva temporalmente las últimas métricas. Sin series, se muestra «Sin datos».",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sin datos",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [ "lastNotNull" ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "expr": "(count(dotnet_assembly_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"})) and on() (up{job=\"otel-collector\"} == 1)",
+          "refId": "A",
+          "legendFormat": "Instancias con series runtime disponibles",
+          "instant": true,
+          "range": false,
+          "format": "time_series",
+          "interval": "1m"
+        }
+      ],
+      "title": "Instancias con series runtime disponibles",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Incremento estimado. Filtra los destinos por dirección y puerto; oculta OTLP por defecto.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sin datos",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 0,
+        "y": 4
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [ "lastNotNull" ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "expr": "sum(((increase(http_client_request_duration_seconds_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\",server_port!~\"${otlp:raw}\",server_address=~\"${destination}\",server_port=~\"${port}\"}[5m])) and on (service_name, exported_instance) dotnet_assembly_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"}) and on() (up{job=\"otel-collector\"} == 1))",
+          "refId": "A",
+          "legendFormat": "Llamadas salientes · últimos 5 min",
+          "instant": true,
+          "range": false,
+          "format": "time_series",
+          "interval": "1m"
+        }
+      ],
+      "title": "Llamadas salientes · últimos 5 min",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Cuenta error_type no vacío: errores de transporte y respuestas clasificadas como error por HttpClient, incluidos 4xx y 5xx. No equivale solo a errores 5xx.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sin datos",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 8,
+        "y": 4
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [ "lastNotNull" ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "expr": "sum(((increase(http_client_request_duration_seconds_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\",server_port!~\"${otlp:raw}\",server_address=~\"${destination}\",server_port=~\"${port}\",error_type!=\"\"}[5m])) and on (service_name, exported_instance) dotnet_assembly_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"}) and on() (up{job=\"otel-collector\"} == 1)) or (0 * sum(((increase(http_client_request_duration_seconds_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\",server_port!~\"${otlp:raw}\",server_address=~\"${destination}\",server_port=~\"${port}\"}[5m])) and on (service_name, exported_instance) dotnet_assembly_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"}) and on() (up{job=\"otel-collector\"} == 1)))",
+          "refId": "A",
+          "legendFormat": "Llamadas con error · últimos 5 min",
+          "instant": true,
+          "range": false,
+          "format": "time_series",
+          "interval": "1m"
+        }
+      ],
+      "title": "Llamadas con error · últimos 5 min",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Latencia de las llamadas HTTP salientes seleccionadas.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "Sin datos",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 4
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [ "lastNotNull" ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (((rate(http_client_request_duration_seconds_bucket{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\",server_port!~\"${otlp:raw}\",server_address=~\"${destination}\",server_port=~\"${port}\"}[5m])) and on (service_name, exported_instance) dotnet_assembly_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"}) and on() (up{job=\"otel-collector\"} == 1)))",
+          "refId": "A",
+          "legendFormat": "Latencia p95 · últimos 5 min",
+          "instant": true,
+          "range": false,
+          "format": "time_series",
+          "interval": "1m"
+        }
+      ],
+      "title": "Latencia p95 · últimos 5 min",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Muestra dirección:puerto (Proyecto) para destinos locales conocidos y dirección:puerto para los demás.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "Sin datos",
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5000"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5000 (Restaurantes.Gateway.Public)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5001"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5001 (Restaurantes.Gateway.Private)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5102"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5102 (Restaurantes.Dining.Api.Write)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5105"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5105 (Restaurantes.CashRegister.Api)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5106"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5106 (Restaurantes.Identity.Api.Write)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5107"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5107 (Restaurantes.Integrations.Api)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5111"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5111 (Restaurantes.RestaurantOperations.Api.Write)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5112"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5112 (Restaurantes.RestaurantOperations.Api.Read)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5121"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5121 (Restaurantes.Orders.Api.Write)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5122"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5122 (Restaurantes.Orders.Api.Read)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5131"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5131 (Restaurantes.Catalog.Api.Write)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5132"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5132 (Restaurantes.Catalog.Api.Read)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5142"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5142 (Restaurantes.Reporting.Api.Read)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5151"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5151 (Restaurantes.Payments.Api.Write)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5162"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5162 (Restaurantes.Sales.Api.Read)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5200"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5200 (Restaurantes.Clients.Commander.Pwa)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5300"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5300 (Restaurantes.Clients.CustomerQr.Pwa)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5400"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5400 (Restaurantes.Clients.Pos.Pwa)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5500"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5500 (Restaurantes.Clients.Backoffice.Pwa)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5600"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5600 (Restaurantes.Clients.Dashboard.Web)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5700"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5700 (Restaurantes.Clients.Kds.Web)"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [ "lastNotNull" ],
+          "height": 80
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (server_address, server_port) (((rate(http_client_request_duration_seconds_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\",server_port!~\"${otlp:raw}\",server_address=~\"${destination}\",server_port=~\"${port}\"}[$__rate_interval])) and on (service_name, exported_instance) dotnet_assembly_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"}) and on() (up{job=\"otel-collector\"} == 1))",
+          "refId": "A",
+          "legendFormat": "{{server_address}}:{{server_port}}",
+          "instant": false,
+          "range": true,
+          "format": "time_series",
+          "interval": "1m"
+        }
+      ],
+      "title": "Tráfico por destino",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Estimación por histograma; interpretar junto con el volumen de llamadas. Muestra dirección:puerto (Proyecto) para destinos locales conocidos y dirección:puerto para los demás.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "Sin datos",
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5000"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5000 (Restaurantes.Gateway.Public)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5001"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5001 (Restaurantes.Gateway.Private)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5102"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5102 (Restaurantes.Dining.Api.Write)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5105"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5105 (Restaurantes.CashRegister.Api)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5106"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5106 (Restaurantes.Identity.Api.Write)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5107"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5107 (Restaurantes.Integrations.Api)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5111"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5111 (Restaurantes.RestaurantOperations.Api.Write)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5112"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5112 (Restaurantes.RestaurantOperations.Api.Read)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5121"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5121 (Restaurantes.Orders.Api.Write)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5122"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5122 (Restaurantes.Orders.Api.Read)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5131"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5131 (Restaurantes.Catalog.Api.Write)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5132"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5132 (Restaurantes.Catalog.Api.Read)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5142"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5142 (Restaurantes.Reporting.Api.Read)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5151"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5151 (Restaurantes.Payments.Api.Write)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5162"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5162 (Restaurantes.Sales.Api.Read)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5200"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5200 (Restaurantes.Clients.Commander.Pwa)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5300"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5300 (Restaurantes.Clients.CustomerQr.Pwa)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5400"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5400 (Restaurantes.Clients.Pos.Pwa)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5500"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5500 (Restaurantes.Clients.Backoffice.Pwa)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5600"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5600 (Restaurantes.Clients.Dashboard.Web)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "localhost:5700"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "localhost:5700 (Restaurantes.Clients.Kds.Web)"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [ "lastNotNull" ],
+          "height": 80
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, server_address, server_port) (((rate(http_client_request_duration_seconds_bucket{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\",server_port!~\"${otlp:raw}\",server_address=~\"${destination}\",server_port=~\"${port}\"}[$__rate_interval])) and on (service_name, exported_instance) dotnet_assembly_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"}) and on() (up{job=\"otel-collector\"} == 1)))",
+          "refId": "A",
+          "legendFormat": "{{server_address}}:{{server_port}}",
+          "instant": false,
+          "range": true,
+          "format": "time_series",
+          "interval": "1m"
+        }
+      ],
+      "title": "Latencia p95 por destino",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Ranking instantáneo al final del rango seleccionado. Origen identifica al servicio que llama; Destino muestra dirección:puerto (Proyecto) si se conoce el proyecto local, o dirección:puerto en los demás casos.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sin datos",
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "service_name" },
+            "properties": [
+              { "id": "mappings", "value": [ { "type": "value", "options": {
+                  "Restaurantes.Gateway.Public": { "text": "localhost:5000 (Restaurantes.Gateway.Public)" },
+                  "Restaurantes.Gateway.Private": { "text": "localhost:5001 (Restaurantes.Gateway.Private)" },
+                  "Restaurantes.Dining.Api.Write": { "text": "localhost:5102 (Restaurantes.Dining.Api.Write)" },
+                  "Restaurantes.CashRegister.Api": { "text": "localhost:5105 (Restaurantes.CashRegister.Api)" },
+                  "Restaurantes.Identity.Api.Write": { "text": "localhost:5106 (Restaurantes.Identity.Api.Write)" },
+                  "Restaurantes.Integrations.Api": { "text": "localhost:5107 (Restaurantes.Integrations.Api)" },
+                  "Restaurantes.RestaurantOperations.Api.Write": { "text": "localhost:5111 (Restaurantes.RestaurantOperations.Api.Write)" },
+                  "Restaurantes.RestaurantOperations.Api.Read": { "text": "localhost:5112 (Restaurantes.RestaurantOperations.Api.Read)" },
+                  "Restaurantes.Orders.Api.Write": { "text": "localhost:5121 (Restaurantes.Orders.Api.Write)" },
+                  "Restaurantes.Orders.Api.Read": { "text": "localhost:5122 (Restaurantes.Orders.Api.Read)" },
+                  "Restaurantes.Catalog.Api.Write": { "text": "localhost:5131 (Restaurantes.Catalog.Api.Write)" },
+                  "Restaurantes.Catalog.Api.Read": { "text": "localhost:5132 (Restaurantes.Catalog.Api.Read)" },
+                  "Restaurantes.Reporting.Api.Read": { "text": "localhost:5142 (Restaurantes.Reporting.Api.Read)" },
+                  "Restaurantes.Payments.Api.Write": { "text": "localhost:5151 (Restaurantes.Payments.Api.Write)" },
+                  "Restaurantes.Sales.Api.Read": { "text": "localhost:5162 (Restaurantes.Sales.Api.Read)" },
+                  "Restaurantes.Clients.Commander.Pwa": { "text": "localhost:5200 (Restaurantes.Clients.Commander.Pwa)" },
+                  "Restaurantes.Clients.CustomerQr.Pwa": { "text": "localhost:5300 (Restaurantes.Clients.CustomerQr.Pwa)" },
+                  "Restaurantes.Clients.Pos.Pwa": { "text": "localhost:5400 (Restaurantes.Clients.Pos.Pwa)" },
+                  "Restaurantes.Clients.Backoffice.Pwa": { "text": "localhost:5500 (Restaurantes.Clients.Backoffice.Pwa)" },
+                  "Restaurantes.Clients.Dashboard.Web": { "text": "localhost:5600 (Restaurantes.Clients.Dashboard.Web)" },
+                  "Restaurantes.Clients.Kds.Web": { "text": "localhost:5700 (Restaurantes.Clients.Kds.Web)" }
+              } } ] }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "destination_endpoint"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "localhost:5000": { "text": "localhost:5000 (Restaurantes.Gateway.Public)" },
+                      "localhost:5001": { "text": "localhost:5001 (Restaurantes.Gateway.Private)" },
+                      "localhost:5102": { "text": "localhost:5102 (Restaurantes.Dining.Api.Write)" },
+                      "localhost:5105": { "text": "localhost:5105 (Restaurantes.CashRegister.Api)" },
+                      "localhost:5106": { "text": "localhost:5106 (Restaurantes.Identity.Api.Write)" },
+                      "localhost:5107": { "text": "localhost:5107 (Restaurantes.Integrations.Api)" },
+                      "localhost:5111": { "text": "localhost:5111 (Restaurantes.RestaurantOperations.Api.Write)" },
+                      "localhost:5112": { "text": "localhost:5112 (Restaurantes.RestaurantOperations.Api.Read)" },
+                      "localhost:5121": { "text": "localhost:5121 (Restaurantes.Orders.Api.Write)" },
+                      "localhost:5122": { "text": "localhost:5122 (Restaurantes.Orders.Api.Read)" },
+                      "localhost:5131": { "text": "localhost:5131 (Restaurantes.Catalog.Api.Write)" },
+                      "localhost:5132": { "text": "localhost:5132 (Restaurantes.Catalog.Api.Read)" },
+                      "localhost:5142": { "text": "localhost:5142 (Restaurantes.Reporting.Api.Read)" },
+                      "localhost:5151": { "text": "localhost:5151 (Restaurantes.Payments.Api.Write)" },
+                      "localhost:5162": { "text": "localhost:5162 (Restaurantes.Sales.Api.Read)" },
+                      "localhost:5200": { "text": "localhost:5200 (Restaurantes.Clients.Commander.Pwa)" },
+                      "localhost:5300": { "text": "localhost:5300 (Restaurantes.Clients.CustomerQr.Pwa)" },
+                      "localhost:5400": { "text": "localhost:5400 (Restaurantes.Clients.Pos.Pwa)" },
+                      "localhost:5500": { "text": "localhost:5500 (Restaurantes.Clients.Backoffice.Pwa)" },
+                      "localhost:5600": { "text": "localhost:5600 (Restaurantes.Clients.Dashboard.Web)" },
+                      "localhost:5700": { "text": "localhost:5700 (Restaurantes.Clients.Kds.Web)" }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "id": 8,
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "sortBy": [
+          {
+            "displayName": "Valor",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "expr": "label_join(topk(10, sum by (service_name, server_address, server_port, http_request_method) (((increase(http_client_request_duration_seconds_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\",server_port!~\"${otlp:raw}\",server_address=~\"${destination}\",server_port=~\"${port}\"}[$__range])) and on (service_name, exported_instance) dotnet_assembly_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"}) and on() (up{job=\"otel-collector\"} == 1))), \"destination_endpoint\", \":\", \"server_address\", \"server_port\")",
+          "refId": "A",
+          "legendFormat": "10 destinos con más llamadas · rango seleccionado",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "interval": "1m"
+        }
+      ],
+      "title": "10 destinos con más llamadas · rango seleccionado",
+      "type": "table",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "server_address": true,
+              "server_port": true
+            },
+            "renameByName": {
+              "service_name": "Origen",
+              "http_request_method": "Método",
+              "destination_endpoint": "Destino",
+              "Value": "Valor"
+            },
+            "indexByName": {
+              "service_name": 0,
+              "http_request_method": 1,
+              "destination_endpoint": 2,
+              "Value": 3
+            }
+          }
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Sin series de error se muestra «Sin datos»; consultar el indicador superior para el total con base HTTP.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "Sin datos",
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [ "lastNotNull" ],
+          "height": 80
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (error_type) (((rate(http_client_request_duration_seconds_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\",server_port!~\"${otlp:raw}\",server_address=~\"${destination}\",server_port=~\"${port}\",error_type!=\"\"}[$__rate_interval])) and on (service_name, exported_instance) dotnet_assembly_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\"}) and on() (up{job=\"otel-collector\"} == 1))",
+          "refId": "A",
+          "legendFormat": "{{error_type}}",
+          "instant": false,
+          "range": true,
+          "format": "time_series",
+          "interval": "1m"
+        }
+      ],
+      "title": "Errores por tipo",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 41,
+  "tags": [ "observability", "restaurantes", "http", "dependencies" ],
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "label": "Servicio",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(dotnet_assembly_count{job=\"otel-collector\",service_name!=\"\"}, service_name)",
+        "query": {
+          "query": "label_values(dotnet_assembly_count{job=\"otel-collector\",service_name!=\"\"}, service_name)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "Restaurantes.Gateway.Private",
+          "value": "Restaurantes.Gateway.Private"
+        },
+        "options": []
+      },
+      {
+        "name": "process",
+        "label": "Instancia",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(dotnet_assembly_count{job=\"otel-collector\",service_name=~\"${service}\"}, exported_instance)",
+        "query": {
+          "query": "label_values(dotnet_assembly_count{job=\"otel-collector\",service_name=~\"${service}\"}, exported_instance)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": []
+      },
+      {
+        "name": "otlp",
+        "label": "Tráfico OTLP",
+        "type": "custom",
+        "query": "Ocultar : 4317|4318, Mostrar : ^$",
+        "current": {
+          "selected": true,
+          "text": "Ocultar",
+          "value": "4317|4318"
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "Ocultar",
+            "value": "4317|4318"
+          },
+          {
+            "selected": false,
+            "text": "Mostrar",
+            "value": "^$"
+          }
+        ],
+        "multi": false,
+        "includeAll": false,
+        "description": "Oculta los puertos OTLP estándar 4317 y 4318. Mostrar permite inspeccionar también ese tráfico."
+      },
+      {
+        "name": "destination",
+        "label": "Destino",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(http_client_request_duration_seconds_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\",server_port!~\"${otlp:raw}\"}, server_address)",
+        "query": {
+          "query": "label_values(http_client_request_duration_seconds_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\",server_port!~\"${otlp:raw}\"}, server_address)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": []
+      },
+      {
+        "name": "port",
+        "label": "Puerto",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(http_client_request_duration_seconds_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\",server_port!~\"${otlp:raw}\",server_address=~\"${destination}\"}, server_port)",
+        "query": {
+          "query": "label_values(http_client_request_duration_seconds_count{job=\"otel-collector\",service_name=~\"${service}\",exported_instance=~\"${process}\",server_port!~\"${otlp:raw}\",server_address=~\"${destination}\"}, server_port)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": []
+      }
+    ]
+  },
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [ "30s", "1m", "5m" ]
+  },
+  "timezone": "browser",
+  "title": "Restaurantes · Dependencias · HTTP saliente",
+  "uid": "restaurantes-dependencies",
+  "version": 8
+}
