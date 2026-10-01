@@ -46,7 +46,12 @@ export class KdsApiClient {
 
   async sendOrderCommand(orderId, path) {
     const response = await this.fetch('/api/orders/' + orderId + '/' + path, { method: 'POST' });
-    if (!response.ok) throw new Error('El comando fue rechazado: HTTP ' + response.status);
+    if (!response.ok) {
+      const error = new Error('El comando fue rechazado: HTTP ' + response.status);
+      error.status = response.status;
+      throw error;
+    }
+    return response.json();
   }
 
   fetch(path, options = {}) {

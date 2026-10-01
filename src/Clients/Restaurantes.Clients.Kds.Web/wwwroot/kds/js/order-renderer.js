@@ -22,6 +22,7 @@ export class OrderRenderer {
     }
 
     for (const order of orders) {
+      const isPending = this.options.isOrderPending(order.id);
       const article = document.createElement('article');
       article.className = 'order';
       article.dataset.status = order.status;
@@ -87,12 +88,14 @@ export class OrderRenderer {
         if (action) {
           const actionButton = document.createElement('button');
           actionButton.textContent = action.label;
+          actionButton.disabled = isPending;
           actionButton.addEventListener('click', () => this.options.onAdvance(order, action, actionButton));
           actions.append(actionButton);
         }
         if (canRecover) {
           const deliverButton = document.createElement('button');
           deliverButton.textContent = 'Entregado · resolver incidencia';
+          deliverButton.disabled = isPending;
           deliverButton.addEventListener('click', () => this.options.onRecover(order, deliverButton));
           actions.append(deliverButton);
         }
@@ -174,6 +177,7 @@ export class OrderRenderer {
           actions.className = 'actions';
           const button = document.createElement('button');
           button.textContent = 'Despachar ' + station.name;
+          button.disabled = this.options.isOrderPending(order.id);
           button.addEventListener('click', () => this.options.onAdvance(order, {
             path: 'stations/' + encodeURIComponent(station.code) + '/dispatch',
             label: button.textContent
