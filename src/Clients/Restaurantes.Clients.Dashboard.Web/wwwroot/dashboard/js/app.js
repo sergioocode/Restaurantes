@@ -41,13 +41,17 @@ async function loadProvider() {
     $('loginGoogle').disabled = settings.activeProvider !== 'Google' || !settings.googleConfigured;
 }
 
-async function load() {
+async function load({ includeHealth = true } = {}) {
     try {
         const params = new URLSearchParams();
         if ($('date').value) params.set('date', $('date').value);
         if ($('restaurant').value) params.set('restaurantId', $('restaurant').value);
         params.set('orderLimit', $('orderLimit').value);
-        const [d, h] = await Promise.all([authorizedFetch('/api/reporting/dashboard/daily?' + params).then(r => r.json()), authorizedFetch('/api/reporting/health').then(r => r.json()), loadDeadLetters()]);
+        if (includeHealth) {
+            void loadHealth();
+            void loadDeadLetters();
+        }
+        const d = await authorizedFetch('/api/reporting/dashboard/daily?' + params).then(r => r.json());
         $('sales').textContent = money.format(d.totalSales);
         $('orders').textContent = d.completedSales;
         $('average').textContent = money.format(d.averageTicket);
@@ -55,11 +59,19 @@ async function load() {
         fill($('restaurants'), d.restaurantRanking, x => `<td>${short(x.restaurantId)}</td><td>${x.tickets}</td><td>${money.format(x.sales)}</td>`);
         fill($('channels'), d.channels, x => `<td>${escapeHtml(x.source)}</td><td>${x.tickets}</td><td>${money.format(x.sales)}</td>`);
         fill($('paymentMethods'), d.paymentMethods, x => `<td>${escapeHtml(paymentMethodLabel(x.method))}</td><td>${x.tickets}</td><td>${money.format(x.sales)}</td>`);
-        fill($('health'), h, x => `<td>${escapeHtml(x.service)}</td><td class="${x.healthy ? 'ok' : 'bad'}">${x.healthy ? 'OK' : 'Error'} ${x.status || ''}</td>`);
         renderOperations(d.operationalOrders);
         $('state').textContent = 'Actualizado ' + new Date().toLocaleTimeString();
     } catch (e) {
         $('state').textContent = 'Error: ' + e.message
+    }
+}
+
+async function loadHealth() {
+    try {
+        const health = await authorizedFetch('/api/reporting/health').then(r => r.json());
+        fill($('health'), health, x => `<td>${escapeHtml(x.service)}</td><td class="${x.healthy ? 'ok' : 'bad'}">${x.healthy ? 'OK' : 'Error'} ${x.status || ''}</td>`)
+    } catch {
+        $('health').innerHTML = '<tr><td>Salud</td><td class="bad">Error al consultar</td></tr>'
     }
 }
 
@@ -229,7 +241,7 @@ async function realtime() {
                     joined = true;
                     $('state').textContent = 'Conectado';
                 }
-                if (m.type === 1 && m.target === 'DashboardUpdated') setTimeout(load, 200)
+                if (m.type === 1 && m.target === 'DashboardUpdated') setTimeout(() => load({ includeHealth: false }), 200)
             }
         };
         ws.onclose = () => { if (access && generation === realtimeGeneration) setTimeout(realtime, 2000) }
