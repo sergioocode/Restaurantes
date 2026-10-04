@@ -1,0 +1,15 @@
+using Microsoft.AspNetCore.SignalR;
+using Restaurantes.Dining.Application;
+
+namespace Restaurantes.Dining.Api.Realtime;
+
+public sealed class DiningNotifications(IHubContext<DiningHub, IDiningRealtimeClient> hub)
+    : IDiningNotifications
+{
+    public Task TableChanged(DiningTableChanged notification)
+    {
+        return hub
+            .Clients.Group(DiningHub.RestaurantGroup(notification.RestaurantId))
+            .TableChanged(notification);
+    }
+}

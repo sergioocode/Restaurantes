@@ -14,5 +14,6 @@
     <ProjectReference Include="..\Restaurantes.Dining.Application\Restaurantes.Dining.Application.csproj" />
     <ProjectReference Include="..\Restaurantes.Dining.Domain\Restaurantes.Dining.Domain.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Restaurantes.ServiceDefaults\Restaurantes.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Restaurantes.Messaging.RabbitMq\Restaurantes.Messaging.RabbitMq.csproj" />
   </ItemGroup>
 </Project>

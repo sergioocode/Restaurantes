@@ -6,11 +6,13 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.12" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Restaurantes.RestaurantOperations.Application\Restaurantes.RestaurantOperations.Application.csproj" />
     <ProjectReference Include="..\Restaurantes.RestaurantOperations.Contracts\Restaurantes.RestaurantOperations.Contracts.csproj" />
     <ProjectReference Include="..\Restaurantes.RestaurantOperations.Domain\Restaurantes.RestaurantOperations.Domain.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Restaurantes.ServiceDefaults\Restaurantes.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Restaurantes.Messaging.RabbitMq\Restaurantes.Messaging.RabbitMq.csproj" />
   </ItemGroup>
 </Project>
