@@ -14,6 +14,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Services\Payments\Restaurantes.Payments.Api.Write\Restaurantes.Payments.Api.Write.csproj" />
+    <ProjectReference Include="..\..\src\Services\Payments\Restaurantes.Payments.Api\Restaurantes.Payments.Api.csproj" />
   </ItemGroup>
 </Project>

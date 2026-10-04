@@ -11,6 +11,7 @@ builder.Services.AddCashRegisterInfrastructure(builder.Configuration);
 builder.Services.AddRestaurantSecurity(builder.Configuration);
 builder.Services.AddControllers();
 
+WorkerHost.ConfigureServices(builder.Services, builder.Configuration);
 WebApplication app = builder.Build();
 await app.Services.MigrateCashRegisterDatabaseAsync();
 app.MapServiceDefaults();

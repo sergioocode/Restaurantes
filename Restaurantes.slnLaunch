@@ -3,91 +3,23 @@
     "Name": "Backoffice · Con navegador",
     "Projects": [
       {
-        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api.Write\\Restaurantes.Identity.Api.Write.csproj",
+        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api\\Restaurantes.Identity.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Api.Write\\Restaurantes.RestaurantOperations.Api.Write.csproj",
+        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Api\\Restaurantes.RestaurantOperations.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Api.Read\\Restaurantes.RestaurantOperations.Api.Read.csproj",
+        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Api\\Restaurantes.Dining.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Publisher\\Restaurantes.RestaurantOperations.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Consumer\\Restaurantes.RestaurantOperations.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Api.Write\\Restaurantes.Dining.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Consumer\\Restaurantes.Dining.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api.Write\\Restaurantes.Catalog.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api.Read\\Restaurantes.Catalog.Api.Read.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Publisher\\Restaurantes.Catalog.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Consumer\\Restaurantes.Catalog.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Write\\Restaurantes.Orders.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Read\\Restaurantes.Orders.Api.Read.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Publisher\\Restaurantes.Orders.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Consumer\\Restaurantes.Orders.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Api.Write\\Restaurantes.Payments.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Publisher\\Restaurantes.Payments.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Consumer\\Restaurantes.Payments.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Api\\Restaurantes.CashRegister.Api.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Consumer\\Restaurantes.CashRegister.Consumer.csproj",
+        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api\\Restaurantes.Catalog.Api.csproj",
         "Action": "Start"
       },
       {
         "Path": "src\\ApiGateways\\Restaurantes.Gateway.Private\\Restaurantes.Gateway.Private.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Clients\\Restaurantes.Clients.CustomerQr.Pwa\\Restaurantes.Clients.CustomerQr.Pwa.csproj",
         "Action": "Start"
       },
       {
@@ -101,91 +33,23 @@
     "Name": "Backoffice · Sin navegador",
     "Projects": [
       {
-        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api.Write\\Restaurantes.Identity.Api.Write.csproj",
+        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api\\Restaurantes.Identity.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Api.Write\\Restaurantes.RestaurantOperations.Api.Write.csproj",
+        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Api\\Restaurantes.RestaurantOperations.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Api.Read\\Restaurantes.RestaurantOperations.Api.Read.csproj",
+        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Api\\Restaurantes.Dining.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Publisher\\Restaurantes.RestaurantOperations.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Consumer\\Restaurantes.RestaurantOperations.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Api.Write\\Restaurantes.Dining.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Consumer\\Restaurantes.Dining.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api.Write\\Restaurantes.Catalog.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api.Read\\Restaurantes.Catalog.Api.Read.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Publisher\\Restaurantes.Catalog.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Consumer\\Restaurantes.Catalog.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Write\\Restaurantes.Orders.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Read\\Restaurantes.Orders.Api.Read.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Publisher\\Restaurantes.Orders.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Consumer\\Restaurantes.Orders.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Api.Write\\Restaurantes.Payments.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Publisher\\Restaurantes.Payments.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Consumer\\Restaurantes.Payments.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Api\\Restaurantes.CashRegister.Api.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Consumer\\Restaurantes.CashRegister.Consumer.csproj",
+        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api\\Restaurantes.Catalog.Api.csproj",
         "Action": "Start"
       },
       {
         "Path": "src\\ApiGateways\\Restaurantes.Gateway.Private\\Restaurantes.Gateway.Private.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Clients\\Restaurantes.Clients.CustomerQr.Pwa\\Restaurantes.Clients.CustomerQr.Pwa.csproj",
         "Action": "Start"
       },
       {
@@ -196,50 +60,26 @@
     ]
   },
   {
-    "Name": "TPV · Con navegador",
+    "Name": "Cliente QR · Sin navegador",
     "Projects": [
       {
-        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api.Write\\Restaurantes.Identity.Api.Write.csproj",
+        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Api\\Restaurantes.RestaurantOperations.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Api.Write\\Restaurantes.Dining.Api.Write.csproj",
+        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Api\\Restaurantes.Dining.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Consumer\\Restaurantes.Dining.Consumer.csproj",
+        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api\\Restaurantes.Catalog.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api.Read\\Restaurantes.Catalog.Api.Read.csproj",
+        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api\\Restaurantes.Orders.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Write\\Restaurantes.Orders.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Read\\Restaurantes.Orders.Api.Read.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Publisher\\Restaurantes.Orders.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Consumer\\Restaurantes.Orders.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Api.Write\\Restaurantes.Payments.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Publisher\\Restaurantes.Payments.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Consumer\\Restaurantes.Payments.Consumer.csproj",
+        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Api\\Restaurantes.Payments.Api.csproj",
         "Action": "Start"
       },
       {
@@ -247,7 +87,40 @@
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Consumer\\Restaurantes.CashRegister.Consumer.csproj",
+        "Path": "src\\ApiGateways\\Restaurantes.Gateway.Public\\Restaurantes.Gateway.Public.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Clients\\Restaurantes.Clients.CustomerQr.Pwa\\Restaurantes.Clients.CustomerQr.Pwa.csproj",
+        "Action": "Start"
+      }
+    ]
+  },
+  {
+    "Name": "TPV · Con navegador",
+    "Projects": [
+      {
+        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api\\Restaurantes.Identity.Api.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Api\\Restaurantes.Dining.Api.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api\\Restaurantes.Catalog.Api.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api\\Restaurantes.Orders.Api.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Api\\Restaurantes.Payments.Api.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Api\\Restaurantes.CashRegister.Api.csproj",
         "Action": "Start"
       },
       {
@@ -265,55 +138,27 @@
     "Name": "TPV · Sin navegador",
     "Projects": [
       {
-        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api.Write\\Restaurantes.Identity.Api.Write.csproj",
+        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api\\Restaurantes.Identity.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Api.Write\\Restaurantes.Dining.Api.Write.csproj",
+        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Api\\Restaurantes.Dining.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Consumer\\Restaurantes.Dining.Consumer.csproj",
+        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api\\Restaurantes.Catalog.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api.Read\\Restaurantes.Catalog.Api.Read.csproj",
+        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api\\Restaurantes.Orders.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Write\\Restaurantes.Orders.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Read\\Restaurantes.Orders.Api.Read.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Publisher\\Restaurantes.Orders.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Consumer\\Restaurantes.Orders.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Api.Write\\Restaurantes.Payments.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Publisher\\Restaurantes.Payments.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Consumer\\Restaurantes.Payments.Consumer.csproj",
+        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Api\\Restaurantes.Payments.Api.csproj",
         "Action": "Start"
       },
       {
         "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Api\\Restaurantes.CashRegister.Api.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Consumer\\Restaurantes.CashRegister.Consumer.csproj",
         "Action": "Start"
       },
       {
@@ -331,43 +176,23 @@
     "Name": "Comandero · Con navegador",
     "Projects": [
       {
-        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api.Write\\Restaurantes.Identity.Api.Write.csproj",
+        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api\\Restaurantes.Identity.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Api.Write\\Restaurantes.Dining.Api.Write.csproj",
+        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Api\\Restaurantes.Dining.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Consumer\\Restaurantes.Dining.Consumer.csproj",
+        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api\\Restaurantes.Catalog.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api.Read\\Restaurantes.Catalog.Api.Read.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Write\\Restaurantes.Orders.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Read\\Restaurantes.Orders.Api.Read.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Publisher\\Restaurantes.Orders.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Consumer\\Restaurantes.Orders.Consumer.csproj",
+        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api\\Restaurantes.Orders.Api.csproj",
         "Action": "Start"
       },
       {
         "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Api\\Restaurantes.CashRegister.Api.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Consumer\\Restaurantes.CashRegister.Consumer.csproj",
         "Action": "Start"
       },
       {
@@ -385,43 +210,23 @@
     "Name": "Comandero · Sin navegador",
     "Projects": [
       {
-        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api.Write\\Restaurantes.Identity.Api.Write.csproj",
+        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api\\Restaurantes.Identity.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Api.Write\\Restaurantes.Dining.Api.Write.csproj",
+        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Api\\Restaurantes.Dining.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Consumer\\Restaurantes.Dining.Consumer.csproj",
+        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api\\Restaurantes.Catalog.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api.Read\\Restaurantes.Catalog.Api.Read.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Write\\Restaurantes.Orders.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Read\\Restaurantes.Orders.Api.Read.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Publisher\\Restaurantes.Orders.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Consumer\\Restaurantes.Orders.Consumer.csproj",
+        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api\\Restaurantes.Orders.Api.csproj",
         "Action": "Start"
       },
       {
         "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Api\\Restaurantes.CashRegister.Api.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Consumer\\Restaurantes.CashRegister.Consumer.csproj",
         "Action": "Start"
       },
       {
@@ -439,27 +244,15 @@
     "Name": "KDS · Con navegador",
     "Projects": [
       {
-        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api.Write\\Restaurantes.Identity.Api.Write.csproj",
+        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api\\Restaurantes.Identity.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api.Read\\Restaurantes.Catalog.Api.Read.csproj",
+        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api\\Restaurantes.Catalog.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Write\\Restaurantes.Orders.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Read\\Restaurantes.Orders.Api.Read.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Publisher\\Restaurantes.Orders.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Consumer\\Restaurantes.Orders.Consumer.csproj",
+        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api\\Restaurantes.Orders.Api.csproj",
         "Action": "Start"
       },
       {
@@ -477,27 +270,15 @@
     "Name": "KDS · Sin navegador",
     "Projects": [
       {
-        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api.Write\\Restaurantes.Identity.Api.Write.csproj",
+        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api\\Restaurantes.Identity.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api.Read\\Restaurantes.Catalog.Api.Read.csproj",
+        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api\\Restaurantes.Catalog.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Write\\Restaurantes.Orders.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Read\\Restaurantes.Orders.Api.Read.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Publisher\\Restaurantes.Orders.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Consumer\\Restaurantes.Orders.Consumer.csproj",
+        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api\\Restaurantes.Orders.Api.csproj",
         "Action": "Start"
       },
       {
@@ -515,23 +296,15 @@
     "Name": "Dashboard · Con navegador",
     "Projects": [
       {
-        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api.Write\\Restaurantes.Identity.Api.Write.csproj",
+        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api\\Restaurantes.Identity.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Api.Read\\Restaurantes.RestaurantOperations.Api.Read.csproj",
+        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Api\\Restaurantes.RestaurantOperations.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Reporting\\Restaurantes.Reporting.Api.Read\\Restaurantes.Reporting.Api.Read.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Reporting\\Restaurantes.Reporting.Consumer\\Restaurantes.Reporting.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Reporting\\Restaurantes.Reporting.Publisher\\Restaurantes.Reporting.Publisher.csproj",
+        "Path": "src\\Services\\Reporting\\Restaurantes.Reporting.Api\\Restaurantes.Reporting.Api.csproj",
         "Action": "Start"
       },
       {
@@ -549,23 +322,15 @@
     "Name": "Dashboard · Sin navegador",
     "Projects": [
       {
-        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api.Write\\Restaurantes.Identity.Api.Write.csproj",
+        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api\\Restaurantes.Identity.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Api.Read\\Restaurantes.RestaurantOperations.Api.Read.csproj",
+        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Api\\Restaurantes.RestaurantOperations.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Reporting\\Restaurantes.Reporting.Api.Read\\Restaurantes.Reporting.Api.Read.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Reporting\\Restaurantes.Reporting.Consumer\\Restaurantes.Reporting.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Reporting\\Restaurantes.Reporting.Publisher\\Restaurantes.Reporting.Publisher.csproj",
+        "Path": "src\\Services\\Reporting\\Restaurantes.Reporting.Api\\Restaurantes.Reporting.Api.csproj",
         "Action": "Start"
       },
       {
@@ -583,75 +348,27 @@
     "Name": "Operación completa · Todos los clientes · Con navegador",
     "Projects": [
       {
-        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api.Write\\Restaurantes.Identity.Api.Write.csproj",
+        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api\\Restaurantes.Identity.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Api.Write\\Restaurantes.RestaurantOperations.Api.Write.csproj",
+        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Api\\Restaurantes.RestaurantOperations.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Api.Read\\Restaurantes.RestaurantOperations.Api.Read.csproj",
+        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Api\\Restaurantes.Dining.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Publisher\\Restaurantes.RestaurantOperations.Publisher.csproj",
+        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api\\Restaurantes.Catalog.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Consumer\\Restaurantes.RestaurantOperations.Consumer.csproj",
+        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api\\Restaurantes.Orders.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Api.Write\\Restaurantes.Dining.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Consumer\\Restaurantes.Dining.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api.Write\\Restaurantes.Catalog.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api.Read\\Restaurantes.Catalog.Api.Read.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Publisher\\Restaurantes.Catalog.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Consumer\\Restaurantes.Catalog.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Write\\Restaurantes.Orders.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Read\\Restaurantes.Orders.Api.Read.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Publisher\\Restaurantes.Orders.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Consumer\\Restaurantes.Orders.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Api.Write\\Restaurantes.Payments.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Publisher\\Restaurantes.Payments.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Consumer\\Restaurantes.Payments.Consumer.csproj",
+        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Api\\Restaurantes.Payments.Api.csproj",
         "Action": "Start"
       },
       {
@@ -659,23 +376,7 @@
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Consumer\\Restaurantes.CashRegister.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
         "Path": "src\\Services\\Integrations\\Restaurantes.Integrations.Api\\Restaurantes.Integrations.Api.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Sales\\Restaurantes.Sales.Consumer\\Restaurantes.Sales.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Sales\\Restaurantes.Sales.Publisher\\Restaurantes.Sales.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Sales\\Restaurantes.Sales.Api.Read\\Restaurantes.Sales.Api.Read.csproj",
         "Action": "Start"
       },
       {
@@ -712,15 +413,11 @@
         "DebugTarget": "http-browser"
       },
       {
-        "Path": "src\\Services\\Reporting\\Restaurantes.Reporting.Api.Read\\Restaurantes.Reporting.Api.Read.csproj",
+        "Path": "src\\Services\\Sales\\Restaurantes.Sales.Api\\Restaurantes.Sales.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Reporting\\Restaurantes.Reporting.Consumer\\Restaurantes.Reporting.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Reporting\\Restaurantes.Reporting.Publisher\\Restaurantes.Reporting.Publisher.csproj",
+        "Path": "src\\Services\\Reporting\\Restaurantes.Reporting.Api\\Restaurantes.Reporting.Api.csproj",
         "Action": "Start"
       },
       {
@@ -734,75 +431,27 @@
     "Name": "Operación completa · Todos los clientes · Sin navegador",
     "Projects": [
       {
-        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api.Write\\Restaurantes.Identity.Api.Write.csproj",
+        "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api\\Restaurantes.Identity.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Api.Write\\Restaurantes.RestaurantOperations.Api.Write.csproj",
+        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Api\\Restaurantes.RestaurantOperations.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Api.Read\\Restaurantes.RestaurantOperations.Api.Read.csproj",
+        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Api\\Restaurantes.Dining.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Publisher\\Restaurantes.RestaurantOperations.Publisher.csproj",
+        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api\\Restaurantes.Catalog.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Consumer\\Restaurantes.RestaurantOperations.Consumer.csproj",
+        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api\\Restaurantes.Orders.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Api.Write\\Restaurantes.Dining.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Dining\\Restaurantes.Dining.Consumer\\Restaurantes.Dining.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api.Write\\Restaurantes.Catalog.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api.Read\\Restaurantes.Catalog.Api.Read.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Publisher\\Restaurantes.Catalog.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Consumer\\Restaurantes.Catalog.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Write\\Restaurantes.Orders.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api.Read\\Restaurantes.Orders.Api.Read.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Publisher\\Restaurantes.Orders.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Consumer\\Restaurantes.Orders.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Api.Write\\Restaurantes.Payments.Api.Write.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Publisher\\Restaurantes.Payments.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Consumer\\Restaurantes.Payments.Consumer.csproj",
+        "Path": "src\\Services\\Payments\\Restaurantes.Payments.Api\\Restaurantes.Payments.Api.csproj",
         "Action": "Start"
       },
       {
@@ -810,23 +459,7 @@
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Consumer\\Restaurantes.CashRegister.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
         "Path": "src\\Services\\Integrations\\Restaurantes.Integrations.Api\\Restaurantes.Integrations.Api.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Sales\\Restaurantes.Sales.Consumer\\Restaurantes.Sales.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Sales\\Restaurantes.Sales.Publisher\\Restaurantes.Sales.Publisher.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Sales\\Restaurantes.Sales.Api.Read\\Restaurantes.Sales.Api.Read.csproj",
         "Action": "Start"
       },
       {
@@ -863,15 +496,11 @@
         "DebugTarget": "http"
       },
       {
-        "Path": "src\\Services\\Reporting\\Restaurantes.Reporting.Api.Read\\Restaurantes.Reporting.Api.Read.csproj",
+        "Path": "src\\Services\\Sales\\Restaurantes.Sales.Api\\Restaurantes.Sales.Api.csproj",
         "Action": "Start"
       },
       {
-        "Path": "src\\Services\\Reporting\\Restaurantes.Reporting.Consumer\\Restaurantes.Reporting.Consumer.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "src\\Services\\Reporting\\Restaurantes.Reporting.Publisher\\Restaurantes.Reporting.Publisher.csproj",
+        "Path": "src\\Services\\Reporting\\Restaurantes.Reporting.Api\\Restaurantes.Reporting.Api.csproj",
         "Action": "Start"
       },
       {
@@ -880,5 +509,5 @@
         "DebugTarget": "http"
       }
     ]
-  },
+  }
 ]

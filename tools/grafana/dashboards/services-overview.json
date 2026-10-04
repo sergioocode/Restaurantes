@@ -302,18 +302,18 @@
         },
         "overrides": [
           { "matcher": { "id": "byName", "options": "Restaurantes.CashRegister.Api" }, "properties": [ { "id": "displayName", "value": "localhost:5105 (Restaurantes.CashRegister.Api)" } ] },
-          { "matcher": { "id": "byName", "options": "Restaurantes.Catalog.Api.Read" }, "properties": [ { "id": "displayName", "value": "localhost:5132 (Restaurantes.Catalog.Api.Read)" } ] },
-          { "matcher": { "id": "byName", "options": "Restaurantes.Catalog.Api.Write" }, "properties": [ { "id": "displayName", "value": "localhost:5131 (Restaurantes.Catalog.Api.Write)" } ] },
-          { "matcher": { "id": "byName", "options": "Restaurantes.Dining.Api.Write" }, "properties": [ { "id": "displayName", "value": "localhost:5102 (Restaurantes.Dining.Api.Write)" } ] },
-          { "matcher": { "id": "byName", "options": "Restaurantes.Identity.Api.Write" }, "properties": [ { "id": "displayName", "value": "localhost:5106 (Restaurantes.Identity.Api.Write)" } ] },
+          { "matcher": { "id": "byName", "options": "Restaurantes.Catalog.Api" }, "properties": [ { "id": "displayName", "value": "localhost:5131 (Restaurantes.Catalog.Api)" } ] },
+          { "matcher": { "id": "byName", "options": "Restaurantes.Catalog.Api" }, "properties": [ { "id": "displayName", "value": "localhost:5131 (Restaurantes.Catalog.Api)" } ] },
+          { "matcher": { "id": "byName", "options": "Restaurantes.Dining.Api" }, "properties": [ { "id": "displayName", "value": "localhost:5102 (Restaurantes.Dining.Api)" } ] },
+          { "matcher": { "id": "byName", "options": "Restaurantes.Identity.Api" }, "properties": [ { "id": "displayName", "value": "localhost:5106 (Restaurantes.Identity.Api)" } ] },
           { "matcher": { "id": "byName", "options": "Restaurantes.Integrations.Api" }, "properties": [ { "id": "displayName", "value": "localhost:5107 (Restaurantes.Integrations.Api)" } ] },
-          { "matcher": { "id": "byName", "options": "Restaurantes.Orders.Api.Read" }, "properties": [ { "id": "displayName", "value": "localhost:5122 (Restaurantes.Orders.Api.Read)" } ] },
-          { "matcher": { "id": "byName", "options": "Restaurantes.Orders.Api.Write" }, "properties": [ { "id": "displayName", "value": "localhost:5121 (Restaurantes.Orders.Api.Write)" } ] },
-          { "matcher": { "id": "byName", "options": "Restaurantes.Payments.Api.Write" }, "properties": [ { "id": "displayName", "value": "localhost:5151 (Restaurantes.Payments.Api.Write)" } ] },
-          { "matcher": { "id": "byName", "options": "Restaurantes.Reporting.Api.Read" }, "properties": [ { "id": "displayName", "value": "localhost:5142 (Restaurantes.Reporting.Api.Read)" } ] },
-          { "matcher": { "id": "byName", "options": "Restaurantes.RestaurantOperations.Api.Read" }, "properties": [ { "id": "displayName", "value": "localhost:5112 (Restaurantes.RestaurantOperations.Api.Read)" } ] },
-          { "matcher": { "id": "byName", "options": "Restaurantes.RestaurantOperations.Api.Write" }, "properties": [ { "id": "displayName", "value": "localhost:5111 (Restaurantes.RestaurantOperations.Api.Write)" } ] },
-          { "matcher": { "id": "byName", "options": "Restaurantes.Sales.Api.Read" }, "properties": [ { "id": "displayName", "value": "localhost:5162 (Restaurantes.Sales.Api.Read)" } ] }
+          { "matcher": { "id": "byName", "options": "Restaurantes.Orders.Api" }, "properties": [ { "id": "displayName", "value": "localhost:5121 (Restaurantes.Orders.Api)" } ] },
+          { "matcher": { "id": "byName", "options": "Restaurantes.Orders.Api" }, "properties": [ { "id": "displayName", "value": "localhost:5121 (Restaurantes.Orders.Api)" } ] },
+          { "matcher": { "id": "byName", "options": "Restaurantes.Payments.Api" }, "properties": [ { "id": "displayName", "value": "localhost:5151 (Restaurantes.Payments.Api)" } ] },
+          { "matcher": { "id": "byName", "options": "Restaurantes.Reporting.Api" }, "properties": [ { "id": "displayName", "value": "localhost:5142 (Restaurantes.Reporting.Api)" } ] },
+          { "matcher": { "id": "byName", "options": "Restaurantes.RestaurantOperations.Api" }, "properties": [ { "id": "displayName", "value": "localhost:5111 (Restaurantes.RestaurantOperations.Api)" } ] },
+          { "matcher": { "id": "byName", "options": "Restaurantes.RestaurantOperations.Api" }, "properties": [ { "id": "displayName", "value": "localhost:5111 (Restaurantes.RestaurantOperations.Api)" } ] },
+          { "matcher": { "id": "byName", "options": "Restaurantes.Sales.Api" }, "properties": [ { "id": "displayName", "value": "localhost:5162 (Restaurantes.Sales.Api)" } ] }
         ]
       },
       "gridPos": {
@@ -422,18 +422,18 @@
             "properties": [
               { "id": "mappings", "value": [ { "type": "value", "options": {
                   "Restaurantes.CashRegister.Api": { "text": "localhost:5105 (Restaurantes.CashRegister.Api)" },
-                  "Restaurantes.Catalog.Api.Read": { "text": "localhost:5132 (Restaurantes.Catalog.Api.Read)" },
-                  "Restaurantes.Catalog.Api.Write": { "text": "localhost:5131 (Restaurantes.Catalog.Api.Write)" },
-                  "Restaurantes.Dining.Api.Write": { "text": "localhost:5102 (Restaurantes.Dining.Api.Write)" },
-                  "Restaurantes.Identity.Api.Write": { "text": "localhost:5106 (Restaurantes.Identity.Api.Write)" },
+                  "Restaurantes.Catalog.Api": { "text": "localhost:5131 (Restaurantes.Catalog.Api)" },
+                  "Restaurantes.Catalog.Api": { "text": "localhost:5131 (Restaurantes.Catalog.Api)" },
+                  "Restaurantes.Dining.Api": { "text": "localhost:5102 (Restaurantes.Dining.Api)" },
+                  "Restaurantes.Identity.Api": { "text": "localhost:5106 (Restaurantes.Identity.Api)" },
                   "Restaurantes.Integrations.Api": { "text": "localhost:5107 (Restaurantes.Integrations.Api)" },
-                  "Restaurantes.Orders.Api.Read": { "text": "localhost:5122 (Restaurantes.Orders.Api.Read)" },
-                  "Restaurantes.Orders.Api.Write": { "text": "localhost:5121 (Restaurantes.Orders.Api.Write)" },
-                  "Restaurantes.Payments.Api.Write": { "text": "localhost:5151 (Restaurantes.Payments.Api.Write)" },
-                  "Restaurantes.Reporting.Api.Read": { "text": "localhost:5142 (Restaurantes.Reporting.Api.Read)" },
-                  "Restaurantes.RestaurantOperations.Api.Read": { "text": "localhost:5112 (Restaurantes.RestaurantOperations.Api.Read)" },
-                  "Restaurantes.RestaurantOperations.Api.Write": { "text": "localhost:5111 (Restaurantes.RestaurantOperations.Api.Write)" },
-                  "Restaurantes.Sales.Api.Read": { "text": "localhost:5162 (Restaurantes.Sales.Api.Read)" }
+                  "Restaurantes.Orders.Api": { "text": "localhost:5121 (Restaurantes.Orders.Api)" },
+                  "Restaurantes.Orders.Api": { "text": "localhost:5121 (Restaurantes.Orders.Api)" },
+                  "Restaurantes.Payments.Api": { "text": "localhost:5151 (Restaurantes.Payments.Api)" },
+                  "Restaurantes.Reporting.Api": { "text": "localhost:5142 (Restaurantes.Reporting.Api)" },
+                  "Restaurantes.RestaurantOperations.Api": { "text": "localhost:5111 (Restaurantes.RestaurantOperations.Api)" },
+                  "Restaurantes.RestaurantOperations.Api": { "text": "localhost:5111 (Restaurantes.RestaurantOperations.Api)" },
+                  "Restaurantes.Sales.Api": { "text": "localhost:5162 (Restaurantes.Sales.Api)" }
               } } ] }
             ]
           }
@@ -508,18 +508,18 @@
             "properties": [
               { "id": "mappings", "value": [ { "type": "value", "options": {
                   "Restaurantes.CashRegister.Api": { "text": "localhost:5105 (Restaurantes.CashRegister.Api)" },
-                  "Restaurantes.Catalog.Api.Read": { "text": "localhost:5132 (Restaurantes.Catalog.Api.Read)" },
-                  "Restaurantes.Catalog.Api.Write": { "text": "localhost:5131 (Restaurantes.Catalog.Api.Write)" },
-                  "Restaurantes.Dining.Api.Write": { "text": "localhost:5102 (Restaurantes.Dining.Api.Write)" },
-                  "Restaurantes.Identity.Api.Write": { "text": "localhost:5106 (Restaurantes.Identity.Api.Write)" },
+                  "Restaurantes.Catalog.Api": { "text": "localhost:5131 (Restaurantes.Catalog.Api)" },
+                  "Restaurantes.Catalog.Api": { "text": "localhost:5131 (Restaurantes.Catalog.Api)" },
+                  "Restaurantes.Dining.Api": { "text": "localhost:5102 (Restaurantes.Dining.Api)" },
+                  "Restaurantes.Identity.Api": { "text": "localhost:5106 (Restaurantes.Identity.Api)" },
                   "Restaurantes.Integrations.Api": { "text": "localhost:5107 (Restaurantes.Integrations.Api)" },
-                  "Restaurantes.Orders.Api.Read": { "text": "localhost:5122 (Restaurantes.Orders.Api.Read)" },
-                  "Restaurantes.Orders.Api.Write": { "text": "localhost:5121 (Restaurantes.Orders.Api.Write)" },
-                  "Restaurantes.Payments.Api.Write": { "text": "localhost:5151 (Restaurantes.Payments.Api.Write)" },
-                  "Restaurantes.Reporting.Api.Read": { "text": "localhost:5142 (Restaurantes.Reporting.Api.Read)" },
-                  "Restaurantes.RestaurantOperations.Api.Read": { "text": "localhost:5112 (Restaurantes.RestaurantOperations.Api.Read)" },
-                  "Restaurantes.RestaurantOperations.Api.Write": { "text": "localhost:5111 (Restaurantes.RestaurantOperations.Api.Write)" },
-                  "Restaurantes.Sales.Api.Read": { "text": "localhost:5162 (Restaurantes.Sales.Api.Read)" }
+                  "Restaurantes.Orders.Api": { "text": "localhost:5121 (Restaurantes.Orders.Api)" },
+                  "Restaurantes.Orders.Api": { "text": "localhost:5121 (Restaurantes.Orders.Api)" },
+                  "Restaurantes.Payments.Api": { "text": "localhost:5151 (Restaurantes.Payments.Api)" },
+                  "Restaurantes.Reporting.Api": { "text": "localhost:5142 (Restaurantes.Reporting.Api)" },
+                  "Restaurantes.RestaurantOperations.Api": { "text": "localhost:5111 (Restaurantes.RestaurantOperations.Api)" },
+                  "Restaurantes.RestaurantOperations.Api": { "text": "localhost:5111 (Restaurantes.RestaurantOperations.Api)" },
+                  "Restaurantes.Sales.Api": { "text": "localhost:5162 (Restaurantes.Sales.Api)" }
               } } ] }
             ]
           }
@@ -602,8 +602,8 @@
         "allValue": ".*",
         "current": {
           "selected": true,
-          "text": "Restaurantes.Orders.Api.Write",
-          "value": "Restaurantes.Orders.Api.Write"
+          "text": "Restaurantes.Orders.Api",
+          "value": "Restaurantes.Orders.Api"
         },
         "options": []
       },

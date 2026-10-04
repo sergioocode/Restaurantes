@@ -116,7 +116,11 @@ flowchart TB
     Reporting --> ReadDB
 ```
 
-La solución no aplica CQRS de forma mecánica a todos los dominios. **RestaurantOperations, Catalog y Orders** separan explícitamente APIs y persistencia de lectura/escritura. **Sales** también mantiene modelos separados, aunque su escritura se alimenta principalmente mediante eventos. **Dining**, **Identity** y **CashRegister** están separados por capas, pero cada uno mantiene una única persistencia operacional porque no necesita un modelo Read independiente.
+La solución no aplica CQRS de forma mecánica a todos los dominios. **RestaurantOperations,
+Catalog y Orders** conservan modelos de lectura y escritura separados dentro de una API por
+servicio. **Sales** también mantiene modelos separados, aunque su escritura se alimenta
+principalmente mediante eventos. **Dining**, **Identity** y **CashRegister** mantienen una
+única persistencia operacional por servicio.
 
 ### YARP como punto único de entrada
 
@@ -379,7 +383,14 @@ Restaurantes/
 └── Restaurantes.slnx
 ```
 
-Los servicios con mayor complejidad se subdividen en proyectos de **Domain, Application, Infrastructure, Contracts, API, Publisher y Consumer**, evitando que las aplicaciones externas dependan de detalles internos del dominio.
+Los servicios con mayor complejidad se subdividen en proyectos de **Domain, Application,
+Infrastructure y Contracts**, además de sus ejecutables. Catalog, Orders y
+RestaurantOperations reúnen sus rutas de lectura y escritura en una API por servicio.
+Sales y Reporting conservan servicios independientes. Cada uno aloja consumidores y
+publicadores en `Infrastructure/Workers` y los ejecuta desde su propia API.
+
+Las API ejecutan también sus workers. Los perfiles de Visual Studio levantan los servicios
+necesarios para el cliente elegido.
 
 ## Entorno local
 
@@ -465,7 +476,9 @@ El workflow usa `SONAR_TOKEN` como secreto del repositorio en GitHub. La organiz
 
 Los datos de ejemplo de `tools/postgres/seed/01-development-catalog.sql` son opcionales y **no se insertan automáticamente** al iniciar Docker ni las aplicaciones. El seed agrega locales, categorías, productos, estaciones KDS, zonas y mesas; no crea usuarios de Identity. El usuario administrador se inicializa por separado al arrancar Identity.
 
-Para cargar estos datos una sola vez, inicia PostgreSQL y arranca al menos `RestaurantOperations.Api.Write` y `Catalog.Api.Write` para que apliquen las migraciones. Después, desde PowerShell en la raíz del repositorio, copia y ejecuta el archivo:
+Para cargar estos datos una sola vez, inicia PostgreSQL y arranca al menos
+`Restaurantes.RestaurantOperations.Api` y `Restaurantes.Catalog.Api` para que apliquen las
+migraciones. Después, desde PowerShell en la raíz del repositorio, copia y ejecuta el archivo:
 
 ```powershell
 docker cp .\tools\postgres\seed\01-development-catalog.sql restaurantes-postgres:/tmp/01-development-catalog.sql

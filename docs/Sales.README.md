@@ -27,17 +27,15 @@ Sales **no captura pagos**, **no modifica pedidos** y **no calcula el estado ope
 
 ## Proyectos
 
-El bounded context está dividido en siete proyectos:
+El bounded context está dividido en cinco proyectos:
 
 ```text
 src/Services/Sales/
-├── Restaurantes.Sales.Api.Read
+├── Restaurantes.Sales.Api
 ├── Restaurantes.Sales.Application
-├── Restaurantes.Sales.Consumer
 ├── Restaurantes.Sales.Contracts
 ├── Restaurantes.Sales.Domain
-├── Restaurantes.Sales.Infrastructure
-└── Restaurantes.Sales.Publisher
+└── Restaurantes.Sales.Infrastructure
 ```
 
 | Proyecto | Responsabilidad |
@@ -45,10 +43,8 @@ src/Services/Sales/
 | `Restaurantes.Sales.Domain` | Modelo `Sale` / `SaleOrder` y regla de completado de la venta. |
 | `Restaurantes.Sales.Application` | Orquestación de eventos de Payments y Orders y puertos de persistencia. |
 | `Restaurantes.Sales.Contracts` | Contratos públicos del servicio: `SaleCompleted`, `SaleResponse` y snapshots de líneas. |
-| `Restaurantes.Sales.Infrastructure` | EF Core, PostgreSQL, stores, Outbox, Inbox y modelos Read/Write. |
-| `Restaurantes.Sales.Consumer` | Consumo de eventos externos y construcción de la proyección Read. |
-| `Restaurantes.Sales.Publisher` | Publicación de eventos pendientes desde Outbox hacia RabbitMQ. |
-| `Restaurantes.Sales.Api.Read` | Consultas de ventas completadas. |
+| `Restaurantes.Sales.Infrastructure` | Persistencia, stores y workers de consumo y publicación. |
+| `Restaurantes.Sales.Api` | Consultas de ventas; ejecuta HTTP, workers o ambos según el rol. |
 
 ## Arquitectura interna
 
@@ -59,13 +55,13 @@ flowchart LR
     Rabbit[("RabbitMQ")]
 
     subgraph Sales["Sales"]
-        Consumer["Sales.Consumer"]
+        Consumer["CheckoutProcessWorker"]
         App["Application + Domain"]
         WriteDb[("sales_write")]
-        Publisher["Sales.Publisher"]
+        Publisher["SalesOutboxPublisherWorker"]
         ReadProjector["SalesReadProjectionWorker"]
         ReadDb[("sales_read")]
-        ReadApi["Sales.Api.Read"]
+        ReadApi["Sales.Api"]
     end
 
     Gateway["YARP Gateway"]
@@ -191,9 +187,9 @@ Si llegan varios eventos para la misma transacción, `ExpectedOrderCount` conser
 sequenceDiagram
     participant Payments
     participant MQ as RabbitMQ
-    participant Consumer as Sales.Consumer
+    participant Consumer as CheckoutProcessWorker
     participant DB as sales_write
-    participant Publisher as Sales.Publisher
+    participant Publisher as SalesOutboxPublisherWorker
     participant Read as sales_read
     participant Reporting
 
@@ -441,9 +437,9 @@ Cuando una venta pasa a `Completed`, `SaleCommandService` agrega `SaleCompleted`
 
 ```mermaid
 sequenceDiagram
-    participant Consumer as Sales.Consumer
+    participant Consumer as CheckoutProcessWorker
     participant DB as sales_write
-    participant Publisher as Sales.Publisher
+    participant Publisher as SalesOutboxPublisherWorker
     participant MQ as RabbitMQ
 
     Consumer->>DB: actualizar Sale + agregar OutboxMessage
@@ -455,7 +451,7 @@ sequenceDiagram
     Publisher->>DB: marcar ProcessedAtUtc
 ```
 
-`Sales.Publisher`:
+`SalesOutboxPublisherWorker`:
 
 - consulta mensajes con `ProcessedAtUtc = null`;
 - publica por orden de `OccurredAtUtc`;
@@ -557,11 +553,11 @@ La API consulta exclusivamente `sales_read`.
 
 Sales se publica a través de los gateways YARP únicamente para operaciones de lectura.
 
-Las rutas `GET /api/sales` y `GET /api/sales/{id}` se dirigen a `Sales.Api.Read`. No existe una ruta de escritura para Sales porque el servicio construye su estado a partir de eventos de integración.
+Las rutas `GET /api/sales` y `GET /api/sales/{id}` se dirigen a `Sales.Api`. No existe una ruta de escritura para Sales porque el servicio construye su estado a partir de eventos de integración.
 
 ## Seguridad
 
-`Sales.Api.Read` no configura actualmente autenticación JWT ni autorización por restaurante. Los endpoints `GET /api/sales` y `GET /api/sales/{id}` se exponen sin una comprobación de permisos dentro del servicio en la implementación actual.
+`Sales.Api` no configura actualmente autenticación JWT ni autorización por restaurante. Los endpoints `GET /api/sales` y `GET /api/sales/{id}` se exponen sin una comprobación de permisos dentro del servicio en la implementación actual.
 
 El gateway define el enrutamiento hacia Sales, pero no sustituye una regla de autorización dentro del bounded context.
 
@@ -715,15 +711,14 @@ Inbox protege el procesamiento frente a entregas repetidas y Transactional Outbo
 
 ## Despliegue y escalado
 
-Sales está dividido en tres procesos ejecutables independientes:
+Sales usa un ejecutable con roles de despliegue:
 
 ```text
-Sales.Consumer
-Sales.Publisher
-Sales.Api.Read
+Sales.Api (Http)
+Sales.Api (Workers)
 ```
 
-Esto permite escalar de forma diferente:
+Esto permite separar la capacidad de:
 
 - consumo de eventos;
 - publicación de Outbox;
@@ -747,14 +742,14 @@ En cloud, si la carga lo requiere, ambas bases pueden alojarse en recursos disti
 RabbitMQ
    │
    ▼
-Sales.Consumer ──────> PostgreSQL Write
+Sales.Api (Workers) ──> PostgreSQL Write
                           sales_write
 
-Sales.Consumer ──────> PostgreSQL Read
+Sales.Api (Workers) ──> PostgreSQL Read
                           sales_read
                               ▲
                               │
-                       Sales.Api.Read
+                       Sales.Api
 ```
 
 La ventaja principal es que una carga elevada de consulta no necesita competir por CPU, memoria, conexiones o I/O con el procesamiento transaccional de eventos.
