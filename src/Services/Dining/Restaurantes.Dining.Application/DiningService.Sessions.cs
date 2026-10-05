@@ -176,13 +176,26 @@ public sealed partial class DiningService
             return DiningResults.NotFound();
         }
 
-        if (
-            !access.CanAccessRestaurant(
+        bool canReleaseAnySession = access.CanAccessRestaurant(
+            principal,
+            session.RestaurantId,
+            DiningPermission.TablesRelease
+        );
+        bool canReleaseOwnCancelledSession =
+            Guid.TryParse(principal.FindFirst(ClaimTypes.NameIdentifier)?.Value, out Guid userId)
+            && session.OpenedByUserId == userId
+            && access.CanAccessRestaurant(
                 principal,
                 session.RestaurantId,
-                DiningPermission.TablesRelease
+                DiningPermission.OrdersCreate
             )
-        )
+            && session.Orders.Count > 0
+            && session.Orders.All(order =>
+                order.OrderStatus == "Cancelled"
+                && order.PaymentStatus != "Paid"
+                && order.Amount == 0
+            );
+        if (!canReleaseAnySession && !canReleaseOwnCancelledSession)
         {
             return DiningResults.Forbid();
         }

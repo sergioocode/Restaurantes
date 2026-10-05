@@ -47,6 +47,16 @@ public sealed partial class CommanderApi
         return await ReadAsync<DiningSessionResponse>(response);
     }
 
+    public async Task<DiningSessionResponse> CloseSessionAsync(Guid sessionId)
+    {
+        using HttpRequestMessage request = Authorized(
+            HttpMethod.Post,
+            $"/api/dining/sessions/{sessionId}/close"
+        );
+        using HttpResponseMessage response = await http.SendAsync(request);
+        return await ReadAsync<DiningSessionResponse>(response);
+    }
+
     public Task<SessionBillResponse> BillAsync(Guid sessionId)
     {
         return GetAsync<SessionBillResponse>($"/api/dining/sessions/{sessionId}/bill");

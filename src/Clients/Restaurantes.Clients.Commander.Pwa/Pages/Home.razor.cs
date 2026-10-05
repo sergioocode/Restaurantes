@@ -52,6 +52,13 @@ public partial class Home
             .ToList();
     private bool CanShowCancelOwnSession =>
         diningSession is not null && diningSession.OpenedByUserId == login?.User.Id;
+    private bool CanReleaseCancelledSession =>
+        CanShowCancelOwnSession
+        && bill is { Status: "Open", Outstanding: 0 }
+        && bill.Orders.Count > 0
+        && bill.Orders.All(order =>
+            order.OrderStatus == "Cancelled" && order.PaymentStatus != "Paid" && order.Amount == 0
+        );
     private bool HasSessionOrders
     {
         get => field || activeOrders.Any(order => order.DiningSessionId == sessionId);
@@ -289,6 +296,26 @@ public partial class Home
                 await Api.CancelSessionAsync(diningSession.Id);
                 success = true;
                 message = "Apertura cancelada y ubicación liberada.";
+                BackToTables();
+                await LoadOperationalData();
+            },
+            false
+        );
+    }
+
+    private async Task ReleaseCancelledSession()
+    {
+        if (diningSession is null || !CanReleaseCancelledSession)
+        {
+            return;
+        }
+
+        await Run(
+            async () =>
+            {
+                await Api.CloseSessionAsync(diningSession.Id);
+                success = true;
+                message = "Mesa liberada. Las comandas canceladas se conservan en el historial.";
                 BackToTables();
                 await LoadOperationalData();
             },
