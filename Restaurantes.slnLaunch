@@ -19,6 +19,10 @@
         "Action": "Start"
       },
       {
+        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api\\Restaurantes.Orders.Api.csproj",
+        "Action": "Start"
+      },
+      {
         "Path": "src\\ApiGateways\\Restaurantes.Gateway.Private\\Restaurantes.Gateway.Private.csproj",
         "Action": "Start"
       },
@@ -46,6 +50,10 @@
       },
       {
         "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api\\Restaurantes.Catalog.Api.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api\\Restaurantes.Orders.Api.csproj",
         "Action": "Start"
       },
       {
@@ -104,6 +112,10 @@
         "Action": "Start"
       },
       {
+        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Api\\Restaurantes.RestaurantOperations.Api.csproj",
+        "Action": "Start"
+      },
+      {
         "Path": "src\\Services\\Dining\\Restaurantes.Dining.Api\\Restaurantes.Dining.Api.csproj",
         "Action": "Start"
       },
@@ -139,6 +151,10 @@
     "Projects": [
       {
         "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api\\Restaurantes.Identity.Api.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Api\\Restaurantes.RestaurantOperations.Api.csproj",
         "Action": "Start"
       },
       {
@@ -180,6 +196,10 @@
         "Action": "Start"
       },
       {
+        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Api\\Restaurantes.RestaurantOperations.Api.csproj",
+        "Action": "Start"
+      },
+      {
         "Path": "src\\Services\\Dining\\Restaurantes.Dining.Api\\Restaurantes.Dining.Api.csproj",
         "Action": "Start"
       },
@@ -211,6 +231,10 @@
     "Projects": [
       {
         "Path": "src\\Services\\Identity\\Restaurantes.Identity.Api\\Restaurantes.Identity.Api.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Api\\Restaurantes.RestaurantOperations.Api.csproj",
         "Action": "Start"
       },
       {
@@ -248,11 +272,19 @@
         "Action": "Start"
       },
       {
+        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Api\\Restaurantes.RestaurantOperations.Api.csproj",
+        "Action": "Start"
+      },
+      {
         "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api\\Restaurantes.Catalog.Api.csproj",
         "Action": "Start"
       },
       {
         "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api\\Restaurantes.Orders.Api.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Api\\Restaurantes.CashRegister.Api.csproj",
         "Action": "Start"
       },
       {
@@ -274,11 +306,19 @@
         "Action": "Start"
       },
       {
+        "Path": "src\\Services\\RestaurantOperations\\Restaurantes.RestaurantOperations.Api\\Restaurantes.RestaurantOperations.Api.csproj",
+        "Action": "Start"
+      },
+      {
         "Path": "src\\Services\\Catalog\\Restaurantes.Catalog.Api\\Restaurantes.Catalog.Api.csproj",
         "Action": "Start"
       },
       {
         "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api\\Restaurantes.Orders.Api.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Api\\Restaurantes.CashRegister.Api.csproj",
         "Action": "Start"
       },
       {
