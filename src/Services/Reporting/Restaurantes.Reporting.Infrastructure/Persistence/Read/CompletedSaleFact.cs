@@ -8,6 +8,7 @@ public sealed class CompletedSaleFact
     public string PaymentMethod { get; set; } = string.Empty;
     public decimal Total { get; set; }
     public DateTime CompletedAtUtc { get; set; }
+    public DateOnly? BusinessDate { get; set; }
     public string OrderIdsJson { get; set; } = "[]";
     public string LinesJson { get; set; } = "[]";
 }

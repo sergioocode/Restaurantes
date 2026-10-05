@@ -53,9 +53,10 @@ public sealed class PaymentsWriteController(
             );
         }
 
+        CashRegisterSessionDetails cashSession;
         try
         {
-            await cashRegister.EnsureOpenAsync(payable.RestaurantId, ct);
+            cashSession = await cashRegister.GetOpenSessionAsync(payable.RestaurantId, ct);
         }
         catch (PaymentCashRegisterClosedException e)
         {
@@ -110,6 +111,7 @@ public sealed class PaymentsWriteController(
                         ? $"QR-{orderId:N}"
                         : request.ExternalReference.Trim(),
                 },
+                cashSession,
                 ct
             );
             return result is null ? StatusCode(TooEarlyStatusCode) : Accepted(result);
@@ -152,9 +154,10 @@ public sealed class PaymentsWriteController(
             return Forbid();
         }
 
+        CashRegisterSessionDetails cashSession;
         try
         {
-            await cashRegister.EnsureOpenAsync(payable.RestaurantId, ct);
+            cashSession = await cashRegister.GetOpenSessionAsync(payable.RestaurantId, ct);
         }
         catch (PaymentCashRegisterClosedException e)
         {
@@ -170,7 +173,7 @@ public sealed class PaymentsWriteController(
 
         try
         {
-            PaymentResponse? result = await service.CaptureAsync(orderId, request, ct);
+            PaymentResponse? result = await service.CaptureAsync(orderId, request, cashSession, ct);
             return result is null
                 ? NotFound(
                     new ProblemDetails
@@ -214,7 +217,7 @@ public sealed class PaymentsWriteController(
 
         try
         {
-            await cashRegister.EnsureOpenAsync(payable.RestaurantId, ct);
+            await cashRegister.GetOpenSessionAsync(payable.RestaurantId, ct);
         }
         catch (PaymentCashRegisterClosedException e)
         {

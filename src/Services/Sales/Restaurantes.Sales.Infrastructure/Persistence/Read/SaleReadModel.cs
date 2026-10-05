@@ -10,6 +10,7 @@ public sealed class SaleReadModel
     public string Status { get; set; } = "Completed";
     public int OrderCount { get; set; }
     public DateTime CompletedAtUtc { get; set; }
+    public DateOnly? BusinessDate { get; set; }
     public string OrderIdsJson { get; set; } = "[]";
     public string LinesJson { get; set; } = "[]";
 }

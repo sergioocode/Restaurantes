@@ -35,11 +35,23 @@ public sealed class SaleCommandService(ISaleWriteStore store, TimeProvider timeP
                 PaymentMethod = integrationEvent.Method,
                 ExpectedOrderCount = Math.Max(1, integrationEvent.TransactionOrderCount),
                 CreatedAtUtc = integrationEvent.CapturedAtUtc,
+                BusinessDate = integrationEvent.BusinessDate,
             };
             store.Add(sale);
         }
         else
         {
+            if (
+                sale.BusinessDate is not null
+                && integrationEvent.BusinessDate is not null
+                && sale.BusinessDate != integrationEvent.BusinessDate
+            )
+            {
+                throw new InvalidOperationException(
+                    "Payments in one sale have different business dates."
+                );
+            }
+            sale.BusinessDate ??= integrationEvent.BusinessDate;
             sale.ExpectedOrderCount = Math.Max(
                 sale.ExpectedOrderCount,
                 Math.Max(1, integrationEvent.TransactionOrderCount)
@@ -156,7 +168,8 @@ public sealed class SaleCommandService(ISaleWriteStore store, TimeProvider timeP
                     sale.Total,
                     sale.CompletedAtUtc!.Value,
                     sale.Orders.Select(item => item.OrderId).ToList(),
-                    lines
+                    lines,
+                    sale.BusinessDate
                 )
             );
         }

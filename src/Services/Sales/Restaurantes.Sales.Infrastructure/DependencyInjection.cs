@@ -5,6 +5,7 @@ using Restaurantes.Sales.Application;
 using Restaurantes.Sales.Infrastructure.Persistence.Read;
 using Restaurantes.Sales.Infrastructure.Persistence.Write;
 using Restaurantes.Sales.Infrastructure.Stores;
+using Restaurantes.ServiceDefaults;
 
 namespace Restaurantes.Sales.Infrastructure;
 
@@ -27,6 +28,7 @@ public static class DependencyInjection
         IConfiguration configuration
     )
     {
+        services.AddBusinessTimeZone(configuration);
         services.AddDbContext<SaleReadDbContext>(options =>
             options.UseNpgsql(configuration.GetConnectionString("SalesRead"))
         );

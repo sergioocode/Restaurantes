@@ -84,5 +84,6 @@ public sealed record PaymentProjection(
     string Method,
     string Reference,
     DateTime OccurredAtUtc,
-    bool IsRefund
+    bool IsRefund,
+    Guid? CashRegisterSessionId = null
 );

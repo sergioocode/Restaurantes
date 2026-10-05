@@ -87,7 +87,12 @@ public sealed class PaymentsWriteControllerTests
 
     private sealed class OpenCashRegister : IPaymentCashRegister
     {
-        public Task EnsureOpenAsync(Guid restaurantId, CancellationToken cancellationToken) =>
-            Task.CompletedTask;
+        public Task<CashRegisterSessionDetails> GetOpenSessionAsync(
+            Guid restaurantId,
+            CancellationToken cancellationToken
+        ) =>
+            Task.FromResult(
+                new CashRegisterSessionDetails(Guid.NewGuid(), new DateOnly(2026, 10, 4))
+            );
     }
 }

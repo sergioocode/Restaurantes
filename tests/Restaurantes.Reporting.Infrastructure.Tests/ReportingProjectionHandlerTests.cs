@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Restaurantes.Orders.Contracts.Events;
 using Restaurantes.Payments.Contracts.Events;
 using Restaurantes.Reporting.Infrastructure.Persistence.Read;
+using Restaurantes.Reporting.Infrastructure.Queries;
 using Restaurantes.Reporting.Infrastructure.Workers;
 using Restaurantes.Sales.Contracts.Events;
 using Xunit;
@@ -11,6 +12,60 @@ namespace Restaurantes.Reporting.Infrastructure.Tests;
 
 public sealed class ReportingProjectionHandlerTests
 {
+    [Fact]
+    public async Task Sale_after_midnight_uses_cash_register_business_date_in_daily_totals()
+    {
+        DbContextOptions<ReportingReadDbContext> options =
+            new DbContextOptionsBuilder<ReportingReadDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .Options;
+        await using ReportingReadDbContext db = new(options);
+        Guid orderId = Guid.NewGuid();
+        Guid restaurantId = Guid.NewGuid();
+        DateTime completedAtUtc = new(2026, 10, 4, 22, 10, 0, DateTimeKind.Utc);
+        db.Orders.Add(new OrderReportingFact { OrderId = orderId, RestaurantId = restaurantId });
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        ReportingProjectionHandler handler = new(db, TimeProvider.System);
+        await ProjectAsync(
+            handler,
+            Guid.NewGuid(),
+            new SaleCompleted(
+                Guid.NewGuid(),
+                restaurantId,
+                "Comandero",
+                "Card",
+                2.20m,
+                completedAtUtc,
+                [orderId],
+                [],
+                new DateOnly(2026, 10, 4)
+            )
+        );
+
+        ReportingReadStore store = new(db);
+        var fourth = await store.GetDailySnapshotAsync(
+            new DateOnly(2026, 10, 4),
+            new DateTime(2026, 10, 3, 22, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 10, 4, 22, 0, 0, DateTimeKind.Utc),
+            [restaurantId],
+            10,
+            TestContext.Current.CancellationToken
+        );
+        var fifth = await store.GetDailySnapshotAsync(
+            new DateOnly(2026, 10, 5),
+            new DateTime(2026, 10, 4, 22, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 10, 5, 22, 0, 0, DateTimeKind.Utc),
+            [restaurantId],
+            10,
+            TestContext.Current.CancellationToken
+        );
+
+        Assert.Single(fourth.Sales);
+        Assert.Equal(2.20m, fourth.Sales[0].Total);
+        Assert.Empty(fifth.Sales);
+    }
+
     [Fact]
     public async Task Cancelled_projection_does_not_record_an_inbox_message()
     {

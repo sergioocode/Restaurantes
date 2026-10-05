@@ -1,6 +1,10 @@
 ﻿namespace Restaurantes.Reporting.Application.Dashboard;
 
-public sealed class DashboardQueryService(IReportingReadStore store, TimeProvider time)
+public sealed class DashboardQueryService(
+    IReportingReadStore store,
+    TimeProvider time,
+    TimeZoneInfo timeZone
+)
 {
     public async Task<DailyDashboard> GetDailyAsync(
         DateOnly? requestedDate,
@@ -10,14 +14,17 @@ public sealed class DashboardQueryService(IReportingReadStore store, TimeProvide
     )
     {
         int normalizedOrderLimit = orderLimit is 20 or 100 ? orderLimit : 10;
-        DateOnly date = requestedDate ?? DateOnly.FromDateTime(time.GetLocalNow().DateTime);
+        DateOnly date =
+            requestedDate
+            ?? DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(time.GetUtcNow(), timeZone).DateTime);
         DateTime localStart = DateTime.SpecifyKind(
             date.ToDateTime(TimeOnly.MinValue),
             DateTimeKind.Unspecified
         );
-        DateTime start = TimeZoneInfo.ConvertTimeToUtc(localStart, TimeZoneInfo.Local);
-        DateTime end = TimeZoneInfo.ConvertTimeToUtc(localStart.AddDays(1), TimeZoneInfo.Local);
+        DateTime start = TimeZoneInfo.ConvertTimeToUtc(localStart, timeZone);
+        DateTime end = TimeZoneInfo.ConvertTimeToUtc(localStart.AddDays(1), timeZone);
         DailyReportingSnapshot snapshot = await store.GetDailySnapshotAsync(
+            date,
             start,
             end,
             restaurantIds,

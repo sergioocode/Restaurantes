@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Restaurantes.CashRegister.Application;
 using Restaurantes.CashRegister.Infrastructure.Persistence;
 using Restaurantes.CashRegister.Infrastructure.Stores;
+using Restaurantes.ServiceDefaults;
 
 namespace Restaurantes.CashRegister.Infrastructure;
 
@@ -16,6 +17,7 @@ public static class DependencyInjection
     )
     {
         services.TryAddSingleton(TimeProvider.System);
+        services.AddBusinessTimeZone(configuration);
         services.AddDbContext<CashRegisterDbContext>(options =>
             options.UseNpgsql(configuration.GetConnectionString("CashRegisterWrite"))
         );

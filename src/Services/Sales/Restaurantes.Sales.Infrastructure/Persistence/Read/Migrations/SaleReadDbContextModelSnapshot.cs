@@ -31,6 +31,9 @@ namespace Restaurantes.Sales.Infrastructure.Persistence.Read.Migrations
                     b.Property<DateTime>("CompletedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateOnly?>("BusinessDate")
+                        .HasColumnType("date");
+
                     b.Property<string>("LinesJson")
                         .IsRequired()
                         .HasColumnType("jsonb");
@@ -65,6 +68,8 @@ namespace Restaurantes.Sales.Infrastructure.Persistence.Read.Migrations
                         .HasColumnType("numeric(12,2)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("BusinessDate", "RestaurantId");
 
                     b.HasIndex("RestaurantId", "CompletedAtUtc");
 

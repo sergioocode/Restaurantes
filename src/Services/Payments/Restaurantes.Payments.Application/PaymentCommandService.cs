@@ -10,6 +10,7 @@ public sealed class PaymentCommandService(IPaymentWriteStore store, TimeProvider
     public async Task<PaymentResponse?> CaptureAsync(
         Guid orderId,
         CapturePaymentRequest request,
+        CashRegisterSessionDetails cashRegister,
         CancellationToken ct
     )
     {
@@ -42,7 +43,9 @@ public sealed class PaymentCommandService(IPaymentWriteStore store, TimeProvider
             order.ExternalReference,
             now,
             order.CaptureIdempotencyKey!.Value,
-            request.TransactionOrderCount
+            request.TransactionOrderCount,
+            cashRegister.SessionId,
+            cashRegister.BusinessDate
         );
         await store.SaveWithEventAsync(order, e, ct);
         return Map(order);

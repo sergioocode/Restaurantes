@@ -25,6 +25,9 @@ namespace Restaurantes.Reporting.Infrastructure.Migrations
 
             modelBuilder.Entity("Restaurantes.Reporting.Infrastructure.CompletedSaleFact", b =>
                 {
+                    b.Property<DateOnly?>("BusinessDate")
+                        .HasColumnType("date");
+
                     b.Property<Guid>("SaleId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
@@ -58,6 +61,8 @@ namespace Restaurantes.Reporting.Infrastructure.Migrations
                         .HasColumnType("numeric(12,2)");
 
                     b.HasKey("SaleId");
+
+                    b.HasIndex("BusinessDate", "RestaurantId");
 
                     b.HasIndex("RestaurantId", "CompletedAtUtc");
 

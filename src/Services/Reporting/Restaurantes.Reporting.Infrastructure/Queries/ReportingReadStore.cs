@@ -8,6 +8,7 @@ namespace Restaurantes.Reporting.Infrastructure.Queries;
 public sealed class ReportingReadStore(ReportingReadDbContext db) : IReportingReadStore
 {
     public async Task<DailyReportingSnapshot> GetDailySnapshotAsync(
+        DateOnly businessDate,
         DateTime startUtc,
         DateTime endUtc,
         IReadOnlyCollection<Guid>? restaurantIds,
@@ -24,7 +25,14 @@ public sealed class ReportingReadStore(ReportingReadDbContext db) : IReportingRe
         }
 
         List<CompletedSaleFact> saleFacts = await salesQuery
-            .Where(x => x.CompletedAtUtc >= startUtc && x.CompletedAtUtc < endUtc)
+            .Where(x =>
+                x.BusinessDate == businessDate
+                || (
+                    x.BusinessDate == null
+                    && x.CompletedAtUtc >= startUtc
+                    && x.CompletedAtUtc < endUtc
+                )
+            )
             .ToListAsync(ct);
         HashSet<Guid> refundedOrderIds = (
             await orderQuery

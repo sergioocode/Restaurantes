@@ -11,5 +11,7 @@ public sealed record PaymentCaptured(
     string ExternalReference,
     DateTime CapturedAtUtc,
     Guid? PaymentTransactionId = null,
-    int TransactionOrderCount = 1
+    int TransactionOrderCount = 1,
+    Guid? CashRegisterSessionId = null,
+    DateOnly? BusinessDate = null
 );

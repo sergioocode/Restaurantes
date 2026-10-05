@@ -119,7 +119,8 @@ public sealed class CashPaymentProjectionWorker(
                 e.Method,
                 e.ExternalReference,
                 e.CapturedAtUtc,
-                false
+                false,
+                e.CashRegisterSessionId
             );
         }
         if (ea.BasicProperties.Type == typeof(PaymentRefunded).FullName)
