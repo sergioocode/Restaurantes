@@ -12,10 +12,6 @@ public sealed class CashPaymentProjectionService(ICashRegisterStore store, TimeP
         }
 
         Guid? sessionId = payment.CashRegisterSessionId ?? ParseSessionId(payment.Reference);
-        if (payment.IsRefund)
-        {
-            sessionId = await store.GetSaleSessionIdAsync(payment.PaymentId, ct);
-        }
 
         CashRegisterSession? session = await store.FindProjectionSessionAsync(
             payment,
@@ -29,7 +25,6 @@ public sealed class CashPaymentProjectionService(ICashRegisterStore store, TimeP
             );
         }
 
-        CashMovementType type = payment.IsRefund ? CashMovementType.Refund : CashMovementType.Sale;
         store.AddMovement(
             new CashMovement
             {
@@ -37,7 +32,7 @@ public sealed class CashPaymentProjectionService(ICashRegisterStore store, TimeP
                 CashRegisterSessionId = session.Id,
                 PaymentId = payment.PaymentId,
                 OrderId = payment.OrderId,
-                Type = type,
+                Type = CashMovementType.Sale,
                 Method = payment.Method,
                 Amount = payment.Amount,
                 Reference = payment.Reference,
@@ -46,7 +41,7 @@ public sealed class CashPaymentProjectionService(ICashRegisterStore store, TimeP
         );
         if (session.Status == CashRegisterStatus.Closed)
         {
-            ReconcileLateMovement(session, payment, type);
+            ReconcileLateMovement(session, payment);
         }
 
         store.MarkMessageProcessed(payment.MessageId, time.GetUtcNow().UtcDateTime);
@@ -55,11 +50,10 @@ public sealed class CashPaymentProjectionService(ICashRegisterStore store, TimeP
 
     private static void ReconcileLateMovement(
         CashRegisterSession session,
-        PaymentProjection payment,
-        CashMovementType type
+        PaymentProjection payment
     )
     {
-        decimal signed = type == CashMovementType.Sale ? payment.Amount : -payment.Amount;
+        decimal amount = payment.Amount;
         CashRegisterReconciliation? reconciliation = session.Reconciliations.FirstOrDefault(x =>
             string.Equals(x.Method, payment.Method, StringComparison.OrdinalIgnoreCase)
         );
@@ -73,15 +67,15 @@ public sealed class CashPaymentProjectionService(ICashRegisterStore store, TimeP
             };
             session.Reconciliations.Add(reconciliation);
         }
-        reconciliation.ExpectedAmount += signed;
+        reconciliation.ExpectedAmount += amount;
         reconciliation.Difference = reconciliation.ReconciledAmount - reconciliation.ExpectedAmount;
-        session.ExpectedTotalAtClose = (session.ExpectedTotalAtClose ?? 0) + signed;
+        session.ExpectedTotalAtClose = (session.ExpectedTotalAtClose ?? 0) + amount;
         session.DifferenceAtClose =
             (session.ReconciledTotalAtClose ?? 0) - session.ExpectedTotalAtClose;
         if (payment.Method == "Cash")
         {
             session.ExpectedCashAtClose =
-                (session.ExpectedCashAtClose ?? session.OpeningFloat) + signed;
+                (session.ExpectedCashAtClose ?? session.OpeningFloat) + amount;
         }
 
         session.Version++;

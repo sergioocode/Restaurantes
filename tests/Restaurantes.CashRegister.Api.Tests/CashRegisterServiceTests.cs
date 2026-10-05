@@ -14,6 +14,7 @@ public sealed class CashRegisterServiceTests
         TestStore store = new();
         CashRegisterService service = new(
             store,
+            new TestIncompleteOrdersChecker(),
             time,
             TimeZoneInfo.FindSystemTimeZoneById("Europe/Madrid")
         );
@@ -58,6 +59,7 @@ public sealed class CashRegisterServiceTests
             first.Id,
             new CloseCashRegisterRequest(new Dictionary<string, decimal> { ["Cash"] = 10 }),
             user,
+            "Bearer test-token",
             CancellationToken.None
         );
         CashRegisterResponse completed = Assert.IsType<CashRegisterResponse>(closed.Value);
@@ -77,10 +79,97 @@ public sealed class CashRegisterServiceTests
     }
 
     [Fact]
+    public async Task Close_keeps_session_open_when_incomplete_orders_exist()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        TestStore store = new();
+        TestIncompleteOrdersChecker incompleteOrders = new(2);
+        CashRegisterService service = new(
+            store,
+            incompleteOrders,
+            new TestTimeProvider(new DateTimeOffset(2026, 10, 4, 21, 30, 0, TimeSpan.Zero)),
+            TimeZoneInfo.Utc
+        );
+        CashRegisterUser user = new(Guid.NewGuid(), "Manager");
+        CashRegisterResponse opened = Assert.IsType<CashRegisterResponse>(
+            (
+                await service.Open(
+                    restaurantId,
+                    new OpenCashRegisterRequest(0),
+                    user,
+                    CancellationToken.None
+                )
+            ).Value
+        );
+
+        CashRegisterResult result = await service.Close(
+            restaurantId,
+            opened.Id,
+            new CloseCashRegisterRequest(new Dictionary<string, decimal> { ["Cash"] = 0 }),
+            user,
+            "Bearer test-token",
+            CancellationToken.None
+        );
+
+        Assert.Equal(CashRegisterOutcome.Conflict, result.Outcome);
+        Assert.Contains("2 pedidos incompletos", result.Value!.ToString());
+        Assert.Equal(CashRegisterStatus.Open, store.Sessions.Single().Status);
+        Assert.Null(store.Sessions.Single().ClosedAtUtc);
+        Assert.Empty(store.Sessions.Single().Reconciliations);
+        Assert.Equal(restaurantId, incompleteOrders.LastRestaurantId);
+        Assert.Equal("Bearer test-token", incompleteOrders.LastAuthorization);
+    }
+
+    [Fact]
+    public async Task Close_fails_closed_when_orders_cannot_be_checked()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        TestStore store = new();
+        TestIncompleteOrdersChecker incompleteOrders = new(
+            new IncompleteOrdersUnavailableException(new HttpRequestException())
+        );
+        CashRegisterService service = new(
+            store,
+            incompleteOrders,
+            new TestTimeProvider(new DateTimeOffset(2026, 10, 4, 21, 30, 0, TimeSpan.Zero)),
+            TimeZoneInfo.Utc
+        );
+        CashRegisterUser user = new(Guid.NewGuid(), "Manager");
+        CashRegisterResponse opened = Assert.IsType<CashRegisterResponse>(
+            (
+                await service.Open(
+                    restaurantId,
+                    new OpenCashRegisterRequest(0),
+                    user,
+                    CancellationToken.None
+                )
+            ).Value
+        );
+
+        CashRegisterResult result = await service.Close(
+            restaurantId,
+            opened.Id,
+            new CloseCashRegisterRequest(new Dictionary<string, decimal> { ["Cash"] = 0 }),
+            user,
+            "Bearer test-token",
+            CancellationToken.None
+        );
+
+        Assert.Equal(CashRegisterOutcome.ServiceUnavailable, result.Outcome);
+        Assert.Equal(CashRegisterStatus.Open, store.Sessions.Single().Status);
+        Assert.Empty(store.Sessions.Single().Reconciliations);
+    }
+
+    [Fact]
     public async Task New_session_uses_the_configured_time_zone()
     {
         TestTimeProvider time = new(new DateTimeOffset(2026, 10, 4, 22, 30, 0, TimeSpan.Zero));
-        CashRegisterService service = new(new TestStore(), time, TimeZoneInfo.Utc);
+        CashRegisterService service = new(
+            new TestStore(),
+            new TestIncompleteOrdersChecker(),
+            time,
+            TimeZoneInfo.Utc
+        );
 
         CashRegisterResult result = await service.Open(
             Guid.NewGuid(),
@@ -95,16 +184,84 @@ public sealed class CashRegisterServiceTests
         );
     }
 
+    [Fact]
+    public async Task Close_preserves_reconciliation_for_cash_card_and_online_payments()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        TestStore store = new();
+        CashRegisterService service = new(
+            store,
+            new TestIncompleteOrdersChecker(),
+            TimeProvider.System,
+            TimeZoneInfo.Utc
+        );
+        CashRegisterUser user = new(Guid.NewGuid(), "Manager");
+        await service.Open(
+            restaurantId,
+            new OpenCashRegisterRequest(10),
+            user,
+            CancellationToken.None
+        );
+        CashRegisterSession session = store.Sessions.Single();
+        foreach (
+            (string method, decimal amount) in new[] { ("Cash", 5m), ("Card", 8m), ("Online", 9m) }
+        )
+        {
+            session.Movements.Add(
+                new CashMovement
+                {
+                    Id = Guid.NewGuid(),
+                    CashRegisterSessionId = session.Id,
+                    Type = CashMovementType.Sale,
+                    Method = method,
+                    Amount = amount,
+                }
+            );
+        }
+        CashRegisterResult result = await service.Close(
+            restaurantId,
+            session.Id,
+            new CloseCashRegisterRequest(
+                new()
+                {
+                    ["Cash"] = 15,
+                    ["Card"] = 8,
+                    ["Online"] = 9,
+                }
+            ),
+            user,
+            "Bearer test-token",
+            CancellationToken.None
+        );
+
+        CashRegisterResponse closed = Assert.IsType<CashRegisterResponse>(result.Value);
+        Assert.Equal("Closed", closed.Status);
+        Assert.Equal(22, closed.TotalSales);
+        Assert.Equal(5, closed.CashSales);
+        Assert.Equal(15, closed.ExpectedCash);
+        Assert.Equal(32, closed.ExpectedTotal);
+        Assert.Equal(0m, closed.Difference);
+        Assert.Equal(3, closed.PaymentMethods.Count);
+        Assert.Equal(8, closed.PaymentMethods.Single(method => method.Method == "Card").Sales);
+        Assert.Equal(9, closed.PaymentMethods.Single(method => method.Method == "Online").Sales);
+        Assert.All(closed.Reconciliations, method => Assert.Equal(0, method.Difference));
+    }
+
     private sealed class TestTimeProvider(DateTimeOffset utcNow) : TimeProvider
     {
         public DateTimeOffset UtcNow { get; set; } = utcNow;
 
-        public override DateTimeOffset GetUtcNow() => UtcNow;
+        public override DateTimeOffset GetUtcNow()
+        {
+            return UtcNow;
+        }
     }
 
     private sealed class TestStore : ICashRegisterStore
     {
         private readonly List<CashRegisterSession> sessions = [];
+
+        public IReadOnlyList<CashRegisterSession> Sessions => sessions;
 
         public Task<CashRegisterSession?> GetOpenSessionAsync(
             Guid restaurantId,
@@ -127,10 +284,12 @@ public sealed class CashRegisterServiceTests
             Guid restaurantId,
             int take,
             CancellationToken ct
-        ) =>
-            Task.FromResult(
+        )
+        {
+            return Task.FromResult(
                 sessions.Where(x => x.RestaurantId == restaurantId).Take(take).ToList()
             );
+        }
 
         public async Task<bool> HasOpenSessionAsync(Guid restaurantId, CancellationToken ct)
         {
@@ -141,24 +300,31 @@ public sealed class CashRegisterServiceTests
             Guid restaurantId,
             Guid sessionId,
             CancellationToken ct
-        ) =>
-            Task.FromResult(
+        )
+        {
+            return Task.FromResult(
                 sessions.SingleOrDefault(x => x.RestaurantId == restaurantId && x.Id == sessionId)
             );
+        }
 
-        public Task<bool> HasProcessedMessageAsync(Guid messageId, CancellationToken ct) =>
-            Task.FromResult(false);
-
-        public Task<Guid?> GetSaleSessionIdAsync(Guid paymentId, CancellationToken ct) =>
-            Task.FromResult<Guid?>(null);
+        public Task<bool> HasProcessedMessageAsync(Guid messageId, CancellationToken ct)
+        {
+            return Task.FromResult(false);
+        }
 
         public Task<CashRegisterSession?> FindProjectionSessionAsync(
             PaymentProjection payment,
             Guid? sessionId,
             CancellationToken ct
-        ) => throw new NotSupportedException();
+        )
+        {
+            throw new NotSupportedException();
+        }
 
-        public void AddSession(CashRegisterSession session) => sessions.Add(session);
+        public void AddSession(CashRegisterSession session)
+        {
+            sessions.Add(session);
+        }
 
         public void AddReconciliation(CashRegisterReconciliation reconciliation)
         {
@@ -167,11 +333,38 @@ public sealed class CashRegisterServiceTests
                 .Reconciliations.Add(reconciliation);
         }
 
-        public void AddMovement(CashMovement movement) => throw new NotSupportedException();
-
-        public void MarkMessageProcessed(Guid messageId, DateTime processedAtUtc) =>
+        public void AddMovement(CashMovement movement)
+        {
             throw new NotSupportedException();
+        }
 
-        public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;
+        public void MarkMessageProcessed(Guid messageId, DateTime processedAtUtc)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task SaveChangesAsync(CancellationToken ct = default)
+        {
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class TestIncompleteOrdersChecker(
+        int count = 0,
+        IncompleteOrdersUnavailableException? exception = null
+    ) : IIncompleteOrdersChecker
+    {
+        public Guid LastRestaurantId { get; private set; }
+        public string LastAuthorization { get; private set; } = string.Empty;
+
+        public Task<int> CountAsync(Guid restaurantId, string authorization, CancellationToken ct)
+        {
+            LastRestaurantId = restaurantId;
+            LastAuthorization = authorization;
+            return exception is not null ? throw exception : Task.FromResult(count);
+        }
+
+        public TestIncompleteOrdersChecker(IncompleteOrdersUnavailableException exception)
+            : this(0, exception) { }
     }
 }

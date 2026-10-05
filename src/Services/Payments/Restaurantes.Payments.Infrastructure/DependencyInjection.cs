@@ -22,6 +22,10 @@ public static class DependencyInjection
             )
         );
         services.AddScoped<IPaymentWriteStore, PaymentWriteStore>();
+        services.AddScoped<
+            IPaymentStatusQuery,
+            Restaurantes.Payments.Infrastructure.Queries.PaymentStatusQuery
+        >();
         services.AddHttpClient<ICustomerDiningSessionValidator, DiningSessionValidator>(client =>
             client.BaseAddress = new Uri(
                 configuration["Dining:BaseAddress"]

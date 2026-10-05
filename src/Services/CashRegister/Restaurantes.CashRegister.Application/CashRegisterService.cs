@@ -4,6 +4,7 @@ namespace Restaurantes.CashRegister.Application;
 
 public sealed class CashRegisterService(
     ICashRegisterStore store,
+    IIncompleteOrdersChecker incompleteOrders,
     TimeProvider time,
     TimeZoneInfo timeZone
 )
@@ -84,6 +85,7 @@ public sealed class CashRegisterService(
         Guid sessionId,
         CloseCashRegisterRequest request,
         CashRegisterUser user,
+        string authorization,
         CancellationToken ct
     )
     {
@@ -128,6 +130,38 @@ public sealed class CashRegisterService(
             );
         }
 
+        int incompleteOrderCount;
+        try
+        {
+            incompleteOrderCount = await incompleteOrders.CountAsync(
+                restaurantId,
+                authorization,
+                ct
+            );
+        }
+        catch (IncompleteOrdersUnavailableException)
+        {
+            return new(
+                CashRegisterOutcome.ServiceUnavailable,
+                new
+                {
+                    detail = "No se pudo verificar si quedan pedidos incompletos. Inténtalo de nuevo.",
+                }
+            );
+        }
+
+        if (incompleteOrderCount > 0)
+        {
+            return new(
+                CashRegisterOutcome.Conflict,
+                new
+                {
+                    detail = $"No se puede cerrar la caja: quedan {incompleteOrderCount} pedidos incompletos. Complétalos o resuélvelos desde el TPV.",
+                    incompleteOrderCount,
+                }
+            );
+        }
+
         foreach ((string method, decimal amount) in expected)
         {
             decimal actual = reconciled[method];
@@ -164,16 +198,16 @@ public sealed class CashRegisterService(
         return DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(utc, timeZone));
     }
 
-    private static decimal Signed(CashMovement movement)
-    {
-        return movement.Type == CashMovementType.Sale ? movement.Amount : -movement.Amount;
-    }
-
     internal static Dictionary<string, decimal> ExpectedByMethod(CashRegisterSession session)
     {
         Dictionary<string, decimal> totals = session
-            .Movements.GroupBy(x => x.Method, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(x => x.Key, x => x.Sum(Signed), StringComparer.OrdinalIgnoreCase);
+            .Movements.Where(x => x.Type == CashMovementType.Sale)
+            .GroupBy(x => x.Method, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                x => x.Key,
+                x => x.Sum(movement => movement.Amount),
+                StringComparer.OrdinalIgnoreCase
+            );
         totals["Cash"] = totals.GetValueOrDefault("Cash") + session.OpeningFloat;
         return totals;
     }
@@ -183,24 +217,14 @@ public sealed class CashRegisterService(
         decimal totalSales = session
             .Movements.Where(x => x.Type == CashMovementType.Sale)
             .Sum(x => x.Amount);
-        decimal totalRefunds = session
-            .Movements.Where(x => x.Type == CashMovementType.Refund)
-            .Sum(x => x.Amount);
         decimal cashSales = session
             .Movements.Where(x => x.Method == "Cash" && x.Type == CashMovementType.Sale)
             .Sum(x => x.Amount);
-        decimal cashRefunds = session
-            .Movements.Where(x => x.Method == "Cash" && x.Type == CashMovementType.Refund)
-            .Sum(x => x.Amount);
         PaymentMethodTotal[] methods = session
-            .Movements.GroupBy(x => x.Method)
+            .Movements.Where(x => x.Type == CashMovementType.Sale)
+            .GroupBy(x => x.Method)
             .OrderBy(x => x.Key)
-            .Select(g => new PaymentMethodTotal(
-                g.Key,
-                g.Where(x => x.Type == CashMovementType.Sale).Sum(x => x.Amount),
-                g.Where(x => x.Type == CashMovementType.Refund).Sum(x => x.Amount),
-                g.Sum(Signed)
-            ))
+            .Select(g => new PaymentMethodTotal(g.Key, g.Sum(x => x.Amount)))
             .ToArray();
         Dictionary<string, decimal> expected = ExpectedByMethod(session);
         return new(
@@ -210,9 +234,7 @@ public sealed class CashRegisterService(
             session.Status.ToString(),
             session.OpeningFloat,
             totalSales,
-            totalRefunds,
             cashSales,
-            cashRefunds,
             expected.GetValueOrDefault("Cash"),
             expected.Values.Sum(),
             session.ReconciledTotalAtClose,
@@ -237,7 +259,8 @@ public sealed class CashRegisterService(
                 ))
                 .ToArray(),
             session
-                .Movements.OrderByDescending(x => x.OccurredAtUtc)
+                .Movements.Where(x => x.Type == CashMovementType.Sale)
+                .OrderByDescending(x => x.OccurredAtUtc)
                 .Take(100)
                 .Select(x => new CashMovementResponse(
                     x.Id,

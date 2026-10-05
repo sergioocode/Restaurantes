@@ -90,7 +90,7 @@ public static class PaymentsTopology
             arguments: null,
             cancellationToken: ct
         );
-        await channel.QueueBindAsync(
+        await channel.QueueUnbindAsync(
             CashRegisterQueueName,
             ExchangeName,
             PaymentRefundedRoutingKey,

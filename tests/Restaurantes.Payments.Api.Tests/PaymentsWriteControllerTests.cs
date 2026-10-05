@@ -33,7 +33,13 @@ public sealed class PaymentsWriteControllerTests
         );
         PaymentStore store = new(order);
         DiningValidator dining = new();
-        PaymentsWriteController controller = new(null!, store, dining, new OpenCashRegister());
+        PaymentsWriteController controller = new(
+            null!,
+            store,
+            dining,
+            new OpenCashRegister(),
+            null!
+        );
         CaptureCustomerQrPaymentRequest request = new()
         {
             IdempotencyKey = Guid.NewGuid(),

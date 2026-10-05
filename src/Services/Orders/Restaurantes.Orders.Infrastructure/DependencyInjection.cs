@@ -23,6 +23,10 @@ public static class DependencyInjection
             )
         );
         services.AddScoped<IOrderWriteStore, OrderWriteStore>();
+        services.AddScoped<
+            IOrderSettlementQuery,
+            Restaurantes.Orders.Infrastructure.Queries.OrderSettlementQuery
+        >();
         services.AddScoped<IOrderCatalogStore, OrderCatalogStore>();
         services.AddScoped<IOrderPaymentStore, OrderPaymentStore>();
         services.AddHttpClient<IOrderCashRegister, OrderCashRegister>(client =>

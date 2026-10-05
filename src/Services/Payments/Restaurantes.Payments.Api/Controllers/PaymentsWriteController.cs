@@ -1,9 +1,12 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Restaurantes.Payments.Application;
 using Restaurantes.Payments.Contracts.Requests;
 using Restaurantes.Payments.Contracts.Responses;
 using Restaurantes.Payments.Domain;
+using Restaurantes.Payments.Infrastructure.Persistence.Write;
 using Restaurantes.Security;
 
 namespace Restaurantes.Payments.Api.Controllers;
@@ -14,7 +17,8 @@ public sealed class PaymentsWriteController(
     PaymentCommandService service,
     IPaymentWriteStore store,
     ICustomerDiningSessionValidator dining,
-    IPaymentCashRegister cashRegister
+    IPaymentCashRegister cashRegister,
+    PaymentWriteDbContext db
 ) : ControllerBase
 {
     private const int TooEarlyStatusCode = 425;
@@ -53,23 +57,6 @@ public sealed class PaymentsWriteController(
             );
         }
 
-        CashRegisterSessionDetails cashSession;
-        try
-        {
-            cashSession = await cashRegister.GetOpenSessionAsync(payable.RestaurantId, ct);
-        }
-        catch (PaymentCashRegisterClosedException e)
-        {
-            return Conflict(
-                new ProblemDetails
-                {
-                    Title = "Caja cerrada",
-                    Detail = e.Message,
-                    Status = 409,
-                }
-            );
-        }
-
         if (
             payable.Source != "CustomerQr"
             || payable.TableId is null
@@ -101,6 +88,14 @@ public sealed class PaymentsWriteController(
 
         try
         {
+            await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(
+                ct
+            );
+            CashRegisterSessionDetails cashSession = await cashRegister.GetOpenSessionAsync(
+                payable.RestaurantId,
+                ct
+            );
+            await db.Entry(payable).ReloadAsync(ct);
             PaymentResponse? result = await service.CaptureAsync(
                 orderId,
                 new CapturePaymentRequest
@@ -114,6 +109,7 @@ public sealed class PaymentsWriteController(
                 cashSession,
                 ct
             );
+            await transaction.CommitAsync(ct);
             return result is null ? StatusCode(TooEarlyStatusCode) : Accepted(result);
         }
         catch (InvalidOperationException e)
@@ -154,26 +150,18 @@ public sealed class PaymentsWriteController(
             return Forbid();
         }
 
-        CashRegisterSessionDetails cashSession;
         try
         {
-            cashSession = await cashRegister.GetOpenSessionAsync(payable.RestaurantId, ct);
-        }
-        catch (PaymentCashRegisterClosedException e)
-        {
-            return Conflict(
-                new ProblemDetails
-                {
-                    Title = "Caja cerrada",
-                    Detail = e.Message,
-                    Status = 409,
-                }
+            await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(
+                ct
             );
-        }
-
-        try
-        {
+            CashRegisterSessionDetails cashSession = await cashRegister.GetOpenSessionAsync(
+                payable.RestaurantId,
+                ct
+            );
+            await db.Entry(payable).ReloadAsync(ct);
             PaymentResponse? result = await service.CaptureAsync(orderId, request, cashSession, ct);
+            await transaction.CommitAsync(ct);
             return result is null
                 ? NotFound(
                     new ProblemDetails

@@ -3,7 +3,6 @@
 public enum CashMovementType
 {
     Sale,
-    Refund,
 }
 
 public sealed class CashMovement

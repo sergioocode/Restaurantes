@@ -7,8 +7,29 @@ namespace Restaurantes.Orders.Api.Controllers;
 
 [ApiController]
 [Route("api/orders")]
-public sealed class OrdersReadController(IKitchenOrderReadStore store) : ControllerBase
+public sealed class OrdersReadController(
+    IKitchenOrderReadStore store,
+    IOrderSettlementQuery settlements
+) : ControllerBase
 {
+    [HttpGet("restaurants/{restaurantId:guid}/cash-close-orders")]
+    public async Task<ActionResult<IReadOnlyList<CashCloseOrderResponse>>> CashCloseOrders(
+        Guid restaurantId,
+        CancellationToken ct,
+        [FromQuery] int offset = 0
+    )
+    {
+        if (!User.CanAccessRestaurant(restaurantId, RestaurantPermissions.CashRegisterManage))
+        {
+            return Forbid();
+        }
+        if (offset < 0)
+        {
+            return BadRequest("offset must be non-negative.");
+        }
+        return Ok(await settlements.ListAsync(restaurantId, offset, ct));
+    }
+
     [HttpGet]
     [ProducesResponseType<IReadOnlyList<OrderResponse>>(StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<OrderResponse>>> List(

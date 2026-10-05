@@ -1,10 +1,12 @@
 ﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Restaurantes.Orders.Application;
 using Restaurantes.Orders.Contracts.Requests;
 using Restaurantes.Orders.Contracts.Responses;
 using Restaurantes.Orders.Domain;
+using Restaurantes.Orders.Infrastructure.Persistence.Write;
 using Restaurantes.Security;
 
 namespace Restaurantes.Orders.Api.Controllers;
@@ -15,7 +17,8 @@ public sealed class OrdersWriteController(
     OrderCommandService commandService,
     IOrderWriteStore store,
     IDiningSessionStore dining,
-    IOrderCashRegister cashRegister
+    IOrderCashRegister cashRegister,
+    OrderWriteDbContext db
 ) : ControllerBase
 {
     [HttpPost]
@@ -42,12 +45,16 @@ public sealed class OrdersWriteController(
         }
         try
         {
+            await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(
+                cancellationToken
+            );
             await cashRegister.EnsureOpenAsync(request.RestaurantId, cancellationToken);
             OrderResponse order = await commandService.CreateAsync(
                 request,
                 customerAccessToken ?? string.Empty,
                 cancellationToken
             );
+            await transaction.CommitAsync(cancellationToken);
             return Accepted($"/api/orders/{order.Id}", order);
         }
         catch (OrderCashRegisterClosedException exception)
@@ -238,7 +245,8 @@ public sealed class OrdersWriteController(
             (orderId, token) =>
                 commandService.CancelTakeawayAsync(orderId, request.Reason, actor, token),
             "Order cannot be cancelled",
-            cancellationToken
+            cancellationToken,
+            requiresOpenCashRegister: true
         );
     }
 
@@ -265,7 +273,8 @@ public sealed class OrdersWriteController(
                 (orderId, token) =>
                     commandService.CancelLineAsync(orderId, lineId, request.Reason, token),
                 "Order line cannot be cancelled",
-                cancellationToken
+                cancellationToken,
+                existing.RestaurantId
             );
     }
 
@@ -273,12 +282,25 @@ public sealed class OrdersWriteController(
         Guid id,
         Func<Guid, CancellationToken, Task<OrderResponse?>> transition,
         string conflictTitle,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        Guid? cashRestaurantId = null
     )
     {
         try
         {
+            await using IDbContextTransaction? transaction = cashRestaurantId.HasValue
+                ? await db.Database.BeginTransactionAsync(cancellationToken)
+                : null;
+            if (transaction is not null)
+            {
+                await cashRegister.EnsureOpenAsync(cashRestaurantId.Value, cancellationToken);
+                db.ChangeTracker.Clear();
+            }
             OrderResponse? order = await transition(id, cancellationToken);
+            if (transaction is not null)
+            {
+                await transaction.CommitAsync(cancellationToken);
+            }
             return order is null ? NotFound() : Accepted($"/api/orders/{order.Id}", order);
         }
         catch (InvalidOperationException exception)
@@ -322,7 +344,8 @@ public sealed class OrdersWriteController(
         string permission,
         Func<Guid, CancellationToken, Task<OrderResponse?>> transition,
         string conflictTitle,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        bool requiresOpenCashRegister = false
     )
     {
         Order? existing = await store.FindAsync(id, cancellationToken);
@@ -330,6 +353,12 @@ public sealed class OrdersWriteController(
             : User.Identity?.IsAuthenticated != true ? (ActionResult<OrderResponse>)Unauthorized()
             : !User.CanAccessRestaurant(existing.RestaurantId, permission)
                 ? (ActionResult<OrderResponse>)Forbid()
-            : await ExecuteTransitionAsync(id, transition, conflictTitle, cancellationToken);
+            : await ExecuteTransitionAsync(
+                id,
+                transition,
+                conflictTitle,
+                cancellationToken,
+                requiresOpenCashRegister ? existing.RestaurantId : null
+            );
     }
 }
