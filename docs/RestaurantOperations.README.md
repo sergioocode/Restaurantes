@@ -24,31 +24,29 @@ RestaurantOperations **no gestiona** mesas, pedidos, catálogo, caja, pagos ni u
 
 ## Proyectos
 
-El bounded context está dividido en ocho proyectos:
+El servicio se organiza en proyectos por responsabilidad. La API es el punto de entrada ejecutable;
+los workers se implementan en Infrastructure y se activan según el rol de ejecución.
 
 ```text
 src/Services/RestaurantOperations/
-├── Restaurantes.RestaurantOperations.Api.Read
-├── Restaurantes.RestaurantOperations.Api.Write
+├── Restaurantes.RestaurantOperations.Api
 ├── Restaurantes.RestaurantOperations.Application
-├── Restaurantes.RestaurantOperations.Consumer
 ├── Restaurantes.RestaurantOperations.Contracts
 ├── Restaurantes.RestaurantOperations.Domain
-├── Restaurantes.RestaurantOperations.Infrastructure
-└── Restaurantes.RestaurantOperations.Publisher
+└── Restaurantes.RestaurantOperations.Infrastructure
 ```
 
 | Proyecto | Responsabilidad |
 | --- | --- |
-| `Restaurantes.RestaurantOperations.Domain` | Entidad `Restaurant`, normalización e invariantes del dominio. |
-| `Restaurantes.RestaurantOperations.Application` | Casos de uso de creación/actualización y puertos de persistencia. |
-| `Restaurantes.RestaurantOperations.Contracts` | Requests, responses y evento `RestaurantChanged`. |
-| `Restaurantes.RestaurantOperations.Infrastructure` | EF Core, PostgreSQL, stores, Outbox, Inbox y modelos Read/Write. |
-| `Restaurantes.RestaurantOperations.Api.Write` | Comandos autenticados de creación y actualización. |
-| `Restaurantes.RestaurantOperations.Api.Read` | Consultas de restaurantes desde la proyección Read. |
-| `Restaurantes.RestaurantOperations.Publisher` | Publicación de eventos pendientes desde Outbox hacia RabbitMQ. |
-| `Restaurantes.RestaurantOperations.Consumer` | Consumo de `RestaurantChanged` y actualización de la proyección Read. |
+| `Restaurantes.RestaurantOperations.Api` | Endpoints HTTP y composición de roles. |
+| `Restaurantes.RestaurantOperations.Application` | Casos de uso y puertos. |
+| `Restaurantes.RestaurantOperations.Contracts` | Requests, respuestas y eventos públicos. |
+| `Restaurantes.RestaurantOperations.Domain` | Entidades y reglas del servicio. |
+| `Restaurantes.RestaurantOperations.Infrastructure` | Persistencia, stores, proyecciones y workers. |
 
+La API atiende las operaciones HTTP de lectura y escritura en un único host. Según el perfil,
+ese ejecutable inicia HTTP, workers o ambos. Read y Write describen responsabilidades/rutas;
+no son proyectos ni APIs separados.
 ## Arquitectura interna
 
 ```mermaid
@@ -59,14 +57,14 @@ flowchart LR
     PublicGateway["YARP Public Gateway"]
 
     subgraph RestaurantOperations["RestaurantOperations"]
-        WriteApi["Api.Write"]
+        WriteApi["API · rutas de escritura"]
         Application["Application"]
         Domain["Domain"]
         WriteDb[("restaurant_operations_write")]
-        Publisher["Publisher"]
-        Consumer["Consumer"]
+        Publisher["OutboxPublisherWorker"]
+        Consumer["RestaurantProjectionWorker"]
         ReadDb[("restaurant_operations_read")]
-        ReadApi["Api.Read"]
+        ReadApi["API · rutas de lectura"]
     end
 
     Rabbit[("RabbitMQ")]
@@ -87,11 +85,11 @@ flowchart LR
     ReadApi --> ReadDb
 ```
 
-La separación Read / Write es visible también en los gateways:
+La separación Read / Write se aplica mediante controladores y rutas dentro del mismo host API:
 
-- el **Private Gateway** dirige `GET` a `Api.Read` y operaciones de modificación a `Api.Write`;
+- el **Private Gateway** dirige `GET` al controlador de lectura y operaciones de modificación al controlador de escritura;
 - el **Public Gateway** expone únicamente las consultas `GET` de RestaurantOperations;
-- las dos APIs son procesos independientes y utilizan bases de datos PostgreSQL lógicamente independientes.
+- ambas rutas llegan a la API de RestaurantOperations. Los workers están en Infrastructure y se activan según el rol de ejecución.
 
 ## Modelo de dominio
 
@@ -171,7 +169,7 @@ Actualmente `UpdateRestaurantRequest` no recibe una versión ni utiliza `ETag` /
 ```mermaid
 sequenceDiagram
     participant Client as Backoffice
-    participant API as RestaurantOperations.Api.Write
+    participant API as RestaurantOperations.Api
     participant App as RestaurantCommandService
     participant DB as restaurant_operations_write
     participant Publisher as Outbox Publisher
@@ -292,7 +290,7 @@ Con Outbox, el cambio y el mensaje pendiente quedan confirmados juntos. Un worke
 
 ### Publisher
 
-`Restaurantes.RestaurantOperations.Publisher`:
+`Restaurantes.RestaurantOperations.Infrastructure`:
 
 - migra `restaurant_operations_write` al iniciar;
 - mantiene una conexión independiente con RabbitMQ;
@@ -358,7 +356,7 @@ OccurredAtUtc
 
 ### Eventos consumidos
 
-`Restaurantes.RestaurantOperations.Consumer` consume `RestaurantChanged` desde RabbitMQ y actualiza la proyección `restaurant_operations_read`.
+`Restaurantes.RestaurantOperations.Infrastructure` consume `RestaurantChanged` desde RabbitMQ y actualiza la proyección `restaurant_operations_read`.
 
 RestaurantOperations no consume actualmente eventos publicados por otros bounded contexts.
 
@@ -378,7 +376,7 @@ Topología actual:
 ```mermaid
 flowchart LR
     Outbox[("outbox_messages")]
-    Publisher["RestaurantOperations.Publisher"]
+    Publisher["OutboxPublisherWorker"]
     Exchange["restaurant-operations.events"]
     Queue["restaurant-operations.read-model"]
     Consumer["RestaurantProjectionWorker"]
@@ -479,7 +477,7 @@ Comportamiento actual:
 Base local:
 
 ```text
-http://localhost:5112
+http://localhost:5111
 ```
 
 ### Listar restaurantes
@@ -521,13 +519,13 @@ El gateway privado separa el tráfico por método HTTP:
 
 ```text
 GET
-    -> RestaurantOperations.Api.Read :5112
+    -> RestaurantOperations.Api :5111
 
 POST / PUT / PATCH / DELETE
-    -> RestaurantOperations.Api.Write :5111
+    -> RestaurantOperations.Api :5111
 ```
 
-Esto permite desplegar, escalar o reiniciar la API de lectura y la de escritura de manera independiente.
+Ambas rutas llegan al mismo host API y seleccionan controladores distintos.
 
 ### Public Gateway
 
@@ -535,7 +533,7 @@ El gateway público expone únicamente:
 
 ```text
 GET /api/restaurant-operations/**
-    -> RestaurantOperations.Api.Read :5112
+    -> RestaurantOperations.Api :5111
 ```
 
 De esta forma los clientes públicos pueden resolver información de un restaurante sin exponer las operaciones administrativas de escritura.
@@ -555,7 +553,7 @@ La propiedad funcional de mesas, pedidos, pagos o catálogo continúa pertenecie
 
 ## Seguridad
 
-`Api.Write` y `Api.Read` utilizan JWT emitido por `Restaurantes.Identity` y el building block `Restaurantes.Security`.
+`RestaurantOperations.Api` utiliza JWT emitido por `Restaurantes.Identity` y el building block `Restaurantes.Security`.
 
 Configuración relevante:
 
@@ -631,7 +629,7 @@ Infrastructure/
         └── Migrations/
 ```
 
-`Api.Write` y `Publisher` aplican migraciones de Write al iniciar. `Api.Read` y `Consumer` hacen lo mismo sobre Read.
+La API aplica las migraciones pendientes al arrancar. El rol Workers inicializa las bases que necesitan sus proyecciones.
 
 Esto mantiene separados los ciclos de evolución de ambos modelos.
 
@@ -641,12 +639,11 @@ Puertos configurados actualmente:
 
 | Componente | URL |
 | --- | --- |
-| RestaurantOperations Write API | `http://localhost:5111` |
-| RestaurantOperations Read API | `http://localhost:5112` |
+| RestaurantOperations API | `http://localhost:5111` |
 
 La infraestructura local utiliza PostgreSQL y RabbitMQ definidos en el `docker-compose.yml` de la raíz del repositorio.
 
-Los procesos `Consumer` y `Publisher` se ejecutan como workers y no exponen una URL HTTP de negocio.
+Los workers no exponen una URL HTTP de negocio. Se inician desde el proyecto API con el rol Workers o All.
 
 ## Health checks
 
@@ -658,7 +655,7 @@ Las APIs utilizan `Restaurantes.ServiceDefaults`, que centraliza configuración 
 - endpoint `/health`;
 - endpoint `/alive`.
 
-Esto permite que la infraestructura de despliegue compruebe el estado de cada proceso de forma independiente.
+La infraestructura comprueba la salud del host API mediante `/health` y `/alive`.
 
 ## Decisiones de diseño
 
@@ -701,7 +698,7 @@ En cloud pueden mantenerse sobre la misma infraestructura administrada mientras 
 ```mermaid
 flowchart LR
     subgraph WriteTier["Transactional tier"]
-        WriteApi["Api.Write"]
+        WriteApi["RestaurantOperations API, escritura"]
         WriteDb[("restaurant_operations_write")]
         WriteApi --> WriteDb
     end
@@ -717,7 +714,7 @@ flowchart LR
 
     subgraph ReadTier["Read tier"]
         ReadDb[("restaurant_operations_read")]
-        ReadApi["Api.Read"]
+        ReadApi["RestaurantOperations API, lectura"]
 
         ReadApi --> ReadDb
     end
@@ -728,8 +725,8 @@ flowchart LR
 
 Para RestaurantOperations la carga actual es pequeña, pero el patrón mantiene las mismas ventajas arquitectónicas que el resto de la plataforma:
 
-- las consultas públicas no compiten directamente con las escrituras administrativas;
-- Read y Write pueden escalar de forma independiente;
+- las consultas públicas y escrituras administrativas utilizan controladores separados;
+- las bases Read y Write pueden escalar de forma independiente;
 - una incidencia o mantenimiento del plano de lectura no necesita modificar el modelo transaccional;
 - la base Read puede utilizar una capacidad diferente a la base Write;
 - el modelo de lectura puede evolucionar sin introducir joins o índices específicos dentro del almacenamiento transaccional;

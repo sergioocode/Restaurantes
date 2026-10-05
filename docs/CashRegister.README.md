@@ -2,14 +2,14 @@
 
 El servicio **CashRegister** administra la jornada operativa de caja de cada restaurante: apertura, cierre, conciliación por medio de pago y proyección de movimientos financieros procedentes de **Payments**.
 
-CashRegister mantiene una única base operacional PostgreSQL y está separado en **Domain, Application, Infrastructure, Api y Consumer**. La API expone las operaciones de caja y consulta del estado actual; el Consumer procesa de forma independiente los eventos `PaymentCaptured` y `PaymentRefunded` publicados por Payments.
+CashRegister mantiene una única base operacional PostgreSQL. La API expone las operaciones HTTP de caja y `Infrastructure` contiene el worker que procesa `PaymentCaptured` y `PaymentRefunded` publicados por Payments.
 
 ## Responsabilidad del servicio
 
 CashRegister es responsable de:
 
 - abrir una caja operativa por restaurante;
-- asociar la caja a una fecha de negocio calculada en la zona horaria `Europe/Madrid`;
+- asociar la caja a la fecha local de apertura, calculada con la zona configurada;
 - garantizar que exista como máximo una caja abierta por restaurante;
 - mantener el fondo inicial de caja;
 - proyectar ventas y devoluciones recibidas desde Payments;
@@ -19,7 +19,7 @@ CashRegister es responsable de:
 - cerrar la caja mediante conciliación explícita de todos los medios de pago esperados;
 - conservar diferencias entre importes esperados y conciliados;
 - mantener historial de sesiones de caja;
-- caducar automáticamente sesiones abiertas pertenecientes a días de negocio anteriores;
+- conservar la sesión abierta después de medianoche hasta su cierre explícito;
 - admitir movimientos financieros tardíos sobre una sesión ya cerrada y reajustar su conciliación;
 - evitar reprocesamiento de eventos mediante Inbox;
 - proteger las operaciones administrativas mediante permisos por restaurante.
@@ -28,27 +28,27 @@ CashRegister **no captura pagos**, **no crea pedidos** y **no administra restaur
 
 ## Proyectos
 
-El bounded context está dividido en cinco proyectos:
+El servicio se organiza en proyectos por responsabilidad. La API es el punto de entrada ejecutable;
+los workers se implementan en Infrastructure y se activan según el rol de ejecución.
 
 ```text
 src/Services/CashRegister/
 ├── Restaurantes.CashRegister.Api
 ├── Restaurantes.CashRegister.Application
-├── Restaurantes.CashRegister.Consumer
 ├── Restaurantes.CashRegister.Domain
 └── Restaurantes.CashRegister.Infrastructure
 ```
 
 | Proyecto | Responsabilidad |
 | --- | --- |
-| `Restaurantes.CashRegister.Domain` | Entidades y estados de caja, movimientos y conciliaciones. |
-| `Restaurantes.CashRegister.Application` | Casos de uso, contratos utilizados por la API, abstracción de persistencia y proyección de eventos de Payments. |
-| `Restaurantes.CashRegister.Infrastructure` | EF Core, PostgreSQL, `CashRegisterStore`, migraciones e Inbox. |
-| `Restaurantes.CashRegister.Api` | Controllers HTTP, autenticación/autorización, composición de dependencias y migración de la base al iniciar. |
-| `Restaurantes.CashRegister.Consumer` | Worker independiente que consume eventos de Payments desde RabbitMQ y actualiza la caja mediante Inbox. |
+| `Restaurantes.CashRegister.Api` | Endpoints HTTP y composición de roles de ejecución. |
+| `Restaurantes.CashRegister.Application` | Casos de uso y puertos internos. |
+| `Restaurantes.CashRegister.Domain` | Entidades y reglas de negocio. |
+| `Restaurantes.CashRegister.Infrastructure` | Persistencia, stores y workers aplicables. |
 
-CashRegister no dispone actualmente de `Api.Read`, `Publisher` ni un proyecto `Contracts` propio. Las consultas operativas se sirven desde la misma API y el servicio no publica actualmente eventos propios mediante RabbitMQ.
-
+La API atiende las operaciones HTTP de lectura y escritura en un único host. Según el perfil,
+ese ejecutable inicia HTTP, workers o ambos. Read y Write describen responsabilidades/rutas;
+no son proyectos ni APIs separados.
 ## Arquitectura interna
 
 ```mermaid
@@ -62,7 +62,7 @@ flowchart LR
         App["Application"]
         Domain["Domain"]
         Infra["Infrastructure"]
-        Consumer["CashRegister.Consumer"]
+        Consumer["CashPaymentProjectionWorker"]
         Db[("cash_register_write")]
     end
 
@@ -77,7 +77,7 @@ flowchart LR
     Consumer --> Infra
 ```
 
-La API y el Consumer son procesos ejecutables independientes, pero ambos trabajan sobre la misma base lógica `cash_register_write`.
+La API y el worker usan `cash_register_write`. El perfil puede ejecutar HTTP, workers o ambos; no hay un proyecto ejecutable Consumer independiente.
 
 ## Modelo de dominio
 
@@ -116,17 +116,17 @@ Campos relevantes:
 ```text
 Open
 Closed
-Expired
+Expired (solo histórico)
 ```
 
 ```mermaid
 flowchart LR
     S((Inicio)) --> O[Open]
     O -->|Cierre conciliado| C[Closed]
-    O -->|Cambio de día| E[Expired]
+    O -->|Cierre conciliado| C[Closed]
 ```
 
-`Closed` y `Expired` son estados terminales para esa sesión concreta. Una nueva jornada se representa mediante una nueva `CashRegisterSession`.
+`Closed` es el estado terminal normal. `Expired` se conserva para registros históricos; el cambio de fecha ya no cierra una sesión abierta.
 
 ### `CashMovement`
 
@@ -181,10 +181,10 @@ CashRegisterSessionId + Method
 
 CashRegister distingue la fecha de negocio de la fecha UTC utilizada para persistir timestamps.
 
-La fecha operativa se calcula con:
+La fecha de negocio se asigna una sola vez, al abrir la caja. Se calcula con la zona horaria configurada en el despliegue:
 
 ```text
-Europe/Madrid
+Business:TimeZoneId = Europe/Madrid
 ```
 
 Conceptualmente:
@@ -199,11 +199,7 @@ extraer DateOnly
 BusinessDate
 ```
 
-Esto permite que la jornada de caja responda al día local del restaurante mientras los timestamps continúan almacenándose en UTC.
-
-Antes de consultar la caja actual, comprobar disponibilidad o abrir una nueva caja, el servicio busca sesiones `Open` de fechas anteriores y las cambia a `Expired`.
-
-Si se intenta cerrar una sesión abierta cuyo `BusinessDate` ya no corresponde al día actual, la sesión se marca también como `Expired` y el cierre manual se rechaza.
+Los instantes `OpenedAtUtc`, `ClosedAtUtc` y `OccurredAtUtc` se almacenan en UTC. `BusinessDate` conserva la fecha local en que se abrió la caja y no cambia al cruzar medianoche. La zona por restaurante queda pendiente hasta que RestaurantOperations permita configurarla.
 
 ## Apertura de caja
 
@@ -227,7 +223,7 @@ Reglas actuales:
 
 - `OpeningFloat` debe estar entre `0` y `100000`;
 - no puede existir otra sesión `Open` para el restaurante;
-- la fecha de negocio se calcula en `Europe/Madrid`;
+- `BusinessDate` se calcula con `Business:TimeZoneId` al abrir la caja;
 - la sesión comienza en estado `Open`;
 - se guarda el usuario que realizó la apertura;
 - una restricción única parcial en PostgreSQL protege también la unicidad de la caja abierta frente a concurrencia.
@@ -243,7 +239,7 @@ GET /api/cash-register/restaurants/{restaurantId}/current
 Authorization: Bearer <token>
 ```
 
-Devuelve la caja abierta de la fecha de negocio actual, incluyendo:
+Devuelve la sesión abierta, aunque su `BusinessDate` corresponda al día anterior, incluyendo:
 
 - fondo inicial;
 - totales de venta y devolución;
@@ -253,7 +249,7 @@ Devuelve la caja abierta de la fecha de negocio actual, incluyendo:
 - conciliaciones existentes;
 - hasta 100 movimientos recientes.
 
-Si no existe una caja abierta para el día actual, devuelve `204 No Content`.
+Si no existe una caja abierta, devuelve `204 No Content`.
 
 ## Disponibilidad de caja
 
@@ -276,7 +272,7 @@ Respuesta conceptual:
 }
 ```
 
-La consulta puede provocar la caducidad automática de sesiones abiertas pertenecientes a días anteriores antes de devolver el resultado.
+Si existe una sesión abierta de un día anterior, la respuesta incluye su `BusinessDate` y `SessionId`.
 
 ## Historial
 
@@ -365,7 +361,7 @@ PaymentRefunded
 sequenceDiagram
     participant P as Payments
     participant MQ as RabbitMQ
-    participant C as CashRegister.Consumer
+    participant C as CashPaymentProjectionWorker
     participant A as CashPaymentProjectionService
     participant DB as cash_register_write
 
@@ -378,7 +374,7 @@ sequenceDiagram
     C->>MQ: ACK
 ```
 
-`CashRegister.Consumer` utiliza la topología RabbitMQ compartida definida por Payments y consume desde la cola reservada para CashRegister.
+`CashPaymentProjectionWorker` utiliza la topología RabbitMQ compartida definida por Payments y consume desde la cola reservada para CashRegister.
 
 ## Asociación de pagos a una sesión de caja
 
@@ -487,7 +483,7 @@ por lo que una misma captura o devolución no puede materializarse dos veces com
 
 ## RabbitMQ
 
-`CashRegister.Consumer` utiliza `Restaurantes.Messaging.RabbitMq` y la topología compartida de Payments.
+`CashPaymentProjectionWorker` utiliza `Restaurantes.Messaging.RabbitMq` y la topología compartida de Payments.
 
 Eventos soportados:
 
@@ -505,7 +501,7 @@ Comportamiento actual:
 - error transitorio o fallo de persistencia → `NACK` con requeue;
 - desconexión de RabbitMQ → recreación de conexión después de una espera de 5 segundos.
 
-El Consumer mantiene su propia conexión y canal RabbitMQ y se ejecuta como proceso independiente de la API.
+El worker mantiene su conexión y canal RabbitMQ. Puede ejecutarse en el rol Workers o junto a HTTP cuando el perfil usa All.
 
 ## Persistencia
 
@@ -790,7 +786,7 @@ dotnet tool restore
 
 `CashRegister.Api` utiliza `Restaurantes.ServiceDefaults` y expone los endpoints comunes definidos por la solución, incluyendo los endpoints generales de salud y liveness.
 
-`CashRegister.Consumer` es un Worker independiente y no expone actualmente endpoints HTTP de health check.
+El worker no expone endpoints HTTP propios. Se inicia desde el proyecto API con el rol Workers o All.
 
 ## Decisiones de diseño
 
@@ -834,22 +830,21 @@ Un evento válido recibido después del cierre modifica los importes esperados h
 
 Esto preserva simultáneamente el hecho operativo del cierre y la consistencia financiera posterior.
 
-### Caducidad por cambio de día
+### La caja conserva su fecha de apertura
 
-Una sesión `Open` de una fecha de negocio anterior no continúa operativa indefinidamente.
-
-El servicio la cambia a `Expired` al detectar el cambio de jornada y obliga a abrir una caja nueva.
+Una sesión abierta continúa activa después de medianoche y conserva la fecha de negocio asignada al abrirse. Los cobros reciben esa fecha y la propagan a Sales y Reporting para que las ventas se agrupen en el día de apertura.
 
 ## Despliegue y escalado
 
-CashRegister tiene actualmente dos procesos ejecutables independientes:
+CashRegister tiene un único proyecto ejecutable API, con estos roles de ejecución:
 
 ```text
-CashRegister.Api
-CashRegister.Consumer
+Http: endpoints de caja.
+Workers: proyección de eventos de Payments.
+All: HTTP y worker en el mismo proceso.
 ```
 
-Ambos utilizan:
+Los dos roles utilizan:
 
 ```text
 cash_register_write
