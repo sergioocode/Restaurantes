@@ -19,7 +19,7 @@ Content-Type: application/json
   "diningSessionId": "{{sessionId}}",
   "tableLabel": "Mesa 01",
   "serviceMode": "DineIn",
-  "source": "WaiterMobile",
+  "source": "Comandero",
   "paymentTiming": "OnAccount",
   "lines": [
     {

@@ -106,7 +106,7 @@ public sealed class Order
         {
             (OrderSource.CustomerQr, ServiceMode.DineIn, PaymentTiming.Immediate) => true,
             (OrderSource.CustomerQr, ServiceMode.DineIn, PaymentTiming.OnAccount) => true,
-            (OrderSource.WaiterMobile, ServiceMode.DineIn, PaymentTiming.OnAccount) => true,
+            (OrderSource.Comandero, ServiceMode.DineIn, PaymentTiming.OnAccount) => true,
             (OrderSource.Pos, ServiceMode.DineIn, PaymentTiming.OnAccount) => true,
             (OrderSource.Pos, ServiceMode.Bar, PaymentTiming.OnAccount) => true,
             (OrderSource.Pos, ServiceMode.Takeaway, PaymentTiming.Immediate) => true,

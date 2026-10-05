@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace Restaurantes.Dining.Application;
 
@@ -27,8 +27,8 @@ public sealed class UpdateTableRequest
 
 public sealed class OpenSessionRequest
 {
-    [Required, RegularExpression("^(CustomerQr|WaiterMobile|Pos)$")]
-    public string Source { get; init; } = "WaiterMobile";
+    [Required, RegularExpression("^(CustomerQr|Comandero|Pos)$")]
+    public string Source { get; init; } = "Comandero";
 }
 
 public sealed class CheckoutSessionRequest

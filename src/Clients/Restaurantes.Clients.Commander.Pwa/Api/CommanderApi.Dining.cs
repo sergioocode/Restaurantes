@@ -1,4 +1,4 @@
-﻿using System.Net.Http.Json;
+using System.Net.Http.Json;
 using Restaurantes.Clients.Commander.Pwa.Models;
 
 namespace Restaurantes.Clients.Commander.Pwa.Api;
@@ -27,7 +27,7 @@ public sealed partial class CommanderApi
             HttpMethod.Post,
             $"/api/dining/tables/{tableId}/sessions"
         );
-        request.Content = JsonContent.Create(new { source = "WaiterMobile" });
+        request.Content = JsonContent.Create(new { source = "Comandero" });
         using HttpResponseMessage response = await http.SendAsync(request);
         return await ReadAsync<DiningSessionResponse>(response);
     }
