@@ -342,7 +342,9 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
                 null,
                 value.Lines,
                 value.Stations,
-                [value.ChangedStationCode]
+                value.Status == "Cancelled"
+                    ? value.Stations.Select(station => station.Code).ToArray()
+                    : new[] { value.ChangedStationCode }
             );
         }
         throw new NotSupportedException($"Unsupported order event: {type}");
