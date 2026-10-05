@@ -11,6 +11,7 @@ public sealed class Sale
     public decimal Total { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public DateTime? CompletedAtUtc { get; set; }
+    public DateOnly? BusinessDate { get; set; }
     public List<SaleOrder> Orders { get; set; } = [];
 
     public bool TryComplete(DateTime now)

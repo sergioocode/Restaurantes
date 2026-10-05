@@ -4,16 +4,8 @@ namespace Restaurantes.CashRegister.Application;
 
 public interface ICashRegisterStore
 {
-    Task<Guid?> GetOpenSessionIdAsync(
-        Guid restaurantId,
-        DateOnly businessDate,
-        CancellationToken ct
-    );
-    Task<CashRegisterSession?> GetCurrentAsync(
-        Guid restaurantId,
-        DateOnly businessDate,
-        CancellationToken ct
-    );
+    Task<CashRegisterSession?> GetOpenSessionAsync(Guid restaurantId, CancellationToken ct);
+    Task<CashRegisterSession?> GetCurrentAsync(Guid restaurantId, CancellationToken ct);
     Task<List<CashRegisterSession>> GetHistoryAsync(
         Guid restaurantId,
         int take,
@@ -23,11 +15,6 @@ public interface ICashRegisterStore
     Task<CashRegisterSession?> GetSessionAsync(
         Guid restaurantId,
         Guid sessionId,
-        CancellationToken ct
-    );
-    Task<List<CashRegisterSession>> GetStaleSessionsAsync(
-        Guid restaurantId,
-        DateOnly businessDate,
         CancellationToken ct
     );
     Task<bool> HasProcessedMessageAsync(Guid messageId, CancellationToken ct);

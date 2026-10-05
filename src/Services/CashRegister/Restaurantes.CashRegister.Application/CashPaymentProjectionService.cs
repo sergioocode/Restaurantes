@@ -11,7 +11,7 @@ public sealed class CashPaymentProjectionService(ICashRegisterStore store, TimeP
             return;
         }
 
-        Guid? sessionId = ParseSessionId(payment.Reference);
+        Guid? sessionId = payment.CashRegisterSessionId ?? ParseSessionId(payment.Reference);
         if (payment.IsRefund)
         {
             sessionId = await store.GetSaleSessionIdAsync(payment.PaymentId, ct);

@@ -24,6 +24,9 @@ namespace Restaurantes.Sales.Infrastructure.Persistence.Write.Migrations
 
             modelBuilder.Entity("Restaurantes.Sales.Domain.Sale", b =>
                 {
+                    b.Property<DateOnly?>("BusinessDate")
+                        .HasColumnType("date");
+
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");

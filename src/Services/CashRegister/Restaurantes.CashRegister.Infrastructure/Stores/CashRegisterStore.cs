@@ -8,38 +8,24 @@ namespace Restaurantes.CashRegister.Infrastructure.Stores;
 
 public sealed class CashRegisterStore(CashRegisterDbContext db) : ICashRegisterStore
 {
-    public Task<Guid?> GetOpenSessionIdAsync(
-        Guid restaurantId,
-        DateOnly businessDate,
-        CancellationToken ct
-    )
+    public Task<CashRegisterSession?> GetOpenSessionAsync(Guid restaurantId, CancellationToken ct)
     {
         return db
             .Sessions.AsNoTracking()
-            .Where(x =>
-                x.RestaurantId == restaurantId
-                && x.Status == CashRegisterStatus.Open
-                && x.BusinessDate == businessDate
-            )
-            .Select(x => (Guid?)x.Id)
-            .SingleOrDefaultAsync(ct);
+            .SingleOrDefaultAsync(
+                x => x.RestaurantId == restaurantId && x.Status == CashRegisterStatus.Open,
+                ct
+            );
     }
 
-    public Task<CashRegisterSession?> GetCurrentAsync(
-        Guid restaurantId,
-        DateOnly businessDate,
-        CancellationToken ct
-    )
+    public Task<CashRegisterSession?> GetCurrentAsync(Guid restaurantId, CancellationToken ct)
     {
         return db
             .Sessions.AsNoTracking()
             .Include(x => x.Movements)
             .Include(x => x.Reconciliations)
             .SingleOrDefaultAsync(
-                x =>
-                    x.RestaurantId == restaurantId
-                    && x.Status == CashRegisterStatus.Open
-                    && x.BusinessDate == businessDate,
+                x => x.RestaurantId == restaurantId && x.Status == CashRegisterStatus.Open,
                 ct
             );
     }
@@ -78,21 +64,6 @@ public sealed class CashRegisterStore(CashRegisterDbContext db) : ICashRegisterS
             .Sessions.Include(x => x.Movements)
             .Include(x => x.Reconciliations)
             .SingleOrDefaultAsync(x => x.Id == sessionId && x.RestaurantId == restaurantId, ct);
-    }
-
-    public Task<List<CashRegisterSession>> GetStaleSessionsAsync(
-        Guid restaurantId,
-        DateOnly businessDate,
-        CancellationToken ct
-    )
-    {
-        return db
-            .Sessions.Where(x =>
-                x.RestaurantId == restaurantId
-                && x.Status == CashRegisterStatus.Open
-                && x.BusinessDate != businessDate
-            )
-            .ToListAsync(ct);
     }
 
     public Task<bool> HasProcessedMessageAsync(Guid messageId, CancellationToken ct)

@@ -2,27 +2,29 @@
 
 namespace Restaurantes.CashRegister.Application;
 
-public sealed class CashRegisterService(ICashRegisterStore store, TimeProvider time)
+public sealed class CashRegisterService(
+    ICashRegisterStore store,
+    TimeProvider time,
+    TimeZoneInfo timeZone
+)
 {
-    private const string MadridTimeZone = "Europe/Madrid";
-
     public async Task<CashRegisterResult> IsOpen(Guid restaurantId, CancellationToken ct)
     {
-        DateTime now = time.GetUtcNow().UtcDateTime;
-        DateOnly today = BusinessDate(now);
-        await ExpirePreviousDays(restaurantId, today, now, ct);
-        Guid? sessionId = await store.GetOpenSessionIdAsync(restaurantId, today, ct);
+        CashRegisterSession? session = await store.GetOpenSessionAsync(restaurantId, ct);
+        DateOnly businessDate = session?.BusinessDate ?? BusinessDate(time.GetUtcNow().UtcDateTime);
         return Ok(
-            new CashRegisterAvailabilityResponse(restaurantId, sessionId.HasValue, today, sessionId)
+            new CashRegisterAvailabilityResponse(
+                restaurantId,
+                session is not null,
+                businessDate,
+                session?.Id
+            )
         );
     }
 
     public async Task<CashRegisterResult> Current(Guid restaurantId, CancellationToken ct)
     {
-        DateTime now = time.GetUtcNow().UtcDateTime;
-        DateOnly today = BusinessDate(now);
-        await ExpirePreviousDays(restaurantId, today, now, ct);
-        CashRegisterSession? session = await store.GetCurrentAsync(restaurantId, today, ct);
+        CashRegisterSession? session = await store.GetCurrentAsync(restaurantId, ct);
         return session is null ? new(CashRegisterOutcome.NoContent) : Ok(ToResponse(session));
     }
 
@@ -45,7 +47,6 @@ public sealed class CashRegisterService(ICashRegisterStore store, TimeProvider t
 
         DateTime now = time.GetUtcNow().UtcDateTime;
         DateOnly today = BusinessDate(now);
-        await ExpirePreviousDays(restaurantId, today, now, ct);
         if (await store.HasOpenSessionAsync(restaurantId, ct))
         {
             return Conflict("Ya existe un turno de caja abierto para este local.");
@@ -112,15 +113,6 @@ public sealed class CashRegisterService(ICashRegisterStore store, TimeProvider t
             return Conflict("Este turno de caja ya no está abierto.");
         }
 
-        if (session.BusinessDate != BusinessDate(now))
-        {
-            Expire(session, now);
-            await store.SaveChangesAsync(ct);
-            return Conflict(
-                "El turno pertenecía a un día anterior y ha caducado. Abre una caja nueva."
-            );
-        }
-
         Dictionary<string, decimal> expected = ExpectedByMethod(session);
         Dictionary<string, decimal> reconciled = request.ReconciledByMethod.ToDictionary(
             x => x.Key.Trim(),
@@ -167,42 +159,9 @@ public sealed class CashRegisterService(ICashRegisterStore store, TimeProvider t
         return Ok(ToResponse(session));
     }
 
-    private async Task ExpirePreviousDays(
-        Guid restaurantId,
-        DateOnly today,
-        DateTime now,
-        CancellationToken ct
-    )
+    private DateOnly BusinessDate(DateTime utc)
     {
-        List<CashRegisterSession> stale = await store.GetStaleSessionsAsync(
-            restaurantId,
-            today,
-            ct
-        );
-        foreach (CashRegisterSession session in stale)
-        {
-            Expire(session, now);
-        }
-
-        if (stale.Count > 0)
-        {
-            await store.SaveChangesAsync(ct);
-        }
-    }
-
-    private static void Expire(CashRegisterSession session, DateTime now)
-    {
-        session.Status = CashRegisterStatus.Expired;
-        session.ClosedAtUtc = now;
-        session.ClosedByName = "Cierre automático por cambio de día";
-        session.Version++;
-    }
-
-    private static DateOnly BusinessDate(DateTime utc)
-    {
-        return DateOnly.FromDateTime(
-            TimeZoneInfo.ConvertTimeBySystemTimeZoneId(utc, MadridTimeZone)
-        );
+        return DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(utc, timeZone));
     }
 
     private static decimal Signed(CashMovement movement)

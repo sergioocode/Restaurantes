@@ -149,6 +149,7 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
                 fact.PaymentMethod = e.PaymentMethod;
                 fact.Total = e.Total;
                 fact.CompletedAtUtc = e.CompletedAtUtc;
+                fact.BusinessDate = e.BusinessDate;
                 fact.OrderIdsJson = JsonSerializer.Serialize(e.OrderIds);
                 fact.LinesJson = JsonSerializer.Serialize(saleLines);
             }

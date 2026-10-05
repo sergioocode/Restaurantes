@@ -104,6 +104,7 @@ public sealed class SalesReadProjectionWorker(
                 view.Status = "Completed";
                 view.OrderCount = e.OrderIds.Count;
                 view.CompletedAtUtc = e.CompletedAtUtc;
+                view.BusinessDate = e.BusinessDate;
                 view.OrderIdsJson = JsonSerializer.Serialize(e.OrderIds);
                 view.LinesJson = JsonSerializer.Serialize(e.Lines);
                 db.InboxMessages.Add(

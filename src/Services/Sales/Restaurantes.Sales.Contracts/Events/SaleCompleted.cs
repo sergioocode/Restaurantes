@@ -8,5 +8,6 @@ public sealed record SaleCompleted(
     decimal Total,
     DateTime CompletedAtUtc,
     IReadOnlyList<Guid> OrderIds,
-    IReadOnlyList<SaleLineSnapshot> Lines
+    IReadOnlyList<SaleLineSnapshot> Lines,
+    DateOnly? BusinessDate = null
 );

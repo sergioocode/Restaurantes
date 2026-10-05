@@ -7,7 +7,8 @@ using Restaurantes.Sales.Infrastructure.Persistence.Read;
 
 namespace Restaurantes.Sales.Infrastructure.Stores;
 
-public sealed class SaleReadStore(SaleReadDbContext dbContext) : ISaleReadStore
+public sealed class SaleReadStore(SaleReadDbContext dbContext, TimeZoneInfo timeZone)
+    : ISaleReadStore
 {
     public async Task<SaleResponse?> FindAsync(Guid id, CancellationToken cancellationToken)
     {
@@ -30,11 +31,20 @@ public sealed class SaleReadStore(SaleReadDbContext dbContext) : ISaleReadStore
         }
         if (date.HasValue)
         {
-            DateTime start = DateTime
-                .SpecifyKind(date.Value.ToDateTime(TimeOnly.MinValue), DateTimeKind.Local)
-                .ToUniversalTime();
-            DateTime end = start.AddDays(1);
-            query = query.Where(item => item.CompletedAtUtc >= start && item.CompletedAtUtc < end);
+            DateTime localStart = DateTime.SpecifyKind(
+                date.Value.ToDateTime(TimeOnly.MinValue),
+                DateTimeKind.Unspecified
+            );
+            DateTime start = TimeZoneInfo.ConvertTimeToUtc(localStart, timeZone);
+            DateTime end = TimeZoneInfo.ConvertTimeToUtc(localStart.AddDays(1), timeZone);
+            query = query.Where(item =>
+                item.BusinessDate == date.Value
+                || (
+                    item.BusinessDate == null
+                    && item.CompletedAtUtc >= start
+                    && item.CompletedAtUtc < end
+                )
+            );
         }
 
         return (
