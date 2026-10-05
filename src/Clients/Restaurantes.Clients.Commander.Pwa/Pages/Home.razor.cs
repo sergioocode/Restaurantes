@@ -366,17 +366,12 @@ public partial class Home
             return;
         }
 
-        await Run(
-            async () =>
-            {
-                await Api.CancelOrderLineAsync(order.OrderId, line.Id, reason.Trim());
-                await Task.Delay(500, realtimeRefresh?.Token ?? CancellationToken.None);
-                await LoadBill();
-                success = true;
-                message = $"{line.ProductName} cancelado antes de preparación.";
-            },
-            clearMessage: false
-        );
+        await Run(async () =>
+        {
+            await Api.CancelOrderLineAsync(order.OrderId, line.Id, reason.Trim());
+            await Task.Delay(500);
+            await LoadBill();
+        });
     }
 
     private void CloseBill()
@@ -405,16 +400,13 @@ public partial class Home
 
     private string TableOrderSummary(TableResponse table)
     {
-        if (table.ActiveSessionId is not Guid sessionId)
-        {
-            return "Sin comandas activas";
-        }
-
-        return OrderProgress.Summarize(
-            activeOrders
-                .Where(order => order.TableId == table.Id && order.DiningSessionId == sessionId)
-                .Select(order => order.Status)
-        );
+        return table.ActiveSessionId is not Guid sessionId
+            ? "Sin comandas activas"
+            : OrderProgress.Summarize(
+                activeOrders
+                    .Where(order => order.TableId == table.Id && order.DiningSessionId == sessionId)
+                    .Select(order => order.Status)
+            );
     }
 
     private string SessionOrderSummary(Guid currentSessionId)
