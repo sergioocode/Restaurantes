@@ -37,7 +37,7 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
                 projection.RestaurantId = data.RestaurantId;
                 projection.TableId = data.TableId;
                 projection.GuestCount = data.GuestCount;
-                projection.DiningSessionId = data.DiningSessionId;
+                projection.DiningSessionId = data.DiningSessionId ?? projection.DiningSessionId;
                 projection.TableLabel = data.TableLabel;
                 projection.CustomerName = data.CustomerName;
                 projection.ServiceMode = data.ServiceMode;
@@ -122,7 +122,7 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
                 value.RestaurantId,
                 value.TableId,
                 value.GuestCount,
-                null,
+                value.DiningSessionId,
                 value.TableLabel,
                 value.CustomerName,
                 value.ServiceMode,
@@ -150,7 +150,7 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
                 value.RestaurantId,
                 value.TableId,
                 value.GuestCount,
-                null,
+                value.DiningSessionId,
                 value.TableLabel,
                 value.CustomerName,
                 value.ServiceMode,
@@ -178,7 +178,7 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
                 value.RestaurantId,
                 value.TableId,
                 value.GuestCount,
-                null,
+                value.DiningSessionId,
                 value.TableLabel,
                 value.CustomerName,
                 value.ServiceMode,
@@ -212,7 +212,7 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
                 value.RestaurantId,
                 value.TableId,
                 value.GuestCount,
-                null,
+                value.DiningSessionId,
                 value.TableLabel,
                 value.CustomerName,
                 value.ServiceMode,
@@ -240,7 +240,7 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
                 value.RestaurantId,
                 value.TableId,
                 value.GuestCount,
-                null,
+                value.DiningSessionId,
                 value.TableLabel,
                 value.CustomerName,
                 value.ServiceMode,
@@ -268,7 +268,7 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
                 value.RestaurantId,
                 value.TableId,
                 value.GuestCount,
-                null,
+                value.DiningSessionId,
                 value.TableLabel,
                 value.CustomerName,
                 value.ServiceMode,

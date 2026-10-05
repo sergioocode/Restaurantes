@@ -5,6 +5,7 @@ public sealed record OrderSubmitted(
     Guid RestaurantId,
     Guid? TableId,
     int? GuestCount,
+    Guid? DiningSessionId,
     string TableLabel,
     string CustomerName,
     string ServiceMode,
