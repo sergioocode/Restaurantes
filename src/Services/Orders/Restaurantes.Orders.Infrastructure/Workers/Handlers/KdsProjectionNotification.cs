@@ -1,4 +1,4 @@
-namespace Restaurantes.Orders.Infrastructure.Workers.Handlers;
+﻿namespace Restaurantes.Orders.Infrastructure.Workers.Handlers;
 
 public sealed record KdsProjectionNotification(
     Guid OrderId,

@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Restaurantes.Catalog.Application;
 using Restaurantes.Catalog.Infrastructure;
 using Restaurantes.Catalog.Infrastructure.Persistence.Read;

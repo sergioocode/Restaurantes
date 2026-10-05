@@ -1,4 +1,4 @@
-namespace Restaurantes.CashRegister.Application;
+﻿namespace Restaurantes.CashRegister.Application;
 
 public sealed record OpenCashRegisterRequest(decimal OpeningFloat);
 

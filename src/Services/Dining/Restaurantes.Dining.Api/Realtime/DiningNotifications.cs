@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.SignalR;
+﻿using Microsoft.AspNetCore.SignalR;
 using Restaurantes.Dining.Application;
 
 namespace Restaurantes.Dining.Api.Realtime;

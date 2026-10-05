@@ -1,4 +1,4 @@
-namespace Restaurantes.Identity.Domain;
+﻿namespace Restaurantes.Identity.Domain;
 
 public sealed class AuthenticationSettings
 {

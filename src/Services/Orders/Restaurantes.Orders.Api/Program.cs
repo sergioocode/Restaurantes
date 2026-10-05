@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Restaurantes.Messaging.RabbitMq;
 using Restaurantes.Orders.Api.Realtime;
 using Restaurantes.Orders.Application;

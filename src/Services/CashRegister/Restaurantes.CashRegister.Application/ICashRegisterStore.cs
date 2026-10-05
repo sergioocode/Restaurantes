@@ -1,4 +1,4 @@
-using Restaurantes.CashRegister.Domain;
+﻿using Restaurantes.CashRegister.Domain;
 
 namespace Restaurantes.CashRegister.Application;
 

@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using Restaurantes.Payments.Application;
 
 namespace Restaurantes.Payments.Infrastructure.Integrations;

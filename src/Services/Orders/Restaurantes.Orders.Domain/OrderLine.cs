@@ -1,4 +1,4 @@
-namespace Restaurantes.Orders.Domain;
+﻿namespace Restaurantes.Orders.Domain;
 
 public sealed class OrderLine
 {

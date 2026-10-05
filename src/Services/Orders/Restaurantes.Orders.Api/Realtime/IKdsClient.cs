@@ -1,4 +1,4 @@
-using Restaurantes.Orders.Contracts.Events;
+﻿using Restaurantes.Orders.Contracts.Events;
 
 namespace Restaurantes.Orders.Api.Realtime;
 

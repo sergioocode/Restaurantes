@@ -1,4 +1,4 @@
-namespace Restaurantes.CashRegister.Domain;
+﻿namespace Restaurantes.CashRegister.Domain;
 
 public enum CashRegisterStatus
 {

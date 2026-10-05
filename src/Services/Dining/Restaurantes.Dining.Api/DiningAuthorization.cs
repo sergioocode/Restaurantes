@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Restaurantes.Dining.Application;
 using Restaurantes.Security;
 

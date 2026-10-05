@@ -1,4 +1,4 @@
-namespace Restaurantes.Reporting.Api.DeadLetters;
+﻿namespace Restaurantes.Reporting.Api.DeadLetters;
 
 public sealed class DeadLetterQueueMonitor(
     RabbitMqDeadLetterService deadLetters,

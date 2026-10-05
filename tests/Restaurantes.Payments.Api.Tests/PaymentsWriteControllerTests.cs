@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Restaurantes.Payments.Api.Controllers;
 using Restaurantes.Payments.Application;
 using Restaurantes.Payments.Contracts.Requests;

@@ -1,4 +1,4 @@
-namespace Restaurantes.Clients.Backoffice.Pwa.Models;
+﻿namespace Restaurantes.Clients.Backoffice.Pwa.Models;
 
 public sealed class RestaurantDraft
 {

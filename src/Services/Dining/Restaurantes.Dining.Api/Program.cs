@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using Microsoft.AspNetCore.HttpOverrides;
 using Restaurantes.Dining.Api;
 using Restaurantes.Dining.Api.Realtime;

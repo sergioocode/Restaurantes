@@ -1,4 +1,4 @@
-using Restaurantes.Clients.Commander.Pwa.Models;
+﻿using Restaurantes.Clients.Commander.Pwa.Models;
 
 namespace Restaurantes.Clients.Commander.Pwa.Api;
 

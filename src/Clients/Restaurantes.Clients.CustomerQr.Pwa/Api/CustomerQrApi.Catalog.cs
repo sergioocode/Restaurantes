@@ -1,4 +1,4 @@
-using Restaurantes.Clients.CustomerQr.Pwa.Models;
+﻿using Restaurantes.Clients.CustomerQr.Pwa.Models;
 
 namespace Restaurantes.Clients.CustomerQr.Pwa.Api;
 

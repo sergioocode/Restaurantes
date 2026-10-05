@@ -1,4 +1,4 @@
-using Restaurantes.Dining.Application;
+﻿using Restaurantes.Dining.Application;
 
 namespace Restaurantes.Dining.Api.Realtime;
 

@@ -1,4 +1,4 @@
-namespace Restaurantes.Clients.Commander.Pwa.Models;
+﻿namespace Restaurantes.Clients.Commander.Pwa.Models;
 
 public sealed record OrderLineDetailResponse(
     Guid Id,
