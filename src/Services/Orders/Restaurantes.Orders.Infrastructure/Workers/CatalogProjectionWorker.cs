@@ -23,17 +23,20 @@ public sealed class CatalogProjectionWorker(
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
-        await using (AsyncServiceScope s = scopes.CreateAsyncScope())
-        {
-            await s
-                .ServiceProvider.GetRequiredService<OrderWriteDbContext>()
-                .Database.MigrateAsync(ct);
-        }
-
+        bool databaseInitialized = false;
         while (!ct.IsCancellationRequested)
         {
             try
             {
+                if (!databaseInitialized)
+                {
+                    await using AsyncServiceScope s = scopes.CreateAsyncScope();
+                    await s
+                        .ServiceProvider.GetRequiredService<OrderWriteDbContext>()
+                        .Database.MigrateAsync(ct);
+                    databaseInitialized = true;
+                }
+
                 ConnectionFactory f = RabbitMqConnectionFactory.Create(options.Value);
                 connection = await f.CreateConnectionAsync("orders-catalog-projection", ct);
                 channel = await connection.CreateChannelAsync(
