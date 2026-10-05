@@ -1,6 +1,9 @@
-﻿using Restaurantes.Messaging.RabbitMq;
+﻿using Microsoft.EntityFrameworkCore;
+using Restaurantes.Messaging.RabbitMq;
 using Restaurantes.Sales.Application;
 using Restaurantes.Sales.Infrastructure;
+using Restaurantes.Sales.Infrastructure.Persistence.Read;
+using Restaurantes.Sales.Infrastructure.Persistence.Write;
 using Restaurantes.Sales.Infrastructure.Workers;
 
 internal static class WorkerHost
@@ -28,4 +31,12 @@ internal static class WorkerHost
         services.AddHostedService<SalesOutboxPublisherWorker>();
     }
 
+    public static async Task MigrateDatabasesAsync(IServiceProvider services)
+    {
+        await using AsyncServiceScope scope = services.CreateAsyncScope();
+        await scope
+            .ServiceProvider.GetRequiredService<SaleWriteDbContext>()
+            .Database.MigrateAsync();
+        await scope.ServiceProvider.GetRequiredService<SaleReadDbContext>().Database.MigrateAsync();
+    }
 }

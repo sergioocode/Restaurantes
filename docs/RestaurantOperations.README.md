@@ -198,7 +198,8 @@ Esto introduce una ventana pequeña de **consistencia eventual**: inmediatamente
 
 ## Persistencia
 
-RestaurantOperations utiliza dos bases de datos PostgreSQL lógicamente independientes:
+RestaurantOperations conserva dos esquemas PostgreSQL independientes, ubicados en
+las bases física operativa y de lectura:
 
 ### `restaurant_operations_write`
 

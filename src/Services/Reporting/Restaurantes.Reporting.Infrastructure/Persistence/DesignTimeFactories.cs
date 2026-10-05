@@ -13,7 +13,8 @@ public sealed class ReportingReadDbContextFactory
         return new(
             new DbContextOptionsBuilder<ReportingReadDbContext>()
                 .UseNpgsql(
-                    VaultConfigurationExtensions.GetDesignTimeConnectionString("ReportingRead")
+                    VaultConfigurationExtensions.GetDesignTimeConnectionString("ReportingRead"),
+                    npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "reporting")
                 )
                 .Options
         );

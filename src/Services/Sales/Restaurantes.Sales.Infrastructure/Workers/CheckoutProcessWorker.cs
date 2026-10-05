@@ -1,5 +1,4 @@
 ﻿using System.Text.Json;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -10,7 +9,6 @@ using Restaurantes.Messaging.RabbitMq;
 using Restaurantes.Orders.Contracts.Events;
 using Restaurantes.Payments.Contracts.Events;
 using Restaurantes.Sales.Application;
-using Restaurantes.Sales.Infrastructure.Persistence.Write;
 
 namespace Restaurantes.Sales.Infrastructure.Workers;
 
@@ -25,13 +23,6 @@ public sealed class CheckoutProcessWorker(
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
-        await using (AsyncServiceScope s = scopes.CreateAsyncScope())
-        {
-            await s
-                .ServiceProvider.GetRequiredService<SaleWriteDbContext>()
-                .Database.MigrateAsync(ct);
-        }
-
         while (!ct.IsCancellationRequested)
         {
             try

@@ -25,13 +25,6 @@ public sealed class SalesReadProjectionWorker(
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
-        await using (AsyncServiceScope s = scopes.CreateAsyncScope())
-        {
-            await s
-                .ServiceProvider.GetRequiredService<SaleReadDbContext>()
-                .Database.MigrateAsync(ct);
-        }
-
         while (!ct.IsCancellationRequested)
         {
             try

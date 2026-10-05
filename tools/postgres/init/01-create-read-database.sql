@@ -1,1 +1,0 @@
-﻿CREATE DATABASE restaurant_operations_read;

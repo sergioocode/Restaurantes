@@ -17,7 +17,10 @@ public static class DependencyInjection
     )
     {
         services.AddDbContext<SaleWriteDbContext>(options =>
-            options.UseNpgsql(configuration.GetConnectionString("SalesWrite"))
+            options.UseNpgsql(
+                configuration.GetConnectionString("SalesWrite"),
+                npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "sales_write")
+            )
         );
         services.AddScoped<ISaleWriteStore, SaleWriteStore>();
         return services;
@@ -30,7 +33,10 @@ public static class DependencyInjection
     {
         services.AddBusinessTimeZone(configuration);
         services.AddDbContext<SaleReadDbContext>(options =>
-            options.UseNpgsql(configuration.GetConnectionString("SalesRead"))
+            options.UseNpgsql(
+                configuration.GetConnectionString("SalesRead"),
+                npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "sales_read")
+            )
         );
         services.AddScoped<ISaleReadStore, SaleReadStore>();
         return services;

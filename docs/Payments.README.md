@@ -943,9 +943,10 @@ All: API y workers en el mismo proceso.
 
 Cuando Http y Workers se ejecutan por separado, el despliegue puede asignar recursos distintos a cada rol.
 
-Payments representa un buen ejemplo de **database-per-service** aunque actualmente no necesite una pareja Read/Write propia.
+Payments conserva su servicio y su esquema operacional `payments`, compartiendo la
+base física operativa con otros contextos.
 
-La base `payments_write` contiene exclusivamente el estado necesario para operar cobros y garantizar su publicación fiable.
+El esquema `payments` contiene exclusivamente el estado necesario para operar cobros y garantizar su publicación fiable.
 
 Las consultas de oficina, dashboards o reporting **no deben ejecutarse sobre esta base operacional**. Esos escenarios se sirven desde las proyecciones de `Sales` y `Reporting`.
 

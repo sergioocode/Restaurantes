@@ -12,7 +12,10 @@ public sealed class SalesWriteDbContextFactory : IDesignTimeDbContextFactory<Sal
     {
         DbContextOptions<SaleWriteDbContext> options =
             new DbContextOptionsBuilder<SaleWriteDbContext>()
-                .UseNpgsql(VaultConfigurationExtensions.GetDesignTimeConnectionString("SalesWrite"))
+                .UseNpgsql(
+                    VaultConfigurationExtensions.GetDesignTimeConnectionString("SalesWrite"),
+                    npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "sales_write")
+                )
                 .Options;
         return new SaleWriteDbContext(options);
     }
@@ -24,7 +27,10 @@ public sealed class SalesReadDbContextFactory : IDesignTimeDbContextFactory<Sale
     {
         DbContextOptions<SaleReadDbContext> options =
             new DbContextOptionsBuilder<SaleReadDbContext>()
-                .UseNpgsql(VaultConfigurationExtensions.GetDesignTimeConnectionString("SalesRead"))
+                .UseNpgsql(
+                    VaultConfigurationExtensions.GetDesignTimeConnectionString("SalesRead"),
+                    npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "sales_read")
+                )
                 .Options;
         return new SaleReadDbContext(options);
     }

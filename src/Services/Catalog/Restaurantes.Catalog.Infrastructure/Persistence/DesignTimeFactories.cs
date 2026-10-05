@@ -14,7 +14,9 @@ public sealed class CatalogWriteDbContextFactory
         return new(
             new DbContextOptionsBuilder<CatalogWriteDbContext>()
                 .UseNpgsql(
-                    VaultConfigurationExtensions.GetDesignTimeConnectionString("CatalogWrite")
+                    VaultConfigurationExtensions.GetDesignTimeConnectionString("CatalogWrite"),
+                    npgsql =>
+                        npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "catalog_write")
                 )
                 .Options
         );
@@ -28,7 +30,8 @@ public sealed class CatalogReadDbContextFactory : IDesignTimeDbContextFactory<Ca
         return new(
             new DbContextOptionsBuilder<CatalogReadDbContext>()
                 .UseNpgsql(
-                    VaultConfigurationExtensions.GetDesignTimeConnectionString("CatalogRead")
+                    VaultConfigurationExtensions.GetDesignTimeConnectionString("CatalogRead"),
+                    npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "catalog_read")
                 )
                 .Options
         );

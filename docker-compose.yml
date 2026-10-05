@@ -7,17 +7,54 @@ services:
     environment:
       POSTGRES_USER: restaurants
       POSTGRES_PASSWORD: ${RESTAURANTES_POSTGRES_PASSWORD:?Local PostgreSQL password is missing}
-      POSTGRES_DB: restaurant_operations_write
+      POSTGRES_DB: restaurants_operational
     ports:
       - "5432:5432"
     volumes:
-      - restaurant-postgres-data:/var/lib/postgresql
-      - ./tools/postgres/init:/docker-entrypoint-initdb.d:ro
+      - restaurant-postgres-operational-data:/var/lib/postgresql
+      - ./tools/postgres/init/operational:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U restaurants -d restaurant_operations_write" ]
+      test: [ "CMD-SHELL", "pg_isready -U restaurants -d postgres" ]
       interval: 5s
       timeout: 5s
       retries: 10
+
+  postgres-analytics:
+    image: postgres:18-alpine
+    container_name: restaurantes-postgres-analytics
+    environment:
+      POSTGRES_USER: restaurants
+      POSTGRES_PASSWORD: ${RESTAURANTES_POSTGRES_PASSWORD:?Local PostgreSQL password is missing}
+      POSTGRES_DB: restaurants_analytics
+    ports:
+      - "5433:5432"
+    volumes:
+      - restaurant-postgres-analytics-data:/var/lib/postgresql
+      - ./tools/postgres/init/analytics:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U restaurants -d restaurants_analytics" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  postgres-schema-init:
+    image: postgres:18-alpine
+    container_name: restaurantes-postgres-schema-init
+    environment:
+      PGPASSWORD: ${RESTAURANTES_POSTGRES_PASSWORD:?Local PostgreSQL password is missing}
+    volumes:
+      - ./tools/postgres/init:/init:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      postgres-analytics:
+        condition: service_healthy
+    entrypoint: [ "/bin/sh", "-c" ]
+    command:
+      - >-
+        psql -h postgres -U restaurants -d postgres -Atc "SELECT 1 FROM pg_database WHERE datname='restaurants_operational'" | grep -q 1 || createdb -h postgres -U restaurants restaurants_operational &&
+        psql -h postgres -U restaurants -d restaurants_operational -v ON_ERROR_STOP=1 -f /init/operational/01-create-schemas.sql &&
+        psql -h postgres-analytics -U restaurants -d restaurants_analytics -v ON_ERROR_STOP=1 -f /init/analytics/01-create-schemas.sql
 
   pgadmin:
     image: dpage/pgadmin4:latest
@@ -33,6 +70,8 @@ services:
       - ./tools/pgadmin/servers.json:/pgadmin4/servers.json:ro
     depends_on:
       postgres:
+        condition: service_healthy
+      postgres-analytics:
         condition: service_healthy
 
   rabbitmq:
@@ -83,6 +122,8 @@ services:
     depends_on:
       vault:
         condition: service_healthy
+      postgres-schema-init:
+        condition: service_completed_successfully
     entrypoint: [ "/bin/sh", "/vault/init/init.sh" ]
 
   vault-proxy:
@@ -170,7 +211,8 @@ services:
 
 
 volumes:
-  restaurant-postgres-data:
+  restaurant-postgres-operational-data:
+  restaurant-postgres-analytics-data:
   restaurant-pgadmin-data:
   restaurant-rabbitmq-data:
   restaurant-vault-proxy-auth:

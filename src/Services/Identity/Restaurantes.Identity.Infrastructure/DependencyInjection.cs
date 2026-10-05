@@ -19,7 +19,10 @@ public static class DependencyInjection
     {
         services.TryAddSingleton(TimeProvider.System);
         services.AddDbContext<IdentityWriteDbContext>(options =>
-            options.UseNpgsql(configuration.GetConnectionString("IdentityWrite"))
+            options.UseNpgsql(
+                configuration.GetConnectionString("IdentityWrite"),
+                npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "identity")
+            )
         );
         services.AddScoped<IIdentityStore, IdentityStore>();
         services.AddScoped<IAccessTokenIssuer, AccessTokenService>();

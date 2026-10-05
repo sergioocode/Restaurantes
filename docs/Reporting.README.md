@@ -101,9 +101,11 @@ flowchart LR
     Realtime -->|DashboardUpdated| Dashboard
 ```
 
-El flujo de lectura está desacoplado de las bases operativas. `Reporting.Api` consulta únicamente `reporting_read`; no realiza joins remotos ni consultas directas sobre las bases de Orders, Payments o Sales.
+El flujo de lectura está desacoplado de la base operativa. `Reporting.Api` consulta
+únicamente el esquema `reporting` de la base de lectura; no realiza joins remotos ni
+consultas directas sobre los esquemas de Orders, Payments o Sales.
 
-## Por qué Reporting tiene una base de datos propia
+## Por qué Reporting tiene un esquema propio
 
 La separación de Reporting responde a un requisito de operación, no únicamente a una elección de estilo arquitectónico.
 
@@ -966,29 +968,31 @@ El diagrama es conceptual: la comunicación real se realiza mediante publishers,
 
 ### Bases de datos
 
-En una instalación pequeña, varias bases lógicas PostgreSQL pueden residir en una misma instancia administrada:
+Reporting mantiene su propio esquema en la instancia PostgreSQL de lectura:
 
 ```text
-PostgreSQL Server / Cluster
-├── orders_write
+PostgreSQL Analytics
 ├── orders_read
-├── payments_write
-├── sales_write
-└── reporting_read
+├── sales_read
+├── restaurant_operations_read
+├── catalog_read
+└── reporting
 ```
 
-Aunque compartan infraestructura física, cada bounded context conserva una conexión y migraciones propias y puede separarse posteriormente.
+Cada servicio conserva su código independiente y su historial de migraciones en su
+propio esquema.
 
-Si la carga de Reporting aumenta, `reporting_read` puede alojarse en infraestructura independiente:
+La base de lectura está en una instancia independiente de la operativa:
 
 ```text
-Operational PostgreSQL
+PostgreSQL Operativa
 ├── orders_write
-├── payments_write
-└── sales_write
+├── payments
+├── sales_write
+└── otros esquemas operativos
 
-Reporting PostgreSQL
-└── reporting_read
+PostgreSQL Analytics
+└── esquemas de lectura, incluido `reporting`
 ```
 
 Esto permite asignar CPU, memoria, IOPS y almacenamiento a Reporting sin competir con las operaciones transaccionales.

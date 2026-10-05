@@ -13,7 +13,8 @@ public sealed class PaymentWriteDbContextFactory
         return new(
             new DbContextOptionsBuilder<PaymentWriteDbContext>()
                 .UseNpgsql(
-                    VaultConfigurationExtensions.GetDesignTimeConnectionString("PaymentsWrite")
+                    VaultConfigurationExtensions.GetDesignTimeConnectionString("PaymentsWrite"),
+                    npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "payments")
                 )
                 .Options
         );

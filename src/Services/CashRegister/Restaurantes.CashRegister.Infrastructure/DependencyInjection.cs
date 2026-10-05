@@ -19,7 +19,10 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.AddBusinessTimeZone(configuration);
         services.AddDbContext<CashRegisterDbContext>(options =>
-            options.UseNpgsql(configuration.GetConnectionString("CashRegisterWrite"))
+            options.UseNpgsql(
+                configuration.GetConnectionString("CashRegisterWrite"),
+                npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "cash_register")
+            )
         );
         services.AddScoped<ICashRegisterStore, CashRegisterStore>();
         return services;

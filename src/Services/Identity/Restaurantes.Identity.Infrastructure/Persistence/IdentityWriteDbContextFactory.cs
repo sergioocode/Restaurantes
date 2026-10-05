@@ -12,7 +12,8 @@ public sealed class IdentityWriteDbContextFactory
         return new(
             new DbContextOptionsBuilder<IdentityWriteDbContext>()
                 .UseNpgsql(
-                    VaultConfigurationExtensions.GetDesignTimeConnectionString("IdentityWrite")
+                    VaultConfigurationExtensions.GetDesignTimeConnectionString("IdentityWrite"),
+                    npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "identity")
                 )
                 .Options
         );

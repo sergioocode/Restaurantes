@@ -1,6 +1,7 @@
 \set ON_ERROR_STOP on
 
-\connect restaurant_operations_write
+\connect restaurants_operational
+SET search_path TO restaurant_operations;
 
 WITH inserted AS (
     INSERT INTO restaurants ("Id", "Code", "Name", "Address", "IsActive", "Version", "UpdatedAtUtc")
@@ -29,7 +30,8 @@ SET "ProcessedAtUtc" = NULL,
     "Type" = 'Restaurantes.RestaurantOperations.Contracts.Events.RestaurantChanged'
 WHERE "Type" = 'Restaurantes.RestaurantOperations.Contracts.RestaurantChanged';
 
-\connect catalog_write
+\connect restaurants_operational
+SET search_path TO catalog_write;
 
 WITH inserted AS (
     INSERT INTO categories ("Id", "Code", "Name", "DefaultStationCode", "DefaultStationName", "IsActive", "Version", "UpdatedAtUtc")
@@ -176,7 +178,8 @@ WHERE "Type" IN (
     'Restaurantes.Catalog.Contracts.CatalogItemChanged',
     'Restaurantes.Catalog.Contracts.KitchenStationChanged'
 );
-\connect dining_write
+\connect restaurants_operational
+SET search_path TO dining;
 
 WITH restaurants("RestaurantId") AS (
     VALUES
