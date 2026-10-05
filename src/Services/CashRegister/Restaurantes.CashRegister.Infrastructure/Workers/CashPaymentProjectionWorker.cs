@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -6,6 +7,7 @@ using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Restaurantes.CashRegister.Application;
+using Restaurantes.CashRegister.Infrastructure.Persistence;
 using Restaurantes.Messaging.RabbitMq;
 using Restaurantes.Payments.Contracts.Events;
 
@@ -73,9 +75,15 @@ public sealed class CashPaymentProjectionWorker(
 
             PaymentProjection payment = ReadPayment(messageId, ea);
             await using AsyncServiceScope scope = scopes.CreateAsyncScope();
+            CashRegisterDbContext db =
+                scope.ServiceProvider.GetRequiredService<CashRegisterDbContext>();
+            await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(
+                ea.CancellationToken
+            );
             await scope
                 .ServiceProvider.GetRequiredService<CashPaymentProjectionService>()
                 .Project(payment, CancellationToken.None);
+            await transaction.CommitAsync(ea.CancellationToken);
             await channel.BasicAckAsync(ea.DeliveryTag, false);
         }
         catch (Exception ex) when (ex is JsonException or NotSupportedException)
@@ -119,25 +127,7 @@ public sealed class CashPaymentProjectionWorker(
                 e.Method,
                 e.ExternalReference,
                 e.CapturedAtUtc,
-                false,
                 e.CashRegisterSessionId
-            );
-        }
-        if (ea.BasicProperties.Type == typeof(PaymentRefunded).FullName)
-        {
-            PaymentRefunded e =
-                JsonSerializer.Deserialize<PaymentRefunded>(ea.Body.Span)
-                ?? throw new JsonException("Empty refund.");
-            return new(
-                messageId,
-                e.PaymentId,
-                e.OrderId,
-                e.RestaurantId,
-                e.Amount,
-                e.Method,
-                e.Reason,
-                e.RefundedAtUtc,
-                true
             );
         }
         throw new NotSupportedException(ea.BasicProperties.Type);

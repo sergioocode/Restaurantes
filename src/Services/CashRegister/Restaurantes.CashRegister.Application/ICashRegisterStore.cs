@@ -18,7 +18,6 @@ public interface ICashRegisterStore
         CancellationToken ct
     );
     Task<bool> HasProcessedMessageAsync(Guid messageId, CancellationToken ct);
-    Task<Guid?> GetSaleSessionIdAsync(Guid paymentId, CancellationToken ct);
     Task<CashRegisterSession?> FindProjectionSessionAsync(
         PaymentProjection payment,
         Guid? sessionId,

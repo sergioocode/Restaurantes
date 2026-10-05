@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Restaurantes.CashRegister.Application;
+using Restaurantes.CashRegister.Infrastructure.Integrations;
 using Restaurantes.CashRegister.Infrastructure.Persistence;
 using Restaurantes.CashRegister.Infrastructure.Stores;
 using Restaurantes.ServiceDefaults;
@@ -25,6 +26,23 @@ public static class DependencyInjection
             )
         );
         services.AddScoped<ICashRegisterStore, CashRegisterStore>();
+        services.AddHttpClient<IIncompleteOrdersChecker, OrdersIncompleteOrdersChecker>(client =>
+        {
+            client.BaseAddress = new Uri(
+                configuration["Orders:BaseAddress"] ?? "http://localhost:5121"
+            );
+            client.Timeout = TimeSpan.FromSeconds(5);
+        });
+        services.AddHttpClient(
+            "CashClosePayments",
+            client =>
+            {
+                client.BaseAddress = new Uri(
+                    configuration["Payments:BaseAddress"] ?? "http://localhost:5151"
+                );
+                client.Timeout = TimeSpan.FromSeconds(5);
+            }
+        );
         return services;
     }
 

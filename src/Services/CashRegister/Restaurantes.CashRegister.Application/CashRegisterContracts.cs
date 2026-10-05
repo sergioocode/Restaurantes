@@ -13,7 +13,7 @@ public sealed record CashMovementResponse(
     DateTime OccurredAtUtc
 );
 
-public sealed record PaymentMethodTotal(string Method, decimal Sales, decimal Refunds, decimal Net);
+public sealed record PaymentMethodTotal(string Method, decimal Sales);
 
 public sealed record PaymentMethodExpected(string Method, decimal Expected);
 
@@ -31,9 +31,7 @@ public sealed record CashRegisterResponse(
     string Status,
     decimal OpeningFloat,
     decimal TotalSales,
-    decimal TotalRefunds,
     decimal CashSales,
-    decimal CashRefunds,
     decimal ExpectedCash,
     decimal ExpectedTotal,
     decimal? ReconciledTotal,
@@ -66,6 +64,7 @@ public enum CashRegisterOutcome
     NotFound,
     Conflict,
     Validation,
+    ServiceUnavailable,
 }
 
 public sealed record CashRegisterResult(
@@ -84,6 +83,5 @@ public sealed record PaymentProjection(
     string Method,
     string Reference,
     DateTime OccurredAtUtc,
-    bool IsRefund,
     Guid? CashRegisterSessionId = null
 );

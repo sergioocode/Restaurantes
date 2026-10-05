@@ -1,13 +1,18 @@
 ﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore.Storage;
 using Restaurantes.CashRegister.Application;
+using Restaurantes.CashRegister.Infrastructure.Persistence;
 using Restaurantes.Security;
 
 namespace Restaurantes.CashRegister.Api.Controllers;
 
 [ApiController, Authorize, Route("api/cash-register/restaurants/{restaurantId:guid}")]
-public sealed class CashRegisterWriteController(CashRegisterService service) : ControllerBase
+public sealed class CashRegisterWriteController(
+    CashRegisterService service,
+    CashRegisterDbContext db
+) : ControllerBase
 {
     [HttpPost("open")]
     public Task<IActionResult> Open(
@@ -17,7 +22,7 @@ public sealed class CashRegisterWriteController(CashRegisterService service) : C
     )
     {
         return CanManage(restaurantId)
-            ? Execute(() => service.Open(restaurantId, request, CurrentUser(), ct))
+            ? ExecuteTransactional(() => service.Open(restaurantId, request, CurrentUser(), ct), ct)
             : Task.FromResult<IActionResult>(Forbid());
     }
 
@@ -30,8 +35,30 @@ public sealed class CashRegisterWriteController(CashRegisterService service) : C
     )
     {
         return CanManage(restaurantId)
-            ? Execute(() => service.Close(restaurantId, sessionId, request, CurrentUser(), ct))
+            ? ExecuteTransactional(
+                () =>
+                    service.Close(
+                        restaurantId,
+                        sessionId,
+                        request,
+                        CurrentUser(),
+                        Request.Headers.Authorization.ToString(),
+                        ct
+                    ),
+                ct
+            )
             : Task.FromResult<IActionResult>(Forbid());
+    }
+
+    private async Task<IActionResult> ExecuteTransactional(
+        Func<Task<CashRegisterResult>> operation,
+        CancellationToken ct
+    )
+    {
+        await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(ct);
+        IActionResult result = await Execute(operation);
+        await transaction.CommitAsync(ct);
+        return result;
     }
 
     private bool CanManage(Guid restaurantId)
@@ -61,6 +88,10 @@ public sealed class CashRegisterWriteController(CashRegisterService service) : C
             CashRegisterOutcome.Conflict => Conflict(result.Value),
             CashRegisterOutcome.Validation => ValidationProblem(
                 new ValidationProblemDetails(result.Errors!.ToDictionary())
+            ),
+            CashRegisterOutcome.ServiceUnavailable => StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                result.Value
             ),
             _ => throw new ArgumentOutOfRangeException(),
         };

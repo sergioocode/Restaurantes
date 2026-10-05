@@ -71,15 +71,6 @@ public sealed class CashRegisterStore(CashRegisterDbContext db) : ICashRegisterS
         return db.InboxMessages.AnyAsync(x => x.Id == messageId, ct);
     }
 
-    public Task<Guid?> GetSaleSessionIdAsync(Guid paymentId, CancellationToken ct)
-    {
-        return db
-            .Movements.AsNoTracking()
-            .Where(x => x.PaymentId == paymentId && x.Type == CashMovementType.Sale)
-            .Select(x => (Guid?)x.CashRegisterSessionId)
-            .SingleOrDefaultAsync(ct);
-    }
-
     public Task<CashRegisterSession?> FindProjectionSessionAsync(
         PaymentProjection payment,
         Guid? sessionId,
