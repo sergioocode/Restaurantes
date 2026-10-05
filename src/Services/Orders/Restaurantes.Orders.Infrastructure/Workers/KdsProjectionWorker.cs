@@ -26,11 +26,17 @@ public sealed class KdsProjectionWorker(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await InitializeDatabaseAsync(stoppingToken);
+        bool databaseInitialized = false;
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
+                if (!databaseInitialized)
+                {
+                    await InitializeDatabaseAsync(stoppingToken);
+                    databaseInitialized = true;
+                }
+
                 await ConsumeAsync(options.Value, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
