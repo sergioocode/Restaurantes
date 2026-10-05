@@ -45,7 +45,7 @@ public sealed partial class CommanderApi
             diningSessionId = sessionId,
             tableLabel = table.Label,
             serviceMode = "DineIn",
-            source = "WaiterMobile",
+            source = "Comandero",
             paymentTiming = "OnAccount",
             lines = quantities
                 .Where(x => x.Value > 0)

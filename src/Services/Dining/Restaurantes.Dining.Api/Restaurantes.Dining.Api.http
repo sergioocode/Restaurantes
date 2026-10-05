@@ -93,7 +93,7 @@ Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 {
-  "source": "WaiterMobile"
+  "source": "Comandero"
 }
 
 ### Consultar la sesion activa de una mesa

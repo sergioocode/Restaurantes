@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace Restaurantes.Orders.Contracts.Requests;
 
@@ -17,7 +17,7 @@ public sealed class CreateOrderRequest
     [Required, RegularExpression("^(DineIn|Bar|Takeaway)$")]
     public string ServiceMode { get; init; } = "DineIn";
 
-    [Required, RegularExpression("^(CustomerQr|WaiterMobile|Pos)$")]
+    [Required, RegularExpression("^(CustomerQr|Comandero|Pos)$")]
     public string Source { get; init; } = "Pos";
 
     [Required, RegularExpression("^(Immediate|OnAccount)$")]
