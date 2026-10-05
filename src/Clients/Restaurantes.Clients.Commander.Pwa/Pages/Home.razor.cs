@@ -354,8 +354,15 @@ public partial class Home
 
     private string TableOrderSummary(TableResponse table)
     {
+        if (table.ActiveSessionId is not Guid sessionId)
+        {
+            return "Sin comandas activas";
+        }
+
         return OrderProgress.Summarize(
-            activeOrders.Where(order => order.TableId == table.Id).Select(order => order.Status)
+            activeOrders
+                .Where(order => order.TableId == table.Id && order.DiningSessionId == sessionId)
+                .Select(order => order.Status)
         );
     }
 

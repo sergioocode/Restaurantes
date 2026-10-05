@@ -677,7 +677,14 @@ public partial class Home
 
     private string TableOrderSummary(TableResponse table)
     {
-        List<OrderResponse> orders = activeOrders.Where(x => x.TableId == table.Id).ToList();
+        if (table.ActiveSessionId is not Guid sessionId)
+        {
+            return "Sin comandas activas";
+        }
+
+        List<OrderResponse> orders = activeOrders
+            .Where(x => x.TableId == table.Id && x.DiningSessionId == sessionId)
+            .ToList();
         return OrderProgress.Summarize(orders.Select(x => x.Status));
     }
 

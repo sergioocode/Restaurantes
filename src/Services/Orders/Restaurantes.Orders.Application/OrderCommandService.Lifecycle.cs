@@ -30,6 +30,7 @@ public sealed partial class OrderCommandService
                 o.RestaurantId,
                 o.TableId,
                 o.GuestCount,
+                o.DiningSessionId,
                 o.TableLabel,
                 o.CustomerName,
                 o.ServiceMode.ToString(),
