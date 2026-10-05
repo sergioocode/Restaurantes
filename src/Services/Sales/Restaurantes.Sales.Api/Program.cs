@@ -1,7 +1,4 @@
-using Microsoft.EntityFrameworkCore;
-using Restaurantes.Sales.Infrastructure;
-using Restaurantes.Sales.Infrastructure.Persistence.Read;
-using Restaurantes.ServiceDefaults;
+﻿using Restaurantes.ServiceDefaults;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 builder.AddVaultConfiguration();
@@ -11,11 +8,7 @@ WorkerHost.ConfigureServices(builder.Services, builder.Configuration);
 
 WebApplication app = builder.Build();
 
-await using (AsyncServiceScope scope = app.Services.CreateAsyncScope())
-{
-    SaleReadDbContext dbContext = scope.ServiceProvider.GetRequiredService<SaleReadDbContext>();
-    await dbContext.Database.MigrateAsync();
-}
+await WorkerHost.MigrateDatabasesAsync(app.Services);
 
 app.MapServiceDefaults();
 app.MapControllers();

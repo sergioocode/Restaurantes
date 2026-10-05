@@ -290,7 +290,8 @@ La configuración es publicada a Orders mediante `KitchenStationChanged`, permit
 
 ## Persistencia
 
-Catalog utiliza dos bases de datos PostgreSQL lógicamente independientes:
+Catalog conserva dos esquemas PostgreSQL independientes, cada uno en la base física
+asignada a su tipo de carga:
 
 ```text
 catalog_write

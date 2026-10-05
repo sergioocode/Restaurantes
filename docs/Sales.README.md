@@ -331,14 +331,16 @@ Entre sus consumidores se encuentra **Reporting**, que utiliza este evento junto
 
 ## Persistencia
 
-Sales utiliza dos bases de datos PostgreSQL lógicamente independientes:
+Sales conserva dos esquemas PostgreSQL independientes, ubicados en las bases física
+operativa y de lectura:
 
 ```text
 sales_write
 sales_read
 ```
 
-En desarrollo ambas pueden residir dentro de la misma instancia PostgreSQL. La separación lógica permite moverlas posteriormente a infraestructura física diferente sin modificar las responsabilidades del servicio.
+`sales_write` queda en la base operativa y `sales_read` en la de lectura. Sales
+mantiene su API y sus workers como servicio independiente.
 
 ### `sales_write`
 

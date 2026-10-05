@@ -17,7 +17,10 @@ public static class DependencyInjection
     )
     {
         services.AddDbContext<OrderWriteDbContext>(options =>
-            options.UseNpgsql(configuration.GetConnectionString("OrdersWrite"))
+            options.UseNpgsql(
+                configuration.GetConnectionString("OrdersWrite"),
+                npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "orders_write")
+            )
         );
         services.AddScoped<IOrderWriteStore, OrderWriteStore>();
         services.AddScoped<IOrderCatalogStore, OrderCatalogStore>();
@@ -51,7 +54,10 @@ public static class DependencyInjection
     )
     {
         services.AddDbContext<OrderReadDbContext>(options =>
-            options.UseNpgsql(configuration.GetConnectionString("OrdersRead"))
+            options.UseNpgsql(
+                configuration.GetConnectionString("OrdersRead"),
+                npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "orders_read")
+            )
         );
         services.AddScoped<IKitchenOrderReadStore, KitchenOrderReadStore>();
         return services;

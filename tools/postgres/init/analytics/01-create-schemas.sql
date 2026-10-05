@@ -1,0 +1,5 @@
+CREATE SCHEMA IF NOT EXISTS catalog_read;
+CREATE SCHEMA IF NOT EXISTS orders_read;
+CREATE SCHEMA IF NOT EXISTS reporting;
+CREATE SCHEMA IF NOT EXISTS restaurant_operations_read;
+CREATE SCHEMA IF NOT EXISTS sales_read;

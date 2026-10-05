@@ -18,7 +18,10 @@ public static class DependencyInjection
     {
         services.TryAddSingleton(TimeProvider.System);
         services.AddDbContext<DiningDbContext>(options =>
-            options.UseNpgsql(configuration.GetConnectionString("DiningWrite"))
+            options.UseNpgsql(
+                configuration.GetConnectionString("DiningWrite"),
+                npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "dining")
+            )
         );
         services.AddScoped<IDiningStore, DiningStore>();
         return services;

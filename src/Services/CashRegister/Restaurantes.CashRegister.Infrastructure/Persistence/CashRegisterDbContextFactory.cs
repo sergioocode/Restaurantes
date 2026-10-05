@@ -12,7 +12,9 @@ public sealed class CashRegisterDbContextFactory
         return new(
             new DbContextOptionsBuilder<CashRegisterDbContext>()
                 .UseNpgsql(
-                    VaultConfigurationExtensions.GetDesignTimeConnectionString("CashRegisterWrite")
+                    VaultConfigurationExtensions.GetDesignTimeConnectionString("CashRegisterWrite"),
+                    npgsql =>
+                        npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "cash_register")
                 )
                 .Options
         );

@@ -151,17 +151,26 @@ La separación no se utiliza únicamente como patrón arquitectónico. Responde 
 | Modelos optimizados | Las proyecciones de lectura pueden diseñarse para consultar y mostrar información sin imponer el mismo modelo normalizado utilizado para escribir. |
 | Aislamiento de fallos | Saturación, mantenimiento o problemas en una carga de consulta tienen menor superficie de impacto sobre la operación transaccional. |
 | Evolución independiente | Los esquemas de lectura pueden cambiar para responder a nuevas necesidades de consulta sin modificar necesariamente el modelo transaccional. |
-| Despliegue cloud flexible | Las bases pueden comenzar compartiendo infraestructura y separarse físicamente cuando el volumen o el coste lo justifiquen. |
+| Despliegue cloud flexible | Cada base puede alojarse y dimensionarse por separado en el proveedor elegido. |
 
-En desarrollo local, todas las bases se alojan en **una misma instancia PostgreSQL** dentro de Docker para simplificar el entorno. La separación sigue siendo lógica: cada servicio utiliza su propia base y sus propias cadenas de conexión.
+En desarrollo local, Docker Compose levanta **dos instancias PostgreSQL independientes**, cada una con una base. Los servicios siguen separados en el código; sus contextos comparten la base operativa o la de lectura mediante esquemas PostgreSQL propios y una tabla `__EFMigrationsHistory` en cada esquema.
 
-En un entorno productivo, esa separación puede convertirse también en **separación física**.
+| Base | Esquemas asignados |
+| --- | --- |
+| `restaurants_operational` | Identity, RestaurantOperations Write, Catalog Write, Dining, Orders Write, Payments, CashRegister y Sales Write. |
+| `restaurants_analytics` | RestaurantOperations Read, Catalog Read, Orders Read, Sales Read y Reporting. |
+
+Las cadenas de conexión conservan una clave por contexto y fijan su `Search Path` al esquema correspondiente. Por eso, nombres como `catalog_write` y `reporting` identifican esquemas, no bases independientes. Cada contexto guarda `__EFMigrationsHistory` en su esquema. Las migraciones existentes usan nombres de tabla sin esquema explícito, así que se aplican al esquema del `Search Path`; no es necesario regenerar las migraciones iniciales. `MigrateAsync` se mantiene en el arranque durante esta etapa.
+
+En producción se mantiene esta separación física; cada instancia puede ser administrada o dimensionada de forma independiente.
+
+Compose usa volúmenes nuevos para estas dos instancias. El volumen PostgreSQL anterior no se borra ni se monta, y sus datos no se copian automáticamente.
 
 ## Estrategia de alojamiento cloud
 
 El proyecto está diseñado para no depender de servicios propietarios de un proveedor cloud dentro de su lógica de negocio. Actualmente, sus dependencias de infraestructura principales son **.NET, PostgreSQL, RabbitMQ, HTTP, SignalR y YARP**, lo que permite desplegar los componentes en Azure, AWS, GCP, infraestructura privada o una combinación de ellos.
 
-El despliegue cloud todavía no forma parte del repositorio y se plantea como una etapa posterior. La estrategia prevista es mantener la separación por responsabilidad y decidir el nivel de aislamiento físico según la carga real.
+El despliegue cloud todavía no forma parte del repositorio y se plantea como una etapa posterior. La estrategia prevista es mantener las dos bases en recursos separados y elegir su tamaño según la carga real.
 
 ### Modelo de despliegue previsto
 
@@ -482,7 +491,7 @@ migraciones. Después, desde PowerShell en la raíz del repositorio, copia y eje
 
 ```powershell
 docker cp .\tools\postgres\seed\01-development-catalog.sql restaurantes-postgres:/tmp/01-development-catalog.sql
-docker exec -i restaurantes-postgres psql -U restaurants -d restaurant_operations_write -v ON_ERROR_STOP=1 -f /tmp/01-development-catalog.sql
+docker exec -i restaurantes-postgres psql -U restaurants -d restaurants_operational -v ON_ERROR_STOP=1 -f /tmp/01-development-catalog.sql
 ```
 
 Si eliminas el volumen de PostgreSQL, tendrás que ejecutar de nuevo el seed. Reiniciar los contenedores no elimina estos datos.

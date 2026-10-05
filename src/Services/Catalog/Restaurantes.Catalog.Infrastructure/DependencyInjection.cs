@@ -16,7 +16,10 @@ public static class DependencyInjection
     )
     {
         s.AddDbContext<CatalogWriteDbContext>(o =>
-            o.UseNpgsql(c.GetConnectionString("CatalogWrite"))
+            o.UseNpgsql(
+                c.GetConnectionString("CatalogWrite"),
+                npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "catalog_write")
+            )
         );
         s.AddScoped<ICatalogWriteStore, CatalogWriteStore>();
         return s;
@@ -28,7 +31,10 @@ public static class DependencyInjection
     )
     {
         s.AddDbContext<CatalogReadDbContext>(o =>
-            o.UseNpgsql(c.GetConnectionString("CatalogRead"))
+            o.UseNpgsql(
+                c.GetConnectionString("CatalogRead"),
+                npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "catalog_read")
+            )
         );
         s.AddScoped<ICatalogReadStore, CatalogReadStore>();
         return s;

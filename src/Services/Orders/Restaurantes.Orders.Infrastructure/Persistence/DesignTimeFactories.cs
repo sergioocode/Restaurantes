@@ -13,7 +13,8 @@ public sealed class OrderWriteDbContextFactory : IDesignTimeDbContextFactory<Ord
         DbContextOptions<OrderWriteDbContext> options =
             new DbContextOptionsBuilder<OrderWriteDbContext>()
                 .UseNpgsql(
-                    VaultConfigurationExtensions.GetDesignTimeConnectionString("OrdersWrite")
+                    VaultConfigurationExtensions.GetDesignTimeConnectionString("OrdersWrite"),
+                    npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "orders_write")
                 )
                 .Options;
         return new OrderWriteDbContext(options);
@@ -26,7 +27,10 @@ public sealed class OrderReadDbContextFactory : IDesignTimeDbContextFactory<Orde
     {
         DbContextOptions<OrderReadDbContext> options =
             new DbContextOptionsBuilder<OrderReadDbContext>()
-                .UseNpgsql(VaultConfigurationExtensions.GetDesignTimeConnectionString("OrdersRead"))
+                .UseNpgsql(
+                    VaultConfigurationExtensions.GetDesignTimeConnectionString("OrdersRead"),
+                    npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "orders_read")
+                )
                 .Options;
         return new OrderReadDbContext(options);
     }

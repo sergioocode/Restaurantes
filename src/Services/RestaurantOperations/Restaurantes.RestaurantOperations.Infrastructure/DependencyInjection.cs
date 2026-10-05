@@ -16,7 +16,11 @@ public static class DependencyInjection
     )
     {
         services.AddDbContext<RestaurantWriteDbContext>(options =>
-            options.UseNpgsql(configuration.GetConnectionString("RestaurantOperationsWrite"))
+            options.UseNpgsql(
+                configuration.GetConnectionString("RestaurantOperationsWrite"),
+                npgsql =>
+                    npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "restaurant_operations")
+            )
         );
         services.AddScoped<IRestaurantWriteStore, RestaurantWriteStore>();
         return services;
@@ -28,7 +32,14 @@ public static class DependencyInjection
     )
     {
         services.AddDbContext<RestaurantReadDbContext>(options =>
-            options.UseNpgsql(configuration.GetConnectionString("RestaurantOperationsRead"))
+            options.UseNpgsql(
+                configuration.GetConnectionString("RestaurantOperationsRead"),
+                npgsql =>
+                    npgsql.MigrationsHistoryTable(
+                        "__EFMigrationsHistory",
+                        "restaurant_operations_read"
+                    )
+            )
         );
         services.AddScoped<IRestaurantReadStore, RestaurantReadStore>();
         return services;

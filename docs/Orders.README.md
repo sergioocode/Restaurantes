@@ -334,14 +334,15 @@ Orders no mantiene el estado maestro de caja; la comprobación se realiza contra
 
 ## Persistencia
 
-Orders utiliza dos bases de datos PostgreSQL lógicamente independientes:
+Orders conserva dos esquemas PostgreSQL independientes, cada uno en la base física
+asignada a su tipo de carga:
 
 ```text
 orders_write
 orders_read
 ```
 
-En desarrollo ambas pueden ejecutarse dentro de la misma instancia PostgreSQL. La separación es lógica desde el inicio y puede convertirse en separación física en cloud cuando la carga lo justifique.
+`orders_write` está en la base operativa y `orders_read` en la base de lectura. Cada esquema mantiene su historial de migraciones.
 
 ### `orders_write`
 
@@ -541,7 +542,7 @@ La proyección contiene, entre otros:
 - líneas serializadas;
 - estaciones serializadas.
 
-Esta estructura está pensada para responder a las necesidades del KDS sin hacer joins sobre el modelo transaccional ni consultar la base `orders_write`.
+Esta estructura está pensada para responder a las necesidades del KDS sin hacer joins sobre el modelo transaccional ni consultar el esquema `orders_write`.
 
 ## SignalR
 

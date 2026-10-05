@@ -16,7 +16,10 @@ public static class DependencyInjection
     )
     {
         services.AddDbContext<PaymentWriteDbContext>(options =>
-            options.UseNpgsql(configuration.GetConnectionString("PaymentsWrite"))
+            options.UseNpgsql(
+                configuration.GetConnectionString("PaymentsWrite"),
+                npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "payments")
+            )
         );
         services.AddScoped<IPaymentWriteStore, PaymentWriteStore>();
         services.AddHttpClient<ICustomerDiningSessionValidator, DiningSessionValidator>(client =>

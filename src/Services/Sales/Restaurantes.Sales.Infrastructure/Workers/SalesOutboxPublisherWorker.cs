@@ -21,13 +21,6 @@ public sealed class SalesOutboxPublisherWorker(
 {
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
-        await using (AsyncServiceScope s = scopes.CreateAsyncScope())
-        {
-            await s
-                .ServiceProvider.GetRequiredService<SaleWriteDbContext>()
-                .Database.MigrateAsync(ct);
-        }
-
         while (!ct.IsCancellationRequested)
         {
             try

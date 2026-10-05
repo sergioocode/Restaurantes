@@ -21,7 +21,10 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.AddBusinessTimeZone(configuration);
         services.AddDbContext<ReportingReadDbContext>(options =>
-            options.UseNpgsql(configuration.GetConnectionString("ReportingRead"))
+            options.UseNpgsql(
+                configuration.GetConnectionString("ReportingRead"),
+                npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "reporting")
+            )
         );
         services.AddHttpClient(nameof(HttpEndpointHealthProbe));
         services.AddScoped<IReportingReadStore, ReportingReadStore>();
