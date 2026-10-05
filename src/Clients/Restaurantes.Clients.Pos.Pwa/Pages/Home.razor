@@ -1,5 +1,4 @@
 ﻿@page "/"
-@using System.Text.Json
 @implements IAsyncDisposable
 @inject PosApi Api
 @inject OrderRealtimeClient Realtime
@@ -322,21 +321,18 @@
                     else
                     {
                         <div class="cash-metrics">
+                            <div><span>Fondo inicial</span><strong>@cashRegister.OpeningFloat.ToString("0.00") €</strong></div>
+                        </div>
+                        <hr class="cash-separator" />
+                        <h3>Ventas del turno</h3>
+                        <div class="cash-metrics">
                             <div><span>Ventas totales</span><strong>@cashRegister.TotalSales.ToString("0.00") €</strong></div>
                             <div><span>Total esperado</span><strong>@cashRegister.ExpectedTotal.ToString("0.00") €</strong></div>
-                            <div><span>Fondo inicial</span><strong>@cashRegister.OpeningFloat.ToString("0.00") €</strong></div>
-                            <div><span>Ventas efectivo</span><strong>@cashRegister.CashSales.ToString("0.00") €</strong></div>
-                            <div><span>Efectivo esperado</span><strong>@cashRegister.ExpectedCash.ToString("0.00") €</strong></div>
+                            @foreach (PaymentMethodTotal method in cashRegister.PaymentMethods)
+                            {
+                                <div><span>@PaymentLabel(method.Method)</span><strong>@method.Sales.ToString("0.00") €</strong></div>
+                            }
                         </div>
-                        @if (cashRegister.PaymentMethods.Count > 0)
-                        {
-                            <div class="cash-methods">
-                                @foreach (PaymentMethodTotal method in cashRegister.PaymentMethods)
-                                {
-                                    <div><span>@PaymentLabel(method.Method)</span><strong>@method.Sales.ToString("0.00") €</strong></div>
-                                }
-                            </div>
-                        }
                         @if (CashRegisterOpen)
                         {
                             <button class="ghost full" @onclick="RefreshCashRegister" disabled="@busy">Actualizar movimientos</button>
