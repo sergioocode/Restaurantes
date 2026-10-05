@@ -82,6 +82,7 @@ input:focus, select:focus { border-color: #286346; box-shadow: 0 0 0 3px #286346
 .warning { padding: 12px; border-radius: 11px; color: #774714; background: #fff0cc; }
 .bill-actions { margin-top: 16px; }
 .cash-register-card { width: min(720px, 100%); }
+.cash-separator { border: 0; border-top: 1px solid #d5dad5; margin: 20px 0; }
 .cash-metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 16px 0; }
 .cash-metrics div { display: grid; gap: 5px; padding: 14px; border-radius: 13px; background: #eef1ed; }
 .cash-metrics span, .cash-difference span { color: #667068; font-size: 12px; font-weight: 800; }
