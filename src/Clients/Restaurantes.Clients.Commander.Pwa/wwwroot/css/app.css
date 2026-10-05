@@ -20,7 +20,7 @@ input, select { width: 100%; padding: 14px 15px; border: 1px solid #cdd0c8; bord
 input:focus, select:focus { border-color: #2f684a; box-shadow: 0 0 0 3px #2f684a22; }
 .primary, .ghost, .back { border: 0; border-radius: 13px; padding: 13px 17px; font-weight: 900; }
 .primary { color: #fff; background: #d45e28; box-shadow: 0 8px 20px #d45e2833; }
-.primary:disabled { opacity: .5; cursor: default; }
+.primary:disabled, .danger:disabled { opacity: .5; cursor: default; }
 .full { width: 100%; margin-top: 8px; }
 .ghost, .back { color: #254632; background: #e4e9df; }
 .dev-hint { margin: 20px 0 0; color: #8a8f89; font-size: 12px; text-align: center; }
@@ -34,6 +34,13 @@ input:focus, select:focus { border-color: #2f684a; box-shadow: 0 0 0 3px #2f684a
 .location-tabs { display: flex; gap: 10px; }
 .location-filter { border: 1px solid #cdd0c8; border-radius: 13px; padding: 12px 16px; color: #254632; background: #fff; font-weight: 900; }
 .location-filter.active { color: #fff; border-color: #2f684a; background: #2f684a; }
+.location-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+.location-card { display: grid; align-content: center; justify-items: start; gap: 10px; min-height: 190px; padding: 24px; border: 1px solid #cdd5ca; border-radius: 22px; color: #fff; background: #253f31; text-align: left; box-shadow: 0 12px 30px #26352b1a; }
+.location-card:hover, .location-card:focus-visible { border-color: #d45e28; outline: 3px solid #d45e2833; transform: translateY(-2px); }
+.location-card strong { font-size: 26px; }
+.location-card span { color: #e0e8e1; font-size: 15px; }
+.location-card small { color: #c8d5cb; }
+.location-card em { margin-top: 4px; color: #f5b28d; font-size: 13px; font-style: normal; font-weight: 900; }
 .table-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
 .table-card { display: grid; gap: 6px; min-height: 150px; padding: 20px; text-align: left; border: 1px solid #d5d5ca; border-radius: 20px; background: #fff; }
 .table-card strong { font-size: 22px; }

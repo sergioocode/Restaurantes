@@ -58,32 +58,54 @@
 
         @if (selectedTable is null)
         {
-            <section>
-                <div class="section-title location-title">
-                    <div><p class="eyebrow">SALÓN</p><h2>Seleccionar ubicación</h2></div>
-                </div>
-                @foreach (var zone in FilteredTables.OrderBy(x => x.ZoneSortOrder).ThenBy(x => x.ZoneName).ThenBy(x => x.Code).GroupBy(x => new { x.ZoneId, x.ZoneName }))
-                {
-                    <section class="dining-zone" @key="zone.Key.ZoneId">
-                        <h3>@zone.Key.ZoneName <small>(@zone.Count())</small></h3>
-                        <div class="table-grid">
-                            @foreach (TableResponse table in zone)
-                            {
-                                <button class="table-card @(table.Status == "Occupied" ? "occupied" : "available")"
-                                        @onclick="() => SelectTable(table)" disabled="@busy">
-                                    <strong>@table.Label</strong><span>@table.Code</span>
-                                    @if (table.Status == "Occupied")
-                                    {
-                                        <small class="order-progress">@TableOrderSummary(table)</small>
-                                    }
-                                    <em>@(table.Status == "Occupied" ? "Ocupada · continuar" : "Disponible · abrir")</em>
-                                </button>
-                            }
-                        </div>
-                    </section>
-                }
-                @if (FilteredTables.Count == 0 && !busy) { <p class="empty">No hay ubicaciones en este grupo.</p> }
-            </section>
+            @if (selectedZoneId is null)
+            {
+                <section>
+                    <div class="section-title location-title">
+                        <div><p class="eyebrow">SALÓN</p><h2>Seleccionar ubicación</h2></div>
+                    </div>
+                    <div class="location-grid">
+                        @foreach (var location in FilteredTables
+                            .GroupBy(table => new { table.ZoneId, table.ZoneName, table.ZoneSortOrder })
+                            .OrderBy(group => group.Key.ZoneSortOrder)
+                            .ThenBy(group => group.Key.ZoneName))
+                        {
+                            <button class="location-card" @onclick="() => SelectZone(location.Key.ZoneId)" disabled="@busy">
+                                <strong>@location.Key.ZoneName</strong>
+                                <span>@location.Count() mesas</span>
+                                <small>@location.Count(table => table.Status == "Available") disponibles</small>
+                                <em>Ver mesas →</em>
+                            </button>
+                        }
+                    </div>
+                    @if (FilteredTables.Count == 0 && !busy) { <p class="empty">No hay ubicaciones configuradas.</p> }
+                </section>
+            }
+            else
+            {
+                <section>
+                    <div class="section-title location-title">
+                        <button class="back" @onclick="BackToZones">← Ubicaciones</button>
+                        <div><p class="eyebrow">UBICACIÓN</p><h2>@SelectedZoneName</h2></div>
+                        <strong>@TablesInSelectedZone.Count() mesas</strong>
+                    </div>
+                    <div class="table-grid">
+                        @foreach (TableResponse table in TablesInSelectedZone)
+                        {
+                            <button class="table-card @(table.Status == "Occupied" ? "occupied" : "available")"
+                                    @onclick="() => SelectTable(table)" disabled="@busy">
+                                <strong>@table.Label</strong><span>@table.Code</span>
+                                @if (table.Status == "Occupied")
+                                {
+                                    <small class="order-progress">@TableOrderSummary(table)</small>
+                                }
+                                <em>@(table.Status == "Occupied" ? "Ocupada · continuar" : "Disponible · abrir")</em>
+                            </button>
+                        }
+                    </div>
+                    @if (!TablesInSelectedZone.Any() && !busy) { <p class="empty">Esta ubicación no tiene mesas.</p> }
+                </section>
+            }
         }
         else
         {

@@ -18,9 +18,16 @@ public partial class Home
     private bool initializing = true;
     private ProviderSettingsResponse? providerSettings;
     private Guid restaurantId;
+    private Guid? selectedZoneId;
     private List<RestaurantResponse> restaurants = [];
 
     private List<TableResponse> FilteredTables { get; set; } = [];
+    private IEnumerable<TableResponse> TablesInSelectedZone =>
+        selectedZoneId is Guid zoneId
+            ? FilteredTables.Where(table => table.ZoneId == zoneId).OrderBy(table => table.Code)
+            : [];
+    private string SelectedZoneName =>
+        FilteredTables.FirstOrDefault(table => table.ZoneId == selectedZoneId)?.ZoneName ?? "";
     private List<OrderResponse> activeOrders = [];
     private TableResponse? selectedTable;
     private Guid sessionId;
@@ -144,6 +151,7 @@ public partial class Home
         login = null;
         restaurants = [];
         FilteredTables = [];
+        selectedZoneId = null;
         BackToTables();
         message = null;
     }
@@ -153,6 +161,7 @@ public partial class Home
         if (Guid.TryParse(args.Value?.ToString(), out Guid value))
         {
             restaurantId = value;
+            selectedZoneId = null;
             BackToTables();
             await LoadTables();
             await ConnectRealtimeAsync();
@@ -183,7 +192,22 @@ public partial class Home
     private async Task LoadOperationalData()
     {
         FilteredTables = await Api.TablesAsync(restaurantId);
+        if (selectedZoneId is Guid zoneId && FilteredTables.All(table => table.ZoneId != zoneId))
+        {
+            selectedZoneId = null;
+        }
+
         activeOrders = await Api.OrdersAsync(restaurantId);
+    }
+
+    private void SelectZone(Guid zoneId)
+    {
+        selectedZoneId = zoneId;
+    }
+
+    private void BackToZones()
+    {
+        selectedZoneId = null;
     }
 
     private async Task SelectTable(TableResponse table)
