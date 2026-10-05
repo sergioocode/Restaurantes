@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Restaurantes.Sales.Application;
 using Restaurantes.Sales.Contracts.Responses;
 

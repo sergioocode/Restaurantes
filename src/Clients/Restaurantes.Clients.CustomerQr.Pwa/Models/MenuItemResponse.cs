@@ -1,4 +1,4 @@
-namespace Restaurantes.Clients.CustomerQr.Pwa.Models;
+﻿namespace Restaurantes.Clients.CustomerQr.Pwa.Models;
 
 public sealed record MenuItemResponse(
     Guid RestaurantId,

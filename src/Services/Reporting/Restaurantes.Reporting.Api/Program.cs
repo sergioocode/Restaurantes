@@ -1,4 +1,4 @@
-using Restaurantes.Messaging.RabbitMq;
+﻿using Restaurantes.Messaging.RabbitMq;
 using Restaurantes.Reporting.Api.DeadLetters;
 using Restaurantes.Reporting.Api.Realtime;
 using Restaurantes.Reporting.Application.Dashboard;

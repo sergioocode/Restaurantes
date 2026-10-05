@@ -1,4 +1,4 @@
-namespace Restaurantes.Catalog.Infrastructure.Persistence.Read;
+﻿namespace Restaurantes.Catalog.Infrastructure.Persistence.Read;
 
 public sealed class InboxMessage
 {

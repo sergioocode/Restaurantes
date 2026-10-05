@@ -1,4 +1,4 @@
-namespace Restaurantes.Orders.Application;
+﻿namespace Restaurantes.Orders.Application;
 
 public interface IOrderCashRegister
 {

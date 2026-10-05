@@ -1,4 +1,4 @@
-namespace Restaurantes.Orders.Application;
+﻿namespace Restaurantes.Orders.Application;
 
 public sealed class OrderCashRegisterClosedException(Guid restaurantId)
     : InvalidOperationException(

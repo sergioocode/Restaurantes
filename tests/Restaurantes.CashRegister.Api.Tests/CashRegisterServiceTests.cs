@@ -1,4 +1,4 @@
-using Restaurantes.CashRegister.Application;
+﻿using Restaurantes.CashRegister.Application;
 using Restaurantes.CashRegister.Domain;
 using Xunit;
 

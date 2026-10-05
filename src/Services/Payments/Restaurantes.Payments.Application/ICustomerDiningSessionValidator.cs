@@ -1,4 +1,4 @@
-namespace Restaurantes.Payments.Application;
+﻿namespace Restaurantes.Payments.Application;
 
 public interface ICustomerDiningSessionValidator
 {

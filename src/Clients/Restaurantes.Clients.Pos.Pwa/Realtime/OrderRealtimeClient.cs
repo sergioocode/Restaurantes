@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.SignalR.Client;
+﻿using Microsoft.AspNetCore.SignalR.Client;
 using Restaurantes.Clients.Pos.Pwa.Api;
 using Restaurantes.Clients.Pos.Pwa.Models;
 

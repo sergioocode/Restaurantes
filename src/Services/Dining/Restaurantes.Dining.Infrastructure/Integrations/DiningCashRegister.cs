@@ -1,4 +1,4 @@
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using Restaurantes.Dining.Application;
 
 namespace Restaurantes.Dining.Infrastructure.Integrations;

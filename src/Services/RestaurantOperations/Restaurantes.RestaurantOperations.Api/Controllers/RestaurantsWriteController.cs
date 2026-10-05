@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Restaurantes.RestaurantOperations.Application;
 using Restaurantes.RestaurantOperations.Contracts.Requests;

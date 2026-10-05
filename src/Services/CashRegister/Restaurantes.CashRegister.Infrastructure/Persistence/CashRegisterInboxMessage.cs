@@ -1,4 +1,4 @@
-namespace Restaurantes.CashRegister.Infrastructure.Persistence;
+﻿namespace Restaurantes.CashRegister.Infrastructure.Persistence;
 
 public sealed class CashRegisterInboxMessage
 {

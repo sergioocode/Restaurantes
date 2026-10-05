@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Restaurantes.Orders.Contracts.Events;
 using Restaurantes.Payments.Contracts.Events;

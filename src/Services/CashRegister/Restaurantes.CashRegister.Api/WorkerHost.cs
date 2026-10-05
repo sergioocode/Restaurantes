@@ -1,4 +1,4 @@
-using Restaurantes.CashRegister.Application;
+﻿using Restaurantes.CashRegister.Application;
 using Restaurantes.CashRegister.Infrastructure;
 using Restaurantes.CashRegister.Infrastructure.Workers;
 using Restaurantes.Messaging.RabbitMq;

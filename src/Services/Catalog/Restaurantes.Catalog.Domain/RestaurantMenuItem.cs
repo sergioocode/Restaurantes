@@ -1,4 +1,4 @@
-namespace Restaurantes.Catalog.Domain;
+﻿namespace Restaurantes.Catalog.Domain;
 
 public sealed class RestaurantMenuItem
 {

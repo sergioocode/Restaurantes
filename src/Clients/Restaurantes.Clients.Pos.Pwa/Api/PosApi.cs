@@ -1,4 +1,4 @@
-namespace Restaurantes.Clients.Pos.Pwa.Api;
+﻿namespace Restaurantes.Clients.Pos.Pwa.Api;
 
 public sealed partial class PosApi(HttpClient http)
 {

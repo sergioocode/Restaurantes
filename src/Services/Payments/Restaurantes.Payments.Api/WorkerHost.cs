@@ -1,4 +1,4 @@
-using Restaurantes.Messaging.RabbitMq;
+﻿using Restaurantes.Messaging.RabbitMq;
 using Restaurantes.Payments.Infrastructure;
 using Restaurantes.Payments.Infrastructure.Workers;
 

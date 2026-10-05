@@ -1,4 +1,4 @@
-using Restaurantes.CashRegister.Application;
+﻿using Restaurantes.CashRegister.Application;
 using Restaurantes.CashRegister.Infrastructure;
 using Restaurantes.Security;
 using Restaurantes.ServiceDefaults;
