@@ -214,9 +214,13 @@
                             </div>
                             <div class="bill-total"><span>Total de la sesión</span><strong>@bill.Total.ToString("0.00") €</strong></div>
                             <div class="bill-total outstanding"><span>Pendiente</span><strong>@bill.Outstanding.ToString("0.00") €</strong></div>
-                            <p class="muted">El cobro se realiza exclusivamente desde el TPV. Sólo puedes cancelar una apertura vacía creada por ti.</p>
+                            <p class="muted">El cobro se realiza exclusivamente desde el TPV. Si tú abriste la mesa, puedes liberarla aquí cuando todas las comandas estén canceladas y el saldo sea cero.</p>
                             <div class="bill-actions">
                                 <button class="ghost" @onclick="OpenBill" disabled="@busy">Actualizar</button>
+                                @if (CanReleaseCancelledSession)
+                                {
+                                    <button class="danger" @onclick="ReleaseCancelledSession" disabled="@busy">Liberar mesa</button>
+                                }
                             </div>
                         }
                     </section>
