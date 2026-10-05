@@ -41,7 +41,8 @@ La propiedad de esos datos permanece en:
 
 ## Proyectos
 
-El bounded context está dividido en cuatro proyectos:
+El servicio se organiza en proyectos por responsabilidad. La API es el punto de entrada ejecutable;
+los workers se implementan en Infrastructure y se activan según el rol de ejecución.
 
 ```text
 src/Services/Reporting/
@@ -53,13 +54,14 @@ src/Services/Reporting/
 
 | Proyecto | Responsabilidad |
 | --- | --- |
-| `Restaurantes.Reporting.Application` | Casos de uso de consulta, modelos del dashboard, abstracción del read store y coordinación del health agregado. |
-| `Restaurantes.Reporting.Contracts` | Eventos públicos emitidos por Reporting. |
-| `Restaurantes.Reporting.Infrastructure` | Persistencia, consultas, health y workers de consumo y publicación. |
-| `Restaurantes.Reporting.Api` | Expone dashboard y SignalR; ejecuta HTTP, workers o ambos según el rol. |
+| `Restaurantes.Reporting.Api` | Dashboard HTTP, SignalR y composición de roles. |
+| `Restaurantes.Reporting.Application` | Consultas, modelos y puertos del dashboard. |
+| `Restaurantes.Reporting.Contracts` | Eventos públicos de Reporting. |
+| `Restaurantes.Reporting.Infrastructure` | Persistencia de lectura, consultas, health y workers. |
 
-A diferencia de otros bounded contexts de la solución, Reporting **no necesita `Api.Write` ni Domain** porque no implementa un modelo transaccional propio. Sí dispone de una capa `Application`: la API depende de sus casos de uso y abstracciones, mientras Infrastructure proporciona las implementaciones de persistencia y de las sondas HTTP.
-
+La API atiende las operaciones HTTP de lectura y escritura en un único host. Según el perfil,
+ese ejecutable inicia HTTP, workers o ambos. Read y Write describen responsabilidades/rutas;
+no son proyectos ni APIs separados.
 ## Arquitectura interna
 
 ```mermaid
@@ -541,11 +543,13 @@ Parámetros actuales:
 
 | Parámetro | Descripción |
 | --- | --- |
-| `date` | Día comercial a consultar. Si se omite, utiliza el día local actual del servidor. |
+| `date` | Día comercial a consultar. Si se omite, utiliza la fecha actual en `Business:TimeZoneId`. |
 | `restaurantId` | Limita la consulta a un restaurante autorizado. |
 | `orderLimit` | Número máximo de pedidos operativos mostrados. Los valores efectivos actuales son `10`, `20` o `100`. |
 
-La fecha de negocio se calcula actualmente utilizando la zona horaria local del proceso que ejecuta Reporting.
+Reporting utiliza `Business:TimeZoneId` para calcular los límites horarios. Las ventas usan además la `BusinessDate` propagada desde la sesión de caja.
+
+Configura la misma zona en todos los procesos de la instalación mediante `Business__TimeZoneId`. El valor predeterminado es `Europe/Madrid`.
 
 ## Métricas devueltas
 
@@ -894,7 +898,7 @@ La base de datos de Reporting es:
 reporting_read
 ```
 
-Los proyectos `Api`, `Consumer` y `Publisher` utilizan la misma proyección porque representan tres procesos diferentes alrededor del mismo read model:
+El proyecto API hospeda las consultas del dashboard y puede iniciar los workers de proyección y Outbox según el rol elegido:
 
 ```text
 Consumer  -> construye la proyección
@@ -902,7 +906,7 @@ Api       -> consulta la proyección
 Publisher -> publica cambios pendientes de la proyección
 ```
 
-Los tres pueden desplegarse como procesos separados aunque compartan la misma base lógica de Reporting.
+Los workers están implementados en Infrastructure y usan la misma base lógica de Reporting. El perfil Workers ejecuta el mismo proyecto API en un proceso separado; All aloja API y workers juntos.
 
 ## Migraciones
 
@@ -926,7 +930,7 @@ URL configurada actualmente para la API:
 
 | Componente | URL |
 | --- | --- |
-| Reporting Read API | `http://localhost:5142` |
+| Reporting API | `http://localhost:5142` |
 
 Base local:
 
@@ -1056,7 +1060,7 @@ Una interrupción temporal de Reporting tampoco debería impedir que Orders o Pa
 
 La proyección se alimenta con eventos. Esto reduce el acoplamiento temporal y evita convertir el dashboard en una cadena de llamadas síncronas a múltiples APIs.
 
-### No existe `Reporting.Api.Write`
+### Reporting expone consultas de solo lectura
 
 Reporting no posee operaciones de negocio transaccionales que deban ser iniciadas por un usuario. Su estado se deriva de eventos.
 

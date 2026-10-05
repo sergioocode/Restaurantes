@@ -27,7 +27,8 @@ Sales **no captura pagos**, **no modifica pedidos** y **no calcula el estado ope
 
 ## Proyectos
 
-El bounded context está dividido en cinco proyectos:
+El servicio se organiza en proyectos por responsabilidad. La API es el punto de entrada ejecutable;
+los workers se implementan en Infrastructure y se activan según el rol de ejecución.
 
 ```text
 src/Services/Sales/
@@ -40,12 +41,14 @@ src/Services/Sales/
 
 | Proyecto | Responsabilidad |
 | --- | --- |
-| `Restaurantes.Sales.Domain` | Modelo `Sale` / `SaleOrder` y regla de completado de la venta. |
-| `Restaurantes.Sales.Application` | Orquestación de eventos de Payments y Orders y puertos de persistencia. |
-| `Restaurantes.Sales.Contracts` | Contratos públicos del servicio: `SaleCompleted`, `SaleResponse` y snapshots de líneas. |
-| `Restaurantes.Sales.Infrastructure` | Persistencia, stores y workers de consumo y publicación. |
-| `Restaurantes.Sales.Api` | Consultas de ventas; ejecuta HTTP, workers o ambos según el rol. |
+| `Restaurantes.Sales.Api` | Composición de los roles HTTP y workers. |
+| `Restaurantes.Sales.Application` | Casos de uso y puertos. |
+| `Restaurantes.Sales.Contracts` | Eventos públicos. |
+| `Restaurantes.Sales.Domain` | Modelo de venta y reglas. |
+| `Restaurantes.Sales.Infrastructure` | Persistencia, stores, proyecciones y workers. |
 
+La API expone las consultas de lectura de ventas. El mismo ejecutable puede iniciar esos
+endpoints, los workers o ambos según el perfil; Sales no ofrece controladores de escritura.
 ## Arquitectura interna
 
 ```mermaid
@@ -108,6 +111,7 @@ Una venta contiene:
 - total consolidado;
 - fecha de creación;
 - fecha de completado;
+- fecha de negocio recibida desde la sesión de caja;
 - pedidos incluidos en la transacción.
 
 Cada pedido asociado se representa mediante `SaleOrder` y conserva:
@@ -316,6 +320,7 @@ Source
 PaymentMethod
 Total
 CompletedAtUtc
+BusinessDate
 OrderIds[]
 Lines[]
 ```
@@ -547,6 +552,8 @@ La consulta de listado:
 - devuelve como máximo 100 registros;
 - consulta exclusivamente `sales_read`.
 
+El filtro `date` usa `BusinessDate` cuando está disponible. Para ventas históricas sin ese dato, calcula los límites del día con `Business:TimeZoneId` (por defecto, `Europe/Madrid`), no con la zona local del proceso. Configura el mismo valor en todos los procesos mediante `Business__TimeZoneId`.
+
 La API consulta exclusivamente `sales_read`.
 
 ## Gateways
@@ -590,13 +597,8 @@ Esto evita convertir Sales en una base de datos analítica y permite que consult
 
 ## Ausencia deliberada de API Write
 
-No existe actualmente:
-
-```text
-Restaurantes.Sales.Api.Write
-```
-
-Esto es intencional en el diseño actual.
+El proyecto `Restaurantes.Sales.Api` expone consultas de lectura; no existe un controlador
+HTTP para crear o modificar ventas. Las escrituras de Sales se originan en eventos.
 
 Sales no recibe comandos de usuario para crear ventas. Una venta se deriva de hechos ocurridos en otros bounded contexts:
 
@@ -663,7 +665,7 @@ URL configurada actualmente para la API:
 
 | Componente | URL |
 | --- | --- |
-| Sales Read API | `http://localhost:5162` |
+| Sales API | `http://localhost:5162` |
 
 Bases locales:
 
@@ -695,7 +697,7 @@ Estos endpoints permiten comprobar disponibilidad y liveness sin ejecutar consul
 
 ### Escritura completamente event-driven
 
-Sales no expone `Api.Write`. Las ventas se derivan de hechos confirmados por Payments y Orders, evitando crear ventas manualmente sin correspondencia con una operación real.
+Sales no ofrece comandos HTTP para crear ventas. Las ventas se derivan de hechos confirmados por Payments y Orders, evitando crear ventas manualmente sin correspondencia con una operación real.
 
 ### Read / Write separados
 

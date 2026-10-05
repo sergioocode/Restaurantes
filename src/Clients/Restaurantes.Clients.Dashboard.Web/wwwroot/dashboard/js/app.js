@@ -7,6 +7,7 @@ const $ = id => document.getElementById(id),
     gatewayOrigin = location.origin,
     sessionKey = 'restaurantes.dashboard.login';
 let timer, access, socket, realtimeGeneration = 0, deadLetterRefreshAt = 0;
+let restaurantNames = new Map();
 const today = new Date();
 $('date').value = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
 
@@ -56,7 +57,7 @@ async function load({ includeHealth = true } = {}) {
         $('orders').textContent = d.completedSales;
         $('average').textContent = money.format(d.averageTicket);
         fill($('products'), d.topProducts, x => `<td>${escapeHtml(x.name)}</td><td>${x.quantity}</td><td>${money.format(x.sales)}</td>`);
-        fill($('restaurants'), d.restaurantRanking, x => `<td>${short(x.restaurantId)}</td><td>${x.tickets}</td><td>${money.format(x.sales)}</td>`);
+        fill($('restaurants'), d.restaurantRanking, x => `<td>${escapeHtml(restaurantName(x.restaurantId))}</td><td>${x.tickets}</td><td>${money.format(x.sales)}</td>`);
         fill($('channels'), d.channels, x => `<td>${escapeHtml(x.source)}</td><td>${x.tickets}</td><td>${money.format(x.sales)}</td>`);
         fill($('paymentMethods'), d.paymentMethods, x => `<td>${escapeHtml(paymentMethodLabel(x.method))}</td><td>${x.tickets}</td><td>${money.format(x.sales)}</td>`);
         renderOperations(d.operationalOrders);
@@ -127,6 +128,10 @@ function short(id) {
     return id ? id.slice(0, 8) : '-'
 }
 
+function restaurantName(id) {
+    return restaurantNames.get(id?.toLowerCase()) || 'Local ' + short(id)
+}
+
 function escapeHtml(v) {
     return String(v ?? '').replace(/[&<>"']/g, c => ({
         '&': '&amp;',
@@ -158,7 +163,7 @@ function renderOperations(items) {
         all[item.restaurantId].push(item);
     return all
 }, { });
-$('operations').innerHTML = Object.entries(groups).map(([local, orders]) => `<section><h3 class="local">Local ${short(local)}</h3><div class="orders">${orders.map(renderOrder).join('')}</div></section>`).join('') || '<p>Sin pedidos para este día.</p>'
+$('operations').innerHTML = Object.entries(groups).map(([local, orders]) => `<section><h3 class="local">${escapeHtml(restaurantName(local))}</h3><div class="orders">${orders.map(renderOrder).join('')}</div></section>`).join('') || '<p>Sin pedidos para este día.</p>'
   }
 
 function renderOrder(o) {
@@ -196,7 +201,8 @@ async function openDashboard(session) {
     const visible = knownRestaurants.filter(x => hasAllRestaurants || allowed.has(x.id.toLowerCase()));
     const missing = (access.restaurants || []).filter(x => allowed.has(x.restaurantId.toLowerCase()) && !visible.some(r => r.id.toLowerCase() === x.restaurantId.toLowerCase())).map(x => ({ id: x.restaurantId, name: 'Local ' + short(x.restaurantId) }));
     const restaurants = [...visible, ...missing].sort((a, b) => a.name.localeCompare(b.name));
-    $('restaurant').innerHTML = `<option value="">${hasAllRestaurants ? 'Todos los Locales' : 'Local asignado'}</option>` + restaurants.map(x => `<option value="${escapeHtml(x.id)}">${escapeHtml(x.name)} · ${escapeHtml(x.id)}</option>`).join('');
+    restaurantNames = new Map(restaurants.map(x => [x.id.toLowerCase(), x.name]));
+    $('restaurant').innerHTML = `<option value="">${hasAllRestaurants ? 'Todos los Locales' : 'Local asignado'}</option>` + restaurants.map(x => `<option value="${escapeHtml(x.id)}">${escapeHtml(x.name)}</option>`).join('');
     $('currentUser').textContent = access.user.displayName;
     schedule();
     await load();

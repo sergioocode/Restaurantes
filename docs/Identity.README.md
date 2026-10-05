@@ -41,7 +41,7 @@ La migración histórica `ReplacePasswordIdentityWithExternalAccounts` descartó
 
 ## Configuración
 
-El proyecto `Restaurantes.Identity.Api.Write` tiene un `UserSecretsId`. En desarrollo, los secretos exclusivos de Identity se configuran mediante .NET User Secrets; en producción, mediante el almacén de secretos o las variables del entorno de despliegue. Los valores no secretos pueden definirse en la configuración propia del ambiente.
+El proyecto `Restaurantes.Identity.Api` tiene un `UserSecretsId`. En desarrollo, los secretos exclusivos de Identity se configuran mediante .NET User Secrets; en producción, mediante el almacén de secretos o las variables del entorno de despliegue. Los valores no secretos pueden definirse en la configuración propia del ambiente.
 
 - IdentityBootstrap:AdminEmail: correo corporativo del primer Admin. Solo se usa cuando la tabla de cuentas está vacía; la cuenta bootstrap se crea con alcance `Todos los Locales`.
 - ExternalAuth:Provider: Microsoft o Google. Es el proveedor efectivo del despliegue y debe coincidir con las credenciales configuradas.
@@ -76,7 +76,7 @@ El inicio de sesión acepta solo estos destinos internos: /backoffice/, /pos/, /
 - Restaurantes.Identity.Domain: cuentas y configuración.
 - Restaurantes.Identity.Application: reglas de autorización y contratos.
 - Restaurantes.Identity.Infrastructure: EF Core, PostgreSQL, códigos de intercambio y JWT.
-- Restaurantes.Identity.Api.Write: endpoints y OIDC.
+- Restaurantes.Identity.Api: endpoints y OIDC.
 - Restaurantes.Security: permisos, claims y validación del JWT en las API.
 
 La API aplica las migraciones pendientes al arrancar. `ResetAuthorizedAccounts` elimina las cuentas autorizadas para reiniciar su configuración; esta operación no es reversible porque la migración no conserva sus datos.

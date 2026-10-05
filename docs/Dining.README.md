@@ -2,7 +2,7 @@
 
 El servicio **Dining** administra la ocupación y configuración operativa de sala dentro de la plataforma Restaurantes: zonas, ubicaciones, sesiones de mesa, comensales, acceso mediante QR y cierre de cuentas asociadas a una sesión.
 
-Dining mantiene una única base operacional PostgreSQL, pero su implementación ya está separada por responsabilidades en **Domain, Application, Infrastructure, Api.Write y Consumer**. La API expone las operaciones HTTP y SignalR, mientras que el Consumer procesa de forma independiente los eventos procedentes de **Orders** y **Payments**.
+Dining mantiene una única base operacional PostgreSQL. La API expone HTTP y SignalR; `Infrastructure` contiene el worker que procesa eventos de **Orders** y **Payments**.
 
 ## Responsabilidad del servicio
 
@@ -29,27 +29,27 @@ Dining **no crea pedidos**, **no captura pagos directamente**, **no administra l
 
 ## Proyectos
 
-El bounded context está dividido en cinco proyectos:
+El servicio se organiza en proyectos por responsabilidad. La API es el punto de entrada ejecutable;
+los workers se implementan en Infrastructure y se activan según el rol de ejecución.
 
 ```text
 src/Services/Dining/
-├── Restaurantes.Dining.Api.Write
+├── Restaurantes.Dining.Api
 ├── Restaurantes.Dining.Application
-├── Restaurantes.Dining.Consumer
 ├── Restaurantes.Dining.Domain
 └── Restaurantes.Dining.Infrastructure
 ```
 
 | Proyecto | Responsabilidad |
 | --- | --- |
-| `Restaurantes.Dining.Domain` | Entidades y reglas del dominio de sala: zonas, ubicaciones, sesiones, políticas y proyecciones operativas de pedidos/pagos. |
-| `Restaurantes.Dining.Application` | Casos de uso, contratos HTTP internos del bounded context, puertos de infraestructura, validación QR/red y procesamiento de eventos de integración. |
-| `Restaurantes.Dining.Infrastructure` | EF Core, PostgreSQL, `DiningStore`, migraciones e integraciones HTTP con Payments y CashRegister. |
-| `Restaurantes.Dining.Api.Write` | API HTTP, autenticación/autorización, contexto de petición, SignalR y composición de dependencias. |
-| `Restaurantes.Dining.Consumer` | Worker independiente que consume eventos de Orders y Payments desde RabbitMQ y mantiene las proyecciones locales mediante Inbox. |
+| `Restaurantes.Dining.Api` | Endpoints HTTP, SignalR y composición de roles. |
+| `Restaurantes.Dining.Application` | Casos de uso y puertos internos. |
+| `Restaurantes.Dining.Domain` | Entidades y reglas de negocio. |
+| `Restaurantes.Dining.Infrastructure` | Persistencia, stores y workers aplicables. |
 
-Dining no dispone actualmente de `Api.Read`, `Publisher` ni un proyecto `Contracts` propio. Los requests y resultados utilizados por la API se encuentran en Application, mientras que los contratos de eventos consumidos proceden de `Orders.Contracts` y `Payments.Contracts`.
-
+La API atiende las operaciones HTTP de lectura y escritura en un único host. Según el perfil,
+ese ejecutable inicia HTTP, workers o ambos. Read y Write describen responsabilidades/rutas;
+no son proyectos ni APIs separados.
 ## Arquitectura interna
 
 ```mermaid
@@ -62,11 +62,11 @@ flowchart LR
     Rabbit[("RabbitMQ")]
 
     subgraph Dining["Dining"]
-        Api["Dining.Api.Write"]
+        Api["Dining.Api · HTTP y SignalR"]
         App["Application"]
         Domain["Domain"]
         Infra["Infrastructure"]
-        Consumer["Dining.Consumer"]
+        Consumer["DiningIntegrationWorker"]
         Db[("dining_write")]
         Hub["SignalR /hubs/dining"]
     end
@@ -87,7 +87,7 @@ flowchart LR
     Consumer --> Infra
 ```
 
-La API y el Consumer son procesos ejecutables independientes, pero ambos trabajan sobre la misma base lógica `dining_write`. Dining no dispone actualmente de una API Read ni de una base `dining_read`.
+La API y el worker usan `dining_write`. El perfil puede ejecutar HTTP, workers o ambos; no hay un proyecto ejecutable Consumer independiente. Dining no dispone de una base `dining_read`.
 
 ## Modelo de dominio
 
@@ -245,7 +245,7 @@ El origen admitido por el contrato es:
 
 ```text
 CustomerQr
-WaiterMobile
+Comandero
 Pos
 ```
 
@@ -718,7 +718,7 @@ dining.dead-letter
 dining.dead-letter.messages
 ```
 
-`DiningIntegrationWorker` utiliza ACK manual y mantiene una conexión RabbitMQ propia dentro del proceso `Restaurantes.Dining.Consumer`.
+`DiningIntegrationWorker` utiliza ACK manual y mantiene una conexión RabbitMQ propia dentro del proceso `Restaurantes.Dining.Infrastructure`.
 
 ## SignalR
 
@@ -955,13 +955,13 @@ RabbitMq:VirtualHost
 
 `DiningDbContext` dispone de migraciones EF Core propias para `dining_write`.
 
-`Restaurantes.Dining.Api.Write` ejecuta actualmente:
+`Restaurantes.Dining.Api` ejecuta actualmente:
 
 ```text
 Database.MigrateAsync()
 ```
 
-al iniciar la API. El proceso `Restaurantes.Dining.Consumer` utiliza la misma persistencia, pero no ejecuta las migraciones por su cuenta.
+al iniciar la API. El proceso `Restaurantes.Dining.Infrastructure` utiliza la misma persistencia, pero no ejecuta las migraciones por su cuenta.
 
 Las migraciones existentes cubren, entre otros cambios ya implementados:
 
@@ -997,11 +997,11 @@ dining_write
 Procesos y dependencias locales principales:
 
 ```text
-Dining.Api.Write     -> http://localhost:5102
-Dining.Consumer      -> RabbitMQ + dining_write
+Dining.Api            -> HTTP + dining_write
+Dining.Api (Workers)  -> RabbitMQ + dining_write
 PostgreSQL
 RabbitMQ
-Payments.Api.Write   -> http://localhost:5151
+Payments.Api   -> http://localhost:5151
 CashRegister         -> http://localhost:5105
 ```
 
@@ -1015,14 +1015,14 @@ dotnet tool restore
 
 ## Health checks
 
-`Restaurantes.Dining.Api.Write` utiliza `ServiceDefaults` y expone:
+`Restaurantes.Dining.Api` utiliza `ServiceDefaults` y expone:
 
 ```text
 /health
 /alive
 ```
 
-`/health` representa el endpoint general de salud de la API y `/alive` la comprobación básica de liveness configurada por la solución. El Consumer es un worker independiente y no expone endpoints HTTP propios en la implementación actual.
+`/health` representa el endpoint general de salud de la API y `/alive` la comprobación básica de liveness configurada por la solución. El worker no expone endpoints HTTP propios.
 
 ## Decisiones de diseño
 
@@ -1052,7 +1052,7 @@ Zonas y ubicaciones se eliminan mediante `DeletedAtUtc`, preservando las referen
 
 ### Sin separación Read / Write actual
 
-Dining utiliza una única base operacional porque sus consultas actuales forman parte directa de la operación de sala. No existe `Dining.Api.Read` ni `dining_read` en la implementación actual. La separación de procesos entre Api.Write y Consumer responde a responsabilidades de ejecución, no a una separación CQRS de persistencia.
+Dining utiliza una única base operacional. La API contiene las operaciones HTTP de lectura y escritura; el worker procesa eventos desde `Infrastructure`. No existe una base `dining_read`.
 
 ### Sin Outbox propio
 
@@ -1060,29 +1060,17 @@ Dining consume eventos de integración pero no publica actualmente contratos de 
 
 ## Despliegue y escalado
 
-Dining dispone actualmente de dos procesos ejecutables independientes:
+Dining dispone de un proyecto ejecutable API que permite estos roles:
 
 ```text
-Restaurantes.Dining.Api.Write
-Restaurantes.Dining.Consumer
+Restaurantes.Dining.Api
+Restaurantes.Dining.Infrastructure
 ```
 
-`Api.Write` contiene:
-
-- API HTTP;
-- SignalR;
-- autenticación y autorización;
-- acceso EF Core a PostgreSQL;
-- integraciones HTTP con Payments y CashRegister.
-
-`Consumer` contiene:
-
-- conexión RabbitMQ;
-- consumo de eventos de Orders y Payments;
-- actualización de proyecciones locales;
-- Inbox e idempotencia.
-
-Esta separación permite desplegar y reiniciar el consumidor sin reiniciar la API, aunque ambos continúan compartiendo el mismo modelo de persistencia.
+El rol Http contiene endpoints, SignalR, autenticación, autorización e integraciones HTTP.
+El rol Workers contiene el consumo RabbitMQ, la actualización de proyecciones y la Inbox.
+Ambos roles comparten el mismo ejecutable y la persistencia `dining_write`; pueden iniciarse
+en procesos distintos o juntos con el rol All.
 
 ### Bases de datos
 
