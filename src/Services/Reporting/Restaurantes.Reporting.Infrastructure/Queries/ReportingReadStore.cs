@@ -42,7 +42,7 @@ public sealed class ReportingReadStore(ReportingReadDbContext db) : IReportingRe
         ).ToHashSet();
         List<OrderReportingFact> orderFacts = await orderQuery
             .Where(x => x.CreatedAtUtc >= startUtc && x.CreatedAtUtc < endUtc)
-            .OrderByDescending(x => x.UpdatedAtUtc)
+            .OrderByDescending(x => x.CreatedAtUtc)
             .Take(orderLimit)
             .ToListAsync(ct);
         return new(

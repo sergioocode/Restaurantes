@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Restaurantes.Orders.Contracts.Events;
 using Restaurantes.Payments.Contracts.Events;
+using Restaurantes.Reporting.Application.Dashboard;
 using Restaurantes.Reporting.Infrastructure.Persistence.Read;
 using Restaurantes.Reporting.Infrastructure.Queries;
 using Restaurantes.Reporting.Infrastructure.Workers;
@@ -44,7 +45,7 @@ public sealed class ReportingProjectionHandlerTests
         );
 
         ReportingReadStore store = new(db);
-        var fourth = await store.GetDailySnapshotAsync(
+        DailyReportingSnapshot fourth = await store.GetDailySnapshotAsync(
             new DateOnly(2026, 10, 4),
             new DateTime(2026, 10, 3, 22, 0, 0, DateTimeKind.Utc),
             new DateTime(2026, 10, 4, 22, 0, 0, DateTimeKind.Utc),
@@ -52,7 +53,7 @@ public sealed class ReportingProjectionHandlerTests
             10,
             TestContext.Current.CancellationToken
         );
-        var fifth = await store.GetDailySnapshotAsync(
+        DailyReportingSnapshot fifth = await store.GetDailySnapshotAsync(
             new DateOnly(2026, 10, 5),
             new DateTime(2026, 10, 4, 22, 0, 0, DateTimeKind.Utc),
             new DateTime(2026, 10, 5, 22, 0, 0, DateTimeKind.Utc),
@@ -64,6 +65,50 @@ public sealed class ReportingProjectionHandlerTests
         Assert.Single(fourth.Sales);
         Assert.Equal(2.20m, fourth.Sales[0].Total);
         Assert.Empty(fifth.Sales);
+    }
+
+    [Fact]
+    public async Task Daily_snapshot_limits_operational_orders_to_the_selected_day()
+    {
+        DbContextOptions<ReportingReadDbContext> options =
+            new DbContextOptionsBuilder<ReportingReadDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .Options;
+        await using ReportingReadDbContext db = new(options);
+        Guid restaurantId = Guid.NewGuid();
+        Guid selectedDayOrderId = Guid.NewGuid();
+        DateTime startUtc = new(2026, 10, 4, 22, 0, 0, DateTimeKind.Utc);
+        DateTime endUtc = new(2026, 10, 5, 22, 0, 0, DateTimeKind.Utc);
+        db.Orders.AddRange(
+            new OrderReportingFact
+            {
+                OrderId = Guid.NewGuid(),
+                RestaurantId = restaurantId,
+                CreatedAtUtc = startUtc.AddDays(-1),
+                UpdatedAtUtc = endUtc.AddMinutes(1),
+            },
+            new OrderReportingFact
+            {
+                OrderId = selectedDayOrderId,
+                RestaurantId = restaurantId,
+                CreatedAtUtc = startUtc.AddHours(1),
+                UpdatedAtUtc = startUtc.AddHours(2),
+            }
+        );
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        ReportingReadStore store = new(db);
+        DailyReportingSnapshot snapshot = await store.GetDailySnapshotAsync(
+            new DateOnly(2026, 10, 5),
+            startUtc,
+            endUtc,
+            [restaurantId],
+            10,
+            TestContext.Current.CancellationToken
+        );
+
+        OperationalOrder order = Assert.Single(snapshot.OperationalOrders);
+        Assert.Equal(selectedDayOrderId, order.OrderId);
     }
 
     [Fact]
