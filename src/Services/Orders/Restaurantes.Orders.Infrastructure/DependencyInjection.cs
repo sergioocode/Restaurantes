@@ -6,6 +6,7 @@ using Restaurantes.Orders.Infrastructure.Integrations;
 using Restaurantes.Orders.Infrastructure.Persistence.Read;
 using Restaurantes.Orders.Infrastructure.Persistence.Write;
 using Restaurantes.Orders.Infrastructure.Stores;
+using Restaurantes.ServiceDefaults;
 
 namespace Restaurantes.Orders.Infrastructure;
 
@@ -16,6 +17,11 @@ public static class DependencyInjection
         IConfiguration configuration
     )
     {
+        services.AddBusinessTimeZone(configuration);
+        Uri cashRegisterBaseAddress = new(
+            configuration["CashRegister:BaseAddress"]
+                ?? throw new InvalidOperationException("CashRegister:BaseAddress is required.")
+        );
         services.AddDbContext<OrderWriteDbContext>(options =>
             options.UseNpgsql(
                 configuration.GetConnectionString("OrdersWrite"),
@@ -23,16 +29,13 @@ public static class DependencyInjection
             )
         );
         services.AddScoped<IOrderWriteStore, OrderWriteStore>();
-        services.AddScoped<
-            IOrderSettlementQuery,
-            Restaurantes.Orders.Infrastructure.Queries.OrderSettlementQuery
-        >();
+        services.AddScoped<IKitchenHistoryQuery, Queries.KitchenHistoryQuery>();
+        services.AddScoped<IManagementOrderQuery, Queries.ManagementOrderQuery>();
+        services.AddScoped<IOrderSettlementQuery, Queries.OrderSettlementQuery>();
         services.AddScoped<IOrderCatalogStore, OrderCatalogStore>();
         services.AddScoped<IOrderPaymentStore, OrderPaymentStore>();
         services.AddHttpClient<IOrderCashRegister, OrderCashRegister>(client =>
-            client.BaseAddress = new Uri(
-                configuration["CashRegister:BaseAddress"] ?? "http://localhost:5105"
-            )
+            client.BaseAddress = cashRegisterBaseAddress
         );
         return services;
     }

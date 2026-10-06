@@ -44,11 +44,16 @@
             </div>
             <div class="toolbar">
                 <button id="refresh" type="button" disabled>Actualizar</button>
+                <button id="historyButton" type="button" class="secondary hidden">Historial</button>
                 <button id="logout" class="secondary" type="button">Salir</button>
             </div>
         </section>
 
         <p id="event"></p>
+        <section id="historyPanel" class="history-panel hidden">
+            <div class="history-heading"><h2>Historial del día operativo</h2><button id="historyClose" class="secondary" type="button">Volver al monitor</button></div>
+            <div id="historyList"></div>
+        </section>
         <section id="orders">
             <p class="empty">Inicia sesión para cargar el monitor.</p>
         </section>

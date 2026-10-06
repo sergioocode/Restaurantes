@@ -31,6 +31,12 @@ public sealed class OrderWriteDbContext(DbContextOptions<OrderWriteDbContext> op
         order.HasIndex(item => new
         {
             item.RestaurantId,
+            item.BusinessDate,
+            item.CashRegisterSessionId,
+        });
+        order.HasIndex(item => new
+        {
+            item.RestaurantId,
             item.Status,
             item.CreatedAtUtc,
         });
@@ -100,6 +106,7 @@ public sealed class OrderWriteDbContext(DbContextOptions<OrderWriteDbContext> op
         payment.HasKey(item => item.OrderId);
         payment.Property(item => item.Status).HasMaxLength(20).IsRequired();
         payment.Property(item => item.Amount).HasPrecision(12, 2);
+        payment.Property(item => item.Method).HasMaxLength(30);
 
         EntityTypeBuilder<OutboxMessage> outbox = modelBuilder.Entity<OutboxMessage>();
         outbox.ToTable("outbox_messages");

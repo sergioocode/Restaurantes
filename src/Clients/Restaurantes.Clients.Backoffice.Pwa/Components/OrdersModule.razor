@@ -1,0 +1,40 @@
+﻿@using Restaurantes.Clients.Backoffice.Pwa.Models
+
+<div class="order-filters">
+    <label>Local
+        <select @bind="Host.historyRestaurantId">
+            <option value="@Guid.Empty">Todos los locales autorizados</option>
+            @foreach (RestaurantResponse restaurant in Host.OrderRestaurants)
+            {
+                <option value="@restaurant.Id">@restaurant.Name</option>
+            }
+        </select>
+    </label>
+    <label>Fecha
+        <input type="date" @bind="Host.historyDate" />
+    </label>
+    <button class="secondary" @onclick="Host.RefreshOrders" disabled="@Host.busy">Consultar pedidos</button>
+</div>
+<div class="order-list">
+    @foreach (ManagementOrderResponse order in Host.historyOrders)
+    {
+        <article class="order-row">
+            <div>
+                <strong>@order.Id.ToString()[..8] · @Host.RestaurantName(order.RestaurantId)</strong>
+                <small>@order.CreatedAtLocal.ToString("dd/MM/yyyy HH:mm") · @(string.IsNullOrEmpty(order.TableLabel) ? order.CustomerName : order.TableLabel)</small>
+            </div>
+            <span>@order.Source · @order.Status</span>
+            <strong>@order.Total.ToString("0.00") €</strong>
+            <button class="secondary" @onclick="() => Host.ShowOrderDetails(order)">Ver ticket</button>
+        </article>
+    }
+    @if (Host.historyOrders.Count == 0 && !Host.busy)
+    {
+        <p class="muted">No hay pedidos para esta fecha y los locales seleccionados.</p>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public Restaurantes.Clients.Backoffice.Pwa.Pages.Home Host { get; set; } = default!;
+}

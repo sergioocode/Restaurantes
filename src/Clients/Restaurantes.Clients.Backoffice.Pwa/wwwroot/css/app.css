@@ -47,3 +47,28 @@ input, select { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px s
 .module-toolbar { display: flex; justify-content: flex-end; margin: 16px 0; }
 
 @media (max-width: 700px) { .restaurant-context { justify-content: stretch; } .restaurant-context label { width: 100%; } }
+
+.order-filters { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; margin: 20px 0; }
+.order-filters label { display: grid; gap: 6px; min-width: 190px; }
+.order-list { display: grid; gap: 10px; }
+.order-row { display: grid; grid-template-columns: minmax(180px, 2fr) 1fr auto auto; gap: 12px; align-items: center; padding: 14px; border: 1px solid #d7dcd8; border-radius: 14px; background: #fff; }
+.order-row > div { display: grid; gap: 5px; }
+.order-row small { color: #748078; }
+.order-details-overlay { position: fixed; inset: 0; z-index: 50; overflow: auto; display: grid; place-items: start center; padding: 30px 12px; background: #0008; }
+.order-details { width: min(420px, 100%); padding: 24px; background: white; color: #17231a; }
+.order-details-actions { display: flex; gap: 10px; justify-content: end; }
+.order-ticket-header, .order-ticket-line { display: grid; gap: 7px; }
+.order-ticket-header { text-align: center; }
+.order-ticket-header h2 { margin: 8px 0; }
+.order-ticket-line, .order-ticket-total { display: flex; justify-content: space-between; gap: 12px; margin: 10px 0; }
+.order-ticket-line > span { display: grid; }
+.order-ticket-copy { margin: 22px 0 0; text-align: center; font-size: 12px; }
+@media (max-width: 700px) { .order-row { grid-template-columns: 1fr; } }
+@media print {
+  @page { margin: 6mm; }
+  body * { visibility: hidden !important; }
+  .order-details-overlay, .order-details-overlay * { visibility: visible !important; }
+  .order-details-overlay { position: absolute; inset: 0; display: block; overflow: visible; padding: 0; background: white; }
+  .order-details { width: 72mm; max-width: 100%; margin: 0 auto; padding: 0; box-shadow: none; }
+  .order-details-actions { display: none !important; }
+}

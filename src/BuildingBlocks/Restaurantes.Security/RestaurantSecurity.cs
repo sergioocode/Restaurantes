@@ -33,6 +33,7 @@ public static class RestaurantPermissions
     public const string TablesManage = "tables.manage";
     public const string TablesRelease = "tables.release";
     public const string OrdersCreate = "orders.create";
+    public const string OrdersRead = "orders.read";
     public const string OrdersManage = "orders.manage";
     public const string OrdersRecover = "orders.recover";
     public const string PaymentsCapture = "payments.capture";
@@ -60,6 +61,7 @@ public static class RestaurantPermissions
                 TablesManage,
                 TablesRelease,
                 OrdersCreate,
+                OrdersRead,
                 OrdersManage,
                 OrdersRecover,
                 PaymentsCapture,
@@ -73,8 +75,22 @@ public static class RestaurantPermissions
                 MarketingReportsRead,
                 KitchenReportsRead,
             ],
-            "Gerente" => [BackofficeAccess, DashboardRead, FinancialReportsRead, PaymentsRefund],
-            "Contabilidad" => [DashboardRead, FinancialReportsRead, PaymentsRefund],
+            "Gerente" =>
+            [
+                BackofficeAccess,
+                OrdersRead,
+                DashboardRead,
+                FinancialReportsRead,
+                PaymentsRefund,
+            ],
+            "Contabilidad" =>
+            [
+                BackofficeAccess,
+                OrdersRead,
+                DashboardRead,
+                FinancialReportsRead,
+                PaymentsRefund,
+            ],
             "Marketing" => [DashboardRead, FinancialReportsRead, MarketingReportsRead],
             "Manager" =>
             [
@@ -84,6 +100,7 @@ public static class RestaurantPermissions
                 TablesManage,
                 TablesRelease,
                 OrdersCreate,
+                OrdersRead,
                 OrdersManage,
                 OrdersRecover,
                 PaymentsCapture,

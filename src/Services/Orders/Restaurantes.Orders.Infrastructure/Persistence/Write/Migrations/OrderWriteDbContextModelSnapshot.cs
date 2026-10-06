@@ -24,9 +24,14 @@ namespace Restaurantes.Orders.Infrastructure.Persistence.Write.Migrations
 
             modelBuilder.Entity("Restaurantes.Orders.Domain.Order", b =>
                 {
-                    b.Property<int?>("GuestCount").HasColumnType("integer");
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("BusinessDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("CashRegisterSessionId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAtUtc")
@@ -42,6 +47,9 @@ namespace Restaurantes.Orders.Infrastructure.Persistence.Write.Migrations
 
                     b.Property<Guid?>("DiningSessionId")
                         .HasColumnType("uuid");
+
+                    b.Property<int?>("GuestCount")
+                        .HasColumnType("integer");
 
                     b.Property<int>("PaymentTiming")
                         .HasColumnType("integer");
@@ -80,6 +88,8 @@ namespace Restaurantes.Orders.Infrastructure.Persistence.Write.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("RestaurantId", "BusinessDate", "CashRegisterSessionId");
 
                     b.HasIndex("RestaurantId", "Status", "CreatedAtUtc");
 
@@ -296,6 +306,7 @@ namespace Restaurantes.Orders.Infrastructure.Persistence.Write.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(40)
@@ -344,6 +355,13 @@ namespace Restaurantes.Orders.Infrastructure.Persistence.Write.Migrations
                     b.Property<decimal>("Amount")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
+
+                    b.Property<DateTime?>("CapturedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Method")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
 
                     b.Property<Guid>("PaymentId")
                         .HasColumnType("uuid");

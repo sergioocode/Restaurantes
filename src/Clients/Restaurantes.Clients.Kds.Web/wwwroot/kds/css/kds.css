@@ -63,3 +63,10 @@ small { color: #9ca3af; }
 #authLoading:not(.hidden) { position: fixed; top: 50%; left: 50%; width: min(380px, calc(100% - 2rem)); margin: 0; justify-content: center; transform: translate(-50%, -50%); }
 #loginPanel:not(.hidden) { position: fixed; top: 50%; left: 50%; width: min(380px, calc(100% - 2rem)); margin: 0; transform: translate(-50%, -50%); }
 #authLoading:not(.hidden) ~ #orders, #loginPanel:not(.hidden) ~ #orders { display: none; }
+
+.history-panel { margin-top: 18px; }
+.history-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+#historyList { display: grid; gap: 12px; margin-top: 12px; }
+.history-order { display: grid; gap: 7px; padding: 16px; border: 1px solid #334155; border-radius: 14px; background: #1e293b; }
+.history-order small { color: #94a3b8; }
+.history-order p { margin: 0; }

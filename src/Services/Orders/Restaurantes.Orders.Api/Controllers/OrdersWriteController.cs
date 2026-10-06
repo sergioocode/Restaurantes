@@ -18,7 +18,8 @@ public sealed class OrdersWriteController(
     IOrderWriteStore store,
     IDiningSessionStore dining,
     IOrderCashRegister cashRegister,
-    OrderWriteDbContext db
+    OrderWriteDbContext db,
+    IConfiguration configuration
 ) : ControllerBase
 {
     [HttpPost]
@@ -43,15 +44,27 @@ public sealed class OrdersWriteController(
                 return Forbid();
             }
         }
+        else
+        {
+            ObjectResult? denied = QrNetworkAccess.DeniedResult(HttpContext, configuration);
+            if (denied is not null)
+            {
+                return denied;
+            }
+        }
         try
         {
             await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(
                 cancellationToken
             );
-            await cashRegister.EnsureOpenAsync(request.RestaurantId, cancellationToken);
+            OrderCashRegisterSession cashSession = await cashRegister.EnsureOpenAsync(
+                request.RestaurantId,
+                cancellationToken
+            );
             OrderResponse order = await commandService.CreateAsync(
                 request,
                 customerAccessToken ?? string.Empty,
+                cashSession,
                 cancellationToken
             );
             await transaction.CommitAsync(cancellationToken);
@@ -124,6 +137,12 @@ public sealed class OrdersWriteController(
         }
         else
         {
+            ObjectResult? denied = QrNetworkAccess.DeniedResult(HttpContext, configuration);
+            if (denied is not null)
+            {
+                return denied;
+            }
+
             await dining.EnsureOpenAsync(
                 existing.DiningSessionId!.Value,
                 existing.RestaurantId,
@@ -241,9 +260,8 @@ public sealed class OrdersWriteController(
             User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.Identity?.Name ?? "unknown";
         return ExecuteAuthorizedTransitionAsync(
             id,
-            RestaurantPermissions.OrdersRecover,
-            (orderId, token) =>
-                commandService.CancelTakeawayAsync(orderId, request.Reason, actor, token),
+            RestaurantPermissions.OrdersManage,
+            (orderId, token) => commandService.CancelAsync(orderId, request.Reason, actor, token),
             "Order cannot be cancelled",
             cancellationToken,
             requiresOpenCashRegister: true

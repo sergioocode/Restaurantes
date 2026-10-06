@@ -115,6 +115,7 @@ namespace Restaurantes.Catalog.Infrastructure.Persistence.Write.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(40)

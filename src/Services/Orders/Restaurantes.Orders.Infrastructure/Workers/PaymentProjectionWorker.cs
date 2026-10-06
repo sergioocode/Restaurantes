@@ -70,6 +70,8 @@ public sealed class PaymentProjectionWorker(
             decimal amount;
             string status;
             DateTime occurred;
+            string? method;
+            DateTime? capturedAtUtc;
             if (ea.BasicProperties.Type == typeof(PaymentCaptured).FullName)
             {
                 PaymentCaptured e =
@@ -80,6 +82,8 @@ public sealed class PaymentProjectionWorker(
                 amount = e.Amount;
                 status = "Paid";
                 occurred = e.CapturedAtUtc;
+                method = e.Method;
+                capturedAtUtc = e.CapturedAtUtc;
             }
             else if (ea.BasicProperties.Type == typeof(PaymentRefunded).FullName)
             {
@@ -91,6 +95,8 @@ public sealed class PaymentProjectionWorker(
                 amount = e.Amount;
                 status = "Refunded";
                 occurred = e.RefundedAtUtc;
+                method = e.Method;
+                capturedAtUtc = null;
             }
             else
             {
@@ -108,6 +114,8 @@ public sealed class PaymentProjectionWorker(
                         OrderId = orderId,
                         PaymentId = paymentId,
                         Amount = amount,
+                        Method = method,
+                        CapturedAtUtc = capturedAtUtc,
                         Status = status,
                         UpdatedAtUtc = occurred,
                     }
@@ -117,6 +125,11 @@ public sealed class PaymentProjectionWorker(
             {
                 x.PaymentId = paymentId;
                 x.Amount = amount;
+                x.Method = method;
+                if (capturedAtUtc is not null)
+                {
+                    x.CapturedAtUtc = capturedAtUtc;
+                }
                 x.Status = status;
                 x.UpdatedAtUtc = occurred;
             }

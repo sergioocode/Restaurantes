@@ -32,6 +32,13 @@ export class KdsApiClient {
     return Array.isArray(payload) ? payload : [payload];
   }
 
+  async getHistory(restaurantId, stationCode) {
+    const query = new URLSearchParams({ restaurantId, stationCode });
+    const response = await this.fetch('/api/orders/kds-history?' + query);
+    if (!response.ok) throw new Error('No se pudo cargar el historial: HTTP ' + response.status);
+    return response.json();
+  }
+
   async getStations(restaurantId) {
     const response = await this.fetch('/api/catalog/restaurants/' + restaurantId + '/stations');
     if (!response.ok) throw new Error('No se pudieron cargar las estaciones KDS: HTTP ' + response.status);

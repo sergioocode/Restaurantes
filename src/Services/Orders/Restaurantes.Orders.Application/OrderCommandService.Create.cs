@@ -10,6 +10,7 @@ public sealed partial class OrderCommandService
     public async Task<OrderResponse> CreateAsync(
         CreateOrderRequest request,
         string customerAccessToken,
+        OrderCashRegisterSession cashSession,
         CancellationToken ct
     )
     {
@@ -28,9 +29,10 @@ public sealed partial class OrderCommandService
             if (request.TableId is null || request.DiningSessionId is null)
             {
                 throw new ArgumentException(
-                    "DineIn and Bar orders require a physical location and DiningSessionId."
+                    "DineIn and Bar orders require a location and DiningSessionId."
                 );
             }
+
             guestCount = await dining.EnsureOpenAsync(
                 request.DiningSessionId.Value,
                 request.RestaurantId,
@@ -86,7 +88,9 @@ public sealed partial class OrderCommandService
                     p.Priority
                 );
             }),
-            now
+            now,
+            cashSession.SessionId,
+            cashSession.BusinessDate
         );
         await store.SaveWithEventAsync(
             order,
