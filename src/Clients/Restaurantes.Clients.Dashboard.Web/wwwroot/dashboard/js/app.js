@@ -6,7 +6,7 @@ const $ = id => document.getElementById(id),
     }),
     gatewayOrigin = location.origin,
     sessionKey = 'restaurantes.dashboard.login';
-let timer, access, socket, realtimeGeneration = 0, deadLetterRefreshAt = 0;
+let timer, access, socket, realtimeGeneration = 0, deadLetterRefreshAt = 0, dashboardRequestGeneration = 0;
 let restaurantNames = new Map();
 const today = new Date();
 $('date').value = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
@@ -43,16 +43,24 @@ async function loadProvider() {
 }
 
 async function load({ includeHealth = true } = {}) {
+    const requestGeneration = ++dashboardRequestGeneration;
+    const requestedDate = $('date').value;
+    const requestedRestaurant = $('restaurant').value;
     try {
         const params = new URLSearchParams();
-        if ($('date').value) params.set('date', $('date').value);
-        if ($('restaurant').value) params.set('restaurantId', $('restaurant').value);
+        if (requestedDate) params.set('date', requestedDate);
+        if (requestedRestaurant) params.set('restaurantId', requestedRestaurant);
         params.set('orderLimit', $('orderLimit').value);
         if (includeHealth) {
             void loadHealth();
             void loadDeadLetters();
         }
         const d = await authorizedFetch('/api/reporting/dashboard/daily?' + params).then(r => r.json());
+        if (
+            requestGeneration !== dashboardRequestGeneration
+            || requestedDate !== $('date').value
+            || requestedRestaurant !== $('restaurant').value
+        ) return;
         $('sales').textContent = money.format(d.totalSales);
         $('orders').textContent = d.completedSales;
         $('average').textContent = money.format(d.averageTicket);
@@ -63,7 +71,7 @@ async function load({ includeHealth = true } = {}) {
         renderOperations(d.operationalOrders);
         $('state').textContent = 'Actualizado ' + new Date().toLocaleTimeString();
     } catch (e) {
-        $('state').textContent = 'Error: ' + e.message
+        if (requestGeneration === dashboardRequestGeneration) $('state').textContent = 'Error: ' + e.message
     }
 }
 
