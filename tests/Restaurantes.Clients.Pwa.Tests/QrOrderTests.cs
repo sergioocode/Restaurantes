@@ -50,7 +50,7 @@ public sealed class QrOrderTests : BunitContext
         );
         Services.AddSingleton<IJSRuntime, EmptyJsRuntime>();
 
-        var cut = Render<QrOrder>(parameters =>
+        IRenderedComponent<QrOrder> cut = Render<QrOrder>(parameters =>
             parameters.Add(component => component.QrCode, "MESA-1")
         );
         using CancellationTokenSource previousPolling = new();
@@ -78,7 +78,7 @@ public sealed class QrOrderTests : BunitContext
         Services.AddSingleton(new CommanderDiningRealtime(http, api));
         Services.AddSingleton<IJSRuntime, EmptyJsRuntime>();
 
-        var cut = Render<CommanderHome>();
+        IRenderedComponent<CommanderHome> cut = Render<CommanderHome>();
         using CancellationTokenSource realtimeRefresh = new();
         SetField(cut.Instance, "realtimeRefresh", realtimeRefresh);
 
@@ -97,7 +97,7 @@ public sealed class QrOrderTests : BunitContext
         Services.AddSingleton(new PosDiningRealtime(http, api));
         Services.AddSingleton<IJSRuntime, EmptyJsRuntime>();
 
-        var cut = Render<PosHome>();
+        IRenderedComponent<PosHome> cut = Render<PosHome>();
         using CancellationTokenSource realtimeRefresh = new();
         using CancellationTokenSource reconciliation = new();
         SetField(cut.Instance, "realtimeRefresh", realtimeRefresh);
@@ -200,29 +200,17 @@ public sealed class QrOrderTests : BunitContext
             {
                 string path = request.RequestUri!.AbsolutePath;
                 requests.Add($"{request.Method} {path}");
-                if (
-                    request.Method == HttpMethod.Get
+                return request.Method == HttpMethod.Get
                     && path == $"/api/dining/tables/{tableId}/active-session"
-                )
-                {
-                    return JsonResponse(session);
-                }
-                if (
-                    request.Method == HttpMethod.Get
+                        ? JsonResponse(session)
+                    : request.Method == HttpMethod.Get
                     && path == $"/api/catalog/restaurants/{restaurantId}/menu"
-                )
-                {
-                    return JsonResponse(new[] { product });
-                }
-                if (
-                    request.Method == HttpMethod.Post
+                        ? JsonResponse(new[] { product })
+                    : request.Method == HttpMethod.Post
                     && (path == "/api/orders" || path == $"/api/orders/{orderId}/submit")
-                )
-                {
-                    return JsonResponse(order);
-                }
-                return request.Method == HttpMethod.Get && path == "/api/orders"
-                    ? JsonResponse(new[] { order })
+                        ? JsonResponse(order)
+                    : request.Method == HttpMethod.Get && path == "/api/orders"
+                        ? JsonResponse(new[] { order })
                     : new HttpResponseMessage(HttpStatusCode.NotFound);
             })
         )
@@ -235,7 +223,7 @@ public sealed class QrOrderTests : BunitContext
         Services.AddSingleton(new CommanderDiningRealtime(http, api));
         Services.AddSingleton<IJSRuntime, EmptyJsRuntime>();
 
-        var cut = Render<CommanderHome>();
+        IRenderedComponent<CommanderHome> cut = Render<CommanderHome>();
         SetField(cut.Instance, "restaurantId", restaurantId);
         MethodInfo selectTable = typeof(CommanderHome).GetMethod(
             "SelectTable",
@@ -288,7 +276,7 @@ public sealed class QrOrderTests : BunitContext
         Services.AddSingleton(new PosDiningRealtime(http, api));
         Services.AddSingleton<IJSRuntime, EmptyJsRuntime>();
 
-        var cut = Render<PosHome>();
+        IRenderedComponent<PosHome> cut = Render<PosHome>();
         using CancellationTokenSource reconciliation = new();
         SetField(cut.Instance, "reconciliation", reconciliation);
 
@@ -304,7 +292,7 @@ public sealed class QrOrderTests : BunitContext
     }
 
     [Fact]
-    public async Task Commander_cancelled_line_reports_success_after_refresh_delay()
+    public async Task Commander_cancelled_line_refreshes_bill_without_success_notice()
     {
         Guid sessionId = Guid.NewGuid();
         Guid orderId = Guid.NewGuid();
@@ -315,25 +303,22 @@ public sealed class QrOrderTests : BunitContext
             {
                 requests.Add(request.RequestUri!.AbsolutePath);
                 string path = request.RequestUri.AbsolutePath;
-                if (path == $"/api/orders/{orderId}/lines/{lineId}/cancel")
-                {
-                    return JsonResponse(
-                        new CommanderOrderDetail(orderId, sessionId, "Submitted", 12m, [], [])
-                    );
-                }
-
-                return path == $"/api/dining/sessions/{sessionId}/bill"
-                    ? JsonResponse(
-                        new CommanderBill(
-                            sessionId,
-                            Guid.NewGuid(),
-                            Guid.NewGuid(),
-                            "Open",
-                            0m,
-                            0m,
-                            []
+                return path == $"/api/orders/{orderId}/lines/{lineId}/cancel"
+                        ? JsonResponse(
+                            new CommanderOrderDetail(orderId, sessionId, "Submitted", 12m, [], [])
                         )
-                    )
+                    : path == $"/api/dining/sessions/{sessionId}/bill"
+                        ? JsonResponse(
+                            new CommanderBill(
+                                sessionId,
+                                Guid.NewGuid(),
+                                Guid.NewGuid(),
+                                "Open",
+                                0m,
+                                0m,
+                                []
+                            )
+                        )
                     : new HttpResponseMessage(HttpStatusCode.NotFound);
             })
         )
@@ -346,7 +331,7 @@ public sealed class QrOrderTests : BunitContext
         Services.AddSingleton(new CommanderDiningRealtime(http, api));
         Services.AddSingleton<IJSRuntime, ConfirmingJsRuntime>();
 
-        var cut = Render<CommanderHome>();
+        IRenderedComponent<CommanderHome> cut = Render<CommanderHome>();
         SetField(cut.Instance, "sessionId", sessionId);
         using CancellationTokenSource refresh = new();
         SetField(cut.Instance, "realtimeRefresh", refresh);
@@ -372,11 +357,11 @@ public sealed class QrOrderTests : BunitContext
 
         Assert.Contains($"/api/orders/{orderId}/lines/{lineId}/cancel", requests);
         Assert.Contains($"/api/dining/sessions/{sessionId}/bill", requests);
-        Assert.Contains("cancelado", (string)GetField(cut.Instance, "message")!);
+        Assert.Null(GetField(cut.Instance, "message"));
     }
 
     [Fact]
-    public async Task Pos_pickup_delivery_refreshes_orders_after_confirmation()
+    public async Task Pos_pickup_delivery_refreshes_orders_after_payment()
     {
         Guid orderId = Guid.NewGuid();
         PosOrder pickup = new(
@@ -387,7 +372,7 @@ public sealed class QrOrderTests : BunitContext
             "Cliente",
             "Takeaway",
             "Immediate",
-            "Submitted",
+            "Ready",
             12m,
             DateTime.UtcNow
         );
@@ -397,12 +382,9 @@ public sealed class QrOrderTests : BunitContext
             {
                 string path = request.RequestUri!.AbsolutePath;
                 requests.Add(path);
-                if (path == $"/api/orders/{orderId}/deliver")
-                {
-                    return JsonResponse(pickup);
-                }
-                return path == "/api/orders" && request.Method == HttpMethod.Get
-                    ? JsonResponse(Array.Empty<PosOrder>())
+                return path == $"/api/orders/{orderId}/deliver" ? JsonResponse(pickup)
+                    : path == "/api/orders" && request.Method == HttpMethod.Get
+                        ? JsonResponse(Array.Empty<PosOrder>())
                     : new HttpResponseMessage(HttpStatusCode.NotFound);
             })
         )
@@ -415,13 +397,15 @@ public sealed class QrOrderTests : BunitContext
         Services.AddSingleton(new PosDiningRealtime(http, api));
         Services.AddSingleton<IJSRuntime, ConfirmingJsRuntime>();
 
-        var cut = Render<PosHome>();
+        IRenderedComponent<PosHome> cut = Render<PosHome>();
+        SetField(cut.Instance, "selectedPickup", pickup);
+        SetField(cut.Instance, "pickupPaymentStatus", "Paid");
         MethodInfo deliver = typeof(PosHome).GetMethod(
-            "CompletePickup",
+            "DeliverPickup",
             BindingFlags.Instance | BindingFlags.NonPublic
         )!;
 
-        await cut.InvokeAsync(() => (Task)deliver.Invoke(cut.Instance, [pickup])!);
+        await cut.InvokeAsync(() => (Task)deliver.Invoke(cut.Instance, null)!);
 
         Assert.Contains($"/api/orders/{orderId}/deliver", requests);
         Assert.Contains("/api/orders", requests);
@@ -454,7 +438,7 @@ public sealed class QrOrderTests : BunitContext
         Services.AddSingleton(new PosDiningRealtime(http, api));
         Services.AddSingleton<IJSRuntime, ConfirmingJsRuntime>();
 
-        var cut = Render<PosHome>();
+        IRenderedComponent<PosHome> cut = Render<PosHome>();
         using CancellationTokenSource refresh = new();
         SetField(cut.Instance, "realtimeRefresh", refresh);
         PosBillOrder order = new(orderId, "Submitted", "Unpaid", 12m, DateTime.UtcNow);
@@ -499,6 +483,7 @@ public sealed class QrOrderTests : BunitContext
             DateTime.UtcNow
         );
         List<string> requests = [];
+        string? createOrderBody = null;
         HttpClient http = new(
             new ReplyHandler(request =>
             {
@@ -509,6 +494,13 @@ public sealed class QrOrderTests : BunitContext
                     && (path == "/api/orders" || path == $"/api/orders/{orderId}/submit")
                 )
                 {
+                    if (path == "/api/orders")
+                    {
+                        createOrderBody = request
+                            .Content!.ReadAsStringAsync()
+                            .GetAwaiter()
+                            .GetResult();
+                    }
                     return JsonResponse(order);
                 }
                 return request.Method == HttpMethod.Get && path == "/api/orders"
@@ -525,7 +517,7 @@ public sealed class QrOrderTests : BunitContext
         Services.AddSingleton(new PosDiningRealtime(http, api));
         Services.AddSingleton<IJSRuntime, ConfirmingJsRuntime>();
 
-        var cut = Render<PosHome>();
+        IRenderedComponent<PosHome> cut = Render<PosHome>();
         PosCashRegister register = new(
             Guid.NewGuid(),
             restaurantId,
@@ -551,8 +543,8 @@ public sealed class QrOrderTests : BunitContext
         SetField(cut.Instance, "cashRegister", register);
         SetField(cut.Instance, "restaurantId", restaurantId);
         SetField(cut.Instance, "serviceMode", "Takeaway");
+        SetField(cut.Instance, "takeawayOpen", true);
         SetField(cut.Instance, "customerName", "Cliente");
-        SetField(cut.Instance, "takeawayRequiresPrepayment", false);
         MethodInfo send = typeof(PosHome).GetMethod(
             "SendOrder",
             BindingFlags.Instance | BindingFlags.NonPublic
@@ -563,6 +555,15 @@ public sealed class QrOrderTests : BunitContext
         Assert.Contains($"/api/orders/{orderId}/submit", requests);
         Assert.Contains("Recogida", (string)GetField(cut.Instance, "message")!);
         Assert.Contains("/api/orders", requests);
+        using JsonDocument orderBody = JsonDocument.Parse(createOrderBody!);
+        Assert.Equal(JsonValueKind.Null, orderBody.RootElement.GetProperty("tableId").ValueKind);
+        Assert.Equal(
+            JsonValueKind.Null,
+            orderBody.RootElement.GetProperty("diningSessionId").ValueKind
+        );
+        Assert.Equal("PARA LLEVAR", orderBody.RootElement.GetProperty("tableLabel").GetString());
+        Assert.Equal("Takeaway", orderBody.RootElement.GetProperty("serviceMode").GetString());
+        Assert.Equal("OnAccount", orderBody.RootElement.GetProperty("paymentTiming").GetString());
     }
 
     private static void SetField(object component, string name, object value)
@@ -615,7 +616,10 @@ public sealed class QrOrderTests : BunitContext
             string identifier,
             CancellationToken cancellationToken,
             object?[]? args
-        ) => InvokeAsync<TValue>(identifier, args);
+        )
+        {
+            return InvokeAsync<TValue>(identifier, args);
+        }
     }
 
     private sealed class ReplyHandler(Func<HttpRequestMessage, HttpResponseMessage> reply)
@@ -624,7 +628,10 @@ public sealed class QrOrderTests : BunitContext
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken
-        ) => Task.FromResult(reply(request));
+        )
+        {
+            return Task.FromResult(reply(request));
+        }
     }
 
     private static HttpResponseMessage JsonResponse<T>(T value)
@@ -656,36 +663,23 @@ public sealed class QrOrderTests : BunitContext
         )
         {
             string path = request.RequestUri!.AbsolutePath;
-            object response;
-            if (path == "/api/dining/qr/MESA-1")
-            {
-                response = Envelope(FirstTableId, FirstSessionId, "Mesa 1");
-            }
-            else if (path == "/api/dining/qr/MESA-2")
-            {
-                response = Envelope(SecondTableId, SecondSessionId, "Mesa 2");
-            }
-            else if (path == $"/api/restaurant-operations/restaurants/{RestaurantId}")
-            {
-                response = new RestaurantResponse(
-                    RestaurantId,
-                    "REST-1",
-                    "Restaurante de prueba",
-                    "Calle de prueba",
-                    true,
-                    1,
-                    DateTime.UnixEpoch
-                );
-            }
-            else if (path.StartsWith("/api/catalog/restaurants/", StringComparison.Ordinal))
-            {
-                response = Array.Empty<MenuItemResponse>();
-            }
-            else
-            {
-                response = Array.Empty<OrderResponse>();
-            }
-
+            object response =
+                path == "/api/dining/qr/MESA-1" ? Envelope(FirstTableId, FirstSessionId, "Mesa 1")
+                : path == "/api/dining/qr/MESA-2"
+                    ? Envelope(SecondTableId, SecondSessionId, "Mesa 2")
+                : path == $"/api/restaurant-operations/restaurants/{RestaurantId}"
+                    ? new RestaurantResponse(
+                        RestaurantId,
+                        "REST-1",
+                        "Restaurante de prueba",
+                        "Calle de prueba",
+                        true,
+                        1,
+                        DateTime.UnixEpoch
+                    )
+                : path.StartsWith("/api/catalog/restaurants/", StringComparison.Ordinal)
+                    ? Array.Empty<MenuItemResponse>()
+                : Array.Empty<OrderResponse>();
             string content = JsonSerializer.Serialize(response);
             return Task.FromResult(
                 new HttpResponseMessage(HttpStatusCode.OK)
@@ -701,7 +695,6 @@ public sealed class QrOrderTests : BunitContext
                 new QrTableResponse(tableId, RestaurantId, tableLabel, tableLabel),
                 new QrDiningSessionResponse(sessionId, RestaurantId, tableId, "Open"),
                 "customer-token",
-                false,
                 true
             );
         }

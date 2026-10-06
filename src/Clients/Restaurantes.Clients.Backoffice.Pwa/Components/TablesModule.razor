@@ -3,15 +3,6 @@
 else
 {
     <div class="module-toolbar"><button class="secondary" @onclick="Host.RefreshModule" disabled="@Host.busy">Actualizar mesas</button></div>
-    <section class="settings-panel policy-panel">
-        <h2>Política del local</h2>
-        <label class="check-line"><input type="checkbox" @bind="Host.policy.QrRequiresImmediatePayment" /> El cliente QR paga antes de enviar a cocina</label>
-        <label class="check-line"><input type="checkbox" @bind="Host.policy.TakeawayRequiresPrepayment" /> Para llevar requiere cobro previo</label>
-        <label class="check-line"><input type="checkbox" @bind="Host.policy.AllowCheckoutBeforeKitchenCompletion" /> Permite cobrar antes de terminar los KDS</label>
-        <label class="check-line"><input type="checkbox" @bind="Host.policy.RequireTrustedNetworkForQr" /> Exigir red autorizada para usar QR</label>
-        <label>IP o redes CIDR autorizadas, una por línea<textarea rows="3" @bind="Host.allowedNetworksText"></textarea></label>
-        <button class="primary" @onclick="Host.SavePolicy" disabled="@Host.busy">Guardar política</button>
-    </section>
     <section class="admin-panel">
         <h3>Zonas del restaurante</h3>
         <form class="inline-form" @onsubmit="Host.CreateZone" @onsubmit:preventDefault>

@@ -303,26 +303,15 @@ y utiliza la referencia recibida o, si viene vacía:
 QR-{OrderId}
 ```
 
-### Relación con `QrRequiresImmediatePayment`
+### Pago obligatorio en Customer QR
 
-Payments **no decide** si un restaurante exige pago inmediato por Customer QR. Esa política pertenece a Dining y se expone mediante:
-
-```text
-QrRequiresImmediatePayment
-```
-
-El cliente Customer QR aplica la política así:
+Customer QR siempre paga online antes de solicitar el envío a cocina. No hay una política de Dining que permita omitir el pago:
 
 ```text
-true
-    -> crea el pedido con PaymentTiming = Immediate
+crear un pedido Draft con PaymentTiming = Immediate
     -> llama a capture-customer-qr
     -> espera PaymentCaptured
-    -> solicita submit en Orders
-
-false
-    -> crea el pedido con PaymentTiming = OnAccount
-    -> no realiza captura inmediata
+    -> Orders proyecta Paid
     -> solicita submit en Orders
 ```
 

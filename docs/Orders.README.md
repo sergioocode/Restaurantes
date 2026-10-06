@@ -158,23 +158,15 @@ Orders no permite combinaciones arbitrarias. El dominio valida explícitamente l
 | Origen | Servicio | Pago | Permitido |
 | --- | --- | --- | :---: |
 | Customer QR | Dine-in | Immediate | Sí |
-| Customer QR | Dine-in | OnAccount | Sí |
 | Comandero | Dine-in | OnAccount | Sí |
 | POS | Dine-in | OnAccount | Sí |
 | POS | Bar | OnAccount | Sí |
-| POS | Takeaway | Immediate | Sí |
+| POS | Takeaway | Immediate | No |
 | POS | Takeaway | OnAccount | Sí |
 
 Las demás combinaciones se rechazan en el dominio.
 
-En Customer QR, `Immediate` y `OnAccount` son ambas combinaciones válidas porque la elección depende de la política de Dining para el restaurante:
-
-```text
-QrRequiresImmediatePayment = true  -> Customer QR crea el pedido como Immediate
-QrRequiresImmediatePayment = false -> Customer QR crea el pedido como OnAccount
-```
-
-El PWA Customer QR obtiene ese flag al abrir o recuperar la sesión en Dining. Orders conserva ambas modalidades y aplica las reglas correspondientes al `PaymentTiming` recibido.
+Customer QR siempre usa `Immediate`; Orders rechaza otras modalidades para ese origen. La regla no es configurable por restaurante.
 
 ### Reglas de ubicación
 
@@ -295,32 +287,28 @@ Reglas actuales:
 
 - un pedido `Immediate` debe estar pagado antes de enviarse a cocina;
 - un `Takeaway` debe estar pagado antes de entregarse al cliente;
+- TPV puede registrar el pago de un `Takeaway` antes o después de que KDS termine; la entrega solo se habilita cuando esté listo;
+- las líneas de un pedido impagado pueden cancelarse individualmente mientras su estación siga `Pending`;
 - una línea de un pedido pagado no puede cancelarse mediante el flujo operativo normal;
 - un takeaway pagado debe haber sido reembolsado antes de poder cancelarse.
 
 Los reembolsos completos y otros procesos administrativos pertenecen al flujo de Backoffice / Payments, no al agregado Orders.
 
-### Customer QR y pago configurable
+### Customer QR y pago obligatorio
 
-Para pedidos `CustomerQr`, el flujo depende de `QrRequiresImmediatePayment`:
+Para pedidos `CustomerQr`, la captura online es obligatoria antes de `submit`:
 
 ```mermaid
 flowchart LR
-    A[Crear pedido Draft] --> B{QrRequiresImmediatePayment}
-
-    B -- true --> C[PaymentTiming = Immediate]
-    C --> D[Captura online en Payments]
-    D --> E[PaymentCaptured]
-    E --> F[Orders proyecta Paid]
-    F --> G[submit]
-    G --> H[Submitted / cocina]
-
-    B -- false --> I[PaymentTiming = OnAccount]
-    I --> J[submit]
-    J --> H
+    A[Abrir o recuperar sesión QR] --> B[Crear pedido Draft Immediate]
+    B --> C[Captura online en Payments]
+    C --> D[PaymentCaptured]
+    D --> E[Orders proyecta Paid]
+    E --> F[submit]
+    F --> G[Submitted / cocina]
 ```
 
-Cuando el pedido es `Immediate`, `SubmitAsync` consulta la proyección local de pagos y rechaza el envío a cocina mientras el pedido no figure como pagado. Cuando es `OnAccount`, no existe esa precondición de captura inmediata y el pedido puede incorporarse a la cuenta de la sesión.
+`SubmitAsync` consulta la proyección local y rechaza el envío a cocina mientras el pedido no figure como pagado. El borrador técnico existe durante la captura, pero no aparece en KDS hasta `submit`.
 
 La sesión Customer QR y su `X-Customer-Session-Token` se vuelven a validar contra Dining al ejecutar `submit`.
 

@@ -10,7 +10,6 @@ internal static class DiningRequestContext
     {
         return new(
             http.User,
-            http.Connection.RemoteIpAddress,
             http.Request.Headers["X-Customer-Session-Token"].FirstOrDefault(),
             http.Request.Headers.Authorization.FirstOrDefault()
         );

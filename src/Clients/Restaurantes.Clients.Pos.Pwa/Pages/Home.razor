@@ -52,18 +52,22 @@
                 </select>
                 <button class="cash-status @(CashRegisterOpen ? "open" : "closed")" @onclick="OpenCashRegisterPanel">
                     Caja · @(CashRegisterOpen ? "abierta" : "cerrada")
+                    @if (CashRegisterOpen && cashRegister is not null)
+                    {
+                        <small>@cashRegister.OpenedAtUtc.ToLocalTime().ToString("dd/MM HH:mm")</small>
+                    }
                 </button>
                 <button class="ghost" @onclick="Logout">Salir</button>
             </div>
         </header>
 
-        @if (selectedTable is null && serviceMode != "Takeaway")
+        @if (selectedTable is null && !takeawayOpen)
         {
             <section class="tables-view">
                 <div class="section-title">
                     <div><p class="eyebrow">COMANDAS</p><h2>Seleccionar ubicación</h2></div>
                     <div class="filters">
-                        <button class="quick-mode" @onclick='() => BeginTakeaway()' disabled="@(!CashRegisterOpen)">Nuevo para llevar</button>
+                        <button class="quick-mode" @onclick="BeginTakeaway" disabled="@(!CashRegisterOpen)">Nuevo para llevar</button>
                         <button class="ghost" @onclick="LoadPickupOrders" disabled="@busy">Recogidas (@pickupOrders.Count)</button>
                         <button class="@FilterClass("All")" @onclick='() => tableFilter = "All"'>Todas</button>
                         <button class="@FilterClass("Available")" @onclick='() => tableFilter = "Available"'>Disponibles</button>
@@ -106,13 +110,8 @@
                             <span class="table-status">@OrderProgress.PickupLabel(pickup.Status)</span>
                             <strong>@pickup.CustomerName</strong>
                             <small>@pickup.Id.ToString()[..8] · @pickup.CreatedAtUtc.ToLocalTime().ToString("HH:mm")</small>
-                            <em>@(pickup.PaymentTiming == "Immediate" ? "Pagado" : "Pendiente de cobro") · @pickup.Total.ToString("0.00") €</em>
-                            @if (OrderProgress.IsReady(pickup.Status))
-                            {
-                                <button class="primary" @onclick="() => CompletePickup(pickup)" disabled="@(busy || (pickup.PaymentTiming != "Immediate" && !CashRegisterOpen))">
-                                    @(pickup.PaymentTiming == "Immediate" ? "Entregar al cliente" : "Cobrar y entregar")
-                                </button>
-                            }
+                            <em>@PickupPaymentLabel(pickupPaymentStatuses.GetValueOrDefault(pickup.Id) ?? "ProjectionPending") · @pickup.Total.ToString("0.00") €</em>
+                            <button class="primary" @onclick="() => OpenPickup(pickup)" disabled="@busy">Ver pedido</button>
                         </article>
                     }
                 </div>
@@ -146,17 +145,17 @@
                         {
                             <button class="danger cancel-opening" disabled="@(busy || hasSessionOrders)" @onclick="CancelSession">Cancelar apertura</button>
                         }
-                        @if (HasPhysicalLocation)
+                        @if (HasLocation)
                         {
                             <button class="ghost" @onclick="OpenBill">Cuenta</button>
                         }
                     </div>
 
-                    @if (HasPhysicalLocation && session is not null)
+                    @if (HasLocation)
                     {
                         <div class="session-progress">
                             <strong>Estado de comandas</strong>
-                            <span>@SessionOrderSummary(session.Id)</span>
+                            <span>@SessionOrderSummary(session!.Id)</span>
                         </div>
                     }
 
@@ -198,31 +197,14 @@
                         @if (Cart.Count == 0) { <p class="empty">Pulsa un producto para añadirlo.</p> }
                     </div>
                     <div class="ticket-total"><span>Total de esta tanda</span><strong>@Total.ToString("0.00") €</strong></div>
-                    @if (!HasPhysicalLocation)
+                    @if (IsTakeaway)
                     {
                         <label>Nombre para la recogida
                             <input maxlength="80" placeholder="Ej. Lucía" @bind="customerName" />
                         </label>
-                        @if (takeawayRequiresPrepayment)
-                        {
-                            <label class="quick-payment">Cobro antes de cocina
-                                <select @bind="quickPaymentMethod">
-                                    <option value="Card">Tarjeta</option>
-                                    <option value="Cash">Efectivo</option>
-                                </select>
-                            </label>
-                            @if (quickPaymentMethod == "Cash" && !CashRegisterOpen)
-                            {
-                                <p class="warning">Abre la caja diaria antes de cobrar en efectivo.</p>
-                            }
-                        }
-                        else
-                        {
-                            <p class="muted">Este local cobra el pedido cuando el cliente lo recoge.</p>
-                        }
                     }
-                    <button class="primary full" disabled="@(busy || !CashRegisterOpen || ItemCount == 0 || (!HasPhysicalLocation && string.IsNullOrWhiteSpace(customerName)))" @onclick="SendOrder">
-                        @(busy ? "Procesando…" : HasPhysicalLocation ? "Enviar a cocina" : takeawayRequiresPrepayment ? "Confirmar cobro y enviar" : "Enviar a cocina · cobrar al recoger")
+                    <button class="primary full" disabled="@(busy || !CashRegisterOpen || ItemCount == 0 || (IsTakeaway && string.IsNullOrWhiteSpace(customerName)))" @onclick="SendOrder">
+                        @(busy ? "Procesando…" : "Enviar a cocina")
                     </button>
                 </aside>
             </section>
@@ -237,10 +219,21 @@
                         </div>
                         @if (bill is null)
                         {
-                            <p class="muted">Cargando cuenta…</p>
+                            @if (billLoadError is null)
+                            {
+                                <p class="muted">Cargando cuenta…</p>
+                            }
+                            else
+                            {
+                                <p class="form-error">No se pudo cargar la cuenta: @billLoadError</p>
+                            }
                         }
                         else
                         {
+                            @if (billLoadError is not null)
+                            {
+                                <p class="form-error">No se pudieron cargar los detalles de los pedidos: @billLoadError</p>
+                            }
                             <div class="bill-orders">
                                 @foreach (SessionBillOrderResponse order in bill.Orders)
                                 {
@@ -271,10 +264,6 @@
                             </div>
                             <div class="bill-total"><span>Total</span><strong>@bill.Total.ToString("0.00") €</strong></div>
                             <div class="bill-total outstanding"><span>Pendiente</span><strong>@bill.Outstanding.ToString("0.00") €</strong></div>
-                            @if (!bill.CanCheckout)
-                            {
-                                <p class="warning">Solo se puede cobrar cuando todas las comandas estén terminadas en cocina.</p>
-                            }
                             <label>Método de pago
                                 <select @bind="paymentMethod"><option value="Card">Tarjeta</option><option value="Cash">Efectivo</option></select>
                             </label>
@@ -304,6 +293,85 @@
             }
         }
 
+        @if (pickupBillOpen)
+        {
+            <div class="modal-backdrop" @onclick="ClosePickup">
+                <section class="bill-card" @onclick:stopPropagation>
+                    <div class="bill-title">
+                        <div><p class="eyebrow">PEDIDO PARA LLEVAR</p><h2>@selectedPickup?.CustomerName</h2></div>
+                        <button class="ghost" @onclick="ClosePickup">Cerrar</button>
+                    </div>
+                    @if (pickupDetail is null)
+                    {
+                        <p class="muted">@(busy ? "Cargando pedido…" : message ?? "No se pudo cargar el pedido.")</p>
+                    }
+                    else
+                    {
+                        <div class="pickup-order-status">
+                            <span>Comanda @pickupDetail.Id.ToString()[..8]</span>
+                            <span>@OrderProgress.PickupLabel(pickupDetail.Status)</span>
+                            <span>@PickupPaymentLabel(pickupPaymentStatus)</span>
+                        </div>
+                        <div class="bill-orders">
+                            <article>
+                                <div class="bill-lines">
+                                    @foreach (OrderLineDetailResponse line in pickupDetail.Lines)
+                                    {
+                                        <div class="bill-line @(line.Status == "Cancelled" ? "cancelled" : "")">
+                                            <span>@line.Quantity × @line.ProductName · @line.PreparationStationName</span>
+                                            @if (CanCancelPickupLine(line))
+                                            {
+                                                <button class="danger" disabled="@busy" @onclick="() => CancelPickupLine(line)">Cancelar</button>
+                                            }
+                                            else if (line.Status == "Cancelled")
+                                            {
+                                                <small>Cancelado · @line.CancellationReason</small>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            </article>
+                        </div>
+                        <div class="bill-total"><span>Total</span><strong>@pickupDetail.Total.ToString("0.00") €</strong></div>
+                        @if (pickupPaymentStatus == "Open")
+                        {
+                            <label>Método de pago
+                                <select @bind="paymentMethod"><option value="Card">Tarjeta</option><option value="Cash">Efectivo</option></select>
+                            </label>
+                            @if (paymentMethod == "Cash" && !CashRegisterOpen)
+                            {
+                                <p class="warning">Abre la caja diaria antes de cobrar este pedido.</p>
+                            }
+                            <label>Referencia (opcional)<input @bind="paymentReference" placeholder="Ticket de caja o datáfono" /></label>
+                        }
+                        else if (pickupPaymentStatus == "ProjectionPending")
+                        {
+                            <p class="warning">El estado del pago aún no está disponible. Actualiza el pedido antes de cobrar.</p>
+                        }
+                        else if (pickupPaymentStatus == "Paid" && !OrderProgress.IsReady(pickupDetail.Status))
+                        {
+                            <p class="muted">Pedido pagado. Se podrá entregar cuando cocina lo marque listo.</p>
+                        }
+                        <div class="bill-actions">
+                            <button class="ghost" @onclick="RefreshPickup" disabled="@busy">Actualizar</button>
+                            @if (pickupPaymentStatus == "Open")
+                            {
+                                <button class="primary" @onclick="CapturePickup" disabled="@(busy || !CashRegisterOpen || pickupDetail.Total <= 0)">
+                                    @(busy ? "Cobrando…" : "Cobrar pedido")
+                                </button>
+                            }
+                            else if (pickupPaymentStatus == "Paid" && OrderProgress.IsReady(pickupDetail.Status))
+                            {
+                                <button class="primary" @onclick="DeliverPickup" disabled="@busy">
+                                    @(busy ? "Entregando…" : "Entregar al cliente")
+                                </button>
+                            }
+                        </div>
+                    }
+                </section>
+            </div>
+        }
+
         @if (cashPanelOpen)
         {
             <div class="modal-backdrop" @onclick="CloseCashRegisterPanel">
@@ -323,6 +391,10 @@
                         <div class="cash-metrics">
                             <div><span>Fondo inicial</span><strong>@cashRegister.OpeningFloat.ToString("0.00") €</strong></div>
                         </div>
+                        @if (CashRegisterOpen)
+                        {
+                            <p class="cash-opening-info">Abierta el @cashRegister.OpenedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @cashRegister.OpenedByName</p>
+                        }
                         <hr class="cash-separator" />
                         <h3>Ventas del turno</h3>
                         <div class="cash-metrics">
@@ -353,7 +425,14 @@
                                 <div class="cash-difference"><span>@PaymentLabel(item.Method): conciliado @item.Reconciled.ToString("0.00") € / esperado @item.Expected.ToString("0.00") €</span><strong class="@(item.Difference == 0 ? "balanced" : "unbalanced")">@item.Difference.ToString("+0.00;-0.00;0.00") €</strong></div>
                             }
                             <div class="cash-difference"><span>Descuadre total</span><strong class="@(cashRegister.Difference == 0 ? "balanced" : "unbalanced")">@cashRegister.Difference?.ToString("+0.00;-0.00;0.00") €</strong></div>
-                            <label>Fondo del nuevo turno<input type="number" min="0" step="0.01" @bind="openingFloat" /></label>
+                            <div class="cash-close-details">
+                                <p>Local: @(restaurants.FirstOrDefault(x => x.Id == restaurantId)?.Name)</p>
+                                <p>Fecha de caja: @cashRegister.BusinessDate.ToString("dd/MM/yyyy")</p>
+                                <p>Abierta: @cashRegister.OpenedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @cashRegister.OpenedByName</p>
+                                <p>Cerrada: @cashRegister.ClosedAtUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @cashRegister.ClosedByName</p>
+                            </div>
+                            <button class="secondary full cash-no-print" @onclick='() => Js.InvokeVoidAsync("window.print")'>Imprimir cierre de caja</button>
+                            <label class="cash-no-print">Fondo del nuevo turno<input type="number" min="0" step="0.01" @bind="openingFloat" /></label>
                             <button class="primary full" @onclick="OpenDailyCashRegister" disabled="@busy">Abrir otro turno hoy</button>
                         }
                     }

@@ -28,13 +28,6 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
             );
     }
 
-    public Task<DiningRestaurantPolicy?> ReadPolicyAsync(Guid restaurantId, CancellationToken ct)
-    {
-        return db
-            .RestaurantPolicies.AsNoTracking()
-            .SingleOrDefaultAsync(x => x.RestaurantId == restaurantId, ct);
-    }
-
     public Task<DiningSession?> ReadActiveSessionWithOrdersAsync(Guid tableId, CancellationToken ct)
     {
         return db
@@ -62,11 +55,6 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
         return db
             .Sessions.AsNoTracking()
             .SingleAsync(x => x.TableId == tableId && x.Status == "Open", ct);
-    }
-
-    public Task<DiningRestaurantPolicy?> FindPolicyAsync(Guid restaurantId, CancellationToken ct)
-    {
-        return db.RestaurantPolicies.SingleOrDefaultAsync(x => x.RestaurantId == restaurantId, ct);
     }
 
     public Task<Dictionary<Guid, DiningSession>> ReadActiveSessionsAsync(
@@ -131,15 +119,6 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
                     && x.Status == "Open",
                 ct
             );
-    }
-
-    public Task<bool> AllowsEarlyCheckoutAsync(Guid restaurantId, CancellationToken ct)
-    {
-        return db
-            .RestaurantPolicies.AsNoTracking()
-            .Where(x => x.RestaurantId == restaurantId)
-            .Select(x => x.AllowCheckoutBeforeKitchenCompletion)
-            .SingleOrDefaultAsync(ct);
     }
 
     public Task<DiningSession?> FindSessionWithOrdersAsync(Guid sessionId, CancellationToken ct)

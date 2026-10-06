@@ -31,6 +31,7 @@ input:focus, select:focus { border-color: #286346; box-shadow: 0 0 0 3px #286346
 .top-actions select option { color: #17201c; background: #fff; }
 .top-actions .ghost { color: #fff; background: #ffffff18; }
 .cash-status { min-height: 44px; padding: 10px 14px; border: 1px solid #ffffff30; border-radius: 12px; color: #fff; font-weight: 900; }
+.cash-status small { display: block; font-size: 10px; line-height: 1.2; opacity: .85; }
 .cash-status.open { background: #2d7a50; }.cash-status.closed { background: #9b4935; }
 .tables-view { padding: 28px; }
 .section-title, .order-head, .ticket-title, .bill-title, .bill-orders article > div, .bill-total, .bill-actions { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
@@ -71,6 +72,8 @@ input:focus, select:focus { border-color: #286346; box-shadow: 0 0 0 3px #286346
 .pickup-title { margin-top: 34px; }
 .pickup-card { min-height: 210px; }
 .pickup-card .primary { align-self: end; width: 100%; }
+.pickup-order-status { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.pickup-order-status span { padding: 5px 8px; border-radius: 8px; background: #ecefeb; font-size: 12px; }
 .cancel-opening { white-space: nowrap; }
 .modal-backdrop { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; padding: 18px; background: #101711c0; backdrop-filter: blur(5px); }
 .bill-card { width: min(650px, 100%); max-height: calc(100vh - 36px); overflow: auto; padding: 24px; border-radius: 24px; background: #faf9f4; box-shadow: 0 24px 90px #0007; }
@@ -87,6 +90,7 @@ input:focus, select:focus { border-color: #286346; box-shadow: 0 0 0 3px #286346
 .cash-metrics div { display: grid; gap: 5px; padding: 14px; border-radius: 13px; background: #eef1ed; }
 .cash-metrics span, .cash-difference span { color: #667068; font-size: 12px; font-weight: 800; }
 .cash-metrics strong { font-size: 21px; }
+.cash-opening-info { margin: 8px 0 0; color: #667068; font-size: 13px; }
 .cash-difference { display: flex; align-items: center; justify-content: space-between; margin: 14px 0; padding: 13px 0; border-top: 1px solid #d5dad5; }
 .cash-difference strong { font-size: 22px; }.balanced { color: #277047; }.unbalanced { color: #af422f; }
 .toast { position: fixed; z-index: 30; top: 16px; left: 50%; width: min(560px, calc(100% - 32px)); transform: translateX(-50%); padding: 14px 18px; border-radius: 13px; color: #fff; box-shadow: 0 12px 34px #0003; }
@@ -111,3 +115,13 @@ input:focus, select:focus { border-color: #286346; box-shadow: 0 0 0 3px #286346
 
 .login-providers { display: grid; gap: .75rem; margin-top: 1.5rem; }
 .login-providers button { width: 100%; }
+
+.cash-close-details { margin: 16px 0; font-size: 13px; color: #4f5c53; }
+.cash-close-details p { margin: 5px 0; }
+@media print {
+  body * { visibility: hidden !important; }
+  .cash-register-card, .cash-register-card * { visibility: visible !important; }
+  .modal-backdrop { position: absolute; inset: 0; display: block; padding: 0; overflow: visible; background: white; }
+  .cash-register-card { position: absolute; inset: 0 auto auto 0; width: 100%; max-height: none; padding: 0; box-shadow: none; }
+  .cash-register-card button, .cash-register-card input, .cash-no-print { display: none !important; }
+}

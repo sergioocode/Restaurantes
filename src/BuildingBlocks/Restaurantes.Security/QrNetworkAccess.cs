@@ -1,50 +1,33 @@
 ﻿using System.Net;
 using System.Net.Sockets;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 
-namespace Restaurantes.Dining.Application;
+namespace Restaurantes.Security;
 
-internal static class QrNetworkAccess
+public static class QrNetworkAccess
 {
-    private const int MaximumNetworks = 20;
-
-    public static bool TryNormalize(
-        IEnumerable<string>? values,
-        out string normalized,
-        out string? error
-    )
+    public static ObjectResult? DeniedResult(HttpContext context, IConfiguration configuration)
     {
-        string[] candidates = (values ?? [])
-            .Select(x => x?.Trim() ?? string.Empty)
-            .Where(x => x.Length > 0)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-        if (candidates.Length > MaximumNetworks)
-        {
-            normalized = string.Empty;
-            error = $"A maximum of {MaximumNetworks} QR networks is allowed.";
-            return false;
-        }
-
-        List<string> result = [];
-        foreach (string candidate in candidates)
-        {
-            if (!TryParse(candidate, out IPAddress? address, out int prefixLength))
+        string[] allowedNetworks =
+            configuration.GetSection("QrAccess:AllowedClientNetworks").Get<string[]>() ?? [];
+        return IsAllowed(context.Connection.RemoteIpAddress, allowedNetworks)
+            ? null
+            : new ObjectResult(
+                new ProblemDetails
+                {
+                    Title = "Acceso QR no autorizado",
+                    Detail = "La IP desde la que accedes no está configurada para usar QR.",
+                    Status = StatusCodes.Status403Forbidden,
+                }
+            )
             {
-                normalized = string.Empty;
-                error = $"'{candidate}' is not a valid IP address or CIDR network.";
-                return false;
-            }
-
-            result.Add($"{address}/{prefixLength}");
-        }
-
-        normalized = string.Join(';', result);
-        error = null;
-        return true;
+                StatusCode = StatusCodes.Status403Forbidden,
+            };
     }
 
-    public static bool IsAllowed(IPAddress? clientAddress, string configuredNetworks)
+    public static bool IsAllowed(IPAddress? clientAddress, IEnumerable<string> allowedNetworks)
     {
         if (clientAddress is null)
         {
@@ -52,15 +35,10 @@ internal static class QrNetworkAccess
         }
 
         IPAddress normalizedClient = NormalizeAddress(clientAddress);
-        foreach (
-            string configured in configuredNetworks.Split(
-                ';',
-                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
-            )
-        )
+        foreach (string configuredNetwork in allowedNetworks)
         {
             if (
-                TryParse(configured, out IPAddress? network, out int prefixLength)
+                TryParse(configuredNetwork, out IPAddress network, out int prefixLength)
                 && Contains(network, prefixLength, normalizedClient)
             )
             {
@@ -69,14 +47,6 @@ internal static class QrNetworkAccess
         }
 
         return false;
-    }
-
-    public static string[] ToResponse(string configuredNetworks)
-    {
-        return configuredNetworks.Split(
-            ';',
-            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
-        );
     }
 
     private static bool TryParse(string value, out IPAddress address, out int prefixLength)

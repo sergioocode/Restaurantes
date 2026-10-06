@@ -4,6 +4,5 @@ public sealed record QrSessionEnvelope(
     QrTableResponse Table,
     QrDiningSessionResponse? Session,
     string CustomerAccessToken,
-    bool QrRequiresImmediatePayment,
     bool IsRestaurantOpen
 );

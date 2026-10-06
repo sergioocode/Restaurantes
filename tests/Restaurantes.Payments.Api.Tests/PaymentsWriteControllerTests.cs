@@ -38,6 +38,7 @@ public sealed class PaymentsWriteControllerTests
             store,
             dining,
             new OpenCashRegister(),
+            null!,
             null!
         );
         CaptureCustomerQrPaymentRequest request = new()
@@ -46,7 +47,7 @@ public sealed class PaymentsWriteControllerTests
             DiningSessionId = sessionId,
         };
 
-        ActionResult<Restaurantes.Payments.Contracts.Responses.PaymentResponse> result =
+        ActionResult<Contracts.Responses.PaymentResponse> result =
             await controller.CaptureCustomerQr(
                 orderId,
                 request,
@@ -61,14 +62,19 @@ public sealed class PaymentsWriteControllerTests
 
     private sealed class PaymentStore(PayableOrder order) : IPaymentWriteStore
     {
-        public Task<PayableOrder?> FindAsync(Guid orderId, CancellationToken cancellationToken) =>
-            Task.FromResult<PayableOrder?>(orderId == order.OrderId ? order : null);
+        public Task<PayableOrder?> FindAsync(Guid orderId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<PayableOrder?>(orderId == order.OrderId ? order : null);
+        }
 
         public Task SaveWithEventAsync(
             PayableOrder order,
             object integrationEvent,
             CancellationToken cancellationToken
-        ) => throw new NotSupportedException();
+        )
+        {
+            throw new NotSupportedException();
+        }
     }
 
     private sealed class DiningValidator : ICustomerDiningSessionValidator
@@ -96,9 +102,11 @@ public sealed class PaymentsWriteControllerTests
         public Task<CashRegisterSessionDetails> GetOpenSessionAsync(
             Guid restaurantId,
             CancellationToken cancellationToken
-        ) =>
-            Task.FromResult(
+        )
+        {
+            return Task.FromResult(
                 new CashRegisterSessionDetails(Guid.NewGuid(), new DateOnly(2026, 10, 4))
             );
+        }
     }
 }
