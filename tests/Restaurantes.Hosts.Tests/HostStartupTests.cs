@@ -3,7 +3,6 @@ using System.Net;
 using System.Reflection;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
-using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Xunit;
@@ -98,10 +97,7 @@ public sealed class HostStartupTests
         {
             if (listener.Name == "Microsoft.Extensions.Hosting")
             {
-                events = listener.Subscribe(
-                    (IObserver<KeyValuePair<string, object?>>)this,
-                    name => name == "HostBuilt"
-                );
+                events = listener.Subscribe(this, name => name == "HostBuilt");
             }
         }
 
@@ -115,7 +111,10 @@ public sealed class HostStartupTests
 
         public void OnCompleted() { }
 
-        public void OnError(Exception error) => built.TrySetException(error);
+        public void OnError(Exception error)
+        {
+            built.TrySetException(error);
+        }
 
         public void Dispose()
         {
