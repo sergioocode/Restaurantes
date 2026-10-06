@@ -20,6 +20,8 @@ public sealed class Order
     public OrderStatus Status { get; private set; }
     public int Version { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
+    public Guid? CashRegisterSessionId { get; private set; }
+    public DateOnly? BusinessDate { get; private set; }
     public DateTime? SubmittedAtUtc { get; private set; }
     public DateTime? PreparationStartedAtUtc { get; private set; }
     public DateTime? ReadyAtUtc { get; private set; }
@@ -38,7 +40,9 @@ public sealed class Order
         OrderSource source,
         PaymentTiming paymentTiming,
         IEnumerable<OrderLineDraft> lineDrafts,
-        DateTime occurredAtUtc
+        DateTime occurredAtUtc,
+        Guid? cashRegisterSessionId = null,
+        DateOnly? businessDate = null
     )
     {
         if (restaurantId == Guid.Empty)
@@ -48,34 +52,22 @@ public sealed class Order
 
         string normalizedTableLabel = tableLabel.Trim();
         string normalizedCustomerName = customerName.Trim();
-        bool hasPhysicalLocation = serviceMode is ServiceMode.DineIn or ServiceMode.Bar;
-        if (hasPhysicalLocation && normalizedTableLabel.Length is < 1 or > 80)
+        if (normalizedTableLabel.Length is < 1 or > 80)
         {
             throw new ArgumentException(
                 "TableLabel must contain between 1 and 80 characters.",
                 nameof(tableLabel)
             );
         }
-        if (!hasPhysicalLocation && normalizedTableLabel.Length > 0)
-        {
-            throw new ArgumentException(
-                "TableLabel must be empty for Takeaway orders.",
-                nameof(tableLabel)
-            );
-        }
+        bool requiresDiningLocation = serviceMode is ServiceMode.DineIn or ServiceMode.Bar;
         if (
-            hasPhysicalLocation
-            && (tableId is null || diningSessionId is null || diningSessionId == Guid.Empty)
+            requiresDiningLocation
+                ? tableId is null || diningSessionId is null || diningSessionId == Guid.Empty
+                : tableId is not null || diningSessionId is not null
         )
         {
             throw new ArgumentException(
-                "DineIn and Bar orders require a physical location and DiningSessionId."
-            );
-        }
-        if (!hasPhysicalLocation && (tableId is not null || diningSessionId is not null))
-        {
-            throw new ArgumentException(
-                "Takeaway orders cannot reference a physical location or dining session."
+                "DineIn and Bar orders require a location and DiningSessionId; Takeaway orders are independent of dining locations."
             );
         }
         if (serviceMode == ServiceMode.Takeaway && normalizedCustomerName.Length is < 1 or > 80)
@@ -105,11 +97,9 @@ public sealed class Order
         bool validPaymentFlow = (source, serviceMode, paymentTiming) switch
         {
             (OrderSource.CustomerQr, ServiceMode.DineIn, PaymentTiming.Immediate) => true,
-            (OrderSource.CustomerQr, ServiceMode.DineIn, PaymentTiming.OnAccount) => true,
             (OrderSource.Comandero, ServiceMode.DineIn, PaymentTiming.OnAccount) => true,
             (OrderSource.Pos, ServiceMode.DineIn, PaymentTiming.OnAccount) => true,
             (OrderSource.Pos, ServiceMode.Bar, PaymentTiming.OnAccount) => true,
-            (OrderSource.Pos, ServiceMode.Takeaway, PaymentTiming.Immediate) => true,
             (OrderSource.Pos, ServiceMode.Takeaway, PaymentTiming.OnAccount) => true,
             _ => false,
         };
@@ -136,6 +126,8 @@ public sealed class Order
             Status = OrderStatus.Draft,
             Version = 1,
             CreatedAtUtc = DateTime.SpecifyKind(occurredAtUtc, DateTimeKind.Utc),
+            CashRegisterSessionId = cashRegisterSessionId,
+            BusinessDate = businessDate,
         };
 
         foreach (OrderLineDraft draft in drafts)
@@ -337,14 +329,8 @@ public sealed class Order
         Version++;
     }
 
-    public void CancelTakeaway(string reason, DateTime occurredAtUtc)
+    public void Cancel(string reason, DateTime occurredAtUtc)
     {
-        if (ServiceMode != ServiceMode.Takeaway)
-        {
-            throw new InvalidOperationException(
-                "Only takeaway orders can use the operational recovery cancellation."
-            );
-        }
         if (Status is OrderStatus.Delivered or OrderStatus.Cancelled)
         {
             throw new InvalidOperationException(
@@ -355,6 +341,17 @@ public sealed class Order
         _ = reason.Trim() is { Length: >= 3 and <= 300 }
             ? true
             : throw new ArgumentException("Cancellation reason must contain 3 to 300 characters.");
+        if (
+            _stations.Any(station =>
+                station.Status is not (KitchenTicketStatus.Pending or KitchenTicketStatus.Cancelled)
+                || station.PreparationStartedAtUtc is not null
+            )
+        )
+        {
+            throw new InvalidOperationException(
+                "An order cannot be cancelled after preparation has started at a kitchen station."
+            );
+        }
         foreach (OrderKitchenStation station in _stations)
         {
             station.CancelForOrder();

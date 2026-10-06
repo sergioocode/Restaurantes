@@ -49,6 +49,7 @@ else
         <aside class="sidebar">
             <h2>Módulos</h2>
             @if (HasAnyLocalPermission("catalog.manage")) { <button class="@NavClass("menu")" @onclick='() => module = "menu"'>Menú por local</button> }
+            @if (OrderRestaurants.Count > 0) { <button class="@NavClass("orders")" @onclick="OpenOrders">Pedidos</button> }
             @if (HasAnyLocalPermission("kds.use")) { <button class="@NavClass("stations")" @onclick='() => module = "stations"'>Estaciones KDS</button> }
             @if (HasAnyLocalPermission("tables.read")) { <button class="@NavClass("tables")" @onclick='() => module = "tables"'>Mesas y configuración</button> }
             @if (IsAdmin) { <button class="@NavClass("restaurants")" @onclick='() => module = "restaurants"'>Locales</button> }
@@ -72,6 +73,10 @@ else
             @if (module == "menu")
             {
                 <MenuModule Host="this" />
+            }
+            else if (module == "orders")
+            {
+                <OrdersModule Host="this" />
             }
             else if (module == "stations")
             {
@@ -100,4 +105,39 @@ else
         </section>
     </main>
     @if (!string.IsNullOrWhiteSpace(message)) { <div class="toast @(ok ? "ok" : "error")">@message</div> }
+}
+@if (selectedOrder is not null)
+{
+    <div class="order-details-overlay">
+        <article class="order-details">
+            <div class="order-details-actions">
+                <button class="secondary" @onclick="PrintOrderDetails">Imprimir</button>
+                <button class="secondary" @onclick="CloseOrderDetails">Cerrar</button>
+            </div>
+            <header class="order-ticket-header">
+                <h2>Copia del pedido</h2>
+                <strong>@RestaurantName(selectedOrder.RestaurantId)</strong>
+                <span>@(string.IsNullOrEmpty(selectedOrder.TableLabel) ? selectedOrder.CustomerName : selectedOrder.TableLabel)</span>
+                <span>@selectedOrder.CreatedAtLocal.ToString("dd/MM/yyyy HH:mm")</span>
+                <span>Pedido @selectedOrder.Id</span>
+                <span>@selectedOrder.Source · @selectedOrder.Status</span>
+                @if (selectedOrder.PaymentMethod is not null && selectedOrder.PaymentCapturedAtLocal is not null)
+                {
+                    <span>Forma de pago: @PaymentMethodLabel(selectedOrder.PaymentMethod)</span>
+                    <span>Pagado: @selectedOrder.PaymentCapturedAtLocal.Value.ToString("dd/MM/yyyy HH:mm")</span>
+                }
+            </header>
+            <hr />
+            @foreach (ManagementOrderLineResponse line in selectedOrder.Lines)
+            {
+                <div class="order-ticket-line">
+                    <span>@line.Quantity × @line.ProductName @if (line.Status == "Cancelled") { <small>(Cancelado)</small> }</span>
+                    <strong>@((line.Quantity * line.UnitPrice).ToString("0.00")) €</strong>
+                </div>
+            }
+            <hr />
+            <div class="order-ticket-total"><strong>Total</strong><strong>@selectedOrder.Total.ToString("0.00") €</strong></div>
+            <p class="order-ticket-copy">Copia del pedido</p>
+        </article>
+    </div>
 }

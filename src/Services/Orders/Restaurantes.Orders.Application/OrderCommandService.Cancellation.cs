@@ -6,7 +6,7 @@ namespace Restaurantes.Orders.Application;
 
 public sealed partial class OrderCommandService
 {
-    public async Task<OrderResponse?> CancelTakeawayAsync(
+    public async Task<OrderResponse?> CancelAsync(
         Guid id,
         string reason,
         string cancelledBy,
@@ -18,15 +18,15 @@ public sealed partial class OrderCommandService
         {
             return null;
         }
-        if (await payments.IsPaidAsync(id, ct) && !await payments.IsRefundedAsync(id, ct))
+        if (await payments.IsPaidAsync(id, ct))
         {
             throw new InvalidOperationException(
-                "Paid takeaway orders must be refunded before they can be cancelled."
+                "Paid orders cannot be cancelled here. Any refund must be handled by Accounting."
             );
         }
 
         DateTime now = time.GetUtcNow().UtcDateTime;
-        o.CancelTakeaway(reason, now);
+        o.Cancel(reason, now);
         await store.SaveWithEventAsync(
             o,
             new OrderCancelled(

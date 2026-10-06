@@ -11,6 +11,10 @@ const monitorPanel = document.querySelector('#monitorPanel');
 const loginMicrosoft = document.querySelector('#loginMicrosoft');
 const loginGoogle = document.querySelector('#loginGoogle');
 const refreshButton = document.querySelector('#refresh');
+const historyButton = document.querySelector('#historyButton');
+const historyPanel = document.querySelector('#historyPanel');
+const historyList = document.querySelector('#historyList');
+const historyClose = document.querySelector('#historyClose');
 const logoutButton = document.querySelector('#logout');
 const restaurantSelect = document.querySelector('#restaurantId');
 const stationSelect = document.querySelector('#stationCode');
@@ -19,6 +23,7 @@ const identityStatus = document.querySelector('#identityStatus');
 const eventText = document.querySelector('#event');
 const ordersElement = document.querySelector('#orders');
 const orderPollingIntervalMilliseconds = 30_000;
+let historyOpen = false;
 
 const api = new KdsApiClient(apiBaseUrl);
 let login;
@@ -82,6 +87,21 @@ async function loadOrders() {
   }
   renderedOrders = orders;
   renderer.render(orders);
+}
+
+function closeHistory() {
+  historyOpen = false;
+  historyPanel.classList.add('hidden');
+  ordersElement.classList.remove('hidden');
+}
+
+function updateHistoryVisibility() {
+  const selectedStation = stationSelect.options[stationSelect.selectedIndex];
+  const available = Boolean(login && selectedStation);
+  historyButton.classList.toggle('hidden', !available);
+  historyButton.disabled = false;
+  historyButton.title = '';
+  if (!available) closeHistory();
 }
 
 function clearOrdersView(message) {
@@ -174,6 +194,7 @@ function updateRestaurantIdentity() {
 async function loadStationsAndConnect() {
   const restaurantId = restaurantSelect.value;
   if (!restaurantId) return;
+  closeHistory();
   clearOrdersView('Cargando pedidos…');
   localStorage.setItem(restaurantKey, restaurantId);
   updateRestaurantIdentity();
@@ -198,6 +219,7 @@ async function loadStationsAndConnect() {
       ? remembered
       : (primary ? 'CHEF' : (stationSelect.options[0]?.value || ''));
     stationSelect.disabled = false;
+    updateHistoryVisibility();
     eventText.textContent = '';
     connect();
   } catch (error) {
@@ -253,6 +275,46 @@ async function activateLogin(loginResponse) {
   await loadStationsAndConnect();
 }
 
+async function openHistory() {
+  if (!login || !restaurantSelect.value || !stationSelect.value) return;
+  historyButton.disabled = true;
+  historyList.replaceChildren();
+  try {
+    const orders = await api.getHistory(restaurantSelect.value, stationSelect.value);
+    for (const order of orders) {
+      const card = document.createElement('article');
+      card.className = 'history-order';
+      const title = document.createElement('strong');
+      const location = order.tableLabel || order.customerName || 'Pedido';
+      title.textContent = location + ' · ' + order.orderId.slice(0, 8);
+      const time = document.createElement('small');
+      time.textContent = new Date(order.processedAtUtc || order.createdAtUtc)
+        .toLocaleString('es-ES') + ' · ' + order.status + ' · Caja '
+        + (order.cashRegisterSessionId ? order.cashRegisterSessionId.slice(0, 8) : 'sin vínculo');
+      card.append(title, time);
+      for (const line of order.lines) {
+        const row = document.createElement('p');
+        row.textContent = line.quantity + ' × ' + line.productName
+          + (line.status === 'Cancelled' ? ' · Cancelado' : '');
+        card.append(row);
+      }
+      historyList.append(card);
+    }
+    if (!orders.length) {
+      const empty = document.createElement('p');
+      empty.className = 'empty';
+      empty.textContent = 'No hay pedidos procesados en esta estación durante el día operativo.';
+      historyList.append(empty);
+    }
+    historyOpen = true;
+    ordersElement.classList.add('hidden');
+    historyPanel.classList.remove('hidden');
+  } catch (error) {
+    eventText.textContent = error.message;
+  } finally {
+    historyButton.disabled = false;
+  }
+}
 function startLogin(provider) {
   const returnPath = encodeURIComponent('/kds/');
   window.location.assign('/api/identity/auth/start/' + provider + '?returnPath=' + returnPath);
@@ -278,6 +340,8 @@ function logout() {
   identityStatus.textContent = '';
   eventText.textContent = '';
   clearOrdersView('Inicia sesión para cargar el monitor.');
+  historyButton.classList.add('hidden');
+  closeHistory();
   setStatus(false, 'Inicia sesión');
 }
 
@@ -307,12 +371,16 @@ async function restoreLogin() {
 loginMicrosoft.addEventListener('click', () => startLogin('Microsoft'));
 loginGoogle.addEventListener('click', () => startLogin('Google'));
 refreshButton.addEventListener('click', refreshMonitor);
+historyButton.addEventListener('click', openHistory);
+historyClose.addEventListener('click', closeHistory);
 logoutButton.addEventListener('click', logout);
 restaurantSelect.addEventListener('change', loadStationsAndConnect);
 stationSelect.addEventListener('change', () => {
+  closeHistory();
   localStorage.setItem('restaurantes.kds.station.' + restaurantSelect.value, stationSelect.value);
   eventText.textContent = '';
   clearOrdersView('Cargando pedidos…');
+  updateHistoryVisibility();
   connect();
 });
 

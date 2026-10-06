@@ -9,8 +9,7 @@ public partial class Home
 {
     private const string SessionKey = "restaurantes.backoffice.login";
     private string module = "menu";
-    internal string search = "",
-        allowedNetworksText = "";
+    internal string search = "";
     private string? message;
     internal bool busy;
     private bool ok;
@@ -21,9 +20,12 @@ public partial class Home
     internal List<ProductResponse> products = [];
     private List<MenuItemResponse> menu = [];
     internal List<KitchenStationResponse> stations = [];
+    internal List<ManagementOrderResponse> historyOrders = [];
+    internal Guid historyRestaurantId;
+    internal DateOnly historyDate = DateOnly.FromDateTime(DateTime.Today);
+    internal ManagementOrderResponse? selectedOrder;
     internal List<RestaurantResponse> restaurants = [];
     internal List<TableResponse> tables = [];
-    internal DiningPolicyResponse policy = new();
     internal List<StaffUserResponse> users = [];
     internal Dictionary<Guid, MenuEditor> editors = [];
     internal CategoryDraft categoryDraft = new();
@@ -79,6 +81,22 @@ public partial class Home
                     )
                 )
                 .ToList();
+    internal List<RestaurantResponse> OrderRestaurants =>
+        restaurants
+            .Where(x =>
+                login?.AllRestaurantsRoles?.Any(role => RoleHasPermission(role, "orders.read"))
+                    == true
+                || login?.AllRestaurantsRoles?.Any(role => RoleHasPermission(role, "orders.manage"))
+                    == true
+                || login?.Restaurants.Any(a =>
+                    a.RestaurantId == x.Id
+                    && (
+                        a.Permissions.Contains("orders.read")
+                        || a.Permissions.Contains("orders.manage")
+                    )
+                ) == true
+            )
+            .ToList();
     internal RestaurantResponse? CurrentRestaurant =>
         restaurants.FirstOrDefault(x => x.Id == restaurantId);
     internal List<ProductResponse> VisibleProducts =>
@@ -94,6 +112,7 @@ public partial class Home
         module switch
         {
             "tables" => "OPERACIÓN DEL LOCAL",
+            "orders" => "OPERACIÓN DEL LOCAL",
             "restaurants" => "CADENA",
             "categories" or "products" => "CATÁLOGO GLOBAL",
             "users" => "SEGURIDAD",
@@ -105,6 +124,7 @@ public partial class Home
             "tables" => "Mesas, barra y reglas de venta",
             "restaurants" => "Locales",
             "stations" => "Estaciones Kitchen Display System",
+            "orders" => "Pedidos",
             "categories" => "Categorías",
             "products" => "Productos",
             "users" => "Usuarios, roles y locales",
@@ -239,6 +259,7 @@ public partial class Home
         {
             "menu" => Run(RefreshMenuCore),
             "stations" => Run(RefreshStationsCore),
+            "orders" => RefreshOrders(),
             "tables" => Run(RefreshTablesCore),
             "categories" => Run(RefreshCategoriesCore),
             "products" => Run(RefreshProductsCore),
@@ -255,6 +276,75 @@ public partial class Home
         await LoadLocalCore();
     }
 
+    internal async Task OpenOrders()
+    {
+        module = "orders";
+        await RefreshOrders();
+    }
+
+    internal Task RefreshOrders()
+    {
+        return Run(async () =>
+        {
+            IEnumerable<RestaurantResponse> allowed = OrderRestaurants;
+            if (historyRestaurantId != Guid.Empty)
+            {
+                allowed = allowed.Where(restaurant => restaurant.Id == historyRestaurantId);
+            }
+            List<ManagementOrderResponse> result = [];
+            foreach (RestaurantResponse restaurant in allowed)
+            {
+                int offset = 0;
+                while (true)
+                {
+                    List<ManagementOrderResponse> page = await Api.ManagementOrdersAsync(
+                        restaurant.Id,
+                        historyDate,
+                        offset
+                    );
+                    result.AddRange(page);
+                    if (page.Count < 100)
+                    {
+                        break;
+                    }
+
+                    offset += page.Count;
+                }
+            }
+            historyOrders = result.OrderByDescending(order => order.CreatedAtUtc).ToList();
+        });
+    }
+
+    internal Task ShowOrderDetails(ManagementOrderResponse order)
+    {
+        return InvokeAsync(() =>
+        {
+            selectedOrder = order;
+            StateHasChanged();
+        });
+    }
+
+    internal void CloseOrderDetails()
+    {
+        selectedOrder = null;
+    }
+
+    internal Task PrintOrderDetails()
+    {
+        return Js.InvokeVoidAsync("window.print").AsTask();
+    }
+
+    internal static string PaymentMethodLabel(string method)
+    {
+        return method switch
+        {
+            "Card" => "Tarjeta / datáfono",
+            "Cash" => "Efectivo",
+            "Online" => "Pago online",
+            _ => method,
+        };
+    }
+
     private async Task RefreshStationsCore()
     {
         stations = await Api.StationsAsync(restaurantId);
@@ -263,8 +353,6 @@ public partial class Home
     private async Task RefreshTablesCore()
     {
         await RefreshZones();
-        policy = await Api.DiningPolicyAsync(restaurantId);
-        allowedNetworksText = string.Join(Environment.NewLine, policy.QrAllowedNetworks);
     }
 
     private async Task RefreshCategoriesCore()
@@ -323,7 +411,6 @@ public partial class Home
             stations = [];
             tables = [];
             zones = [];
-            policy = new();
             return;
         }
         menu = HasLocalPermission("catalog.manage") ? await Api.MenuAsync(restaurantId) : [];
@@ -332,10 +419,6 @@ public partial class Home
         zones = HasLocalPermission("tables.read") ? await Api.ZonesAsync(restaurantId) : [];
         tableDraft = new() { ZoneId = zones.FirstOrDefault()?.Id ?? Guid.Empty };
         zoneDraft = new();
-        policy = HasLocalPermission("tables.read")
-            ? await Api.DiningPolicyAsync(restaurantId)
-            : new();
-        allowedNetworksText = string.Join(Environment.NewLine, policy.QrAllowedNetworks);
         editors = products.ToDictionary(
             p => p.Id,
             p =>
@@ -653,24 +736,6 @@ public partial class Home
         );
     }
 
-    internal async Task SavePolicy()
-    {
-        await Run(
-            async () =>
-            {
-                policy.QrAllowedNetworks = allowedNetworksText.Split(
-                    ['\r', '\n', ',', ';'],
-                    StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
-                );
-                policy = await Api.UpdateDiningPolicyAsync(restaurantId, policy);
-                allowedNetworksText = string.Join(Environment.NewLine, policy.QrAllowedNetworks);
-                ok = true;
-                message = "Política del local actualizada.";
-            },
-            false
-        );
-    }
-
     private async Task LoadUsersCore()
     {
         users = await Api.UsersAsync();
@@ -772,6 +837,7 @@ public partial class Home
             "Admin" => true,
             "Gerente" or "Contabilidad" => permission
                 is "backoffice.access"
+                    or "orders.read"
                     or "dashboard.read"
                     or "reports.financial.read"
                     or "payments.refund",
@@ -787,6 +853,7 @@ public partial class Home
                     or "tables.manage"
                     or "tables.release"
                     or "orders.create"
+                    or "orders.read"
                     or "orders.manage"
                     or "orders.recover"
                     or "payments.capture"
