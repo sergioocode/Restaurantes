@@ -296,7 +296,7 @@ Cada servicio es propietario de sus datos. Un servicio no consulta directamente 
 
 | Perfil | Aplicación | Propósito | Tecnología |
 | --- | --- | --- | --- |
-| Cliente | **Customer QR** | Pedido, pago según la política del restaurante y seguimiento desde el QR asociado a una mesa/sesión. | Blazor WebAssembly PWA |
+| Cliente | **Customer QR** | Pago online obligatorio antes de enviar el pedido a cocina y seguimiento desde el QR asociado a una mesa/sesión. | Blazor WebAssembly PWA |
 | Camarero | **Comandero** | Atención de mesas, registro y seguimiento de pedidos. | Blazor WebAssembly PWA |
 | Caja | **TPV / POS** | Operación de pedidos, cuentas y caja. | Blazor WebAssembly PWA |
 | Cocina | **KDS** | Preparación por estación y seguimiento del ciclo de cocina. | ASP.NET Core Web |
@@ -318,32 +318,25 @@ sequenceDiagram
 
     alt Customer QR
         Client->>Dining: abrir o recuperar sesión QR
-        Dining-->>Client: sesión + QrRequiresImmediatePayment
-    end
-
-    Client->>Orders: crear pedido Draft
-
-    alt Customer QR y QrRequiresImmediatePayment = true
+        Dining-->>Client: sesión activa
+        Client->>Orders: crear pedido Draft (Immediate)
         Orders-->>MQ: OrderCreated
         MQ-->>Payments: proyectar PayableOrder
         Client->>Payments: capturar pago online
         Payments-->>MQ: PaymentCaptured
-        MQ-->>Orders: actualizar proyección de pago
+        MQ-->>Orders: actualizar proyección de pago a Paid
+        Client->>Orders: submit
+        Orders-->>MQ: OrderSubmitted
+        MQ-->>KDS: actualizar proyección operativa
+    else Comandero / POS
+        Client->>Orders: crear pedido Draft (OnAccount)
+        Client->>Orders: submit
+        Orders-->>MQ: OrderSubmitted
+        MQ-->>KDS: actualizar proyección operativa
     end
-
-    Client->>Orders: submit
-    Orders-->>MQ: OrderSubmitted
-    MQ-->>KDS: actualizar proyección operativa
 ```
 
-En Customer QR, `QrRequiresImmediatePayment` es una política configurable por restaurante:
-
-```text
-QrRequiresImmediatePayment = true  -> Immediate -> pagar antes de submit
-QrRequiresImmediatePayment = false -> OnAccount -> submit sin captura inmediata
-```
-
-Cuando está activada, Orders no permite enviar el pedido a cocina mientras su proyección de pago no indique `Paid`. Cuando está desactivada, el pedido se incorpora a la cuenta de la sesión.
+Customer QR siempre crea pedidos `Immediate`. Payments debe confirmar el pago y Orders proyectar `Paid` antes de aceptar `submit`; el pedido `Draft` creado para iniciar el pago aún no se envía a cocina.
 
 La publicación y consumo de eventos introduce consistencia eventual entre servicios. Cada bounded context mantiene su propio estado y las proyecciones se actualizan después del commit del servicio que origina el cambio.
 

@@ -35,6 +35,7 @@ public sealed partial class PosApi
         TableResponse table,
         Guid sessionId,
         string serviceMode,
+        string customerName,
         IReadOnlyDictionary<Guid, int> quantities,
         IReadOnlyDictionary<Guid, string> notes
     )
@@ -45,6 +46,7 @@ public sealed partial class PosApi
             tableId = table.Id,
             diningSessionId = sessionId,
             tableLabel = table.Label,
+            customerName,
             serviceMode,
             source = "Pos",
             paymentTiming = "OnAccount",
@@ -70,82 +72,7 @@ public sealed partial class PosApi
         return await ReadAsync<OrderResponse>(submitResponse);
     }
 
-    public async Task<OrderResponse> CreatePayAndSubmitQuickSaleAsync(
-        Guid restaurantId,
-        string serviceMode,
-        string customerName,
-        string paymentMethod,
-        Guid? cashRegisterSessionId,
-        IReadOnlyDictionary<Guid, int> quantities,
-        IReadOnlyDictionary<Guid, string> notes
-    )
-    {
-        object body = new
-        {
-            restaurantId,
-            tableId = (Guid?)null,
-            diningSessionId = (Guid?)null,
-            tableLabel = string.Empty,
-            customerName,
-            serviceMode,
-            source = "Pos",
-            paymentTiming = "Immediate",
-            lines = quantities
-                .Where(x => x.Value > 0)
-                .Select(x => new
-                {
-                    productId = x.Key,
-                    quantity = x.Value,
-                    notes = notes.GetValueOrDefault(x.Key) ?? string.Empty,
-                }),
-        };
-        using HttpRequestMessage create = Authorized(HttpMethod.Post, "/api/orders");
-        create.Content = JsonContent.Create(body);
-        using HttpResponseMessage createResponse = await http.SendAsync(create);
-        OrderResponse order = await ReadAsync<OrderResponse>(createResponse);
-
-        Guid paymentKey = Guid.NewGuid();
-        await RetryAsync(
-            async () =>
-            {
-                using HttpRequestMessage payment = Authorized(
-                    HttpMethod.Post,
-                    $"/api/payments/orders/{order.Id}/capture"
-                );
-                payment.Content = JsonContent.Create(
-                    new
-                    {
-                        idempotencyKey = paymentKey,
-                        method = paymentMethod,
-                        externalReference = PaymentReference(
-                            paymentMethod,
-                            cashRegisterSessionId,
-                            $"POS-{serviceMode.ToUpperInvariant()}-{order.Id:N}"
-                        ),
-                    }
-                );
-                return await http.SendAsync(payment);
-            },
-            [404, 425],
-            "La proyección de pago no estuvo disponible a tiempo."
-        );
-
-        return await RetryAsync(
-            async () =>
-            {
-                using HttpRequestMessage submit = Authorized(
-                    HttpMethod.Post,
-                    $"/api/orders/{order.Id}/submit"
-                );
-                return await http.SendAsync(submit);
-            },
-            [409],
-            "El pago no se proyectó en Orders a tiempo.",
-            ReadAsync<OrderResponse>
-        );
-    }
-
-    public async Task<OrderResponse> CreateAndSubmitTakeawayOnAccountAsync(
+    public async Task<OrderResponse> CreateAndSubmitTakeawayAsync(
         Guid restaurantId,
         string customerName,
         IReadOnlyDictionary<Guid, int> quantities,
@@ -157,7 +84,7 @@ public sealed partial class PosApi
             restaurantId,
             tableId = (Guid?)null,
             diningSessionId = (Guid?)null,
-            tableLabel = string.Empty,
+            tableLabel = "PARA LLEVAR",
             customerName,
             serviceMode = "Takeaway",
             source = "Pos",
@@ -175,6 +102,7 @@ public sealed partial class PosApi
         create.Content = JsonContent.Create(body);
         using HttpResponseMessage createResponse = await http.SendAsync(create);
         OrderResponse order = await ReadAsync<OrderResponse>(createResponse);
+
         using HttpRequestMessage submit = Authorized(
             HttpMethod.Post,
             $"/api/orders/{order.Id}/submit"
@@ -183,41 +111,8 @@ public sealed partial class PosApi
         return await ReadAsync<OrderResponse>(submitResponse);
     }
 
-    public async Task<OrderResponse> DeliverPickupAsync(
-        Guid orderId,
-        string? paymentMethod,
-        Guid? cashRegisterSessionId
-    )
+    public async Task<OrderResponse> DeliverPickupAsync(Guid orderId)
     {
-        if (!string.IsNullOrWhiteSpace(paymentMethod))
-        {
-            Guid paymentKey = Guid.NewGuid();
-            await RetryAsync(
-                async () =>
-                {
-                    using HttpRequestMessage payment = Authorized(
-                        HttpMethod.Post,
-                        $"/api/payments/orders/{orderId}/capture"
-                    );
-                    payment.Content = JsonContent.Create(
-                        new
-                        {
-                            idempotencyKey = paymentKey,
-                            method = paymentMethod,
-                            externalReference = PaymentReference(
-                                paymentMethod,
-                                cashRegisterSessionId,
-                                $"POS-PICKUP-{orderId:N}"
-                            ),
-                        }
-                    );
-                    return await http.SendAsync(payment);
-                },
-                [404, 425],
-                "La proyección de pago no estuvo disponible a tiempo."
-            );
-        }
-
         return await RetryAsync(
             async () =>
             {

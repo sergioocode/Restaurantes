@@ -40,11 +40,6 @@ public sealed partial class BackofficeApi
         return GetAsync<List<TableResponse>>($"/api/dining/restaurants/{restaurantId}/tables");
     }
 
-    public Task<DiningPolicyResponse> DiningPolicyAsync(Guid restaurantId)
-    {
-        return GetAsync<DiningPolicyResponse>($"/api/dining/restaurants/{restaurantId}/policy");
-    }
-
     public async Task<TableResponse> CreateTableAsync(Guid restaurantId, TableDraft draft)
     {
         using HttpRequestMessage request = Authorized(
@@ -96,28 +91,5 @@ public sealed partial class BackofficeApi
         );
         using HttpResponseMessage response = await http.SendAsync(request);
         return await ReadAsync<TableQrResponse>(response);
-    }
-
-    public async Task<DiningPolicyResponse> UpdateDiningPolicyAsync(
-        Guid restaurantId,
-        DiningPolicyResponse policy
-    )
-    {
-        using HttpRequestMessage request = Authorized(
-            HttpMethod.Put,
-            $"/api/dining/restaurants/{restaurantId}/policy"
-        );
-        request.Content = JsonContent.Create(
-            new
-            {
-                policy.QrRequiresImmediatePayment,
-                policy.RequireTrustedNetworkForQr,
-                policy.TakeawayRequiresPrepayment,
-                policy.AllowCheckoutBeforeKitchenCompletion,
-                policy.QrAllowedNetworks,
-            }
-        );
-        using HttpResponseMessage response = await http.SendAsync(request);
-        return await ReadAsync<DiningPolicyResponse>(response);
     }
 }

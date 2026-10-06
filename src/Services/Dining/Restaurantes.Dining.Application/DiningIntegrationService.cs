@@ -34,6 +34,10 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
         {
             await ApplyOrderLineCancelled(db, body);
         }
+        else if (type == typeof(OrderCancelled).FullName)
+        {
+            await ApplyOrderCancelled(db, body);
+        }
         else if (type == typeof(PaymentCaptured).FullName)
         {
             await ApplyPayment(db, body, "Paid");
@@ -56,7 +60,7 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
         OrderCreated e =
             JsonSerializer.Deserialize<OrderCreated>(body.Span)
             ?? throw new JsonException("OrderCreated is empty.");
-        if (e.ServiceMode == "Takeaway" || e.DiningSessionId is null)
+        if (e.DiningSessionId is null)
         {
             return;
         }
@@ -107,7 +111,7 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
         OrderDelivered e =
             JsonSerializer.Deserialize<OrderDelivered>(body.Span)
             ?? throw new JsonException("OrderDelivered is empty.");
-        if (e.ServiceMode == "Takeaway")
+        if (e.DiningSessionId is null)
         {
             return;
         }
@@ -129,7 +133,7 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
         OrderReady e =
             JsonSerializer.Deserialize<OrderReady>(body.Span)
             ?? throw new JsonException("OrderReady is empty.");
-        if (e.ServiceMode == "Takeaway")
+        if (e.DiningSessionId is null)
         {
             return;
         }
@@ -150,11 +154,10 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
         OrderSubmitted e =
             JsonSerializer.Deserialize<OrderSubmitted>(body.Span)
             ?? throw new JsonException("OrderSubmitted is empty.");
-        if (e.ServiceMode == "Takeaway")
+        if (e.DiningSessionId is null)
         {
             return;
         }
-
         DiningSessionOrder order =
             await db.FindOrderAsync(e.OrderId)
             ?? throw new JsonException($"Dining order ''{e.OrderId}'' does not exist.");
@@ -170,7 +173,7 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
         OrderLineCancelled e =
             JsonSerializer.Deserialize<OrderLineCancelled>(body.Span)
             ?? throw new JsonException("OrderLineCancelled is empty.");
-        if (e.ServiceMode == "Takeaway" || e.DiningSessionId is null)
+        if (e.DiningSessionId is null)
         {
             return;
         }
@@ -179,6 +182,23 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
             ?? throw new JsonException($"Dining order ''{e.OrderId}'' does not exist.");
         order.OrderStatus = e.Status;
         order.Amount = e.Total;
+        order.UpdatedAtUtc = e.CancelledAtUtc;
+    }
+
+    private static async Task ApplyOrderCancelled(IDiningStore db, ReadOnlyMemory<byte> body)
+    {
+        OrderCancelled e =
+            JsonSerializer.Deserialize<OrderCancelled>(body.Span)
+            ?? throw new JsonException("OrderCancelled is empty.");
+        if (e.DiningSessionId is null)
+        {
+            return;
+        }
+        DiningSessionOrder order =
+            await db.FindOrderAsync(e.OrderId)
+            ?? throw new JsonException($"Dining order '{e.OrderId}' does not exist.");
+        order.OrderStatus = "Cancelled";
+        order.Amount = 0;
         order.UpdatedAtUtc = e.CancelledAtUtc;
     }
 

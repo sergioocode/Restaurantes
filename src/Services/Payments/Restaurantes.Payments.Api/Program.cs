@@ -1,4 +1,6 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System.Net;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.EntityFrameworkCore;
 using Restaurantes.Payments.Application;
 using Restaurantes.Payments.Infrastructure;
 using Restaurantes.Payments.Infrastructure.Persistence.Write;
@@ -8,6 +10,26 @@ using Restaurantes.ServiceDefaults;
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 builder.AddVaultConfiguration();
 builder.AddServiceDefaults();
+string[] trustedProxyAddresses =
+    builder.Configuration.GetSection("QrAccess:TrustedProxyAddresses").Get<string[]>() ?? [];
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+    options.KnownProxies.Clear();
+    options.KnownIPNetworks.Clear();
+    foreach (string configuredAddress in trustedProxyAddresses)
+    {
+        if (!IPAddress.TryParse(configuredAddress, out IPAddress? address))
+        {
+            throw new InvalidOperationException(
+                $"QrAccess:TrustedProxyAddresses contains invalid IP '{configuredAddress}'."
+            );
+        }
+
+        options.KnownProxies.Add(address);
+    }
+});
 builder.Services.AddControllers();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<PaymentCommandService>();
@@ -22,6 +44,7 @@ await using (AsyncServiceScope scope = app.Services.CreateAsyncScope())
     await dbContext.Database.MigrateAsync();
 }
 app.MapServiceDefaults();
+app.UseForwardedHeaders();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

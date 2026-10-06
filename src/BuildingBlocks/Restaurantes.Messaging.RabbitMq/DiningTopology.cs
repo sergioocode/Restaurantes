@@ -92,6 +92,13 @@ public static class DiningTopology
         );
         await channel.QueueBindAsync(
             QueueName,
+            OrdersTopology.ExchangeName,
+            OrdersTopology.OrderCancelledRoutingKey,
+            arguments: null,
+            cancellationToken: ct
+        );
+        await channel.QueueBindAsync(
+            QueueName,
             PaymentsTopology.ExchangeName,
             PaymentsTopology.PaymentCapturedRoutingKey,
             arguments: null,

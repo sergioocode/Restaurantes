@@ -1,11 +1,13 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Restaurantes.Dining.Application;
+using Restaurantes.Security;
 
 namespace Restaurantes.Dining.Api.Controllers;
 
 [ApiController, Authorize, Route("api/dining")]
-public sealed class DiningWriteController(DiningService service) : ControllerBase
+public sealed class DiningWriteController(DiningService service, IConfiguration configuration)
+    : ControllerBase
 {
     [HttpPost("restaurants/{restaurantId:guid}/tables")]
     public Task<IActionResult> CreateTable(
@@ -33,16 +35,6 @@ public sealed class DiningWriteController(DiningService service) : ControllerBas
         return Execute(() => service.DeleteTable(tableId, User, ct));
     }
 
-    [HttpPut("restaurants/{restaurantId:guid}/policy")]
-    public Task<IActionResult> UpdatePolicy(
-        Guid restaurantId,
-        UpdateDiningPolicyRequest request,
-        CancellationToken ct
-    )
-    {
-        return Execute(() => service.UpdatePolicy(restaurantId, request, User, ct));
-    }
-
     [HttpPost("tables/{tableId:guid}/sessions")]
     public Task<IActionResult> OpenSession(
         Guid tableId,
@@ -63,14 +55,17 @@ public sealed class DiningWriteController(DiningService service) : ControllerBas
     [HttpPost("qr/{qrCode}/sessions")]
     public Task<IActionResult> OpenQrSession(string qrCode, int? guestCount, CancellationToken ct)
     {
-        return Execute(() =>
-            service.OpenQrSession(
-                qrCode,
-                guestCount,
-                DiningRequestContext.FromHttpContext(HttpContext),
-                ct
-            )
-        );
+        ObjectResult? denied = QrNetworkAccess.DeniedResult(HttpContext, configuration);
+        return denied is not null
+            ? Task.FromResult<IActionResult>(denied)
+            : Execute(() =>
+                service.OpenQrSession(
+                    qrCode,
+                    guestCount,
+                    DiningRequestContext.FromHttpContext(HttpContext),
+                    ct
+                )
+            );
     }
 
     [AllowAnonymous]
@@ -81,14 +76,17 @@ public sealed class DiningWriteController(DiningService service) : ControllerBas
         CancellationToken ct
     )
     {
-        return Execute(() =>
-            service.SetGuestCount(
-                sessionId,
-                request,
-                DiningRequestContext.FromHttpContext(HttpContext),
-                ct
-            )
-        );
+        ObjectResult? denied = QrNetworkAccess.DeniedResult(HttpContext, configuration);
+        return denied is not null
+            ? Task.FromResult<IActionResult>(denied)
+            : Execute(() =>
+                service.SetGuestCount(
+                    sessionId,
+                    request,
+                    DiningRequestContext.FromHttpContext(HttpContext),
+                    ct
+                )
+            );
     }
 
     [HttpPost("sessions/{sessionId:guid}/checkout")]

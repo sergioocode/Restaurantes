@@ -12,26 +12,14 @@ public sealed partial class DiningService
     )
     {
         DiningSession? session = await db.ReadSessionWithOrdersAsync(sessionId, ct);
-        if (session is null)
-        {
-            return DiningResults.NotFound();
-        }
-        if (
-            !access.CanAccessRestaurant(
+        return session is null ? DiningResults.NotFound()
+            : !access.CanAccessRestaurant(
                 principal,
                 session.RestaurantId,
                 DiningPermission.TablesRead
             )
-        )
-        {
-            return DiningResults.Forbid();
-        }
-
-        bool allowCheckoutBeforeKitchenCompletion = await db.AllowsEarlyCheckoutAsync(
-            session.RestaurantId,
-            ct
-        );
-        return DiningResults.Ok(BillResponse(session, allowCheckoutBeforeKitchenCompletion));
+                ? DiningResults.Forbid()
+            : DiningResults.Ok(BillResponse(session));
     }
 
     public async Task<DiningResult> Checkout(
@@ -70,7 +58,7 @@ public sealed partial class DiningService
         if (session.Status == "Closed")
         {
             return session.CheckoutIdempotencyKey == request.IdempotencyKey
-                ? DiningResults.Ok(BillResponse(session, false))
+                ? DiningResults.Ok(BillResponse(session))
                 : DiningResults.Conflict(new { detail = "The dining session is already closed." });
         }
         if (session.Orders.Count == 0)
@@ -78,28 +66,6 @@ public sealed partial class DiningService
             return DiningResults.Conflict(
                 new { detail = "The dining session has no projected orders." }
             );
-        }
-
-        bool allowCheckoutBeforeKitchenCompletion = await db.AllowsEarlyCheckoutAsync(
-            session.RestaurantId,
-            ct
-        );
-        if (!allowCheckoutBeforeKitchenCompletion)
-        {
-            Guid[] notDelivered = session
-                .Orders.Where(x => x.OrderStatus is not ("Ready" or "Delivered" or "Cancelled"))
-                .Select(x => x.OrderId)
-                .ToArray();
-            if (notDelivered.Length > 0)
-            {
-                return DiningResults.Conflict(
-                    new
-                    {
-                        detail = "All orders must be delivered before checkout.",
-                        orderIds = notDelivered,
-                    }
-                );
-            }
         }
 
         List<DiningSessionOrder> unpaidOrders = session
@@ -140,13 +106,10 @@ public sealed partial class DiningService
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         await PublishTableChanged(realtime, session, "Available", time);
-        return DiningResults.Ok(BillResponse(session, allowCheckoutBeforeKitchenCompletion));
+        return DiningResults.Ok(BillResponse(session));
     }
 
-    private static object BillResponse(
-        DiningSession session,
-        bool allowCheckoutBeforeKitchenCompletion
-    )
+    private static object BillResponse(DiningSession session)
     {
         return new
         {
@@ -160,7 +123,7 @@ public sealed partial class DiningService
             session.PaidAtUtc,
             total = session.Orders.Sum(x => x.Amount),
             outstanding = session.Orders.Where(x => x.PaymentStatus != "Paid").Sum(x => x.Amount),
-            canCheckout = session.CanCheckout(allowCheckoutBeforeKitchenCompletion),
+            canCheckout = session.CanCheckout,
             orders = session
                 .Orders.OrderBy(x => x.AddedAtUtc)
                 .Select(x => new

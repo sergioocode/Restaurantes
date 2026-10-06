@@ -21,15 +21,7 @@ public sealed class DiningSession
     public Guid? CancelledByUserId { get; set; }
     public List<DiningSessionOrder> Orders { get; set; } = [];
 
-    public bool CanCheckout(bool allowBeforeKitchenCompletion)
-    {
-        return Status == "Open"
-            && Orders.Count > 0
-            && (
-                allowBeforeKitchenCompletion
-                || Orders.All(x => x.OrderStatus is "Ready" or "Delivered" or "Cancelled")
-            );
-    }
+    public bool CanCheckout => Status == "Open" && Orders.Count > 0;
 
     public void CompleteCheckout(Guid idempotencyKey, string method, DateTime now)
     {

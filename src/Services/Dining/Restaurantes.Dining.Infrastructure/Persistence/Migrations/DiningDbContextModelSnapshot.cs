@@ -22,20 +22,6 @@ namespace Restaurantes.Dining.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Restaurantes.Dining.Infrastructure.Persistence.DiningInboxMessage", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("ProcessedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("inbox_messages", (string)null);
-                });
-
             modelBuilder.Entity("Restaurantes.Dining.Domain.DiningPendingPayment", b =>
                 {
                     b.Property<Guid>("OrderId")
@@ -55,51 +41,8 @@ namespace Restaurantes.Dining.Infrastructure.Persistence.Migrations
                     b.ToTable("pending_payments", (string)null);
                 });
 
-            modelBuilder.Entity("Restaurantes.Dining.Domain.DiningRestaurantPolicy", b =>
-                {
-                    b.Property<Guid>("RestaurantId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("AllowCheckoutBeforeKitchenCompletion")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<string>("QrAllowedNetworks")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<bool>("QrRequiresImmediatePayment")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
-
-                    b.Property<bool>("RequireTrustedNetworkForQr")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("TakeawayRequiresPrepayment")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("Version")
-                        .IsConcurrencyToken()
-                        .HasColumnType("integer");
-
-                    b.HasKey("RestaurantId");
-
-                    b.ToTable("dining_restaurant_policies", (string)null);
-                });
-
             modelBuilder.Entity("Restaurantes.Dining.Domain.DiningSession", b =>
                 {
-                    b.Property<bool>("RequestGuestCount").HasColumnType("boolean");
-                    b.Property<int?>("GuestCount").HasColumnType("integer");
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
@@ -121,6 +64,9 @@ namespace Restaurantes.Dining.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<int?>("GuestCount")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("OpenedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -134,6 +80,9 @@ namespace Restaurantes.Dining.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
+
+                    b.Property<bool>("RequestGuestCount")
+                        .HasColumnType("boolean");
 
                     b.Property<Guid>("RestaurantId")
                         .HasColumnType("uuid");
@@ -202,19 +151,36 @@ namespace Restaurantes.Dining.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("Restaurantes.Dining.Domain.DiningZone", b =>
                 {
-                    b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("uuid");
-                    b.Property<Guid>("RestaurantId").HasColumnType("uuid");
-                    b.Property<string>("Name").IsRequired().HasMaxLength(80).HasColumnType("character varying(80)");
-                    b.Property<int>("SortOrder").HasColumnType("integer");
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .IsConcurrencyToken()
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<Guid>("RestaurantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
-                    b.HasAlternateKey("RestaurantId", "Id");
-                    b.Property<DateTime?>("DeletedAtUtc").IsConcurrencyToken().HasColumnType("timestamp with time zone");
-                    b.HasIndex("RestaurantId", "Name").IsUnique().HasFilter("\"DeletedAtUtc\" IS NULL");
+
+                    b.HasIndex("RestaurantId", "Name")
+                        .IsUnique()
+                        .HasFilter("\"DeletedAtUtc\" IS NULL");
+
                     b.ToTable("dining_zones", (string)null);
                 });
+
             modelBuilder.Entity("Restaurantes.Dining.Domain.RestaurantTable", b =>
                 {
-                    b.Property<bool>("RequestGuestCount").HasColumnType("boolean");
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
@@ -225,6 +191,9 @@ namespace Restaurantes.Dining.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(40)");
 
                     b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsActive")
@@ -240,7 +209,13 @@ namespace Restaurantes.Dining.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<bool>("RequestGuestCount")
+                        .HasColumnType("boolean");
+
                     b.Property<Guid>("RestaurantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ZoneId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
@@ -252,10 +227,23 @@ namespace Restaurantes.Dining.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("\"DeletedAtUtc\" IS NULL");
 
-                    b.Property<DateTime?>("DeletedAtUtc").HasColumnType("timestamp with time zone");
-                    b.Property<Guid>("ZoneId").HasColumnType("uuid");
                     b.HasIndex("RestaurantId", "ZoneId");
+
                     b.ToTable("restaurant_tables", (string)null);
+                });
+
+            modelBuilder.Entity("Restaurantes.Dining.Infrastructure.Persistence.DiningInboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ProcessedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("inbox_messages", (string)null);
                 });
 
             modelBuilder.Entity("Restaurantes.Dining.Domain.DiningSession", b =>
@@ -276,10 +264,6 @@ namespace Restaurantes.Dining.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Restaurantes.Dining.Domain.DiningSession", b =>
-                {
-                    b.Navigation("Orders");
-                });
             modelBuilder.Entity("Restaurantes.Dining.Domain.RestaurantTable", b =>
                 {
                     b.HasOne("Restaurantes.Dining.Domain.DiningZone", "Zone")
@@ -288,7 +272,13 @@ namespace Restaurantes.Dining.Infrastructure.Persistence.Migrations
                         .HasPrincipalKey("RestaurantId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
                     b.Navigation("Zone");
+                });
+
+            modelBuilder.Entity("Restaurantes.Dining.Domain.DiningSession", b =>
+                {
+                    b.Navigation("Orders");
                 });
 #pragma warning restore 612, 618
         }

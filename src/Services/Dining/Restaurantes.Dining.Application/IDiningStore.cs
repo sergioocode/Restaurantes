@@ -6,12 +6,10 @@ public interface IDiningStore
 {
     Task<DiningSession?> LockSessionAsync(Guid sessionId, CancellationToken ct);
     Task<RestaurantTable?> ReadQrTableAsync(string code, CancellationToken ct);
-    Task<DiningRestaurantPolicy?> ReadPolicyAsync(Guid restaurantId, CancellationToken ct);
     Task<DiningSession?> ReadActiveSessionWithOrdersAsync(Guid tableId, CancellationToken ct);
     Task<RestaurantTable?> LockTableAsync(Guid tableId, CancellationToken ct);
     Task<bool> HasOpenSessionAsync(Guid tableId, CancellationToken ct);
     Task<DiningSession> ReadRequiredActiveSessionAsync(Guid tableId, CancellationToken ct);
-    Task<DiningRestaurantPolicy?> FindPolicyAsync(Guid restaurantId, CancellationToken ct);
     Task<Dictionary<Guid, DiningSession>> ReadActiveSessionsAsync(
         Guid restaurantId,
         CancellationToken ct
@@ -26,7 +24,6 @@ public interface IDiningStore
         Guid tableId,
         CancellationToken ct
     );
-    Task<bool> AllowsEarlyCheckoutAsync(Guid restaurantId, CancellationToken ct);
     Task<DiningSession?> FindSessionWithOrdersAsync(Guid sessionId, CancellationToken ct);
     Task<List<DiningZone>> ListZonesAsync(Guid restaurantId, CancellationToken ct);
     Task<DiningZone?> FindZoneAsync(Guid restaurantId, Guid zoneId, CancellationToken ct);

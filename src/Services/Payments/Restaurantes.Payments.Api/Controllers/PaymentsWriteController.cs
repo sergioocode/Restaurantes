@@ -1,6 +1,5 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Restaurantes.Payments.Application;
 using Restaurantes.Payments.Contracts.Requests;
@@ -18,7 +17,8 @@ public sealed class PaymentsWriteController(
     IPaymentWriteStore store,
     ICustomerDiningSessionValidator dining,
     IPaymentCashRegister cashRegister,
-    PaymentWriteDbContext db
+    PaymentWriteDbContext db,
+    IConfiguration configuration
 ) : ControllerBase
 {
     private const int TooEarlyStatusCode = 425;
@@ -32,6 +32,12 @@ public sealed class PaymentsWriteController(
         CancellationToken ct
     )
     {
+        ObjectResult? denied = QrNetworkAccess.DeniedResult(HttpContext, configuration);
+        if (denied is not null)
+        {
+            return denied;
+        }
+
         if (request.IdempotencyKey == Guid.Empty || request.DiningSessionId == Guid.Empty)
         {
             return BadRequest(

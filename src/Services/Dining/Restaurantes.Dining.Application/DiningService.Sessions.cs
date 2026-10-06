@@ -34,7 +34,6 @@ public sealed partial class DiningService
         {
             return DiningResults.Conflict(new { detail = "The table is not active." });
         }
-
         if (
             !Guid.TryParse(
                 principal.FindFirst(ClaimTypes.NameIdentifier)?.Value,

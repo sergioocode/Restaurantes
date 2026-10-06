@@ -135,7 +135,7 @@ else if (context is not null)
             <strong>@Total.ToString("0.00") €</strong>
         </div>
         <button class="primary-button" disabled="@(busy || ItemCount == 0)" @onclick="SubmitOrderAsync">
-            @(busy ? progress : context.QrRequiresImmediatePayment ? "Pagar online y enviar" : "Enviar pedido a cocina")
+            @(busy ? progress : "Pagar online y enviar")
         </button>
     </aside>
 }

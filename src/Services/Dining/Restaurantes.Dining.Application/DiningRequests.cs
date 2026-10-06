@@ -42,15 +42,6 @@ public sealed class CheckoutSessionRequest
     public string ExternalReference { get; init; } = string.Empty;
 }
 
-public sealed class UpdateDiningPolicyRequest
-{
-    public bool QrRequiresImmediatePayment { get; init; } = true;
-    public bool RequireTrustedNetworkForQr { get; init; }
-    public bool TakeawayRequiresPrepayment { get; init; } = true;
-    public bool AllowCheckoutBeforeKitchenCompletion { get; init; }
-    public string[] QrAllowedNetworks { get; init; } = [];
-}
-
 public sealed class SaveZoneRequest
 {
     [Required, StringLength(80, MinimumLength = 1)]

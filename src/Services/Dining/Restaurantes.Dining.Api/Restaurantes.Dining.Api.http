@@ -8,37 +8,6 @@
 GET {{diningUrl}}/api/dining/restaurants/{{restaurantId}}/tables
 Authorization: Bearer {{accessToken}}
 
-### Consultar política Dining
-GET {{diningUrl}}/api/dining/restaurants/{{restaurantId}}/policy
-Authorization: Bearer {{accessToken}}
-
-### Configurar políticas operativas del local
-PUT {{diningUrl}}/api/dining/restaurants/{{restaurantId}}/policy
-Authorization: Bearer {{accessToken}}
-Content-Type: application/json
-
-{
-  "qrRequiresImmediatePayment": true,
-  "requireTrustedNetworkForQr": false,
-  "takeawayRequiresPrepayment": true,
-  "qrAllowedNetworks": []
-}
-
-### Exigir presencia en la red del local (ejemplo para F5 en localhost)
-PUT {{diningUrl}}/api/dining/restaurants/{{restaurantId}}/policy
-Authorization: Bearer {{accessToken}}
-Content-Type: application/json
-
-{
-  "qrRequiresImmediatePayment": true,
-  "requireTrustedNetworkForQr": true,
-  "takeawayRequiresPrepayment": true,
-  "qrAllowedNetworks": [
-    "127.0.0.1/32",
-    "::1/128"
-  ]
-}
-
 ### Rotar el QR de la mesa; invalida inmediatamente el codigo anterior
 # @name rotateQr
 POST {{diningUrl}}/api/dining/tables/{{tableId}}/qr/rotate
@@ -50,10 +19,6 @@ GET {{diningUrl}}/api/dining/qr/{{rotateQr.response.body.$.qrCode}}
 ### Confirmar el primer pedido: abre una sesion CustomerQr o recupera la propia
 # @name openQrSession
 POST {{diningUrl}}/api/dining/qr/{{rotateQr.response.body.$.qrCode}}/sessions?guestCount=2
-
-### Simular un cliente fuera del local; debe responder HTTP 403
-POST {{diningUrl}}/api/dining/qr/{{rotateQr.response.body.$.qrCode}}/sessions?guestCount=2
-X-Forwarded-For: 203.0.113.50
 
 ### Crear una zona; el nombre y las ubicaciones los configura el usuario
 # @name createZone

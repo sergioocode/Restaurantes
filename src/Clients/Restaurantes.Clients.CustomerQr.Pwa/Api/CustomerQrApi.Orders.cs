@@ -23,7 +23,7 @@ public sealed partial class CustomerQrApi
             diningSessionId = context.Session.Id,
             tableLabel = context.Table.Label,
             source = "CustomerQr",
-            paymentTiming = context.QrRequiresImmediatePayment ? "Immediate" : "OnAccount",
+            paymentTiming = "Immediate",
             lines = quantities
                 .Where(x => x.Value > 0)
                 .Select(x => new

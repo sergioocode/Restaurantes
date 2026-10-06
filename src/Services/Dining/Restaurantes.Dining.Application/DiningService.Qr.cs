@@ -17,18 +17,6 @@ public sealed partial class DiningService
             return DiningResults.NotFound(new { detail = "El QR no está disponible." });
         }
 
-        DiningRestaurantPolicy? policy = await db.ReadPolicyAsync(table.RestaurantId, ct);
-        if (
-            policy?.RequireTrustedNetworkForQr == true
-            && !QrNetworkAccess.IsAllowed(httpContext.RemoteIpAddress, policy.QrAllowedNetworks)
-        )
-        {
-            return DiningResults.Problem(
-                statusCode: 403,
-                detail: "Conéctate a la red autorizada del restaurante."
-            );
-        }
-
         bool restaurantOpen = true;
         try
         {
@@ -44,7 +32,7 @@ public sealed partial class DiningService
         return
             session?.Source == "CustomerQr"
             && TokenEquals(session.CustomerAccessToken, httpContext.CustomerSessionToken)
-            ? DiningResults.Ok(QrSessionResponse(table, session, policy, restaurantOpen))
+            ? DiningResults.Ok(QrSessionResponse(table, session, restaurantOpen))
             : DiningResults.Ok(
                 new
                 {
@@ -58,7 +46,6 @@ public sealed partial class DiningService
                     },
                     session = (object?)null,
                     customerAccessToken = string.Empty,
-                    qrRequiresImmediatePayment = policy?.QrRequiresImmediatePayment ?? true,
                     isRestaurantOpen = restaurantOpen,
                 }
             );
@@ -93,19 +80,6 @@ public sealed partial class DiningService
             return DiningResults.Conflict(new { detail = exception.Message });
         }
 
-        DiningRestaurantPolicy? policy = await db.ReadPolicyAsync(table.RestaurantId, ct);
-        if (
-            policy?.RequireTrustedNetworkForQr == true
-            && !QrNetworkAccess.IsAllowed(httpContext.RemoteIpAddress, policy.QrAllowedNetworks)
-        )
-        {
-            return DiningResults.Problem(
-                statusCode: 403,
-                title: "Restaurant presence required",
-                detail: "This table QR can only be used from an authorized restaurant network."
-            );
-        }
-
         DiningSession? existing = await db.FindActiveSessionWithOrdersAsync(table.Id, ct);
         if (existing is not null)
         {
@@ -118,7 +92,7 @@ public sealed partial class DiningService
 
             string? suppliedToken = httpContext.CustomerSessionToken;
             return TokenEquals(existing.CustomerAccessToken, suppliedToken)
-                ? DiningResults.Ok(QrSessionResponse(table, existing, policy))
+                ? DiningResults.Ok(QrSessionResponse(table, existing))
                 : DiningResults.Conflict(
                     new { detail = "This table already has an active customer QR session." }
                 );
@@ -150,7 +124,7 @@ public sealed partial class DiningService
             await PublishTableChanged(realtime, session, "Occupied", time);
             return DiningResults.Created(
                 $"/api/dining/sessions/{session.Id}",
-                QrSessionResponse(table, session, policy)
+                QrSessionResponse(table, session)
             );
         }
         catch (DiningStoreException e) when (e.Failure == DiningStoreFailure.Duplicate)

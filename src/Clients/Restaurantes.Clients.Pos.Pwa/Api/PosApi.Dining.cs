@@ -21,11 +21,6 @@ public sealed partial class PosApi
         return GetAsync<List<TableResponse>>($"/api/dining/restaurants/{restaurantId}/tables");
     }
 
-    public Task<DiningPolicyResponse> PolicyAsync(Guid restaurantId)
-    {
-        return GetAsync<DiningPolicyResponse>($"/api/dining/restaurants/{restaurantId}/policy");
-    }
-
     public async Task<DiningSessionResponse> OpenSessionAsync(Guid tableId)
     {
         using HttpRequestMessage request = Authorized(

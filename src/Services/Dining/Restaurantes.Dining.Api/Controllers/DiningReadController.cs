@@ -1,11 +1,13 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Restaurantes.Dining.Application;
+using Restaurantes.Security;
 
 namespace Restaurantes.Dining.Api.Controllers;
 
 [ApiController, Authorize, Route("api/dining")]
-public sealed class DiningReadController(DiningService service) : ControllerBase
+public sealed class DiningReadController(DiningService service, IConfiguration configuration)
+    : ControllerBase
 {
     [HttpGet("restaurants/{restaurantId:guid}/tables")]
     public Task<IActionResult> ListTables(Guid restaurantId, CancellationToken ct)
@@ -13,19 +15,16 @@ public sealed class DiningReadController(DiningService service) : ControllerBase
         return Execute(() => service.ListTables(restaurantId, User, ct));
     }
 
-    [HttpGet("restaurants/{restaurantId:guid}/policy")]
-    public Task<IActionResult> GetPolicy(Guid restaurantId, CancellationToken ct)
-    {
-        return Execute(() => service.GetPolicy(restaurantId, User, ct));
-    }
-
     [AllowAnonymous]
     [HttpGet("qr/{qrCode}")]
     public Task<IActionResult> PreviewQr(string qrCode, CancellationToken ct)
     {
-        return Execute(() =>
-            service.PreviewQr(qrCode, DiningRequestContext.FromHttpContext(HttpContext), ct)
-        );
+        ObjectResult? denied = QrNetworkAccess.DeniedResult(HttpContext, configuration);
+        return denied is not null
+            ? Task.FromResult<IActionResult>(denied)
+            : Execute(() =>
+                service.PreviewQr(qrCode, DiningRequestContext.FromHttpContext(HttpContext), ct)
+            );
     }
 
     [HttpGet("tables/{tableId:guid}/active-session")]
@@ -57,17 +56,20 @@ public sealed class DiningReadController(DiningService service) : ControllerBase
         CancellationToken ct
     )
     {
-        return Execute(() =>
-            service.ValidateSession(
-                sessionId,
-                restaurantId,
-                tableId,
-                source,
-                serviceMode,
-                DiningRequestContext.FromHttpContext(HttpContext),
-                ct
-            )
-        );
+        ObjectResult? denied = QrNetworkAccess.DeniedResult(HttpContext, configuration);
+        return denied is not null
+            ? Task.FromResult<IActionResult>(denied)
+            : Execute(() =>
+                service.ValidateSession(
+                    sessionId,
+                    restaurantId,
+                    tableId,
+                    source,
+                    serviceMode,
+                    DiningRequestContext.FromHttpContext(HttpContext),
+                    ct
+                )
+            );
     }
 
     [HttpGet("restaurants/{restaurantId:guid}/zones")]

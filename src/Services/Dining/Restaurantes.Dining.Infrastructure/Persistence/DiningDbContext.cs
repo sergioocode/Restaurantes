@@ -8,7 +8,6 @@ public sealed class DiningDbContext(DbContextOptions<DiningDbContext> options) :
 {
     public DbSet<DiningZone> Zones => Set<DiningZone>();
     public DbSet<RestaurantTable> Tables => Set<RestaurantTable>();
-    public DbSet<DiningRestaurantPolicy> RestaurantPolicies => Set<DiningRestaurantPolicy>();
     public DbSet<DiningSession> Sessions => Set<DiningSession>();
     public DbSet<DiningSessionOrder> SessionOrders => Set<DiningSessionOrder>();
     public DbSet<DiningPendingPayment> PendingPayments => Set<DiningPendingPayment>();
@@ -43,16 +42,6 @@ public sealed class DiningDbContext(DbContextOptions<DiningDbContext> options) :
             .HasForeignKey(x => new { x.RestaurantId, x.ZoneId })
             .HasPrincipalKey(x => new { x.RestaurantId, x.Id })
             .OnDelete(DeleteBehavior.Restrict);
-
-        EntityTypeBuilder<DiningRestaurantPolicy> policy =
-            modelBuilder.Entity<DiningRestaurantPolicy>();
-        policy.ToTable("dining_restaurant_policies");
-        policy.HasKey(x => x.RestaurantId);
-        policy.Property(x => x.QrAllowedNetworks).HasMaxLength(2000).IsRequired();
-        policy.Property(x => x.QrRequiresImmediatePayment).HasDefaultValue(true);
-        policy.Property(x => x.TakeawayRequiresPrepayment).HasDefaultValue(true);
-        policy.Property(x => x.AllowCheckoutBeforeKitchenCompletion).HasDefaultValue(false);
-        policy.Property(x => x.Version).IsConcurrencyToken();
 
         EntityTypeBuilder<DiningSession> session = modelBuilder.Entity<DiningSession>();
         session.ToTable("dining_sessions");

@@ -133,19 +133,11 @@ sin DiningSession Open  -> Available
 con DiningSession Open  -> Occupied
 ```
 
-### `DiningRestaurantPolicy`
+### Acceso de red al Customer QR
 
-Conserva reglas configurables por restaurante:
+La lista de IP o redes CIDR permitidas se configura en `QrAccess:AllowedClientNetworks` de la configuración de los servicios QR. No es una política por restaurante ni se persiste en Dining. Las direcciones reenviadas solo se aceptan desde proxies configurados en `QrAccess:TrustedProxyAddresses`.
 
-| Campo | Propósito |
-| --- | --- |
-| `QrRequiresImmediatePayment` | Indica al flujo Customer QR que el pago debe realizarse de forma inmediata. |
-| `RequireTrustedNetworkForQr` | Exige que el cliente QR proceda de una red autorizada. |
-| `QrAllowedNetworks` | Lista normalizada de direcciones IP o redes CIDR permitidas. |
-| `TakeawayRequiresPrepayment` | Política de prepago utilizada por clientes operativos para takeaway. |
-| `AllowCheckoutBeforeKitchenCompletion` | Permite checkout antes de que todos los pedidos estén `Ready`, `Delivered` o `Cancelled`. |
-| `Version` | Token de concurrencia de la política. |
-| `UpdatedAtUtc` | Última modificación UTC. |
+Customer QR siempre requiere pago online antes de enviar el pedido a cocina. Esta regla es fija y no se configura desde Backoffice.
 
 ### `DiningSession`
 
@@ -336,36 +328,21 @@ Se admiten como máximo 20 redes configuradas. Dining normaliza IPv4, IPv6 y CID
 
 La aplicación utiliza `X-Forwarded-For` y `X-Forwarded-Proto` únicamente a través de proxies configurados en `QrAccess:TrustedProxyAddresses`.
 
-### Política de pago Customer QR
+### Pago obligatorio en Customer QR
 
-El comportamiento de pago se configura por restaurante mediante:
-
-```text
-QrRequiresImmediatePayment
-```
-
-El flag es deliberadamente configurable y Customer QR admite dos flujos:
+Todos los pedidos Customer QR usan `PaymentTiming = Immediate`. El cliente paga online antes de enviar el pedido a cocina:
 
 ```text
-QrRequiresImmediatePayment = true
-    -> PaymentTiming = Immediate
-    -> crear pedido Draft
+abrir o recuperar sesión QR
+    -> crear pedido Draft con PaymentTiming = Immediate
     -> capturar pago online
     -> PaymentCaptured
+    -> Orders proyecta el pago como Paid
     -> submit
     -> cocina / KDS
-
-QrRequiresImmediatePayment = false
-    -> PaymentTiming = OnAccount
-    -> crear pedido Draft
-    -> submit
-    -> cocina / KDS
-    -> el pedido permanece en la cuenta de la sesión
 ```
 
-Dining es propietario de esta política y la devuelve al cliente Customer QR al abrir o recuperar la sesión. El PWA utiliza el valor para seleccionar `Immediate` u `OnAccount`.
-
-Dining no captura el pago ni envía directamente la comanda a cocina. **Payments** captura el cobro online y publica `PaymentCaptured`; **Orders** impide el `submit` de cualquier pedido `Immediate` mientras su proyección de pago no indique `Paid`.
+La creación técnica de un `Draft` precede a la captura porque Payments necesita proyectar el pedido. Ese borrador no se envía a cocina. Orders rechaza `submit` hasta que su proyección indique `Paid`; el servidor valida la regla aunque un cliente intente enviar otra modalidad.
 
 El QR físico permanece asociado a la ubicación mientras no se rote su `QrCode`. Si se deteriora, se pierde o necesita reemplazarse, Backoffice puede rotar el identificador e imprimir un nuevo QR, invalidando el anterior.
 
@@ -537,7 +514,6 @@ Tablas principales:
 | --- | --- |
 | `dining_zones` | Zonas operativas del restaurante. |
 | `restaurant_tables` | Ubicaciones y configuración QR. |
-| `dining_restaurant_policies` | Políticas QR, takeaway y checkout por restaurante. |
 | `dining_sessions` | Sesiones de ocupación. |
 | `dining_session_orders` | Proyección local de pedidos asociados a cada sesión. |
 | `pending_payments` | Pagos recibidos antes de la proyección del pedido. |
@@ -570,17 +546,6 @@ erDiagram
         bool IsActive
         datetime DeletedAtUtc
         datetime CreatedAtUtc
-    }
-
-    dining_restaurant_policies {
-        uuid RestaurantId PK
-        bool QrRequiresImmediatePayment
-        bool RequireTrustedNetworkForQr
-        bool TakeawayRequiresPrepayment
-        bool AllowCheckoutBeforeKitchenCompletion
-        string QrAllowedNetworks
-        int Version
-        datetime UpdatedAtUtc
     }
 
     dining_sessions {
@@ -624,7 +589,6 @@ erDiagram
 - `restaurant_tables.QrCode` es único;
 - una ubicación pertenece a una zona del mismo restaurante mediante clave compuesta;
 - `dining_sessions` permite como máximo una sesión `Open` por `TableId`;
-- `DiningRestaurantPolicy.Version` es concurrency token;
 - `DiningSession.Version` es concurrency token;
 - `DiningZone.DeletedAtUtc` se utiliza como concurrency token en la eliminación lógica.
 
@@ -784,7 +748,7 @@ Ruta base:
 | `PUT` | `/restaurants/{restaurantId}/zones/{zoneId}` | Actualizar zona. |
 | `DELETE` | `/restaurants/{restaurantId}/zones/{zoneId}` | Eliminar lógicamente una zona. |
 
-### Ubicaciones y política
+### Ubicaciones
 
 | Método | Endpoint | Operación |
 | --- | --- | --- |
@@ -792,8 +756,6 @@ Ruta base:
 | `POST` | `/restaurants/{restaurantId}/tables` | Crear ubicación. |
 | `PUT` | `/tables/{tableId}` | Actualizar ubicación. |
 | `DELETE` | `/tables/{tableId}` | Eliminar lógicamente una ubicación. |
-| `GET` | `/restaurants/{restaurantId}/policy` | Consultar política Dining. |
-| `PUT` | `/restaurants/{restaurantId}/policy` | Actualizar política Dining. |
 | `POST` | `/tables/{tableId}/qr/rotate` | Rotar QR de una ubicación. |
 
 ### Sesiones
@@ -966,12 +928,9 @@ al iniciar la API. El proceso `Restaurantes.Dining.Infrastructure` utiliza la mi
 Las migraciones existentes cubren, entre otros cambios ya implementados:
 
 - checkout de sesión;
-- QR y políticas Dining;
-- redes confiables para QR;
+- QR y sesiones Customer QR;
 - token de acceso Customer QR;
 - cancelación de sesión;
-- política de prepago takeaway;
-- checkout antes de finalización de cocina;
 - zonas;
 - eliminación lógica de ubicaciones y zonas;
 - número de comensales.
