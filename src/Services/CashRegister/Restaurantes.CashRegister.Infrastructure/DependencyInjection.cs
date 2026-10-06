@@ -17,6 +17,14 @@ public static class DependencyInjection
         IConfiguration configuration
     )
     {
+        Uri ordersBaseAddress = new(
+            configuration["Orders:BaseAddress"]
+                ?? throw new InvalidOperationException("Orders:BaseAddress is required.")
+        );
+        Uri paymentsBaseAddress = new(
+            configuration["Payments:BaseAddress"]
+                ?? throw new InvalidOperationException("Payments:BaseAddress is required.")
+        );
         services.TryAddSingleton(TimeProvider.System);
         services.AddBusinessTimeZone(configuration);
         services.AddDbContext<CashRegisterDbContext>(options =>
@@ -28,18 +36,14 @@ public static class DependencyInjection
         services.AddScoped<ICashRegisterStore, CashRegisterStore>();
         services.AddHttpClient<IIncompleteOrdersChecker, OrdersIncompleteOrdersChecker>(client =>
         {
-            client.BaseAddress = new Uri(
-                configuration["Orders:BaseAddress"] ?? "http://localhost:5121"
-            );
+            client.BaseAddress = ordersBaseAddress;
             client.Timeout = TimeSpan.FromSeconds(5);
         });
         services.AddHttpClient(
             "CashClosePayments",
             client =>
             {
-                client.BaseAddress = new Uri(
-                    configuration["Payments:BaseAddress"] ?? "http://localhost:5151"
-                );
+                client.BaseAddress = paymentsBaseAddress;
                 client.Timeout = TimeSpan.FromSeconds(5);
             }
         );

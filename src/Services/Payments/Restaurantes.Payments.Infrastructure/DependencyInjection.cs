@@ -15,6 +15,14 @@ public static class DependencyInjection
         IConfiguration configuration
     )
     {
+        Uri diningBaseAddress = new(
+            configuration["Dining:BaseAddress"]
+                ?? throw new InvalidOperationException("Dining:BaseAddress is required.")
+        );
+        Uri cashRegisterBaseAddress = new(
+            configuration["CashRegister:BaseAddress"]
+                ?? throw new InvalidOperationException("CashRegister:BaseAddress is required.")
+        );
         services.AddDbContext<PaymentWriteDbContext>(options =>
             options.UseNpgsql(
                 configuration.GetConnectionString("PaymentsWrite"),
@@ -27,15 +35,10 @@ public static class DependencyInjection
             Restaurantes.Payments.Infrastructure.Queries.PaymentStatusQuery
         >();
         services.AddHttpClient<ICustomerDiningSessionValidator, DiningSessionValidator>(client =>
-            client.BaseAddress = new Uri(
-                configuration["Dining:BaseAddress"]
-                    ?? throw new InvalidOperationException("Dining:BaseAddress is required.")
-            )
+            client.BaseAddress = diningBaseAddress
         );
         services.AddHttpClient<IPaymentCashRegister, PaymentCashRegister>(client =>
-            client.BaseAddress = new Uri(
-                configuration["CashRegister:BaseAddress"] ?? "http://localhost:5105"
-            )
+            client.BaseAddress = cashRegisterBaseAddress
         );
         return services;
     }
