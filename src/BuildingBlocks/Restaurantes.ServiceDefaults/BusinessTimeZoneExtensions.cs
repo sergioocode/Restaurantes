@@ -11,7 +11,9 @@ public static class BusinessTimeZoneExtensions
         IConfiguration configuration
     )
     {
-        string timeZoneId = configuration["Business:TimeZoneId"] ?? "Europe/Madrid";
+        string timeZoneId =
+            configuration["Business:TimeZoneId"]
+            ?? throw new InvalidOperationException("Business:TimeZoneId is required.");
         services.TryAddSingleton(TimeZoneInfo.FindSystemTimeZoneById(timeZoneId));
         return services;
     }
