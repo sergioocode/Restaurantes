@@ -111,7 +111,7 @@ public partial class Home
     private string ModuleEyebrow =>
         module switch
         {
-            "tables" => "OPERACIÓN DEL LOCAL",
+            "tables" or "zones" => "OPERACIÓN DEL LOCAL",
             "orders" => "OPERACIÓN DEL LOCAL",
             "restaurants" => "CADENA",
             "categories" or "products" => "CATÁLOGO GLOBAL",
@@ -121,7 +121,8 @@ public partial class Home
     private string ModuleTitle =>
         module switch
         {
-            "tables" => "Mesas, barra y reglas de venta",
+            "tables" => "Mesas y puestos de barra",
+            "zones" => "Zonas del restaurante",
             "restaurants" => "Locales",
             "stations" => "Estaciones Kitchen Display System",
             "orders" => "Pedidos",
@@ -261,6 +262,7 @@ public partial class Home
             "stations" => Run(RefreshStationsCore),
             "orders" => RefreshOrders(),
             "tables" => Run(RefreshTablesCore),
+            "zones" => Run(RefreshTablesCore),
             "categories" => Run(RefreshCategoriesCore),
             "products" => Run(RefreshProductsCore),
             "restaurants" => Run(RefreshRestaurantsCore),

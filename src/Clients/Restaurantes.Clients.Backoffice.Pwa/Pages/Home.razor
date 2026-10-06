@@ -51,7 +51,8 @@ else
             @if (HasAnyLocalPermission("catalog.manage")) { <button class="@NavClass("menu")" @onclick='() => module = "menu"'>Menú por local</button> }
             @if (OrderRestaurants.Count > 0) { <button class="@NavClass("orders")" @onclick="OpenOrders">Pedidos</button> }
             @if (HasAnyLocalPermission("kds.use")) { <button class="@NavClass("stations")" @onclick='() => module = "stations"'>Estaciones KDS</button> }
-            @if (HasAnyLocalPermission("tables.read")) { <button class="@NavClass("tables")" @onclick='() => module = "tables"'>Mesas y configuración</button> }
+            @if (HasAnyLocalPermission("tables.read")) { <button class="@NavClass("tables")" @onclick='() => module = "tables"'>Mesas y puestos de barra</button> }
+            @if (HasAnyLocalPermission("tables.read")) { <button class="@NavClass("zones")" @onclick='() => module = "zones"'>Zonas</button> }
             @if (IsAdmin) { <button class="@NavClass("restaurants")" @onclick='() => module = "restaurants"'>Locales</button> }
             @if (IsAdmin) { <button class="@NavClass("categories")" @onclick='() => module = "categories"'>Categorías</button> }
             @if (IsAdmin) { <button class="@NavClass("products")" @onclick='() => module = "products"'>Productos</button> }
@@ -101,6 +102,10 @@ else
             else if (module == "tables")
             {
                 <TablesModule Host="this" />
+            }
+            else if (module == "zones")
+            {
+                <ZonesModule Host="this" />
             }
         </section>
     </main>
