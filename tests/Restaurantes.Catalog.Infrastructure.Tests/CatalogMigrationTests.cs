@@ -22,6 +22,8 @@ public sealed class CatalogMigrationTests
         Assert.Contains("ALTER TABLE products DROP COLUMN \"BasePrice\"", script);
         Assert.Contains("ALTER TABLE products ADD COLUMN \"TaxId\"", script);
         Assert.Contains("ADD COLUMN \"AllowsExtras\" boolean", script);
+        Assert.DoesNotContain("Vista completa", script);
+        Assert.DoesNotContain("INSERT INTO restaurant_kitchen_stations", script);
     }
 
     [Fact]
@@ -34,5 +36,7 @@ public sealed class CatalogMigrationTests
         using CatalogReadDbContext context = new(options);
         string script = context.GetService<IMigrator>().GenerateScript();
         Assert.Contains("DROP COLUMN \"BasePrice\"", script);
+        Assert.DoesNotContain("Vista completa", script);
+        Assert.DoesNotContain("INSERT INTO kitchen_station_views", script);
     }
 }

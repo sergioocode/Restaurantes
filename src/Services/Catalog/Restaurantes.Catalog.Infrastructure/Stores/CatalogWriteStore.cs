@@ -82,29 +82,6 @@ public sealed class CatalogWriteStore(CatalogWriteDbContext db) : ICatalogWriteS
         );
     }
 
-    public async Task<bool> IsStationReferencedAsync(
-        Guid restaurantId,
-        string code,
-        CancellationToken ct
-    )
-    {
-        return await db.Categories.AnyAsync(x => x.DefaultStationCode == code, ct)
-            || await db.MenuItems.AnyAsync(
-                x => x.RestaurantId == restaurantId && x.PreparationStationCode == code,
-                ct
-            );
-    }
-
-    public async Task DeleteStationWithEventAsync(
-        RestaurantKitchenStation station,
-        object integrationEvent,
-        CancellationToken ct
-    )
-    {
-        db.KitchenStations.Remove(station);
-        await SaveWithEventAsync(station, integrationEvent, ct);
-    }
-
     public async Task SaveWithEventAsync(
         object aggregate,
         object integrationEvent,

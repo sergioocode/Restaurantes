@@ -7,22 +7,6 @@ namespace Restaurantes.Catalog.Application;
 
 public sealed partial class CatalogCommandService
 {
-    private static readonly (
-        string Code,
-        string Name,
-        bool IsPrimary,
-        bool RequiresPrimaryDispatch,
-        int Priority
-    )[] DefaultStations =
-    [
-        ("CHEF", "Vista completa", true, false, 0),
-        ("ENTRANTES", "Entrantes", false, true, 1),
-        ("BEBIDAS", "Bebidas", false, false, 1),
-        ("PASTAS", "Pastas", false, true, 2),
-        ("CARNES", "Carnes", false, true, 2),
-        ("POSTRES", "Postres", false, false, 3),
-    ];
-
     public async Task<KitchenStationResponse?> CreateStationAsync(
         Guid restaurantId,
         CreateKitchenStationRequest request,
@@ -89,82 +73,6 @@ public sealed partial class CatalogCommandService
         );
         await SaveStationAsync(item, now, ct);
         return ToResponse(item);
-    }
-
-    public async Task<IReadOnlyList<KitchenStationResponse>> EnsureDefaultStationsAsync(
-        Guid restaurantId,
-        CancellationToken ct
-    )
-    {
-        List<KitchenStationResponse> result = [];
-        foreach (
-            (
-                string code,
-                string name,
-                bool isPrimary,
-                bool requiresPrimaryDispatch,
-                int priority
-            ) in DefaultStations
-        )
-        {
-            RestaurantKitchenStation? item = await store.FindStationByCodeAsync(
-                restaurantId,
-                code,
-                ct
-            );
-            if (item is null)
-            {
-                DateTime now = timeProvider.GetUtcNow().UtcDateTime;
-                item = RestaurantKitchenStation.Create(
-                    restaurantId,
-                    code,
-                    name,
-                    isPrimary,
-                    requiresPrimaryDispatch,
-                    priority,
-                    now
-                );
-                await SaveStationAsync(item, now, ct);
-            }
-            result.Add(ToResponse(item));
-        }
-        return result;
-    }
-
-    public async Task<bool> DeleteStationAsync(
-        Guid restaurantId,
-        Guid stationId,
-        CancellationToken ct
-    )
-    {
-        RestaurantKitchenStation? item = await store.FindStationAsync(restaurantId, stationId, ct);
-        if (item is null)
-        {
-            return false;
-        }
-        if (await store.IsStationReferencedAsync(restaurantId, item.Code, ct))
-        {
-            throw new InvalidOperationException(
-                "La estación está asignada a una categoría o a productos de la carta. Cambia esas asignaciones antes de eliminarla."
-            );
-        }
-
-        DateTime now = timeProvider.GetUtcNow().UtcDateTime;
-        KitchenStationChanged message = new(
-            item.Id,
-            item.RestaurantId,
-            item.Code,
-            item.Name,
-            item.IsPrimary,
-            item.RequiresPrimaryDispatch,
-            item.Priority,
-            item.IsActive,
-            item.Version + 1,
-            now,
-            IsDeleted: true
-        );
-        await store.DeleteStationWithEventAsync(item, message, ct);
-        return true;
     }
 
     private async Task SaveStationAsync(
