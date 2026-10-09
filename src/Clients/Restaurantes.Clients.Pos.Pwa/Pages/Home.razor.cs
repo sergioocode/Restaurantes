@@ -10,6 +10,9 @@ namespace Restaurantes.Clients.Pos.Pwa.Pages;
 public partial class Home
 {
     private int? guestCount;
+    private int guestCountDraft = 2;
+    private bool guestCountDialogOpen;
+    private bool guestCountSessionOpenedHere;
     private const string SessionKey = "restaurantes.pos.login";
     private string? message;
     private bool busy;
@@ -20,7 +23,9 @@ public partial class Home
     private Guid restaurantId;
     private List<RestaurantResponse> restaurants = [];
     private List<TableResponse> tables = [];
+    private Guid? selectedZoneId;
     private string tableFilter = "All";
+    private bool pickupView;
     private string serviceMode = "DineIn";
     private string customerName = string.Empty;
     private bool takeawayOpen;
@@ -33,20 +38,51 @@ public partial class Home
     private Guid pickupPaymentKey;
     private bool pickupBillOpen;
     private TableResponse? selectedTable;
+    private TableResponse? guestCountTable;
     private DiningSessionResponse? session;
     private List<MenuItemResponse> menu = [];
-    private Dictionary<Guid, int> quantities = [];
-    private Dictionary<Guid, string> notes = [];
+    private List<PosCartLine> cart = [];
+    private MenuItemResponse? extraDialogProduct;
+    private Guid? editingExtraLineId;
+    private Dictionary<(Guid GroupId, Guid ProductId), int> extraSelections = [];
     private string? category;
     private SessionBillResponse? bill;
     private string? billLoadError;
     private bool billOpen;
+    private bool paymentDialogOpen;
+    private string keypadTarget = "Charge";
+    private string keypadText = string.Empty;
+    private bool keypadStartNew = true;
+    private decimal? lastChangeAmount;
     private string paymentMethod = "Card";
     private string paymentReference = string.Empty;
+    private decimal currentChargeAmount;
+    private int tipPercentage;
+    private decimal tipAmount;
+    private bool tipAmountManuallyEdited;
+    private decimal CurrentTipAmount => tipAmount;
+    private decimal SuggestedTipAmount =>
+        Math.Round(
+            Math.Min(currentChargeAmount, bill?.Outstanding ?? 0) * tipPercentage / 100m,
+            2,
+            MidpointRounding.AwayFromZero
+        );
+    private PosPaymentPreview PaymentPreview =>
+        PosPaymentPreview.Calculate(bill?.Outstanding ?? 0, currentChargeAmount, CurrentTipAmount);
+    private decimal AmountReceived => PaymentPreview.Received;
+    private decimal ChangeAmount => PaymentPreview.Change;
+    private decimal RemainingAfterPayment => PaymentPreview.Remaining;
+    private bool IsChargeAmountValid =>
+        bill is not null
+        && (paymentMethod is "Cash" or "Card" or "Transfer")
+        && currentChargeAmount > 0
+        && AmountReceived <= 1_000_000m
+        && (paymentMethod != "Transfer" || currentChargeAmount == bill.Outstanding);
     private Guid checkoutKey;
     private Dictionary<Guid, OrderDetailResponse> billOrders = [];
     private CancellationTokenSource? realtimeRefresh;
     private CancellationTokenSource? reconciliation;
+    private CancellationTokenSource? kitchenClockRefresh;
     private CashRegisterResponse? cashRegister;
     private bool cashPanelOpen;
     private decimal openingFloat;
@@ -58,19 +94,33 @@ public partial class Home
     private decimal ReconciliationDifference =>
         reconciliationAmounts.Values.Sum() - (cashRegister?.ExpectedTotal ?? 0);
 
+    private List<
+        IGrouping<(Guid ZoneId, string ZoneName, int ZoneSortOrder), TableResponse>
+    > DiningZones =>
+        tables
+            .GroupBy(x => (x.ZoneId, x.ZoneName, x.ZoneSortOrder))
+            .OrderBy(x => x.Key.ZoneSortOrder)
+            .ThenBy(x => x.Key.ZoneName)
+            .ToList();
+    private List<TableResponse> TablesInSelectedZone =>
+        selectedZoneId is Guid zoneId ? tables.Where(x => x.ZoneId == zoneId).ToList() : [];
     private List<TableResponse> FilteredTables =>
-        tables.Where(x => tableFilter == "All" || x.Status == tableFilter).ToList();
+        TablesInSelectedZone
+            .Where(x => tableFilter == "All" || x.Status == tableFilter)
+            .OrderBy(x => x.Code)
+            .ToList();
     private List<string> Categories => menu.Select(x => x.CategoryName).Distinct().Order().ToList();
     private List<MenuItemResponse> VisibleMenu =>
-        menu.Where(x => x.IsAvailable && (category is null || x.CategoryName == category)).ToList();
-    private List<MenuItemResponse> Cart =>
-        menu.Where(x => quantities.GetValueOrDefault(x.ProductId) > 0).ToList();
-    private int ItemCount => quantities.Values.Sum();
-    private decimal Total => menu.Sum(x => x.Price * quantities.GetValueOrDefault(x.ProductId));
+        menu.Where(x => x.IsAvailable && (category is null || x.CategoryName == category))
+            .OrderBy(x => x.CategoryName)
+            .ThenBy(x => x.ProductName)
+            .ToList();
+    private List<PosCartLine> Cart => cart;
+    private int ItemCount => cart.Sum(x => x.Quantity);
+    private decimal Total => cart.Sum(line => UnitPrice(line) * line.Quantity);
     private bool HasLocation => selectedTable is not null && session is not null;
     private bool IsTakeaway => serviceMode == "Takeaway";
     private bool hasSessionOrders;
-    private bool CanCancelSession => HasLocation;
     private string CurrentLabel =>
         IsTakeaway ? "Pedido para llevar" : selectedTable?.Label ?? "Ubicación";
 
@@ -111,6 +161,7 @@ public partial class Home
             await LoadTables();
             await ConnectRealtimeAsync();
             StartReconciliation();
+            StartKitchenClockRefresh();
         }
         catch (Exception exception)
         {
@@ -157,6 +208,7 @@ public partial class Home
         await LoadOperationalData();
         await ConnectRealtimeAsync();
         StartReconciliation();
+        StartKitchenClockRefresh();
     }
 
     private async Task Logout()
@@ -171,11 +223,20 @@ public partial class Home
 
         reconciliation?.Dispose();
         reconciliation = null;
+        if (kitchenClockRefresh is not null)
+        {
+            await kitchenClockRefresh.CancelAsync();
+        }
+
+        kitchenClockRefresh?.Dispose();
+        kitchenClockRefresh = null;
         Api.AccessToken = null;
         login = null;
         restaurants = [];
         cashRegister = null;
         tables = [];
+        selectedZoneId = null;
+        pickupView = false;
         BackToTables();
         message = null;
     }
@@ -188,6 +249,8 @@ public partial class Home
         }
 
         restaurantId = value;
+        selectedZoneId = null;
+        pickupView = false;
         BackToTables();
         await LoadTables();
         await ConnectRealtimeAsync();
@@ -216,7 +279,7 @@ public partial class Home
 
     private async Task LoadOperationalData()
     {
-        tables = await Api.TablesAsync(restaurantId);
+        SetTables(await Api.TablesAsync(restaurantId));
         cashRegister = await Api.CurrentCashRegisterAsync(restaurantId);
         PrepareReconciliation();
         await LoadPickupOrdersCore();
@@ -225,6 +288,31 @@ public partial class Home
     private async Task LoadPickupOrders()
     {
         await Run(LoadPickupOrdersCore);
+    }
+
+    private async Task ShowPickupOrders()
+    {
+        pickupView = true;
+        selectedZoneId = null;
+        tableFilter = "All";
+        await LoadPickupOrders();
+    }
+
+    private void SelectZone(Guid zoneId)
+    {
+        selectedZoneId = zoneId;
+        tableFilter = "All";
+        pickupView = false;
+    }
+
+    private void SetTables(List<TableResponse> refreshedTables)
+    {
+        tables = refreshedTables;
+        if (selectedZoneId is Guid zoneId && tables.All(x => x.ZoneId != zoneId))
+        {
+            selectedZoneId = null;
+            tableFilter = "All";
+        }
     }
 
     private async Task LoadPickupOrdersCore()
@@ -273,16 +361,53 @@ public partial class Home
             serviceMode = "DineIn";
             takeawayOpen = false;
             customerName = string.Empty;
+            guestCountSessionOpenedHere = !table.ActiveSessionId.HasValue;
             session = table.ActiveSessionId.HasValue
                 ? await Api.ActiveSessionAsync(table.Id)
                 : await Api.OpenSessionAsync(table.Id);
             guestCount = session.GuestCount;
-            selectedTable = table;
+            guestCountDraft = guestCount ?? 2;
+            guestCountDialogOpen = session.RequestGuestCount && session.GuestCount is null;
+            guestCountTable = guestCountDialogOpen ? table : null;
+            selectedTable = guestCountDialogOpen ? null : table;
             hasSessionOrders = session.Orders.Count > 0;
-            menu = await Api.MenuAsync(restaurantId);
-            quantities = menu.ToDictionary(x => x.ProductId, _ => 0);
-            notes = menu.ToDictionary(x => x.ProductId, _ => string.Empty);
+            menu = guestCountDialogOpen ? [] : await Api.MenuAsync(restaurantId);
+            cart = [];
         });
+    }
+
+    private async Task AcceptGuestCount()
+    {
+        if (session is null || guestCountTable is null || guestCountDraft is < 1 or > 999 || busy)
+        {
+            return;
+        }
+
+        await Run(async () =>
+        {
+            session = await Api.SetGuestCountAsync(session.Id, guestCountDraft);
+            guestCount = session.GuestCount;
+            menu = await Api.MenuAsync(restaurantId);
+            selectedTable = guestCountTable;
+            guestCountTable = null;
+            guestCountDialogOpen = false;
+        });
+    }
+
+    private async Task CancelGuestCount()
+    {
+        if (guestCountSessionOpenedHere && session is { Orders.Count: 0 })
+        {
+            await Run(async () =>
+            {
+                await Api.CancelSessionAsync(session.Id);
+                BackToTables();
+                await LoadOperationalData();
+            });
+            return;
+        }
+
+        BackToTables();
     }
 
     private async Task BeginTakeaway()
@@ -299,16 +424,165 @@ public partial class Home
             session = null;
             serviceMode = "Takeaway";
             takeawayOpen = true;
+            pickupView = false;
             customerName = string.Empty;
             menu = await Api.MenuAsync(restaurantId);
-            quantities = menu.ToDictionary(x => x.ProductId, _ => 0);
-            notes = menu.ToDictionary(x => x.ProductId, _ => string.Empty);
+            cart = [];
         });
     }
 
-    private void ChangeQuantity(Guid productId, int change)
+    private void SelectProduct(Guid productId)
     {
-        quantities[productId] = Math.Clamp(quantities[productId] + change, 0, 99);
+        MenuItemResponse? product = menu.FirstOrDefault(x => x.ProductId == productId);
+        if (product is null)
+            return;
+        if (product.ExtraGroups is { Count: > 0 })
+        {
+            extraDialogProduct = product;
+            editingExtraLineId = null;
+            extraSelections = [];
+            return;
+        }
+        AddCartUnit(productId, []);
+    }
+
+    private void AddCartUnit(Guid productId, List<PosCartExtra> extras)
+    {
+        PosCartLine? existing = cart.FirstOrDefault(line =>
+            line.ProductId == productId
+            && string.IsNullOrWhiteSpace(line.Notes)
+            && SameExtras(line.Extras, extras)
+        );
+        if (existing is not null)
+        {
+            existing.Quantity = Math.Min(99, existing.Quantity + 1);
+            return;
+        }
+
+        cart.Add(new PosCartLine { ProductId = productId, Extras = extras });
+    }
+
+    private static bool SameExtras(
+        IEnumerable<PosCartExtra> left,
+        IEnumerable<PosCartExtra> right
+    ) =>
+        left.OrderBy(extra => extra.GroupId)
+            .ThenBy(extra => extra.ProductId)
+            .SequenceEqual(right.OrderBy(extra => extra.GroupId).ThenBy(extra => extra.ProductId));
+
+    private MenuItemResponse ProductFor(PosCartLine line) =>
+        menu.First(x => x.ProductId == line.ProductId);
+
+    private decimal UnitPrice(PosCartLine line)
+    {
+        MenuItemResponse product = ProductFor(line);
+        return product.Price
+            + line.Extras.Sum(extra =>
+                product
+                    .ExtraGroups?.FirstOrDefault(group => group.Id == extra.GroupId)
+                    ?.Options.FirstOrDefault(option => option.ProductId == extra.ProductId)
+                    ?.Price * extra.Quantity
+                ?? 0
+            );
+    }
+
+    private void ChangeCartQuantity(Guid lineId, int change)
+    {
+        PosCartLine? line = cart.FirstOrDefault(x => x.Id == lineId);
+        if (line is null)
+            return;
+        line.Quantity = Math.Clamp(line.Quantity + change, 0, 99);
+        if (line.Quantity == 0)
+            cart.Remove(line);
+    }
+
+    private void EditExtras(PosCartLine line)
+    {
+        extraDialogProduct = ProductFor(line);
+        editingExtraLineId = line.Id;
+        extraSelections = line.Extras.ToDictionary(x => (x.GroupId, x.ProductId), x => x.Quantity);
+    }
+
+    private int ExtraQuantity(ProductExtraGroup group, ProductExtraOption option) =>
+        extraSelections.GetValueOrDefault((group.Id, option.ProductId));
+
+    private int GroupExtraQuantity(ProductExtraGroup group) =>
+        extraSelections.Where(x => x.Key.GroupId == group.Id).Sum(x => x.Value);
+
+    private void ChangeExtraQuantity(ProductExtraGroup group, ProductExtraOption option, int change)
+    {
+        var key = (group.Id, option.ProductId);
+        int next = Math.Clamp(extraSelections.GetValueOrDefault(key) + change, 0, 99);
+        if (
+            GroupExtraQuantity(group) + next - extraSelections.GetValueOrDefault(key)
+            > group.MaxSelections
+        )
+            return;
+        if (next == 0)
+            extraSelections.Remove(key);
+        else
+            extraSelections[key] = next;
+    }
+
+    private bool CanAcceptExtras =>
+        extraDialogProduct?.ExtraGroups?.All(group =>
+            GroupExtraQuantity(group) >= group.MinSelections
+            && GroupExtraQuantity(group) <= group.MaxSelections
+        )
+        ?? false;
+
+    private void AcceptExtras()
+    {
+        if (extraDialogProduct is null || !CanAcceptExtras)
+            return;
+        List<PosCartExtra> selections = extraSelections
+            .Where(x => x.Value > 0)
+            .Select(x => new PosCartExtra(x.Key.GroupId, x.Key.ProductId, x.Value))
+            .ToList();
+        if (editingExtraLineId is Guid lineId)
+        {
+            PosCartLine? line = cart.FirstOrDefault(x => x.Id == lineId);
+            if (line is not null)
+            {
+                line.Extras.Clear();
+                line.Extras.AddRange(selections);
+                MergeMatchingCartLine(line);
+            }
+        }
+        else
+        {
+            AddCartUnit(extraDialogProduct.ProductId, selections);
+        }
+        CloseExtras();
+    }
+
+    private void MergeMatchingCartLine(PosCartLine line)
+    {
+        PosCartLine? matching = cart.FirstOrDefault(candidate =>
+            candidate.Id != line.Id
+            && candidate.ProductId == line.ProductId
+            && candidate.Notes == line.Notes
+            && SameExtras(candidate.Extras, line.Extras)
+        );
+        if (matching is null)
+        {
+            return;
+        }
+
+        if (matching.Quantity + line.Quantity > 99)
+        {
+            return;
+        }
+
+        matching.Quantity += line.Quantity;
+        cart.Remove(line);
+    }
+
+    private void CloseExtras()
+    {
+        extraDialogProduct = null;
+        editingExtraLineId = null;
+        extraSelections = [];
     }
 
     private async Task SendOrder()
@@ -339,8 +613,7 @@ public partial class Home
                     ? await Api.CreateAndSubmitTakeawayAsync(
                         restaurantId,
                         customerName.Trim(),
-                        quantities,
-                        notes
+                        cart
                     )
                     : await Api.CreateAndSubmitAsync(
                         restaurantId,
@@ -348,15 +621,10 @@ public partial class Home
                         session!.Id,
                         serviceMode,
                         string.Empty,
-                        quantities,
-                        notes
+                        cart
                     );
 
-                foreach (Guid id in quantities.Keys.ToArray())
-                {
-                    quantities[id] = 0;
-                    notes[id] = string.Empty;
-                }
+                cart.Clear();
                 hasSessionOrders = HasLocation;
                 success = true;
                 message = IsTakeaway
@@ -420,9 +688,7 @@ public partial class Home
             && pickupPaymentStatus != "Paid"
             && line.Status == "Active"
             && OrderProgress.CanCancelBeforePreparation(pickupDetail.Status)
-            && pickupDetail.Stations.Any(station =>
-                station.Code == line.PreparationStationCode && station.Status == "Pending"
-            );
+            && line.KitchenStatus == "Pending";
     }
 
     private async Task CancelPickupLine(OrderLineDetailResponse line)
@@ -562,9 +828,20 @@ public partial class Home
         );
     }
 
+    private async Task BackFromTableOrder()
+    {
+        if (HasLocation && !hasSessionOrders)
+        {
+            await CancelSession();
+            return;
+        }
+
+        BackToTables();
+    }
+
     private async Task OpenBill()
     {
-        if (session is null)
+        if (session is null || !hasSessionOrders || busy)
         {
             return;
         }
@@ -572,7 +849,12 @@ public partial class Home
         bill = null;
         billLoadError = null;
         billOrders = [];
+        currentChargeAmount = 0;
+        tipPercentage = 0;
+        tipAmount = 0;
+        tipAmountManuallyEdited = false;
         billOpen = true;
+        paymentDialogOpen = false;
         await Run(LoadBill);
     }
 
@@ -591,6 +873,11 @@ public partial class Home
                 bill.Orders.Select(order => Api.OrderAsync(order.OrderId))
             );
             billOrders = details.ToDictionary(order => order.Id);
+            if (paymentDialogOpen && paymentMethod == "Transfer")
+            {
+                currentChargeAmount = bill.Outstanding;
+            }
+            SyncPaymentAmounts();
         }
         catch (Exception exception)
         {
@@ -607,38 +894,19 @@ public partial class Home
         OrderLineDetailResponse line
     )
     {
-        return billOrder.PaymentStatus != "Paid"
+        return billOrder.AmountPaid == 0
+            && billOrder.PaymentStatus != "Paid"
             && line.Status == "Active"
             && OrderProgress.CanCancelBeforePreparation(order.Status)
-            && order.Stations.Any(station =>
-                station.Code == line.PreparationStationCode && station.Status == "Pending"
-            );
+            && line.KitchenStatus == "Pending";
     }
 
     private async Task CancelLine(SessionBillOrderResponse order, OrderLineDetailResponse line)
     {
-        string? reason = await Js.InvokeAsync<string?>(
-            "prompt",
-            $"Motivo para cancelar {line.Quantity} × {line.ProductName}:"
-        );
-        if (string.IsNullOrWhiteSpace(reason))
-        {
-            return;
-        }
-
-        bool confirmed = await Js.InvokeAsync<bool>(
-            "confirm",
-            "La línea desaparecerá del KDS si cocina todavía no comenzó. ¿Continuar?"
-        );
-        if (!confirmed)
-        {
-            return;
-        }
-
         await Run(
             async () =>
             {
-                await Api.CancelOrderLineAsync(order.OrderId, line.Id, reason.Trim());
+                await Api.CancelOrderLineAsync(order.OrderId, line.Id, "Cancelado desde TPV");
                 await Task.Delay(500);
                 await LoadBill();
                 success = true;
@@ -650,12 +918,115 @@ public partial class Home
 
     private void CloseBill()
     {
+        paymentDialogOpen = false;
         billOpen = false;
+    }
+
+    private void OpenPaymentDialog()
+    {
+        if (bill is null || bill.Outstanding <= 0 || !bill.CanCheckout || busy)
+        {
+            return;
+        }
+        paymentMethod = string.Empty;
+        currentChargeAmount = 0;
+        tipPercentage = 0;
+        tipAmount = 0;
+        tipAmountManuallyEdited = false;
+        paymentReference = string.Empty;
+        SyncPaymentAmounts();
+        paymentDialogOpen = true;
+        SelectKeypadTarget("Charge");
+    }
+
+    private void ClosePaymentDialog()
+    {
+        if (!busy)
+        {
+            paymentDialogOpen = false;
+        }
+    }
+
+    private void SelectKeypadTarget(string target)
+    {
+        if (paymentMethod == "Transfer" && target == "Charge")
+        {
+            return;
+        }
+        keypadTarget = target;
+        keypadText = (target == "Tip" ? tipAmount : currentChargeAmount)
+            .ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)
+            .Replace('.', ',');
+        keypadStartNew = true;
+    }
+
+    private void SetExactAmount()
+    {
+        if (bill is null)
+        {
+            return;
+        }
+        currentChargeAmount = bill.Outstanding;
+        SyncPaymentAmounts();
+        SelectKeypadTarget("Charge");
+    }
+
+    private void PressPaymentKey(string key)
+    {
+        if (paymentMethod == "Transfer" && keypadTarget == "Charge")
+        {
+            return;
+        }
+        string next = keypadText;
+        if (key == "Borrar")
+        {
+            next = "0";
+        }
+        else if (key == ",")
+        {
+            next =
+                keypadStartNew ? "0,"
+                : next.Contains(',') ? next
+                : next + ",";
+        }
+        else
+        {
+            next =
+                keypadStartNew ? key
+                : next == "0" ? key
+                : next + key;
+        }
+        if (
+            next.Length > 10
+            || next.Contains(',') && next[(next.IndexOf(',') + 1)..].Length > 2
+            || !decimal.TryParse(
+                next.Replace(',', '.'),
+                System.Globalization.NumberStyles.AllowDecimalPoint,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out decimal amount
+            )
+            || amount > 1_000_000m
+        )
+        {
+            return;
+        }
+        keypadStartNew = false;
+        keypadText = next;
+        if (keypadTarget == "Charge")
+        {
+            currentChargeAmount = amount;
+            SyncPaymentAmounts();
+        }
+        else if (keypadTarget == "Tip")
+        {
+            tipAmount = amount;
+            tipAmountManuallyEdited = true;
+        }
     }
 
     private async Task CheckoutSession()
     {
-        if (session is null || busy)
+        if (session is null || bill is null || bill.Outstanding <= 0 || !bill.CanCheckout || busy)
         {
             return;
         }
@@ -665,7 +1036,16 @@ public partial class Home
             message = "Debes abrir la caja antes de registrar el cobro.";
             return;
         }
+        if (!IsChargeAmountValid)
+        {
+            return;
+        }
+        decimal paymentAmount = currentChargeAmount;
+        decimal tipAmount = CurrentTipAmount;
+        decimal amountReceived = AmountReceived;
+        decimal changeAmount = ChangeAmount;
         checkoutKey = checkoutKey == Guid.Empty ? Guid.NewGuid() : checkoutKey;
+        List<PosApi.CheckoutOrderAllocation> allocations = GetCurrentAllocations();
         await Run(
             async () =>
             {
@@ -674,19 +1054,105 @@ public partial class Home
                     cashRegister?.Id,
                     paymentReference
                 );
-                bill = await Api.CheckoutAsync(session.Id, checkoutKey, paymentMethod, reference);
+                bill = await Api.CheckoutAsync(
+                    session.Id,
+                    checkoutKey,
+                    paymentMethod,
+                    reference,
+                    tipAmount,
+                    amountReceived,
+                    allocations
+                );
+                checkoutKey = Guid.Empty;
+                lastChangeAmount = changeAmount;
+                paymentDialogOpen = false;
+                currentChargeAmount = 0;
+                tipAmountManuallyEdited = false;
+                SyncPaymentAmounts();
                 success = true;
-                message = $"Cobro completado: {bill.Total:0.00} €. Ubicación liberada.";
-                BackToTables();
-                await LoadOperationalData();
+                message =
+                    $"Cobro de {paymentAmount + tipAmount:0.00} € registrado."
+                    + $" Cambio a devolver: {changeAmount:0.00} €."
+                    + $" Pendiente de la cuenta: {bill.Outstanding:0.00} €.";
             },
             false
         );
     }
 
+    private List<PosApi.CheckoutOrderAllocation> GetCurrentAllocations()
+    {
+        if (bill is null)
+        {
+            return [];
+        }
+        decimal remainingAmount = PaymentPreview.AppliedToAccount;
+        List<PosApi.CheckoutOrderAllocation> allocations = [];
+        foreach (
+            SessionBillOrderResponse order in bill.Orders.Where(order =>
+                order.OrderStatus != "Cancelled"
+            )
+        )
+        {
+            decimal orderOutstanding = Math.Max(0, order.Amount - order.AmountPaid);
+            decimal allocation = Math.Min(orderOutstanding, remainingAmount);
+            if (allocation > 0)
+            {
+                allocations.Add(new(order.OrderId, allocation));
+                remainingAmount -= allocation;
+            }
+            if (remainingAmount <= 0)
+            {
+                break;
+            }
+        }
+        return allocations;
+    }
+
+    private void SelectTip(int percentage)
+    {
+        tipPercentage = percentage;
+        tipAmountManuallyEdited = false;
+        SyncPaymentAmounts();
+        if (keypadTarget == "Tip")
+        {
+            SelectKeypadTarget("Tip");
+        }
+    }
+
+    private void SetPaymentMethod(string method)
+    {
+        if (paymentMethod == "Transfer" && method != "Transfer")
+        {
+            currentChargeAmount = 0;
+        }
+        paymentMethod = method;
+        if (method == "Transfer" && bill is not null)
+        {
+            currentChargeAmount = bill.Outstanding;
+        }
+        SyncPaymentAmounts();
+        if (method == "Transfer")
+        {
+            keypadTarget = "Charge";
+            keypadStartNew = true;
+        }
+        else
+        {
+            SelectKeypadTarget("Charge");
+        }
+    }
+
+    private void SyncPaymentAmounts()
+    {
+        if (!tipAmountManuallyEdited)
+        {
+            tipAmount = SuggestedTipAmount;
+        }
+    }
+
     private async Task ReleaseSession()
     {
-        if (session is null)
+        if (session is null || bill is null || !bill.CanRelease || busy)
         {
             return;
         }
@@ -706,18 +1172,22 @@ public partial class Home
 
     private void BackToTables()
     {
+        guestCountDialogOpen = false;
+        guestCountSessionOpenedHere = false;
+        guestCountTable = null;
         selectedTable = null;
         session = null;
         takeawayOpen = false;
         serviceMode = "DineIn";
         menu = [];
-        quantities = [];
-        notes = [];
+        cart = [];
         category = null;
         hasSessionOrders = false;
         bill = null;
         billOrders = [];
         billOpen = false;
+        paymentDialogOpen = false;
+        lastChangeAmount = null;
         checkoutKey = Guid.Empty;
         paymentReference = string.Empty;
     }
@@ -808,6 +1278,11 @@ public partial class Home
         return tableFilter == value ? "filter active" : "filter";
     }
 
+    private string ZoneClass(Guid zoneId)
+    {
+        return !pickupView && selectedZoneId == zoneId ? "zone-filter active" : "zone-filter";
+    }
+
     private string CategoryClass(string? value)
     {
         return category == value ? "filter active" : "filter";
@@ -817,6 +1292,33 @@ public partial class Home
     {
         return status == "Occupied" ? "Ocupada" : "Disponible";
     }
+
+    private static string KitchenLineStatusLabel(string status) =>
+        status switch
+        {
+            "InPreparation" => "Preparando",
+            "Ready" => "Esperando despacho del chef",
+            "Dispatched" => "Despachado",
+            _ => "Pendiente",
+        };
+
+    private static string KitchenLineStatusIcon(string status) =>
+        status switch
+        {
+            "InPreparation" => "🍴",
+            "Ready" => "⏳",
+            "Dispatched" => "✔",
+            _ => "⏳",
+        };
+
+    private static string KitchenLineStatusClass(string status) =>
+        status switch
+        {
+            "InPreparation" => "preparing",
+            "Ready" => "awaiting-dispatch",
+            "Dispatched" => "dispatched",
+            _ => "pending",
+        };
 
     private string TableOrderSummary(TableResponse table)
     {
@@ -829,6 +1331,84 @@ public partial class Home
             .Where(x => x.TableId == table.Id && x.DiningSessionId == sessionId)
             .ToList();
         return OrderProgress.Summarize(orders.Select(x => x.Status));
+    }
+
+    private string? TableKitchenTime(TableResponse table)
+    {
+        if (table.ActiveSessionId is not Guid sessionId)
+        {
+            return null;
+        }
+
+        DateTime now = DateTime.UtcNow;
+        TimeSpan? longestElapsed = null;
+        foreach (
+            OrderResponse order in activeOrders.Where(x =>
+                x.TableId == table.Id && x.DiningSessionId == sessionId
+            )
+        )
+        {
+            (DateTime Start, DateTime? End)? clock = KitchenClock(order);
+            if (clock is null)
+            {
+                continue;
+            }
+
+            TimeSpan elapsed = (clock.Value.End ?? now) - clock.Value.Start;
+            if (longestElapsed is null || elapsed > longestElapsed.Value)
+            {
+                longestElapsed = elapsed;
+            }
+        }
+
+        return longestElapsed is TimeSpan duration ? FormatKitchenDuration(duration) : null;
+    }
+
+    private static (DateTime Start, DateTime? End)? KitchenClock(OrderResponse order)
+    {
+        if (
+            order.SubmittedAtUtc is not DateTime start
+            || order.Status is "Cancelled" or "Delivered"
+        )
+        {
+            return null;
+        }
+
+        OrderStationProgressResponse[] stations = (order.Stations ?? [])
+            .Where(station => station.Status != "Cancelled")
+            .ToArray();
+        if (stations.Length == 0)
+        {
+            return null;
+        }
+
+        bool completed = stations.All(station => station.Status is "Ready" or "Dispatched");
+        if (order.Status == "Ready" && stations.All(station => station.Status == "Dispatched"))
+        {
+            return null;
+        }
+
+        if (!completed)
+        {
+            return (start, null);
+        }
+
+        if (stations.Any(station => station.ReadyAtUtc is null))
+        {
+            return null;
+        }
+
+        DateTime end = stations.Max(station => station.ReadyAtUtc!.Value);
+        return (start, end < start ? start : end);
+    }
+
+    private static string FormatKitchenDuration(TimeSpan duration)
+    {
+        int seconds = Math.Max(0, (int)Math.Floor(duration.TotalSeconds));
+        int hours = seconds / 3600;
+        int minutes = hours > 0 ? (seconds / 60) % 60 : seconds / 60;
+        int remainder = seconds % 60;
+        return hours > 0 ? $"{hours}:{minutes:00}:{remainder:00}" : $"{minutes:00}:{remainder:00}";
     }
 
     private string SessionOrderSummary(Guid sessionId)
@@ -844,19 +1424,10 @@ public partial class Home
         {
             "Cash" => "Efectivo",
             "Card" => "Tarjeta / datáfono",
+            "Transfer" => "Transferencia",
             "Online" => "Pago online",
             "Cheque" => "Cheque",
             _ => method,
-        };
-    }
-
-    private static string ModeLabel(string mode)
-    {
-        return mode switch
-        {
-            "Bar" => "BARRA",
-            "Takeaway" => "PARA LLEVAR",
-            _ => "SERVICIO EN MESA",
         };
     }
 
@@ -889,7 +1460,7 @@ public partial class Home
         {
             await Realtime.ConnectAsync(restaurantId);
             await DiningRealtime.ConnectAsync(restaurantId);
-            tables = await Api.TablesAsync(restaurantId);
+            SetTables(await Api.TablesAsync(restaurantId));
             StateHasChanged();
         }
         catch (Exception exception)
@@ -948,15 +1519,23 @@ public partial class Home
             await Task.Delay(400, cancellationToken);
             await InvokeAsync(async () =>
             {
-                tables = await Api.TablesAsync(restaurantId);
+                SetTables(await Api.TablesAsync(restaurantId));
                 await LoadPickupOrdersCore();
                 if (session is not null)
                 {
                     TableResponse? current = tables.FirstOrDefault(x => x.Id == session.TableId);
                     if (current?.ActiveSessionId == session.Id)
                     {
-                        selectedTable = current;
+                        if (guestCountDialogOpen)
+                        {
+                            guestCountTable = current;
+                        }
+                        else
+                        {
+                            selectedTable = current;
+                        }
                         session = await Api.ActiveSessionAsync(current.Id);
+                        hasSessionOrders = session.Orders.Count > 0;
                         if (billOpen)
                         {
                             await LoadBill();
@@ -989,6 +1568,32 @@ public partial class Home
         _ = ReconcileOperationalDataAsync(reconciliation.Token);
     }
 
+    private void StartKitchenClockRefresh()
+    {
+        kitchenClockRefresh?.Cancel();
+        kitchenClockRefresh?.Dispose();
+        kitchenClockRefresh = new CancellationTokenSource();
+        _ = RefreshKitchenClocksAsync(kitchenClockRefresh.Token);
+    }
+
+    private async Task RefreshKitchenClocksAsync(CancellationToken cancellationToken)
+    {
+        using PeriodicTimer timer = new(TimeSpan.FromSeconds(1));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                if (login is null || selectedTable is not null || takeawayOpen || pickupView)
+                {
+                    continue;
+                }
+
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+
     private async Task ReconcileOperationalDataAsync(CancellationToken cancellationToken)
     {
         using PeriodicTimer timer = new(TimeSpan.FromSeconds(15));
@@ -1003,7 +1608,7 @@ public partial class Home
                         return;
                     }
 
-                    tables = await Api.TablesAsync(restaurantId);
+                    SetTables(await Api.TablesAsync(restaurantId));
                     await LoadPickupOrdersCore();
                     cashRegister = await Api.CurrentCashRegisterAsync(restaurantId);
                     PrepareReconciliation();
@@ -1039,6 +1644,12 @@ public partial class Home
         }
 
         reconciliation?.Dispose();
+        if (kitchenClockRefresh is not null)
+        {
+            await kitchenClockRefresh.CancelAsync();
+        }
+
+        kitchenClockRefresh?.Dispose();
         await Realtime.DisconnectAsync();
         await DiningRealtime.DisconnectAsync();
     }

@@ -5,5 +5,7 @@ public sealed record SessionBillOrderResponse(
     string OrderStatus,
     string PaymentStatus,
     decimal Amount,
-    DateTime AddedAtUtc
+    decimal AmountPaid,
+    DateTime AddedAtUtc,
+    decimal TipPaid = 0
 );

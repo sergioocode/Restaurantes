@@ -10,5 +10,9 @@ public sealed record SessionBillResponse(
     decimal Total,
     decimal Outstanding,
     bool CanCheckout,
-    List<SessionBillOrderResponse> Orders
+    bool CanRelease,
+    List<SessionBillOrderResponse> Orders,
+    bool RequestGuestCount = false,
+    int? GuestCount = null,
+    decimal TipTotal = 0
 );
