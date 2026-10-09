@@ -14,7 +14,6 @@ const refreshButton = document.querySelector('#refresh');
 const historyButton = document.querySelector('#historyButton');
 const historyPanel = document.querySelector('#historyPanel');
 const historyList = document.querySelector('#historyList');
-const historyClose = document.querySelector('#historyClose');
 const logoutButton = document.querySelector('#logout');
 const restaurantSelect = document.querySelector('#restaurantId');
 const stationSelect = document.querySelector('#stationCode');
@@ -93,6 +92,7 @@ function closeHistory() {
   historyOpen = false;
   historyPanel.classList.add('hidden');
   ordersElement.classList.remove('hidden');
+  historyButton.setAttribute('aria-expanded', 'false');
 }
 
 function updateHistoryVisibility() {
@@ -101,6 +101,8 @@ function updateHistoryVisibility() {
   historyButton.classList.toggle('hidden', !available);
   historyButton.disabled = false;
   historyButton.title = '';
+  historyButton.textContent = 'Historial';
+  historyButton.setAttribute('aria-expanded', String(historyOpen));
   if (!available) closeHistory();
 }
 
@@ -194,6 +196,7 @@ function updateRestaurantIdentity() {
 async function loadStationsAndConnect() {
   const restaurantId = restaurantSelect.value;
   if (!restaurantId) return;
+  realtime.disconnect();
   closeHistory();
   clearOrdersView('Cargando pedidos…');
   localStorage.setItem(restaurantKey, restaurantId);
@@ -203,15 +206,23 @@ async function loadStationsAndConnect() {
   setStatus(false, 'Cargando estaciones…');
   try {
     const stations = await api.getStations(restaurantId);
-    const primary = stations.find(item => item.isActive && item.isPrimary);
+    const activeStations = stations
+      .filter(item => item.isActive)
+      .sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name));
+    const primary = activeStations.find(item => item.isPrimary);
     primaryStationCode = primary ? 'CHEF' : '';
     if (primary) {
       addOption(stationSelect, 'CHEF', primary.code + ' · ' + primary.name, primary.name);
     }
-    for (const station of stations
-      .filter(item => item.isActive && !item.isPrimary)
-      .sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name))) {
+    for (const station of activeStations.filter(item => !item.isPrimary)) {
       addOption(stationSelect, station.code, station.code + ' · ' + station.name, station.name);
+    }
+    if (stationSelect.options.length === 0) {
+      stationSelect.disabled = true;
+      clearOrdersView('Este local no tiene estaciones KDS activas. Configúralas en Backoffice.');
+      setStatus(false, 'Sin estaciones KDS activas');
+      updateHistoryVisibility();
+      return;
     }
     const stationKey = 'restaurantes.kds.station.' + restaurantId;
     const remembered = localStorage.getItem(stationKey);
@@ -305,6 +316,7 @@ async function openHistory() {
     historyOpen = true;
     ordersElement.classList.add('hidden');
     historyPanel.classList.remove('hidden');
+    historyButton.setAttribute('aria-expanded', 'true');
   } catch (error) {
     eventText.textContent = error.message;
   } finally {
@@ -335,10 +347,10 @@ function logout() {
   refreshButton.disabled = true;
   identityStatus.textContent = '';
   eventText.textContent = '';
-  clearOrdersView('Inicia sesión para cargar el monitor.');
+  clearOrdersView('Accede para cargar el monitor.');
   historyButton.classList.add('hidden');
   closeHistory();
-  setStatus(false, 'Inicia sesión');
+  setStatus(false, 'Sin autenticar');
 }
 
 async function restoreLogin() {
@@ -367,8 +379,10 @@ async function restoreLogin() {
 loginMicrosoft.addEventListener('click', () => startLogin('Microsoft'));
 loginGoogle.addEventListener('click', () => startLogin('Google'));
 refreshButton.addEventListener('click', refreshMonitor);
-historyButton.addEventListener('click', openHistory);
-historyClose.addEventListener('click', closeHistory);
+historyButton.addEventListener('click', () => {
+  if (historyOpen) closeHistory();
+  else openHistory();
+});
 logoutButton.addEventListener('click', logout);
 restaurantSelect.addEventListener('change', loadStationsAndConnect);
 stationSelect.addEventListener('change', () => {

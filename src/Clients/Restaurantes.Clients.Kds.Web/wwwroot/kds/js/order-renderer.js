@@ -10,6 +10,7 @@ export class OrderRenderer {
   constructor(element, options) {
     this.element = element;
     this.options = options;
+    this.collapsedOrders = new Set();
     window.setInterval(() => this.refreshKitchenClocks(), 1000);
     document.addEventListener('visibilitychange', () => this.refreshKitchenClocks());
   }
@@ -22,85 +23,115 @@ export class OrderRenderer {
     }
 
     for (const order of orders) {
-      const isPending = this.options.isOrderPending(order.id);
       const article = document.createElement('article');
       article.className = 'order';
       article.dataset.status = order.status;
 
       const title = document.createElement('h2');
+      const titleContent = document.createElement('span');
+      titleContent.className = 'order-title-content';
       const destination = document.createElement('span');
       destination.textContent = orderDestinationLabel(order);
-      const badge = document.createElement('span');
-      badge.className = 'badge';
-      badge.textContent = order.status + ' · v' + order.version;
-      title.append(destination, badge);
+      const shortId = document.createElement('small');
+      shortId.className = 'order-short-id';
+      shortId.textContent = order.id.slice(0, 8);
+      shortId.title = order.id;
+      titleContent.append(destination, shortId);
 
-      const id = document.createElement('small');
-      id.textContent = order.id;
-      const age = document.createElement('small');
-      age.textContent = order.status === 'Ready' && order.readyAtUtc
-        ? ' · ' + elapsedLabel(order.readyAtUtc)
-        : '';
-      id.append(age);
-
-      const channel = document.createElement('div');
-      channel.className = 'stations';
+      const headerMeta = document.createElement('span');
+      headerMeta.className = 'order-header-meta';
       const sourceBadge = document.createElement('span');
       sourceBadge.className = 'station';
       sourceBadge.textContent = 'Origen: ' + order.source;
-      channel.append(sourceBadge, this.renderKitchenClock(order, this.options.getStationCode()));
+      headerMeta.append(sourceBadge, this.renderKitchenClock(order, this.options.getStationCode()));
+
+      const collapsed = this.collapsedOrders.has(order.id);
+      const toggleButton = document.createElement('button');
+      toggleButton.className = 'order-collapse secondary';
+      toggleButton.type = 'button';
+      toggleButton.textContent = collapsed ? '+' : '−';
+      toggleButton.setAttribute('aria-expanded', String(!collapsed));
+      toggleButton.setAttribute('aria-label', collapsed ? 'Expandir tarjeta' : 'Contraer tarjeta');
+      toggleButton.title = collapsed ? 'Mostrar pedido' : 'Recoger tarjeta';
+      title.append(titleContent, headerMeta, toggleButton);
+
+      const age = document.createElement('small');
+      age.className = 'order-age';
+      age.textContent = order.status === 'Ready' && order.readyAtUtc
+        ? elapsedLabel(order.readyAtUtc)
+        : '';
+
       if (Number.isInteger(order.guestCount) && order.guestCount > 0) {
         const guests = document.createElement('span');
-        guests.className = 'station';
-        guests.textContent = '👥 ' + order.guestCount;
+        guests.className = 'station guest-count';
+        const guestIcon = document.createElement('span');
+        guestIcon.className = 'guest-icon';
+        guestIcon.textContent = '👥';
+        const guestNumber = document.createElement('span');
+        guestNumber.textContent = order.guestCount;
+        guests.append(guestIcon, guestNumber);
         guests.title = order.guestCount + ' comensales';
         guests.setAttribute('aria-label', guests.title);
-        channel.append(guests);
+        headerMeta.append(guests);
       }
 
       const stations = document.createElement('div');
       stations.className = 'stations';
-      for (const station of order.stations) {
-        const stationBadge = document.createElement('span');
-        stationBadge.className = 'station';
-        stationBadge.textContent = station.name + ': ' + station.status;
-        stations.append(stationBadge);
+      const selectedStationCode = this.options.getStationCode();
+      const isPrimary = selectedStationCode === this.options.getPrimaryStationCode();
+      if (!isPrimary) {
+        for (const station of order.stations) {
+          if (station.code === selectedStationCode) continue;
+          const stationBadge = document.createElement('span');
+          stationBadge.className = 'station';
+          stationBadge.textContent = station.name + ': ' + station.status;
+          stations.append(stationBadge);
+        }
       }
 
+      const controlledCodes = new Set(order.stations
+        .filter(station => station.requiresPrimaryDispatch)
+        .map(station => station.code));
       const lines = document.createElement('ul');
+      lines.className = 'product-lines';
       for (const line of order.lines) {
-        const item = document.createElement('li');
-        item.textContent = line.quantity + ' × ' + line.productName + ' [' + line.categoryName + ']'
-          + (line.notes ? ' — ' + line.notes : '');
-        lines.append(item);
+        if (isPrimary && controlledCodes.has(line.preparationStationCode)) continue;
+        lines.append(this.renderProductLine(order, line, false, false, !isPrimary));
       }
 
-      article.append(title, id, channel, stations, lines);
-      if (this.options.getStationCode() === this.options.getPrimaryStationCode()) {
-        article.append(this.renderChefPasses(order));
+      const body = document.createElement('div');
+      body.className = 'order-body';
+      body.hidden = collapsed;
+      toggleButton.addEventListener('click', () => {
+        if (body.hidden) this.collapsedOrders.delete(order.id);
+        else this.collapsedOrders.add(order.id);
+        body.hidden = !body.hidden;
+        toggleButton.textContent = body.hidden ? '+' : '−';
+        toggleButton.setAttribute('aria-expanded', String(!body.hidden));
+        toggleButton.setAttribute('aria-label', body.hidden ? 'Expandir tarjeta' : 'Contraer tarjeta');
+        toggleButton.title = body.hidden ? 'Mostrar pedido' : 'Recoger tarjeta';
+      });
+
+      article.append(title);
+      if (age.textContent) body.append(age);
+      if (!isPrimary) body.append(stations);
+      body.append(lines);
+      if (isPrimary) {
+        body.append(this.renderChefPasses(order));
       }
 
-      const action = this.nextAction(order);
       const canRecover = this.options.canRecover(order);
-      if (action || canRecover) {
+      if (canRecover) {
         const actions = document.createElement('div');
         actions.className = 'actions';
-        if (action) {
-          const actionButton = document.createElement('button');
-          actionButton.textContent = action.label;
-          actionButton.disabled = isPending;
-          actionButton.addEventListener('click', () => this.options.onAdvance(order, action, actionButton));
-          actions.append(actionButton);
-        }
-        if (canRecover) {
-          const deliverButton = document.createElement('button');
-          deliverButton.textContent = 'Entregado · resolver incidencia';
-          deliverButton.disabled = isPending;
-          deliverButton.addEventListener('click', () => this.options.onRecover(order, deliverButton));
-          actions.append(deliverButton);
-        }
-        article.append(actions);
+        const deliverButton = document.createElement('button');
+        deliverButton.textContent = 'Entregado · resolver incidencia';
+        deliverButton.disabled = isPending;
+        deliverButton.addEventListener('click', () => this.options.onRecover(order, deliverButton));
+        actions.append(deliverButton);
+        body.append(actions);
       }
+      article.append(body);
       this.element.append(article);
     }
   }
@@ -110,24 +141,98 @@ export class OrderRenderer {
     this.element.querySelector('.empty').textContent = message;
   }
 
-  nextAction(order) {
-    const stationCode = this.options.getStationCode();
-    if (stationCode === this.options.getPrimaryStationCode()) return null;
-    const ticket = order.stations.find(station => station.code === stationCode);
-    if (!ticket) return null;
-    if (ticket.status === 'Pending') {
-      return {
-        path: 'stations/' + encodeURIComponent(stationCode) + '/start-preparation',
-        label: 'Iniciar ' + ticket.name
-      };
+  renderProductLine(order, line, isPrimary, blocked = false, stationActions = !isPrimary) {
+    const item = document.createElement('li');
+    item.className = 'product-line';
+    const description = document.createElement('div');
+    description.className = 'product-description';
+    const name = document.createElement('span');
+    name.className = 'product-name';
+    const notes = line.notes || '';
+    const extrasMarker = notes.indexOf('Extras:');
+    const productNotes = extrasMarker < 0
+      ? notes
+      : notes.slice(0, extrasMarker).replace(/[·\s]+$/, '').trim();
+    name.textContent = line.quantity + ' × ' + line.productName + ' [' + line.categoryName + ']'
+      + (productNotes ? ' — ' + productNotes : '');
+    description.append(name);
+    if (extrasMarker >= 0) {
+      const extras = notes.slice(extrasMarker + 'Extras:'.length).trim();
+      if (extras) {
+        const extraLines = document.createElement('ul');
+        extraLines.className = 'product-extras';
+        for (const extra of extras.split(/,\s*/)) {
+          const extraLine = document.createElement('li');
+          extraLine.textContent = extra;
+          extraLines.append(extraLine);
+        }
+        description.append(extraLines);
+      }
     }
-    if (ticket.status === 'InPreparation') {
-      return {
-        path: 'stations/' + encodeURIComponent(stationCode) + '/ready',
-        label: 'Marcar ' + ticket.name + ' listo'
-      };
+    const state = document.createElement('small');
+    state.className = 'line-state ' + (line.kitchenStatus || 'Pending');
+    state.textContent = kitchenStatusLabel(line.kitchenStatus);
+    const controls = document.createElement('div');
+    controls.className = 'line-controls';
+    if (!(isPrimary && line.kitchenStatus === 'Ready')) controls.append(state);
+
+    if (isPrimary) {
+      controls.append(
+        this.renderLineClock('Preparación', line.preparationStartedAtUtc, line.readyAtUtc),
+        this.renderLineClock('Principal', line.readyAtUtc, line.dispatchedAtUtc)
+      );
+      if (line.kitchenStatus === 'Ready') {
+        if (blocked) {
+          const note = document.createElement('small');
+          note.className = 'line-waiting';
+          note.textContent = 'Esperando un pase anterior.';
+          controls.append(note);
+        } else {
+          controls.append(this.createLineAction(order, line, 'dispatch', 'Despachar'));
+        }
+      }
+    } else {
+      controls.append(this.renderLineClock(
+          'Preparación',
+          line.preparationStartedAtUtc,
+          line.readyAtUtc
+        ));
+      if (stationActions && line.kitchenStatus === 'Pending') {
+        controls.append(this.createLineAction(order, line, 'start-preparation', 'Iniciar'));
+      } else if (stationActions && line.kitchenStatus === 'InPreparation') {
+        controls.append(this.createLineAction(order, line, 'ready', 'Listo'));
+      }
     }
-    return null;
+    item.append(description, controls);
+    return item;
+  }
+
+  createLineAction(order, line, action, label) {
+    const button = document.createElement('button');
+    button.className = 'line-action';
+    button.textContent = label;
+    button.disabled = this.options.isOrderPending(order.id);
+    button.addEventListener('click', () => this.options.onAdvance(order, {
+      path: 'lines/' + encodeURIComponent(line.id) + '/' + action,
+      label
+    }, button));
+    return button;
+  }
+
+  renderLineClock(label, start, end) {
+    const badge = document.createElement('small');
+    badge.className = 'line-clock';
+    badge.title = label;
+    if (!start) {
+      badge.textContent = '🕓 —';
+      return badge;
+    }
+    const startMilliseconds = new Date(start).getTime();
+    const endMilliseconds = end ? new Date(end).getTime() : null;
+    badge.dataset.kitchenStart = String(startMilliseconds);
+    if (endMilliseconds !== null) badge.dataset.kitchenEnd = String(endMilliseconds);
+    updateKitchenClock(badge, startMilliseconds, endMilliseconds, label);
+    return badge;
   }
 
   renderChefPasses(order) {
@@ -149,43 +254,20 @@ export class OrderRenderer {
       const header = document.createElement('header');
       const name = document.createElement('strong');
       name.textContent = station.name + ' · prioridad ' + station.priority;
-      const status = document.createElement('span');
-      status.className = 'station';
-      status.textContent = station.status;
-      header.append(name, status, this.renderKitchenClock(order, station.code));
+      header.append(name);
 
+      const blocked = controlled.some(other =>
+        other.priority < station.priority
+        && other.status !== 'Dispatched'
+        && other.status !== 'Cancelled'
+      );
       const lines = document.createElement('ul');
+      lines.className = 'product-lines pass-lines';
       for (const line of order.lines.filter(line => line.preparationStationCode === station.code)) {
-        const item = document.createElement('li');
-        item.textContent = line.quantity + ' × ' + line.productName;
-        lines.append(item);
+        lines.append(this.renderProductLine(order, line, true, blocked, false));
       }
       pass.append(header, lines);
 
-      if (station.status === 'Ready') {
-        const blocked = controlled.some(other =>
-          other.priority < station.priority
-          && other.status !== 'Dispatched'
-          && other.status !== 'Cancelled'
-        );
-        if (blocked) {
-          const note = document.createElement('small');
-          note.textContent = 'Esperando el despacho de un pase anterior.';
-          pass.append(note);
-        } else {
-          const actions = document.createElement('div');
-          actions.className = 'actions';
-          const button = document.createElement('button');
-          button.textContent = 'Despachar ' + station.name;
-          button.disabled = this.options.isOrderPending(order.id);
-          button.addEventListener('click', () => this.options.onAdvance(order, {
-            path: 'stations/' + encodeURIComponent(station.code) + '/dispatch',
-            label: button.textContent
-          }, button));
-          actions.append(button);
-          pass.append(actions);
-        }
-      }
       container.append(pass);
     }
     return container;
@@ -199,7 +281,7 @@ export class OrderRenderer {
       stationCode === this.options.getPrimaryStationCode() ? 'CHEF' : stationCode
     );
     if (!clock) {
-      badge.textContent = '⏱ —';
+      badge.textContent = '🕓 —';
       badge.title = 'Tiempo de cocina no disponible';
       badge.setAttribute('aria-label', badge.title);
       return badge;
@@ -216,15 +298,29 @@ export class OrderRenderer {
   refreshKitchenClocks() {
     if (document.hidden) return;
     for (const badge of this.element.querySelectorAll('[data-kitchen-start]')) {
-      updateKitchenClock(badge, Number(badge.dataset.kitchenStart), null);
+      updateKitchenClock(
+        badge,
+        Number(badge.dataset.kitchenStart),
+        badge.dataset.kitchenEnd ? Number(badge.dataset.kitchenEnd) : null,
+        badge.title
+      );
     }
   }
 }
 
-function updateKitchenClock(badge, start, end) {
+function updateKitchenClock(badge, start, end, label = badge.title) {
   const duration = formatKitchenDuration(start, end);
-  badge.textContent = '⏱ ' + duration;
-  badge.setAttribute('aria-label', badge.title + ': ' + duration);
+  badge.textContent = '🕓 ' + duration;
+  badge.setAttribute('aria-label', label + ': ' + duration);
+}
+
+function kitchenStatusLabel(status) {
+  return ({
+    Pending: 'Pendiente',
+    InPreparation: 'Preparando',
+    Ready: 'Listo para despacho',
+    Dispatched: 'Despachado'
+  })[status] || 'Pendiente';
 }
 
 function elapsedLabel(value) {
