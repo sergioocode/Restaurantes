@@ -106,7 +106,6 @@ public static class RestaurantPermissions
                 PaymentsCapture,
                 CashRegisterManage,
                 CatalogManage,
-                KdsUse,
                 KitchenReportsRead,
             ],
             "Camarero" => [CommanderUse, TablesRead, OrdersCreate, OrdersManage],
@@ -214,12 +213,9 @@ public static class RestaurantSecurityExtensions
 
     public static bool HasAnyRestaurantPermission(this ClaimsPrincipal user, string permission)
     {
-        foreach (Claim roleClaim in user.FindAll(ClaimTypes.Role))
+        if (user.HasGlobalRestaurantPermission(permission))
         {
-            if (RestaurantPermissions.ForRole(roleClaim.Value).Contains(permission))
-            {
-                return true;
-            }
+            return true;
         }
 
         string suffix = $":{permission}";
@@ -228,5 +224,23 @@ public static class RestaurantSecurityExtensions
                 claim.Type == RestaurantClaimTypes.Permission
                 && claim.Value.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
             );
+    }
+
+    public static bool HasGlobalRestaurantPermission(this ClaimsPrincipal user, string permission)
+    {
+        if (user.Identity?.IsAuthenticated != true)
+        {
+            return false;
+        }
+
+        foreach (Claim roleClaim in user.FindAll(ClaimTypes.Role))
+        {
+            if (RestaurantPermissions.ForRole(roleClaim.Value).Contains(permission))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

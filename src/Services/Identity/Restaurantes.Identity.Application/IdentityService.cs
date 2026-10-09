@@ -119,6 +119,7 @@ public sealed class IdentityService(
                 token.ExpiresAtUtc,
                 new(user.Id, user.Email, user.DisplayName),
                 allRestaurantsRoles,
+                user.AllRestaurants ? RestaurantPermissions.ForRole(user.Role) : [],
                 restaurants
             )
         );
