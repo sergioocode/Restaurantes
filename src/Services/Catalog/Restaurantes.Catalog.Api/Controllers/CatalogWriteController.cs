@@ -126,23 +126,6 @@ public sealed class CatalogWriteController(
         return Accepted($"/api/catalog/restaurants/{restaurantId}/menu", item);
     }
 
-    [HttpPost("restaurants/{restaurantId:guid}/stations/defaults")]
-    public async Task<ActionResult<IReadOnlyList<KitchenStationResponse>>> EnsureDefaultStations(
-        Guid restaurantId,
-        CancellationToken ct
-    )
-    {
-        if (!User.CanAccessRestaurant(restaurantId, RestaurantPermissions.CatalogManage))
-            return Forbid();
-
-        IReadOnlyList<KitchenStationResponse> stations = await service.EnsureDefaultStationsAsync(
-            restaurantId,
-            ct
-        );
-        await synchronizer.SyncAffectedMenus(restaurantId, ct);
-        return Accepted(stations);
-    }
-
     [HttpPost("restaurants/{restaurantId:guid}/stations")]
     public async Task<ActionResult<KitchenStationResponse>> CreateStation(
         Guid restaurantId,
@@ -191,29 +174,5 @@ public sealed class CatalogWriteController(
         return item is null
             ? NotFound()
             : Accepted($"/api/catalog/restaurants/{restaurantId}/stations", item);
-    }
-
-    [HttpDelete("restaurants/{restaurantId:guid}/stations/{stationId:guid}")]
-    public async Task<IActionResult> DeleteStation(
-        Guid restaurantId,
-        Guid stationId,
-        CancellationToken ct
-    )
-    {
-        if (!User.CanAccessRestaurant(restaurantId, RestaurantPermissions.CatalogManage))
-        {
-            return Forbid();
-        }
-
-        try
-        {
-            return await service.DeleteStationAsync(restaurantId, stationId, ct)
-                ? NoContent()
-                : NotFound();
-        }
-        catch (InvalidOperationException e)
-        {
-            return Conflict(new ProblemDetails { Title = e.Message, Status = 409 });
-        }
     }
 }

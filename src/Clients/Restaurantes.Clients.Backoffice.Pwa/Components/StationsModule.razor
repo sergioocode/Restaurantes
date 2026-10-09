@@ -16,7 +16,7 @@ else
     <div class="maintenance-list">
         @foreach (KitchenStationResponse item in Host.stations.OrderBy(x => x.Priority).ThenBy(x => x.Name))
         {
-            <article class="maintenance-row @(item.IsActive ? "" : "inactive")">
+            <article class="maintenance-row station-row @(item.IsActive ? "" : "inactive")">
                 <div><strong>@item.Code</strong><small>v@item.Version</small></div>
                 <label>Nombre KDS<input maxlength="80" @bind="item.Name" /></label>
                 <label>Prioridad<input type="number" min="0" max="99" @bind="item.Priority" disabled="@item.IsPrimary" /></label>
@@ -24,7 +24,6 @@ else
                 <label class="availability"><input type="checkbox" @bind="item.RequiresPrimaryDispatch" disabled="@item.IsPrimary" /> Despacha principal</label>
                 <label class="availability"><input type="checkbox" @bind="item.IsActive" /> Activa</label>
                 <button class="primary" @onclick="() => Host.SaveStation(item)" disabled="@Host.busy">Guardar</button>
-                <button class="danger" @onclick="() => Host.DeleteStation(item)" disabled="@Host.busy">Eliminar</button>
             </article>
         }
     </div>

@@ -32,16 +32,6 @@ public sealed partial class BackofficeApi
         );
     }
 
-    public async Task EnsureDefaultStationsAsync(Guid restaurantId)
-    {
-        using HttpRequestMessage request = Authorized(
-            HttpMethod.Post,
-            $"/api/catalog/restaurants/{restaurantId}/stations/defaults"
-        );
-        using HttpResponseMessage response = await http.SendAsync(request);
-        await ReadAsync<List<KitchenStationResponse>>(response);
-    }
-
     public async Task<KitchenStationResponse> CreateStationAsync(
         Guid restaurantId,
         KitchenStationDraft draft
@@ -74,19 +64,6 @@ public sealed partial class BackofficeApi
         );
         using HttpResponseMessage response = await http.SendAsync(request);
         return await ReadAsync<KitchenStationResponse>(response);
-    }
-
-    public async Task DeleteStationAsync(KitchenStationResponse item)
-    {
-        using HttpRequestMessage request = Authorized(
-            HttpMethod.Delete,
-            $"/api/catalog/restaurants/{item.RestaurantId}/stations/{item.Id}"
-        );
-        using HttpResponseMessage response = await http.SendAsync(request);
-        if (!response.IsSuccessStatusCode)
-        {
-            await ReadAsync<object>(response);
-        }
     }
 
     public async Task<MenuItemResponse> ConfigureAsync(
