@@ -1,4 +1,7 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using System.Net;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Restaurantes.Payments.Api.Controllers;
 using Restaurantes.Payments.Application;
 using Restaurantes.Payments.Contracts.Requests;
@@ -39,8 +42,20 @@ public sealed class PaymentsWriteControllerTests
             dining,
             new OpenCashRegister(),
             null!,
-            null!
+            new ConfigurationBuilder()
+                .AddInMemoryCollection(
+                    new Dictionary<string, string?>
+                    {
+                        ["QrAccess:AllowedClientNetworks:0"] = "127.0.0.1",
+                    }
+                )
+                .Build()
         );
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext(),
+        };
+        controller.HttpContext.Connection.RemoteIpAddress = IPAddress.Loopback;
         CaptureCustomerQrPaymentRequest request = new()
         {
             IdempotencyKey = Guid.NewGuid(),
