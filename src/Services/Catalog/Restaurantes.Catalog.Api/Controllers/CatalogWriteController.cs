@@ -1,14 +1,20 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Restaurantes.Catalog.Api.Services;
 using Restaurantes.Catalog.Application;
 using Restaurantes.Catalog.Contracts.Requests;
 using Restaurantes.Catalog.Contracts.Responses;
+using Restaurantes.Catalog.Infrastructure.Persistence.Write;
 using Restaurantes.Security;
 
 namespace Restaurantes.Catalog.Api.Controllers;
 
 [ApiController, Authorize, Route("api/catalog")]
-public sealed class CatalogWriteController(CatalogCommandService service) : ControllerBase
+public sealed class CatalogWriteController(
+    CatalogCommandService service,
+    CatalogMenuSynchronizer synchronizer,
+    CatalogWriteDbContext db
+) : ControllerBase
 {
     [HttpPost("categories")]
     public async Task<ActionResult<CategoryResponse>> CreateCategory(
@@ -60,8 +66,13 @@ public sealed class CatalogWriteController(CatalogCommandService service) : Cont
             return Forbid();
         }
 
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         CategoryResponse? item = await service.UpdateCategoryAsync(id, request, ct);
-        return item is null ? NotFound() : Accepted($"/api/catalog/categories/{id}", item);
+        if (item is null)
+            return NotFound();
+        await synchronizer.SyncAffectedMenus(Guid.Empty, ct);
+        await transaction.CommitAsync(ct);
+        return Accepted($"/api/catalog/categories/{id}", item);
     }
 
     [HttpPut("products/{id:guid}")]
@@ -76,8 +87,13 @@ public sealed class CatalogWriteController(CatalogCommandService service) : Cont
             return Forbid();
         }
 
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         ProductResponse? item = await service.UpdateProductAsync(id, request, ct);
-        return item is null ? NotFound() : Accepted($"/api/catalog/products/{id}", item);
+        if (item is null)
+            return NotFound();
+        await synchronizer.SyncAffectedMenus(Guid.Empty, ct);
+        await transaction.CommitAsync(ct);
+        return Accepted($"/api/catalog/products/{id}", item);
     }
 
     [HttpPut("restaurants/{restaurantId:guid}/products/{productId:guid}")]
@@ -98,15 +114,16 @@ public sealed class CatalogWriteController(CatalogCommandService service) : Cont
             request,
             ct
         );
-        return item is null
-            ? NotFound(
+        if (item is null)
+            return NotFound(
                 new ProblemDetails
                 {
                     Title = "Product or category was not found or is inactive",
                     Status = 404,
                 }
-            )
-            : Accepted($"/api/catalog/restaurants/{restaurantId}/menu", item);
+            );
+        await synchronizer.SyncAffectedMenus(restaurantId, ct);
+        return Accepted($"/api/catalog/restaurants/{restaurantId}/menu", item);
     }
 
     [HttpPost("restaurants/{restaurantId:guid}/stations/defaults")]
@@ -115,10 +132,15 @@ public sealed class CatalogWriteController(CatalogCommandService service) : Cont
         CancellationToken ct
     )
     {
-        return !User.CanAccessRestaurant(restaurantId, RestaurantPermissions.CatalogManage)
-            ? (ActionResult<IReadOnlyList<KitchenStationResponse>>)Forbid()
-            : (ActionResult<IReadOnlyList<KitchenStationResponse>>)
-                Accepted(await service.EnsureDefaultStationsAsync(restaurantId, ct));
+        if (!User.CanAccessRestaurant(restaurantId, RestaurantPermissions.CatalogManage))
+            return Forbid();
+
+        IReadOnlyList<KitchenStationResponse> stations = await service.EnsureDefaultStationsAsync(
+            restaurantId,
+            ct
+        );
+        await synchronizer.SyncAffectedMenus(restaurantId, ct);
+        return Accepted(stations);
     }
 
     [HttpPost("restaurants/{restaurantId:guid}/stations")]
@@ -134,6 +156,8 @@ public sealed class CatalogWriteController(CatalogCommandService service) : Cont
         }
 
         KitchenStationResponse? item = await service.CreateStationAsync(restaurantId, request, ct);
+        if (item is not null)
+            await synchronizer.SyncAffectedMenus(restaurantId, ct);
         return item is null
             ? Conflict(
                 new ProblemDetails
@@ -167,5 +191,29 @@ public sealed class CatalogWriteController(CatalogCommandService service) : Cont
         return item is null
             ? NotFound()
             : Accepted($"/api/catalog/restaurants/{restaurantId}/stations", item);
+    }
+
+    [HttpDelete("restaurants/{restaurantId:guid}/stations/{stationId:guid}")]
+    public async Task<IActionResult> DeleteStation(
+        Guid restaurantId,
+        Guid stationId,
+        CancellationToken ct
+    )
+    {
+        if (!User.CanAccessRestaurant(restaurantId, RestaurantPermissions.CatalogManage))
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            return await service.DeleteStationAsync(restaurantId, stationId, ct)
+                ? NoContent()
+                : NotFound();
+        }
+        catch (InvalidOperationException e)
+        {
+            return Conflict(new ProblemDetails { Title = e.Message, Status = 409 });
+        }
     }
 }

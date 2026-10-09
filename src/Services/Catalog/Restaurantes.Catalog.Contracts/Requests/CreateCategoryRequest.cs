@@ -15,4 +15,7 @@ public sealed class CreateCategoryRequest
 
     [Required, StringLength(80)]
     public string DefaultStationName { get; init; } = "General";
+    public bool ShowInPos { get; init; } = true;
+    public bool ShowInCommander { get; init; } = true;
+    public bool ShowInCustomerQr { get; init; } = true;
 }

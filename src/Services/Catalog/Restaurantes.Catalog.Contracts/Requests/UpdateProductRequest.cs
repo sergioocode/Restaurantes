@@ -8,7 +8,5 @@ public sealed class UpdateProductRequest
     public string Name { get; init; } = "";
     public Guid CategoryId { get; init; }
 
-    [Range(typeof(decimal), "0", "9999999")]
-    public decimal BasePrice { get; init; }
     public bool IsActive { get; init; } = true;
 }

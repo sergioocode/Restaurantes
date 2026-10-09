@@ -28,5 +28,11 @@ public interface ICatalogWriteStore
         Guid? excludedStationId,
         CancellationToken ct
     );
+    Task<bool> IsStationReferencedAsync(Guid restaurantId, string code, CancellationToken ct);
+    Task DeleteStationWithEventAsync(
+        RestaurantKitchenStation station,
+        object integrationEvent,
+        CancellationToken ct
+    );
     Task SaveWithEventAsync(object aggregate, object integrationEvent, CancellationToken ct);
 }

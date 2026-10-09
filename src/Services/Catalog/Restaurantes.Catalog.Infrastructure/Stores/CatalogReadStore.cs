@@ -2,10 +2,12 @@
 using Restaurantes.Catalog.Application;
 using Restaurantes.Catalog.Contracts.Responses;
 using Restaurantes.Catalog.Infrastructure.Persistence.Read;
+using Restaurantes.Catalog.Infrastructure.Persistence.Write;
 
 namespace Restaurantes.Catalog.Infrastructure.Stores;
 
-public sealed class CatalogReadStore(CatalogReadDbContext db) : ICatalogReadStore
+public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbContext writeDb)
+    : ICatalogReadStore
 {
     public async Task<IReadOnlyList<CategoryResponse>> ListCategoriesAsync(CancellationToken ct)
     {
@@ -20,7 +22,10 @@ public sealed class CatalogReadStore(CatalogReadDbContext db) : ICatalogReadStor
                 x.DefaultStationName,
                 x.IsActive,
                 x.Version,
-                x.UpdatedAtUtc
+                x.UpdatedAtUtc,
+                x.ShowInPos,
+                x.ShowInCommander,
+                x.ShowInCustomerQr
             ))
             .ToListAsync(ct);
     }
@@ -35,7 +40,6 @@ public sealed class CatalogReadStore(CatalogReadDbContext db) : ICatalogReadStor
                 x.Sku,
                 x.Name,
                 x.CategoryId,
-                x.BasePrice,
                 x.IsActive,
                 x.Version,
                 x.UpdatedAtUtc
@@ -48,32 +52,191 @@ public sealed class CatalogReadStore(CatalogReadDbContext db) : ICatalogReadStor
         CancellationToken ct
     )
     {
-        return await db
-            .MenuItems.AsNoTracking()
+        CatalogMenu? menu =
+            await writeDb
+                .CatalogMenus.AsNoTracking()
+                .Where(x => x.RestaurantId == restaurantId && x.IsActive)
+                .FirstOrDefaultAsync(ct)
+            ?? await writeDb
+                .CatalogMenus.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.RestaurantId == Guid.Empty, ct);
+        if (menu is null)
+            return [];
+
+        CatalogMenuEntry[] entries = await writeDb
+            .CatalogMenuEntries.AsNoTracking()
+            .Where(x => x.MenuId == menu.Id && x.IsAvailable)
+            .OrderBy(x => x.SortOrder)
+            .ToArrayAsync(ct);
+        Guid[] ids = entries.Select(x => x.ProductId).ToArray();
+        CatalogMenuPrice[] prices = await writeDb
+            .CatalogMenuPrices.AsNoTracking()
+            .Where(x => x.MenuId == menu.Id && x.Channel == "LOCAL" && ids.Contains(x.ProductId))
+            .ToArrayAsync(ct);
+        var photos = await writeDb
+            .ProductPhotos.AsNoTracking()
+            .Where(x => ids.Contains(x.ProductId))
+            .ToDictionaryAsync(x => x.ProductId, ct);
+        Guid[] taxedIds = await writeDb
+            .Products.AsNoTracking()
             .Where(x =>
-                x.RestaurantId == restaurantId
-                && x.IsAvailable
-                && db.Products.Any(product => product.Id == x.ProductId && product.IsActive)
-                && db.Categories.Any(category => category.Id == x.CategoryId && category.IsActive)
+                ids.Contains(x.Id)
+                && x.TaxId != null
+                && writeDb.Taxes.Any(t => t.Id == x.TaxId && t.IsActive)
             )
-            .OrderBy(x => x.CategoryName)
-            .ThenBy(x => x.ProductName)
-            .Select(x => new MenuItemResponse(
-                x.RestaurantId,
-                x.ProductId,
-                x.Sku,
-                x.ProductName,
-                x.CategoryId,
-                x.CategoryCode,
-                x.CategoryName,
-                x.Price,
-                x.IsAvailable,
-                x.PreparationStationCode,
-                x.PreparationStationName,
-                x.Version,
-                x.UpdatedAtUtc
-            ))
-            .ToListAsync(ct);
+            .Select(x => x.Id)
+            .ToArrayAsync(ct);
+        var products = await db
+            .Products.AsNoTracking()
+            .Where(x => taxedIds.Contains(x.Id) && x.IsActive)
+            .ToDictionaryAsync(x => x.Id, ct);
+        Guid[] categoryIds = products.Values.Select(x => x.CategoryId).Distinct().ToArray();
+        var categories = await db
+            .Categories.AsNoTracking()
+            .Where(x => categoryIds.Contains(x.Id) && x.IsActive)
+            .ToDictionaryAsync(x => x.Id, ct);
+        var stations = await db
+            .MenuItems.AsNoTracking()
+            .Where(x => x.RestaurantId == restaurantId && ids.Contains(x.ProductId))
+            .ToDictionaryAsync(x => x.ProductId, ct);
+        ProductOptionGroup[] groups = await writeDb
+            .ProductOptionGroups.AsNoTracking()
+            .Where(x => ids.Contains(x.ParentProductId) && x.Kind == "Extra")
+            .OrderBy(x => x.SortOrder)
+            .ToArrayAsync(ct);
+        Guid[] groupIds = groups.Select(x => x.Id).ToArray();
+        ProductOption[] options =
+            groupIds.Length == 0
+                ? []
+                : await writeDb
+                    .ProductOptions.AsNoTracking()
+                    .Where(x => groupIds.Contains(x.GroupId))
+                    .ToArrayAsync(ct);
+        Guid[] extraIds = options.Select(x => x.ProductId).Distinct().ToArray();
+        var extraProducts =
+            extraIds.Length == 0
+                ? new Dictionary<Guid, ProductReadModel>()
+                : await db
+                    .Products.AsNoTracking()
+                    .Where(x => extraIds.Contains(x.Id) && x.IsActive)
+                    .ToDictionaryAsync(x => x.Id, ct);
+        CatalogMenuPrice[] extraPrices =
+            extraIds.Length == 0
+                ? []
+                : await writeDb
+                    .CatalogMenuPrices.AsNoTracking()
+                    .Where(x =>
+                        x.MenuId == menu.Id
+                        && x.Channel == "LOCAL"
+                        && x.Format == "RACION"
+                        && extraIds.Contains(x.ProductId)
+                    )
+                    .ToArrayAsync(ct);
+        Guid globalMenuId =
+            menu.RestaurantId == Guid.Empty
+                ? menu.Id
+                : await writeDb
+                    .CatalogMenus.AsNoTracking()
+                    .Where(x => x.RestaurantId == Guid.Empty && x.IsActive)
+                    .Select(x => x.Id)
+                    .FirstOrDefaultAsync(ct);
+        if (globalMenuId != Guid.Empty && globalMenuId != menu.Id)
+        {
+            extraPrices = extraPrices
+                .Concat(
+                    await writeDb
+                        .CatalogMenuPrices.AsNoTracking()
+                        .Where(x =>
+                            x.MenuId == globalMenuId
+                            && x.Channel == "LOCAL"
+                            && x.Format == "RACION"
+                            && extraIds.Contains(x.ProductId)
+                        )
+                        .ToArrayAsync(ct)
+                )
+                .GroupBy(x => x.ProductId)
+                .Select(x => x.First())
+                .ToArray();
+        }
+        var extraPriceByProduct = extraPrices.ToDictionary(x => x.ProductId, x => x.Amount);
+        Dictionary<Guid, ProductExtraGroup[]> extraGroupsByParent = groups
+            .GroupBy(x => x.ParentProductId)
+            .ToDictionary(
+                parent => parent.Key,
+                parent =>
+                    parent
+                        .Select(group =>
+                        {
+                            ProductExtraOption[] groupOptions = options
+                                .Where(x => x.GroupId == group.Id)
+                                .OrderBy(x => x.SortOrder)
+                                .Where(option =>
+                                    extraProducts.ContainsKey(option.ProductId)
+                                    && extraPriceByProduct.ContainsKey(option.ProductId)
+                                )
+                                .Select(option =>
+                                {
+                                    ProductReadModel extra = extraProducts[option.ProductId];
+                                    return new ProductExtraOption(
+                                        extra.Id,
+                                        extra.Sku,
+                                        extra.Name,
+                                        extraPriceByProduct[extra.Id]
+                                    );
+                                })
+                                .ToArray();
+                            return new ProductExtraGroup(
+                                group.Id,
+                                group.Name,
+                                group.MinSelections,
+                                group.MaxSelections,
+                                groupOptions
+                            );
+                        })
+                        .Where(group => group.Options.Count > 0)
+                        .ToArray()
+            );
+        List<MenuItemResponse> result = [];
+        foreach (CatalogMenuEntry entry in entries)
+        {
+            if (
+                !products.TryGetValue(entry.ProductId, out var product)
+                || !categories.TryGetValue(product.CategoryId, out var category)
+            )
+                continue;
+            CatalogMenuPrice? price = prices.FirstOrDefault(x =>
+                x.ProductId == entry.ProductId && x.Format == entry.DefaultFormat
+            );
+            if (price is null)
+                continue;
+            stations.TryGetValue(entry.ProductId, out var station);
+            photos.TryGetValue(entry.ProductId, out var photo);
+            string photoRoot = photo is null ? "" : $"/api/catalog/products/{product.Id}/photos/";
+            string photoVersion = photo is null ? "" : $"?v={photo.Revision}";
+            result.Add(
+                new MenuItemResponse(
+                    restaurantId,
+                    product.Id,
+                    product.Sku,
+                    product.Name,
+                    category.Id,
+                    category.Code,
+                    category.Name,
+                    price.Amount,
+                    true,
+                    station?.PreparationStationCode ?? category.DefaultStationCode,
+                    station?.PreparationStationName ?? category.DefaultStationName,
+                    product.Version,
+                    product.UpdatedAtUtc,
+                    entry.DefaultFormat,
+                    photo is null ? "" : $"{photoRoot}thumbnail{photoVersion}",
+                    photo is null ? "" : $"{photoRoot}card{photoVersion}",
+                    photo is null ? "" : $"{photoRoot}detail{photoVersion}",
+                    extraGroupsByParent.GetValueOrDefault(product.Id, [])
+                )
+            );
+        }
+        return result;
     }
 
     public async Task<IReadOnlyList<MenuItemResponse>> ListMenuConfigurationAsync(

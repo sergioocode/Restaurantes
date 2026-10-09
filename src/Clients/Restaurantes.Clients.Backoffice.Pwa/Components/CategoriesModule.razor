@@ -4,7 +4,7 @@ else
 {
     <div class="module-toolbar"><button class="secondary" @onclick="Host.RefreshModule" disabled="@Host.busy">Actualizar categorías</button></div>
     <details class="admin-panel" open><summary>Nueva categoría</summary>
-        <form class="inline-form" @onsubmit="Host.CreateCategory" @onsubmit:preventDefault>
+        <form class="inline-form category-create-form" @onsubmit="Host.CreateCategory" @onsubmit:preventDefault>
             <input placeholder="Código" @bind="Host.categoryDraft.Code" /><input placeholder="Nombre" @bind="Host.categoryDraft.Name" />
             <select value="@Host.categoryDraft.DefaultStationCode" @onchange="Host.SelectDraftCategoryStation" disabled="@(Host.stations.Count(x => x.IsActive) == 0)">
                 <option value="">Estación KDS</option>
@@ -13,13 +13,18 @@ else
                     <option value="@station.Code">@station.Name</option>
                 }
             </select>
+            <div class="category-visibility">
+                <label><input type="checkbox" @bind="Host.categoryDraft.ShowInPos" /> TPV</label>
+                <label><input type="checkbox" @bind="Host.categoryDraft.ShowInCommander" /> Comandero</label>
+                <label><input type="checkbox" @bind="Host.categoryDraft.ShowInCustomerQr" /> Cliente QR</label>
+            </div>
             <button class="primary" disabled="@Host.busy">Agregar</button>
         </form>
     </details>
     <div class="maintenance-list">
         @foreach (CategoryResponse item in Host.categories.OrderBy(x => x.Name))
         {
-            <article class="maintenance-row @(item.IsActive ? "" : "inactive")">
+            <article class="maintenance-row category-row @(item.IsActive ? "" : "inactive")">
                 <div><strong>@item.Code</strong><small>v@item.Version</small></div>
                 <label>Nombre<input @bind="item.Name" /></label>
                 <label>Estación KDS<select value="@item.DefaultStationCode" @onchange="args => Host.SelectCategoryStation(item, args)">
@@ -33,6 +38,11 @@ else
                     }
                 </select></label>
                 <label class="availability"><input type="checkbox" @bind="item.IsActive" /> Activa</label>
+                <div class="category-visibility">
+                    <label><input type="checkbox" @bind="item.ShowInPos" /> TPV</label>
+                    <label><input type="checkbox" @bind="item.ShowInCommander" /> Comandero</label>
+                    <label><input type="checkbox" @bind="item.ShowInCustomerQr" /> Cliente QR</label>
+                </div>
                 <button class="primary" @onclick="() => Host.SaveCategory(item)" disabled="@Host.busy">Guardar</button>
             </article>
         }

@@ -131,6 +131,42 @@ public sealed partial class CatalogCommandService
         return result;
     }
 
+    public async Task<bool> DeleteStationAsync(
+        Guid restaurantId,
+        Guid stationId,
+        CancellationToken ct
+    )
+    {
+        RestaurantKitchenStation? item = await store.FindStationAsync(restaurantId, stationId, ct);
+        if (item is null)
+        {
+            return false;
+        }
+        if (await store.IsStationReferencedAsync(restaurantId, item.Code, ct))
+        {
+            throw new InvalidOperationException(
+                "La estación está asignada a una categoría o a productos de la carta. Cambia esas asignaciones antes de eliminarla."
+            );
+        }
+
+        DateTime now = timeProvider.GetUtcNow().UtcDateTime;
+        KitchenStationChanged message = new(
+            item.Id,
+            item.RestaurantId,
+            item.Code,
+            item.Name,
+            item.IsPrimary,
+            item.RequiresPrimaryDispatch,
+            item.Priority,
+            item.IsActive,
+            item.Version + 1,
+            now,
+            IsDeleted: true
+        );
+        await store.DeleteStationWithEventAsync(item, message, ct);
+        return true;
+    }
+
     private async Task SaveStationAsync(
         RestaurantKitchenStation item,
         DateTime now,

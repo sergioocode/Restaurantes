@@ -28,7 +28,6 @@ public sealed class CatalogReadDbContext(DbContextOptions<CatalogReadDbContext> 
         p.Property(x => x.Sku).HasMaxLength(60).IsRequired();
         p.HasIndex(x => x.Sku).IsUnique();
         p.Property(x => x.Name).HasMaxLength(160).IsRequired();
-        p.Property(x => x.BasePrice).HasPrecision(12, 2);
         EntityTypeBuilder<MenuItemReadModel> m = b.Entity<MenuItemReadModel>();
         m.ToTable("menu_item_views");
         m.HasKey(x => x.Id);

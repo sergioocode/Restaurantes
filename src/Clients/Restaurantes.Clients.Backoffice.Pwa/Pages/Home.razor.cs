@@ -8,7 +8,7 @@ namespace Restaurantes.Clients.Backoffice.Pwa.Pages;
 public partial class Home
 {
     private const string SessionKey = "restaurantes.backoffice.login";
-    private string module = "menu";
+    private string module = "catalog-design";
     internal string search = "";
     private string? message;
     internal bool busy;
@@ -54,12 +54,11 @@ public partial class Home
     internal bool IsAdmin => login?.AllRestaurantsRoles?.Contains("Admin") == true;
     internal Guid? CurrentUserId => login?.User.Id;
     private bool HasBackofficeAccess =>
-        login?.AllRestaurantsRoles?.Any(role => RoleHasPermission(role, "backoffice.access"))
-            == true
+        HasGlobalPermission("backoffice.access")
         || login?.Restaurants.Any(x => x.Permissions.Contains("backoffice.access")) == true;
     internal bool CanManageUsers => HasGlobalPermission("identity.manage");
     internal bool CanAssignAllRestaurants =>
-        login?.AllRestaurantsRoles?.Any(role => RoleHasPermission(role, "identity.manage")) == true;
+        login?.AllRestaurantsPermissions?.Contains("identity.manage") == true;
     internal IEnumerable<string> AssignableRoles => Roles;
     internal List<RestaurantResponse> ManageableRestaurants =>
         restaurants
@@ -71,8 +70,7 @@ public partial class Home
             )
             .ToList();
     internal List<RestaurantResponse> SelectableRestaurants =>
-        login?.AllRestaurantsRoles?.Any(role => RoleHasPermission(role, "backoffice.access"))
-        == true
+        login?.AllRestaurantsPermissions?.Contains("backoffice.access") == true
             ? restaurants
             : restaurants
                 .Where(x =>
@@ -84,10 +82,8 @@ public partial class Home
     internal List<RestaurantResponse> OrderRestaurants =>
         restaurants
             .Where(x =>
-                login?.AllRestaurantsRoles?.Any(role => RoleHasPermission(role, "orders.read"))
-                    == true
-                || login?.AllRestaurantsRoles?.Any(role => RoleHasPermission(role, "orders.manage"))
-                    == true
+                login?.AllRestaurantsPermissions?.Contains("orders.read") == true
+                || login?.AllRestaurantsPermissions?.Contains("orders.manage") == true
                 || login?.Restaurants.Any(a =>
                     a.RestaurantId == x.Id
                     && (
@@ -114,7 +110,8 @@ public partial class Home
             "tables" or "zones" => "OPERACIÓN DEL LOCAL",
             "orders" => "OPERACIÓN DEL LOCAL",
             "restaurants" => "CADENA",
-            "categories" or "products" => "CATÁLOGO GLOBAL",
+            "categories" or "products" or "taxes" or "allergens" => "CATÁLOGO GLOBAL",
+            "catalog-design" => "CONFIGURACIÓN DE CARTAS",
             "users" => "SEGURIDAD",
             _ => "CATÁLOGO DEL LOCAL",
         };
@@ -128,8 +125,11 @@ public partial class Home
             "orders" => "Pedidos",
             "categories" => "Categorías",
             "products" => "Productos",
+            "taxes" => "Impuestos",
+            "allergens" => "Alérgenos",
+            "catalog-design" => "Cartas y precios por local",
             "users" => "Usuarios, roles y locales",
-            _ => "Menú, precios y estaciones KDS",
+            _ => "Preparación y estaciones KDS",
         };
 
     protected override async Task OnInitializedAsync()
@@ -246,7 +246,7 @@ public partial class Home
 
     internal bool HasAnyLocalPermission(string permission)
     {
-        return GlobalRoleHasPermission(permission)
+        return login?.AllRestaurantsPermissions?.Contains(permission) == true
             || SelectableRestaurants.Any(restaurant =>
                 login
                     ?.Restaurants.FirstOrDefault(x => x.RestaurantId == restaurant.Id)
@@ -429,7 +429,7 @@ public partial class Home
                 CategoryResponse? c = categories.FirstOrDefault(x => x.Id == p.CategoryId);
                 return new MenuEditor
                 {
-                    Price = m?.Price ?? p.BasePrice,
+                    Price = m?.Price ?? 0,
                     IsAvailable = m?.IsAvailable ?? false,
                     PreparationStationCode =
                         m?.PreparationStationCode ?? c?.DefaultStationCode ?? "GENERAL",
@@ -445,6 +445,11 @@ public partial class Home
         await Run(
             async () =>
             {
+                MenuItemResponse? effective = (
+                    await Api.EffectiveMenuAsync(restaurantId)
+                ).FirstOrDefault(x => x.ProductId == p.Id);
+                editors[p.Id].Price = effective?.Price ?? 0;
+                editors[p.Id].IsAvailable = effective is not null;
                 MenuItemResponse accepted = await Api.ConfigureAsync(
                     restaurantId,
                     p.Id,
@@ -458,8 +463,7 @@ public partial class Home
                 editors[p.Id].PreparationStationCode = saved.PreparationStationCode;
                 editors[p.Id].PreparationStationName = saved.PreparationStationName;
                 ok = true;
-                message =
-                    $"{p.Name} actualizado para {CurrentRestaurant?.Name} y confirmado en la vista de lectura.";
+                message = $"Estación de {p.Name} actualizada para {CurrentRestaurant?.Name}.";
             },
             false
         );
@@ -494,6 +498,29 @@ public partial class Home
         );
     }
 
+    internal async Task DeleteStation(KitchenStationResponse item)
+    {
+        bool confirmed = await Js.InvokeAsync<bool>(
+            "confirm",
+            $"¿Eliminar la estación KDS {item.Name} ({item.Code})?"
+        );
+        if (!confirmed)
+        {
+            return;
+        }
+
+        await Run(
+            async () =>
+            {
+                await Api.DeleteStationAsync(item);
+                stations = await ConfirmStationDeletion(item.Id);
+                ok = true;
+                message = "Estación KDS eliminada.";
+            },
+            false
+        );
+    }
+
     private async Task RefreshStations()
     {
         await Task.Delay(600);
@@ -518,7 +545,7 @@ public partial class Home
                 await RefreshCatalogProjection();
                 ok = true;
                 message =
-                    "Categoría agregada. Crea sus productos y habilítalos en Menú por local para publicarlos.";
+                    "Categoría agregada. Crea productos y asígnales precios predeterminados para incluirlos en la carta.";
             },
             false
         );
@@ -554,7 +581,7 @@ public partial class Home
                 await RefreshCatalogProjection();
                 ok = true;
                 message =
-                    "Producto agregado al catálogo global. Habilítalo y define precio/estación en Menú por local.";
+                    "Producto agregado. Asigna impuesto, alérgenos, extras y precios predeterminados en Productos.";
             },
             false
         );
@@ -814,7 +841,7 @@ public partial class Home
 
     internal bool HasLocalPermission(string permission)
     {
-        return GlobalRoleHasPermission(permission)
+        return login?.AllRestaurantsPermissions?.Contains(permission) == true
             || login
                 ?.Restaurants.FirstOrDefault(x => x.RestaurantId == restaurantId)
                 ?.Permissions.Contains(permission) == true;
@@ -822,55 +849,8 @@ public partial class Home
 
     internal bool HasGlobalPermission(string permission)
     {
-        return GlobalRoleHasPermission(permission)
+        return login?.AllRestaurantsPermissions?.Contains(permission) == true
             || login?.Restaurants.Any(x => x.Permissions.Contains(permission)) == true;
-    }
-
-    private bool GlobalRoleHasPermission(string permission)
-    {
-        string? role = login?.AllRestaurantsRoles?.FirstOrDefault();
-        return role is not null && RoleHasPermission(role, permission);
-    }
-
-    private static bool RoleHasPermission(string role, string permission)
-    {
-        return role switch
-        {
-            "Admin" => true,
-            "Gerente" or "Contabilidad" => permission
-                is "backoffice.access"
-                    or "orders.read"
-                    or "dashboard.read"
-                    or "reports.financial.read"
-                    or "payments.refund",
-            "Marketing" => permission
-                is "backoffice.access"
-                    or "dashboard.read"
-                    or "reports.financial.read"
-                    or "reports.marketing.read",
-            "Manager" => permission
-                is "backoffice.access"
-                    or "pos.use"
-                    or "tables.read"
-                    or "tables.manage"
-                    or "tables.release"
-                    or "orders.create"
-                    or "orders.read"
-                    or "orders.manage"
-                    or "orders.recover"
-                    or "payments.capture"
-                    or "cash-register.manage"
-                    or "catalog.manage"
-                    or "kds.use"
-                    or "reports.kitchen.read",
-            "Camarero" => permission
-                is "commander.use"
-                    or "tables.read"
-                    or "orders.create"
-                    or "orders.manage",
-            "Kds" => permission is "kds.use",
-            _ => false,
-        };
     }
 
     internal string CurrentRoleFor(Guid id)
@@ -1005,6 +985,23 @@ public partial class Home
         }
         throw new InvalidOperationException(
             "La categoría se guardó, pero la proyección Read del catálogo no la confirmó. Comprueba Catalog Publisher, Consumer y RabbitMQ."
+        );
+    }
+
+    private async Task<List<KitchenStationResponse>> ConfirmStationDeletion(Guid stationId)
+    {
+        for (int attempt = 0; attempt < 20; attempt++)
+        {
+            List<KitchenStationResponse> projected = await Api.StationsAsync(restaurantId);
+            if (projected.All(x => x.Id != stationId))
+            {
+                return projected;
+            }
+
+            await Task.Delay(300);
+        }
+        throw new InvalidOperationException(
+            "La estación se eliminó, pero la lista de KDS aún no se actualizó. Comprueba Catalog Publisher, Consumer y RabbitMQ."
         );
     }
 

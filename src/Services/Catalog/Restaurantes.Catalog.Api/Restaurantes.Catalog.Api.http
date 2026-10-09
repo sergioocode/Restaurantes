@@ -29,8 +29,7 @@ Content-Type: application/json
 {
   "sku": "HTTP_COLA_01",
   "name": "Cola HTTP",
-  "categoryId": "{{createCategory.response.body.$.id}}",
-  "basePrice": 3.25
+  "categoryId": "{{createCategory.response.body.$.id}}"
 }
 
 ### Añadir el producto al menu del local

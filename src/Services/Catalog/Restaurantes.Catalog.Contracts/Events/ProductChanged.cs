@@ -5,7 +5,6 @@ public sealed record ProductChanged(
     string Sku,
     string Name,
     Guid CategoryId,
-    decimal BasePrice,
     bool IsActive,
     int Version,
     DateTime OccurredAtUtc

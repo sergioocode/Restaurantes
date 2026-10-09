@@ -4,7 +4,16 @@ public sealed class Category
 {
     private Category() { }
 
-    private Category(string code, string name, string stationCode, string stationName, DateTime now)
+    private Category(
+        string code,
+        string name,
+        string stationCode,
+        string stationName,
+        DateTime now,
+        bool showInPos,
+        bool showInCommander,
+        bool showInCustomerQr
+    )
     {
         Id = Guid.NewGuid();
         Code = CodeValue(code, 40);
@@ -12,6 +21,9 @@ public sealed class Category
         DefaultStationCode = CodeValue(stationCode, 40);
         DefaultStationName = Required(stationName, 80);
         IsActive = true;
+        ShowInPos = showInPos;
+        ShowInCommander = showInCommander;
+        ShowInCustomerQr = showInCustomerQr;
         Version = 1;
         UpdatedAtUtc = now;
     }
@@ -22,6 +34,9 @@ public sealed class Category
     public string DefaultStationCode { get; private set; } = "";
     public string DefaultStationName { get; private set; } = "";
     public bool IsActive { get; private set; }
+    public bool ShowInPos { get; private set; } = true;
+    public bool ShowInCommander { get; private set; } = true;
+    public bool ShowInCustomerQr { get; private set; } = true;
     public int Version { get; private set; }
     public DateTime UpdatedAtUtc { get; private set; }
 
@@ -30,10 +45,22 @@ public sealed class Category
         string name,
         string stationCode,
         string stationName,
-        DateTime now
+        DateTime now,
+        bool showInPos = true,
+        bool showInCommander = true,
+        bool showInCustomerQr = true
     )
     {
-        return new(code, name, stationCode, stationName, now);
+        return new(
+            code,
+            name,
+            stationCode,
+            stationName,
+            now,
+            showInPos,
+            showInCommander,
+            showInCustomerQr
+        );
     }
 
     public void Update(
@@ -41,13 +68,19 @@ public sealed class Category
         string stationCode,
         string stationName,
         bool isActive,
-        DateTime now
+        DateTime now,
+        bool showInPos,
+        bool showInCommander,
+        bool showInCustomerQr
     )
     {
         Name = Required(name, 120);
         DefaultStationCode = CodeValue(stationCode, 40);
         DefaultStationName = Required(stationName, 80);
         IsActive = isActive;
+        ShowInPos = showInPos;
+        ShowInCommander = showInCommander;
+        ShowInCustomerQr = showInCustomerQr;
         Version++;
         UpdatedAtUtc = now;
     }

@@ -12,6 +12,18 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
     public DbSet<RestaurantMenuItem> MenuItems => Set<RestaurantMenuItem>();
     public DbSet<RestaurantKitchenStation> KitchenStations => Set<RestaurantKitchenStation>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<CatalogTax> Taxes => Set<CatalogTax>();
+    public DbSet<CatalogAllergen> Allergens => Set<CatalogAllergen>();
+    public DbSet<ProductAllergen> ProductAllergens => Set<ProductAllergen>();
+    public DbSet<ProductPhoto> ProductPhotos => Set<ProductPhoto>();
+    public DbSet<ProductConfiguration> ProductConfigurations => Set<ProductConfiguration>();
+    public DbSet<ProductOptionGroup> ProductOptionGroups => Set<ProductOptionGroup>();
+    public DbSet<ProductOption> ProductOptions => Set<ProductOption>();
+    public DbSet<CatalogPrice> Prices => Set<CatalogPrice>();
+    public DbSet<CatalogMenu> CatalogMenus => Set<CatalogMenu>();
+    public DbSet<CatalogMenuPrice> CatalogMenuPrices => Set<CatalogMenuPrice>();
+    public DbSet<CatalogMenuEntry> CatalogMenuEntries => Set<CatalogMenuEntry>();
+    public DbSet<CatalogMenuChannel> CatalogMenuChannels => Set<CatalogMenuChannel>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -30,11 +42,14 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
         p.Property(x => x.Sku).HasMaxLength(60).IsRequired();
         p.HasIndex(x => x.Sku).IsUnique();
         p.Property(x => x.Name).HasMaxLength(160).IsRequired();
-        p.Property(x => x.BasePrice).HasPrecision(12, 2);
         p.Property(x => x.Version).IsConcurrencyToken();
         p.HasOne<Category>()
             .WithMany()
             .HasForeignKey(x => x.CategoryId)
+            .OnDelete(DeleteBehavior.Restrict);
+        p.HasOne<CatalogTax>()
+            .WithMany()
+            .HasForeignKey(x => x.TaxId)
             .OnDelete(DeleteBehavior.Restrict);
         EntityTypeBuilder<RestaurantMenuItem> m = b.Entity<RestaurantMenuItem>();
         m.ToTable("restaurant_menu_items");
@@ -65,5 +80,157 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
         o.Property(x => x.Payload).HasColumnType("jsonb").IsRequired();
         o.Property(x => x.Error).HasMaxLength(2000);
         o.HasIndex(x => new { x.ProcessedAtUtc, x.OccurredAtUtc });
+
+        b.Entity<CatalogTax>(x =>
+        {
+            x.ToTable("taxes");
+            x.HasKey(t => t.Id);
+            x.Property(t => t.Code).HasMaxLength(40).IsRequired();
+            x.HasIndex(t => t.Code).IsUnique();
+            x.Property(t => t.Name).HasMaxLength(120).IsRequired();
+            x.Property(t => t.Rate).HasPrecision(7, 4);
+        });
+        b.Entity<CatalogAllergen>(x =>
+        {
+            x.ToTable("allergens");
+            x.HasKey(a => a.Id);
+            x.Property(a => a.Code).HasMaxLength(40).IsRequired();
+            x.HasIndex(a => a.Code).IsUnique();
+            x.Property(a => a.Name).HasMaxLength(120).IsRequired();
+            x.Property(a => a.Description).HasMaxLength(500).IsRequired();
+        });
+        b.Entity<ProductAllergen>(x =>
+        {
+            x.ToTable("product_allergens");
+            x.HasKey(a => new { a.ProductId, a.AllergenId });
+            x.HasOne<Product>()
+                .WithMany()
+                .HasForeignKey(a => a.ProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+            x.HasOne<CatalogAllergen>()
+                .WithMany()
+                .HasForeignKey(a => a.AllergenId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<ProductPhoto>(x =>
+        {
+            x.ToTable("product_photos");
+            x.HasKey(p => p.ProductId);
+            x.Property(p => p.OriginalContentType).HasMaxLength(40).IsRequired();
+            x.HasOne<Product>()
+                .WithOne()
+                .HasForeignKey<ProductPhoto>(p => p.ProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<ProductConfiguration>(x =>
+        {
+            x.ToTable("product_configurations");
+            x.HasKey(p => p.ProductId);
+            x.HasOne<Product>()
+                .WithMany()
+                .HasForeignKey(p => p.ProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<ProductOptionGroup>(x =>
+        {
+            x.ToTable("product_option_groups");
+            x.HasKey(g => g.Id);
+            x.Property(g => g.Name).HasMaxLength(120).IsRequired();
+            x.Property(g => g.Kind).HasMaxLength(20).IsRequired();
+            x.HasOne<Product>()
+                .WithMany()
+                .HasForeignKey(g => g.ParentProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<ProductOption>(x =>
+        {
+            x.ToTable("product_options");
+            x.HasKey(o => new { o.GroupId, o.ProductId });
+            x.HasOne<ProductOptionGroup>()
+                .WithMany()
+                .HasForeignKey(o => o.GroupId)
+                .OnDelete(DeleteBehavior.Cascade);
+            x.HasOne<Product>()
+                .WithMany()
+                .HasForeignKey(o => o.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<CatalogPrice>(x =>
+        {
+            x.ToTable("product_prices");
+            x.HasKey(p => p.Id);
+            x.Property(p => p.Channel).HasMaxLength(20).IsRequired();
+            x.Property(p => p.Format).HasMaxLength(20).IsRequired();
+            x.Property(p => p.Amount).HasPrecision(12, 2);
+            x.HasIndex(p => new
+                {
+                    p.ProductId,
+                    p.RestaurantId,
+                    p.Channel,
+                    p.Format,
+                })
+                .IsUnique();
+            x.HasOne<Product>()
+                .WithMany()
+                .HasForeignKey(p => p.ProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<CatalogMenu>(x =>
+        {
+            x.ToTable("catalog_menus");
+            x.HasKey(m => m.Id);
+            x.HasIndex(m => new { m.RestaurantId, m.IsActive })
+                .IsUnique()
+                .HasFilter("\"IsActive\" = TRUE");
+            x.Property(m => m.Name).HasMaxLength(120).IsRequired();
+        });
+        b.Entity<CatalogMenuEntry>(x =>
+        {
+            x.ToTable("catalog_menu_entries");
+            x.HasKey(e => e.Id);
+            x.HasIndex(e => new { e.MenuId, e.ProductId }).IsUnique();
+            x.Property(e => e.DefaultFormat).HasMaxLength(20).IsRequired();
+            x.HasOne<CatalogMenu>()
+                .WithMany()
+                .HasForeignKey(e => e.MenuId)
+                .OnDelete(DeleteBehavior.Cascade);
+            x.HasOne<Product>()
+                .WithMany()
+                .HasForeignKey(e => e.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<CatalogMenuPrice>(x =>
+        {
+            x.ToTable("catalog_menu_prices");
+            x.HasKey(p => new
+            {
+                p.MenuId,
+                p.ProductId,
+                p.Channel,
+                p.Format,
+            });
+            x.Property(p => p.Channel).HasMaxLength(20).IsRequired();
+            x.Property(p => p.Format).HasMaxLength(20).IsRequired();
+            x.Property(p => p.Amount).HasPrecision(12, 2);
+            x.HasOne<CatalogMenu>()
+                .WithMany()
+                .HasForeignKey(p => p.MenuId)
+                .OnDelete(DeleteBehavior.Cascade);
+            x.HasOne<Product>()
+                .WithMany()
+                .HasForeignKey(p => p.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<CatalogMenuChannel>(x =>
+        {
+            x.ToTable("catalog_menu_channels");
+            x.HasKey(c => new { c.MenuEntryId, c.Channel });
+            x.Property(c => c.Channel).HasMaxLength(20).IsRequired();
+            x.Property(c => c.ExternalId).HasMaxLength(160).IsRequired();
+            x.HasOne<CatalogMenuEntry>()
+                .WithMany()
+                .HasForeignKey(c => c.MenuEntryId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
     }
 }
