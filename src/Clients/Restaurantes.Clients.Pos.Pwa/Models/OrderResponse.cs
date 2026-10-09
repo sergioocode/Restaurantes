@@ -10,5 +10,7 @@ public sealed record OrderResponse(
     string PaymentTiming,
     string Status,
     decimal Total,
-    DateTime CreatedAtUtc
+    DateTime CreatedAtUtc,
+    DateTime? SubmittedAtUtc = null,
+    List<OrderStationProgressResponse>? Stations = null
 );

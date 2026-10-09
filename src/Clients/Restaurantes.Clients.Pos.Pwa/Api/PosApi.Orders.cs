@@ -7,7 +7,7 @@ public sealed partial class PosApi
 {
     public Task<List<OrderResponse>> OrdersAsync(Guid restaurantId)
     {
-        return GetAsync<List<OrderResponse>>($"/api/orders?restaurantId={restaurantId}");
+        return GetAsync<List<OrderResponse>>($"/api/orders/pos?restaurantId={restaurantId}");
     }
 
     public Task<OrderDetailResponse> OrderAsync(Guid orderId)
@@ -36,8 +36,7 @@ public sealed partial class PosApi
         Guid sessionId,
         string serviceMode,
         string customerName,
-        IReadOnlyDictionary<Guid, int> quantities,
-        IReadOnlyDictionary<Guid, string> notes
+        IReadOnlyList<PosCartLine> lines
     )
     {
         object body = new
@@ -50,14 +49,7 @@ public sealed partial class PosApi
             serviceMode,
             source = "Pos",
             paymentTiming = "OnAccount",
-            lines = quantities
-                .Where(x => x.Value > 0)
-                .Select(x => new
-                {
-                    productId = x.Key,
-                    quantity = x.Value,
-                    notes = notes.GetValueOrDefault(x.Key) ?? string.Empty,
-                }),
+            lines = OrderLines(lines),
         };
         using HttpRequestMessage create = Authorized(HttpMethod.Post, "/api/orders");
         create.Content = JsonContent.Create(body);
@@ -75,8 +67,7 @@ public sealed partial class PosApi
     public async Task<OrderResponse> CreateAndSubmitTakeawayAsync(
         Guid restaurantId,
         string customerName,
-        IReadOnlyDictionary<Guid, int> quantities,
-        IReadOnlyDictionary<Guid, string> notes
+        IReadOnlyList<PosCartLine> lines
     )
     {
         object body = new
@@ -89,14 +80,7 @@ public sealed partial class PosApi
             serviceMode = "Takeaway",
             source = "Pos",
             paymentTiming = "OnAccount",
-            lines = quantities
-                .Where(x => x.Value > 0)
-                .Select(x => new
-                {
-                    productId = x.Key,
-                    quantity = x.Value,
-                    notes = notes.GetValueOrDefault(x.Key) ?? string.Empty,
-                }),
+            lines = OrderLines(lines),
         };
         using HttpRequestMessage create = Authorized(HttpMethod.Post, "/api/orders");
         create.Content = JsonContent.Create(body);
@@ -126,5 +110,25 @@ public sealed partial class PosApi
             "El pago no se proyectó en Orders a tiempo.",
             ReadAsync<OrderResponse>
         );
+    }
+
+    private static IEnumerable<object> OrderLines(IReadOnlyList<PosCartLine> lines)
+    {
+        return lines
+            .Where(line => line.Quantity > 0)
+            .Select(line => new
+            {
+                productId = line.ProductId,
+                quantity = line.Quantity,
+                notes = line.Notes,
+                selectedExtras = line
+                    .Extras.Where(extra => extra.Quantity > 0)
+                    .Select(extra => new
+                    {
+                        groupId = extra.GroupId,
+                        productId = extra.ProductId,
+                        quantity = extra.Quantity,
+                    }),
+            });
     }
 }
