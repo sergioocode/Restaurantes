@@ -1,5 +1,5 @@
 const cachePrefix = 'restaurantes-kds-';
-const cacheName = `${cachePrefix}v7`;
+const cacheName = `${cachePrefix}v8`;
 const appShell = [
   './',
   './index.html',
