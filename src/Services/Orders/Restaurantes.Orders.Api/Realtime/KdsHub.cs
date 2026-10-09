@@ -18,10 +18,7 @@ public sealed class KdsHub : Hub<IKdsClient>
             : string.IsNullOrWhiteSpace(stationCode)
                 ? throw new HubException("StationCode is required.")
             : Context.User is not { } user
-            || (
-                !user.CanAccessRestaurant(restaurantId, RestaurantPermissions.KdsUse)
-                && !user.CanAccessRestaurant(restaurantId, RestaurantPermissions.OrdersManage)
-            )
+            || !user.CanAccessRestaurant(restaurantId, RestaurantPermissions.KdsUse)
                 ? throw new HubException("The user cannot access this restaurant KDS.")
             : Groups.AddToGroupAsync(Context.ConnectionId, StationGroup(restaurantId, stationCode));
     }

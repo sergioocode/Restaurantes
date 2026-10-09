@@ -72,6 +72,9 @@ public sealed class OrderWriteDbContext(DbContextOptions<OrderWriteDbContext> op
             .HasDefaultValue("General")
             .IsRequired();
         line.Property(item => item.Status).HasConversion<int>();
+        line.Property(item => item.KitchenStatus)
+            .HasConversion<int>()
+            .HasDefaultValue(KitchenLineStatus.Pending);
         line.Property(item => item.CancellationReason).HasMaxLength(300).IsRequired();
 
         EntityTypeBuilder<OrderKitchenStation> station = modelBuilder.Entity<OrderKitchenStation>();
@@ -90,6 +93,7 @@ public sealed class OrderWriteDbContext(DbContextOptions<OrderWriteDbContext> op
         catalog.Property(item => item.CategoryName).HasMaxLength(120).IsRequired();
         catalog.Property(item => item.StationCode).HasMaxLength(40).IsRequired();
         catalog.Property(item => item.StationName).HasMaxLength(80).IsRequired();
+        catalog.Property(item => item.ExtraGroupsJson).HasColumnType("jsonb").IsRequired();
         catalog.HasIndex(item => new { item.RestaurantId, item.ProductId }).IsUnique();
 
         EntityTypeBuilder<OrderKitchenStationConfiguration> stationConfiguration =

@@ -160,6 +160,7 @@ public sealed class KdsProjectionWorker(
         KdsOrderUpdated notification = new(
             projection.OrderId,
             projection.RestaurantId,
+            projection.Source,
             projection.Status,
             projection.Version,
             timeProvider.GetUtcNow().UtcDateTime,

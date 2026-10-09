@@ -75,6 +75,7 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
             ? new KdsProjectionNotification(
                 data.OrderId,
                 data.RestaurantId,
+                data.Source,
                 data.Status,
                 data.Version,
                 data.AffectedStationCodes
@@ -417,7 +418,11 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
                 line.PreparationStationName,
                 line.Status,
                 line.CancelledAtUtc,
-                line.CancellationReason
+                line.CancellationReason,
+                line.KitchenStatus,
+                line.PreparationStartedAtUtc,
+                line.ReadyAtUtc,
+                line.DispatchedAtUtc
             ))
             .ToList();
     }

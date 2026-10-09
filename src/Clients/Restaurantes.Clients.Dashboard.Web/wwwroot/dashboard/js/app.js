@@ -6,7 +6,7 @@ const $ = id => document.getElementById(id),
     }),
     gatewayOrigin = location.origin,
     sessionKey = 'restaurantes.dashboard.login';
-let timer, access, socket, realtimeGeneration = 0, deadLetterRefreshAt = 0, dashboardRequestGeneration = 0;
+let timer, access, socket, realtimeGeneration = 0, deadLetterRefreshAt = 0, deadLetterRequestGeneration = 0, dashboardRequestGeneration = 0;
 let restaurantNames = new Map();
 const today = new Date();
 $('date').value = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
@@ -42,7 +42,7 @@ async function loadProvider() {
     $('loginGoogle').disabled = settings.activeProvider !== 'Google' || !settings.googleConfigured;
 }
 
-async function load({ includeHealth = true } = {}) {
+async function load({ includeHealth = true, forceDeadLetters = false } = {}) {
     const requestGeneration = ++dashboardRequestGeneration;
     const requestedDate = $('date').value;
     const requestedRestaurant = $('restaurant').value;
@@ -53,7 +53,7 @@ async function load({ includeHealth = true } = {}) {
         params.set('orderLimit', $('orderLimit').value);
         if (includeHealth) {
             void loadHealth();
-            void loadDeadLetters();
+            void loadDeadLetters(forceDeadLetters);
         }
         const d = await authorizedFetch('/api/reporting/dashboard/daily?' + params).then(r => r.json());
         if (
@@ -84,7 +84,7 @@ async function loadHealth() {
     }
 }
 
-async function loadDeadLetters() {
+async function loadDeadLetters(force = false) {
     const alert = $('deadLetterAlert');
     if (!(access?.allRestaurantsRoles || []).includes('Admin')) {
         alert.hidden = true;
@@ -92,8 +92,9 @@ async function loadDeadLetters() {
     }
 
     const now = Date.now();
-    if (now < deadLetterRefreshAt) return;
+    if (!force && now < deadLetterRefreshAt) return;
     deadLetterRefreshAt = now + 30000;
+    const requestGeneration = ++deadLetterRequestGeneration;
 
     try {
         const queues = await authorizedFetch('/api/reporting/dead-letters').then(r => r.json()),
@@ -101,18 +102,20 @@ async function loadDeadLetters() {
             unavailable = queues.filter(x => !x.available),
             total = pending.reduce((sum, x) => sum + x.messageCount, 0),
             hasAlert = total > 0 || unavailable.length > 0;
+        if (requestGeneration !== deadLetterRequestGeneration) return;
 
         alert.hidden = false;
         alert.className = 'dead-letter-alert ' + (hasAlert ? 'bad' : 'ok');
-        alert.textContent = total > 0 ? `⚠ DLQ ${total}` : unavailable.length > 0 ? '⚠ DLQ ?' : '✓ DLQ 0';
+        alert.textContent = (total > 0 ? `⚠ DLQ ${total}` : unavailable.length > 0 ? '⚠ DLQ ?' : '✓ DLQ 0') + ' · cada 30 s';
         alert.title = [
             ...pending.map(x => `${x.queue}: ${x.messageCount} pendiente${x.messageCount === 1 ? '' : 's'}`),
             ...unavailable.map(x => `${x.queue}: no disponible`)
         ].join('\n') || 'No hay mensajes muertos pendientes.'
     } catch (error) {
+        if (requestGeneration !== deadLetterRequestGeneration) return;
         alert.hidden = false;
         alert.className = 'dead-letter-alert bad';
-        alert.textContent = '⚠ DLQ ?';
+        alert.textContent = '⚠ DLQ ? · cada 30 s';
         alert.title = 'No se pudo consultar el estado de las colas de mensajes muertos.'
     }
 }
@@ -158,6 +161,9 @@ function paymentMethodLabel(method) {
     return ({
         Card: 'Tarjeta',
         Cash: 'Efectivo',
+        Transfer: 'Transferencia',
+        Mixed: 'Mixto',
+        UnavailableBreakdown: 'Sin desglose',
         Online: 'Pago online',
         Check: 'Cheque',
         Cheque: 'Cheque',
@@ -175,10 +181,25 @@ $('operations').innerHTML = Object.entries(groups).map(([local, orders]) => `<se
   }
 
 function renderOrder(o) {
-    const stations = o.stations.map(s => badge(s.code + ': ' + s.status)).join('');
-    const lines = o.lines.map(l => `<li>${l.quantity} × ${escapeHtml(l.productName)} <small>${escapeHtml(l.categoryName)} · ${escapeHtml(l.preparationStationCode)}</small></li>`).join('');
+    const lines = o.lines.map(l => {
+        const marker = lineStatusMarker(l.kitchenStatus);
+        return `<li class="operation-line">${marker}${l.quantity} × ${escapeHtml(l.productName)} <small>${escapeHtml(l.categoryName)} · ${escapeHtml(l.preparationStationCode)}</small></li>`;
+    }).join('');
     const label = o.serviceMode === 'DineIn' ? o.tableLabel : o.serviceMode === 'Bar' ? (o.tableLabel || 'Barra') : ('Para llevar · ' + (o.customerName || 'Sin nombre'));
-    return `<article class="order"><div class="order-head"><strong>${escapeHtml(label)}</strong><small>${short(o.orderId)}</small></div><div class="badges">${badge(o.serviceMode)}${badge(o.source)}${badge(o.orderStatus)}${badge(o.paymentStatus)}${o.paymentMethod ? badge(o.paymentMethod) : ''}</div><div class="badges">${stations}</div><ul>${lines}</ul><strong>${money.format(o.total)}</strong></article>`
+    return `<article class="order"><div class="order-head"><strong>${escapeHtml(label)}</strong><small>${short(o.orderId)}</small></div><div class="badges">${badge(o.serviceMode)}${badge(o.source)}${badge(o.orderStatus)}${badge(o.paymentStatus)}${o.paymentMethod ? badge(o.paymentMethod) : ''}</div><ul>${lines}</ul><strong>${money.format(o.total)}</strong></article>`
+}
+
+function lineStatusMarker(status) {
+    const markers = {
+        Pending: ['⏳', 'Pendiente', 'line-pending-marker'],
+        InPreparation: ['🍴', 'En preparación', 'line-preparing-marker'],
+        Ready: ['⏳', 'Esperando despacho del chef', 'line-waiting-marker'],
+        Dispatched: ['✔', 'Despachado', 'line-complete-marker']
+    };
+    const marker = markers[status];
+    return marker
+        ? `<span class="${marker[2]}" role="img" aria-label="${marker[1]}" title="${marker[1]}">${marker[0]}</span> `
+        : '';
 }
 
 function schedule() {
@@ -186,7 +207,7 @@ function schedule() {
     const ms = +$('interval').value;
     if (ms) timer = setInterval(load, ms)
 }
-$('refresh').onclick = load;
+$('refresh').onclick = () => load({ forceDeadLetters: true });
 $('interval').onchange = schedule;
 $('date').onchange = load;
 $('restaurant').onchange = async () => { await load(); realtime() };
@@ -195,7 +216,7 @@ $('orderLimit').onchange = load;
 $('logout').onclick = logout;
 
 async function openDashboard(session) {
-    const hasAllRestaurants = (session.allRestaurantsRoles || []).some(role => ['Admin', 'Gerente', 'Contabilidad', 'Marketing'].includes(role));
+    const hasAllRestaurants = (session.allRestaurantsPermissions || []).includes('dashboard.read');
     const allowed = new Set((session.restaurants || []).filter(x => (x.permissions || []).includes('dashboard.read')).map(x => x.restaurantId.toLowerCase()));
     if (!hasAllRestaurants && allowed.size === 0) throw new Error('Este perfil no tiene acceso al Dashboard.');
     access = session;

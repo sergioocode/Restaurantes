@@ -72,7 +72,21 @@ public static class DiningTopology
         await channel.QueueBindAsync(
             QueueName,
             OrdersTopology.ExchangeName,
+            OrdersTopology.OrderPreparationStartedRoutingKey,
+            arguments: null,
+            cancellationToken: ct
+        );
+        await channel.QueueBindAsync(
+            QueueName,
+            OrdersTopology.ExchangeName,
             OrdersTopology.OrderReadyRoutingKey,
+            arguments: null,
+            cancellationToken: ct
+        );
+        await channel.QueueBindAsync(
+            QueueName,
+            OrdersTopology.ExchangeName,
+            OrdersTopology.KitchenTicketUpdatedRoutingKey,
             arguments: null,
             cancellationToken: ct
         );

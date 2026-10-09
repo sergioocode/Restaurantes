@@ -22,7 +22,7 @@ public sealed class OrderRealtimeClient(HttpClient http, CommanderApi api) : IAs
         {
             connection = new HubConnectionBuilder()
                 .WithUrl(
-                    new Uri(http.BaseAddress!, "/hubs/kds"),
+                    new Uri(http.BaseAddress!, "/hubs/orders"),
                     options =>
                         options.AccessTokenProvider = () =>
                             Task.FromResult<string?>(api.AccessToken)
@@ -38,7 +38,7 @@ public sealed class OrderRealtimeClient(HttpClient http, CommanderApi api) : IAs
             {
                 if (restaurantId != Guid.Empty)
                 {
-                    await connection.InvokeAsync("JoinRestaurant", restaurantId);
+                    await connection.InvokeAsync("JoinCommander", restaurantId);
                 }
             };
             await connection.StartAsync();
@@ -50,10 +50,10 @@ public sealed class OrderRealtimeClient(HttpClient http, CommanderApi api) : IAs
         }
         if (restaurantId != Guid.Empty)
         {
-            await connection.InvokeAsync("LeaveRestaurant", restaurantId);
+            await connection.InvokeAsync("LeaveCommander", restaurantId);
         }
         restaurantId = newRestaurantId;
-        await connection.InvokeAsync("JoinRestaurant", restaurantId);
+        await connection.InvokeAsync("JoinCommander", restaurantId);
     }
 
     public async Task DisconnectAsync()

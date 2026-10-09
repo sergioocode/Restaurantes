@@ -20,10 +20,10 @@
     else if (login is null)
     {
         <section class="login-card">
-            <img class="brand-icon" src="icons/icon-192.png" alt="" />
-            <p class="eyebrow">RESTAURANTES · OPERACIONES</p>
-            <h1>Comandero</h1>
-            <p class="muted">Acceso exclusivo/default perfil Camarero.</p>
+            <div class="login-brand">
+                <img class="brand-icon" src="icons/icon-192.png" alt="" />
+                <div><p class="eyebrow">RESTAURANTES · OPERACIONES</p><h1>Comandero</h1></div>
+            </div>
             <div class="login-providers">
                 <button class="primary full" type="button" @onclick='() => StartLogin("Microsoft")'
                         disabled="@(providerSettings is null || providerSettings.ActiveProvider != "Microsoft" || !providerSettings.MicrosoftConfigured)">
@@ -109,16 +109,7 @@
         }
         else
         {
-                @if (diningSession is { RequestGuestCount: true, GuestCount: null })
-                {
-                    <section class="guest-count">
-                        <label>¿Cuántos comensales van a comer?
-                            <input type="number" min="1" max="999" placeholder="Cantidad de comensales" @bind="guestCount" disabled="@busy" />
-                        </label>
-                        <p>Indica la cantidad antes de enviar el primer pedido.</p>
-                    </section>
-                }
-                else if (diningSession?.GuestCount is int savedGuestCount)
+                @if (diningSession?.GuestCount is int savedGuestCount)
                 {
                     <p class="guest-count">Comensales: @savedGuestCount</p>
                 }
@@ -149,14 +140,23 @@
                 @foreach (MenuItemResponse item in VisibleMenu)
                 {
                     <article class="product-card">
-                        <div><span class="category">@item.CategoryName</span><h3>@item.ProductName</h3><strong>@item.Price.ToString("0.00") €</strong></div>
+                        <div><span class="category">@item.CategoryName</span>@if (item.ExtraGroups is { Count: > 0 }) { <span class="extra-marker">Con extras</span> }<h3>@item.ProductName</h3><strong>@item.Price.ToString("0.00") €</strong></div>
                         <div class="stepper">
                             <button @onclick="() => ChangeQuantity(item.ProductId, -1)">−</button>
-                            <span>@quantities[item.ProductId]</span>
+                            <span>@ProductQuantity(item.ProductId)</span>
                             <button @onclick="() => ChangeQuantity(item.ProductId, 1)">+</button>
                         </div>
-                        @if (quantities[item.ProductId] > 0)
+                        @foreach (CommanderCartLine line in cart.Where(line => line.ProductId == item.ProductId))
                         {
+                            @foreach (CommanderCartExtra extra in line.Extras)
+                            {
+                                ProductExtraOption? option = item.ExtraGroups?.FirstOrDefault(group => group.Id == extra.GroupId)?.Options.FirstOrDefault(option => option.ProductId == extra.ProductId);
+                                @if (option is not null) { <small class="selected-extra">@extra.Quantity × @option.ProductName</small> }
+                            }
+                            @if (item.ExtraGroups is { Count: > 0 })
+                            {
+                                <button class="ghost edit-extras" @onclick="() => EditExtras(line)">Editar extras</button>
+                            }
                             <input class="notes" placeholder="Notas para cocina" @bind="notes[item.ProductId]" />
                         }
                     </article>
@@ -169,6 +169,32 @@
                     @(busy ? "Enviando…" : "Enviar a cocina")
                 </button>
             </footer>
+
+            @if (extraDialogProduct is not null)
+            {
+                <div class="modal-backdrop" @onclick="CloseExtras">
+                    <section class="bill-card extras-card" role="dialog" aria-modal="true" aria-labelledby="extras-title" @onclick:stopPropagation>
+                        <div class="bill-title">
+                            <div><p class="eyebrow">EXTRAS</p><h2 id="extras-title">@extraDialogProduct.ProductName</h2></div>
+                            <button class="ghost" @onclick="CloseExtras">Cancelar</button>
+                        </div>
+                        @foreach (ProductExtraGroup group in extraDialogProduct.ExtraGroups ?? [])
+                        {
+                            <section class="extra-group">
+                                <div class="extra-group-heading"><strong>@group.Name</strong><small>Elige @group.MinSelections–@group.MaxSelections</small></div>
+                                @foreach (ProductExtraOption option in group.Options)
+                                {
+                                    <div class="extra-option">
+                                        <span>@option.ProductName <small>+ @option.Price.ToString("0.00") €</small></span>
+                                        <div class="stepper"><button @onclick="() => ChangeExtraQuantity(group, option, -1)">−</button><span>@ExtraQuantity(group, option)</span><button @onclick="() => ChangeExtraQuantity(group, option, 1)">+</button></div>
+                                    </div>
+                                }
+                            </section>
+                        }
+                        <button class="primary full" disabled="@(!CanAcceptExtras)" @onclick="AcceptExtras">Aceptar</button>
+                    </section>
+                </div>
+            }
 
             @if (billOpen)
             {
@@ -197,6 +223,10 @@
                                                 {
                                                     <div class="bill-line @(line.Status == "Cancelled" ? "cancelled" : "")">
                                                         <span>@line.Quantity × @line.ProductName · @line.PreparationStationName</span>
+                                                        @if (line.Status != "Cancelled")
+                                                        {
+                                                            <small class="line-kitchen @KitchenLineStatusClass(line.KitchenStatus)">@KitchenLineStatusLabel(line.KitchenStatus)</small>
+                                                        }
                                                         @if (CanCancelLine(order, detail, line))
                                                         {
                                                             <button class="danger" disabled="@busy" @onclick="() => CancelLine(order, line)">Cancelar</button>
@@ -226,6 +256,30 @@
                     </section>
                 </div>
             }
+        }
+
+        @if (guestCountDialogOpen)
+        {
+            <div class="modal-backdrop guest-count-backdrop">
+                <section class="guest-count-dialog" role="dialog" aria-modal="true" aria-labelledby="guest-count-title">
+                    <h2 id="guest-count-title">¿Cuántos comensales?</h2>
+                    <div class="guest-count-stepper">
+                        <button class="ghost" @onclick="() => guestCountDraft = Math.Max(1, guestCountDraft - 1)" disabled="@(busy || guestCountDraft <= 1)" aria-label="Quitar un comensal">−</button>
+                        <strong>@guestCountDraft</strong>
+                        <button class="ghost" @onclick="() => guestCountDraft = Math.Min(999, guestCountDraft + 1)" disabled="@(busy || guestCountDraft >= 999)" aria-label="Agregar un comensal">+</button>
+                    </div>
+                    <div class="guest-count-options">
+                        @foreach (int count in new[] { 1, 3, 4, 5, 6, 8, 10, 12 })
+                        {
+                            <button class="@(guestCountDraft == count ? "selected" : "")" @onclick="() => guestCountDraft = count" disabled="@busy">@count</button>
+                        }
+                    </div>
+                    <div class="guest-count-actions">
+                        <button class="primary" @onclick="AcceptGuestCount" disabled="@busy">@(busy ? "Guardando…" : "Aceptar")</button>
+                        <button class="ghost" @onclick="CancelGuestCount" disabled="@busy">Cancelar</button>
+                    </div>
+                </section>
+            </div>
         }
 
         @if (!string.IsNullOrWhiteSpace(message))

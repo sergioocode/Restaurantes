@@ -36,8 +36,11 @@ public sealed class OrderWriteStore(OrderWriteDbContext dbContext) : IOrderWrite
             OrderSubmitted submitted => submitted.SubmittedAtUtc,
             OrderPreparationStarted started => started.PreparationStartedAtUtc,
             OrderReady ready => ready.ReadyAtUtc,
-            KitchenTicketPreparationStarted started => started.PreparationStartedAtUtc,
+            KitchenTicketPreparationStarted started => started.Lines.Max(item =>
+                item.PreparationStartedAtUtc
+            ) ?? started.PreparationStartedAtUtc,
             KitchenTicketReady ready => ready.ReadyAtUtc
+                ?? ready.Lines.Max(item => item.ReadyAtUtc)
                 ?? ready
                     .Stations.Single(item => item.Code == ready.ChangedStationCode)
                     .ReadyAtUtc!.Value,

@@ -324,8 +324,13 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
                 e.ReadyAtUtc.HasValue ? "Ready" : "InPreparation",
                 e.Version,
                 e.CreatedAtUtc,
-                e.ReadyAtUtc
-                    ?? e.Stations.Single(x => x.Code == e.ChangedStationCode).ReadyAtUtc!.Value,
+                e.Lines.Where(x => x.PreparationStationCode == e.ChangedStationCode)
+                    .Select(x => x.ReadyAtUtc)
+                    .Where(x => x.HasValue)
+                    .Max()
+                    ?? throw new InvalidOperationException(
+                        $"Kitchen station '{e.ChangedStationCode}' has no ready line timestamp."
+                    ),
                 null,
                 e.Lines,
                 e.Stations

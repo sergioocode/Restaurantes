@@ -79,7 +79,7 @@ public sealed class OrderLifecycleTests
     {
         Order order = CreateOrder(OrderSource.Pos, ServiceMode.Takeaway, PaymentTiming.OnAccount);
         order.Submit(DateTime.UtcNow);
-        order.StartStationPreparation("BEVERAGES", DateTime.UtcNow);
+        order.StartLinePreparation(order.Lines.Single().Id, DateTime.UtcNow);
 
         Assert.Throws<InvalidOperationException>(() =>
             order.Cancel("Motivo válido", DateTime.UtcNow)

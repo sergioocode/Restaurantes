@@ -86,7 +86,8 @@ public sealed class ReportingReadStore(ReportingReadDbContext db) : IReportingRe
                 x.ProductName,
                 x.Quantity,
                 x.CategoryName,
-                x.PreparationStationCode
+                x.PreparationStationCode,
+                x.KitchenStatus
             ))
             .ToList();
         return new(
@@ -123,6 +124,7 @@ public sealed class ReportingReadStore(ReportingReadDbContext db) : IReportingRe
         Guid? CategoryId,
         string CategoryName,
         string PreparationStationCode,
-        string PreparationStationName
+        string PreparationStationName,
+        string KitchenStatus
     );
 }
