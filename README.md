@@ -474,20 +474,10 @@ El [workflow de CI](.github/workflows/ci.yml) se ejecuta al subir `master` o man
 
 El workflow usa `SONAR_TOKEN` como secreto del repositorio en GitHub. La organización y la clave del proyecto están configuradas allí; el valor del token no se versiona.
 
-### Datos de desarrollo opcionales
+### Scripts PostgreSQL
 
-Los datos de ejemplo de `tools/postgres/seed/01-development-catalog.sql` son opcionales y **no se insertan automáticamente** al iniciar Docker ni las aplicaciones. El seed agrega locales, categorías, productos, estaciones KDS, zonas y mesas; no crea usuarios de Identity. El usuario administrador se inicializa por separado al arrancar Identity.
-
-Para cargar estos datos una sola vez, inicia PostgreSQL y arranca al menos
-`Restaurantes.RestaurantOperations.Api` y `Restaurantes.Catalog.Api` para que apliquen las
-migraciones. Después, desde PowerShell en la raíz del repositorio, copia y ejecuta el archivo:
-
-```powershell
-docker cp .\tools\postgres\seed\01-development-catalog.sql restaurantes-postgres:/tmp/01-development-catalog.sql
-docker exec -i restaurantes-postgres psql -U restaurants -d restaurants_operational -v ON_ERROR_STOP=1 -f /tmp/01-development-catalog.sql
-```
-
-Si eliminas el volumen de PostgreSQL, tendrás que ejecutar de nuevo el seed. Reiniciar los contenedores no elimina estos datos.
+- `tools/postgres/seed/01-development-catalog.sql`
+- `tools/postgres/reset-operational-data.sql`
 
 ### Restaurar herramientas y dependencias
 

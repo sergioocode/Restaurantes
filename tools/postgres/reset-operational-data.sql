@@ -24,6 +24,8 @@
 --
 -- Ejecuta cada modo contra su instancia indicada. El script verifica tanto el modo
 -- solicitado como current_database() para evitar limpiar la instancia equivocada.
+-- Antes de truncar también comprueba que estén aplicadas las migraciones de todas
+-- las tablas operativas/read models incluidas en cada modo.
 
 \set ON_ERROR_STOP on
 
@@ -67,6 +69,46 @@ END AS correct_database \gset
 
 SELECT :'reset_target' = 'operational' AS reset_operational \gset
 \if :reset_operational
+    DO $$
+    DECLARE
+        missing_tables text;
+    BEGIN
+        SELECT string_agg(table_name, ', ' ORDER BY table_name)
+        INTO missing_tables
+        FROM unnest(ARRAY[
+            'orders_write.order_lines',
+            'orders_write.order_kitchen_stations',
+            'orders_write.order_payments',
+            'orders_write.orders',
+            'orders_write.outbox_messages',
+            'dining.pending_payments',
+            'dining.dining_session_orders',
+            'dining.dining_sessions',
+            'dining.inbox_messages',
+            'payments.payable_orders',
+            'payments.payment_captures',
+            'payments.inbox_messages',
+            'payments.outbox_messages',
+            'cash_register.cash_movements',
+            'cash_register.cash_register_reconciliations',
+            'cash_register.cash_register_sessions',
+            'cash_register.inbox_messages',
+            'sales_write.sale_orders',
+            'sales_write.sale_payments',
+            'sales_write.sales',
+            'sales_write.delivered_order_markers',
+            'sales_write.inbox_messages',
+            'sales_write.outbox_messages'
+        ]) AS expected(table_name)
+        WHERE to_regclass(table_name) IS NULL;
+
+        IF missing_tables IS NOT NULL THEN
+            RAISE EXCEPTION 'Faltan tablas operativas; aplica las migraciones antes del reset: %', missing_tables;
+        END IF;
+
+    END
+    $$;
+
     BEGIN;
     TRUNCATE TABLE
         orders_write.order_lines,
@@ -78,6 +120,7 @@ SELECT :'reset_target' = 'operational' AS reset_operational \gset
         dining.dining_session_orders,
         dining.dining_sessions,
         dining.inbox_messages,
+        payments.payment_captures,
         payments.payable_orders,
         payments.inbox_messages,
         payments.outbox_messages,
@@ -86,6 +129,7 @@ SELECT :'reset_target' = 'operational' AS reset_operational \gset
         cash_register.cash_register_sessions,
         cash_register.inbox_messages,
         sales_write.sale_orders,
+        sales_write.sale_payments,
         sales_write.sales,
         sales_write.delivered_order_markers,
         sales_write.inbox_messages,
@@ -96,6 +140,30 @@ SELECT :'reset_target' = 'operational' AS reset_operational \gset
 
 SELECT :'reset_target' = 'analytics' AS reset_analytics \gset
 \if :reset_analytics
+    DO $$
+    DECLARE
+        missing_tables text;
+    BEGIN
+        SELECT string_agg(table_name, ', ' ORDER BY table_name)
+        INTO missing_tables
+        FROM unnest(ARRAY[
+            'orders_read.kitchen_order_views',
+            'orders_read.inbox_messages',
+            'sales_read.sales',
+            'sales_read.inbox_messages',
+            'reporting.order_reporting_facts',
+            'reporting.completed_sale_facts',
+            'reporting.inbox_messages',
+            'reporting.outbox_messages'
+        ]) AS expected(table_name)
+        WHERE to_regclass(table_name) IS NULL;
+
+        IF missing_tables IS NOT NULL THEN
+            RAISE EXCEPTION 'Faltan tablas analíticas; aplica las migraciones antes del reset: %', missing_tables;
+        END IF;
+    END
+    $$;
+
     BEGIN;
     TRUNCATE TABLE
         orders_read.kitchen_order_views,
