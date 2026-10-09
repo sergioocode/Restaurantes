@@ -16,6 +16,10 @@ public sealed class OrderLine
     public string PreparationStationCode { get; private set; } = string.Empty;
     public string PreparationStationName { get; private set; } = string.Empty;
     public OrderLineStatus Status { get; private set; }
+    public KitchenLineStatus KitchenStatus { get; private set; }
+    public DateTime? PreparationStartedAtUtc { get; private set; }
+    public DateTime? ReadyAtUtc { get; private set; }
+    public DateTime? DispatchedAtUtc { get; private set; }
     public DateTime? CancelledAtUtc { get; private set; }
     public string CancellationReason { get; private set; } = string.Empty;
 
@@ -61,7 +65,47 @@ public sealed class OrderLine
                     80
                 ),
                 Status = OrderLineStatus.Active,
+                KitchenStatus = KitchenLineStatus.Pending,
             };
+    }
+
+    internal void StartPreparation(DateTime occurredAtUtc)
+    {
+        if (KitchenStatus != KitchenLineStatus.Pending)
+        {
+            throw new InvalidOperationException(
+                "The product line must be pending to start preparation."
+            );
+        }
+
+        KitchenStatus = KitchenLineStatus.InPreparation;
+        PreparationStartedAtUtc = DateTime.SpecifyKind(occurredAtUtc, DateTimeKind.Utc);
+    }
+
+    internal void MarkReady(DateTime occurredAtUtc)
+    {
+        if (KitchenStatus != KitchenLineStatus.InPreparation)
+        {
+            throw new InvalidOperationException(
+                "The product line must be in preparation before it can be ready."
+            );
+        }
+
+        KitchenStatus = KitchenLineStatus.Ready;
+        ReadyAtUtc = DateTime.SpecifyKind(occurredAtUtc, DateTimeKind.Utc);
+    }
+
+    internal void Dispatch(DateTime occurredAtUtc)
+    {
+        if (KitchenStatus != KitchenLineStatus.Ready)
+        {
+            throw new InvalidOperationException(
+                "The product line must be ready before it can be dispatched."
+            );
+        }
+
+        KitchenStatus = KitchenLineStatus.Dispatched;
+        DispatchedAtUtc = DateTime.SpecifyKind(occurredAtUtc, DateTimeKind.Utc);
     }
 
     internal void Cancel(string reason, DateTime occurredAtUtc)

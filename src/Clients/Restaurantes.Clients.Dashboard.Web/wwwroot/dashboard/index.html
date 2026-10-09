@@ -16,19 +16,23 @@
 </head>
 
 <body class="login-mode">
-    <section id="authLoading" aria-live="polite">
-        <small>RESTAURANTES · INFORMES</small>
-        <h1>Comprobando sesión…</h1>
+    <section id="authLoading" class="auth-card" aria-live="polite">
+        <div class="auth-brand">
+            <img src="icons/icon-192.png" alt="" />
+            <div><small>RESTAURANTES · INFORMES</small><strong>Dashboard</strong></div>
+        </div>
+        <div class="auth-progress"><span class="auth-spinner"></span><span>Comprobando sesión…</span></div>
     </section>
-    <section id="loginView" hidden>
-        <small>RESTAURANTES · INFORMES</small>
-        <h1>Iniciar sesión</h1>
-        <p>Acceso exclusivo/default perfil Administración.</p>
-        <div id="loginForm">
-            <button id="loginMicrosoft" type="button" disabled>Iniciar sesión con Microsoft</button>
-            <button id="loginGoogle" type="button" disabled>Iniciar sesión con Google</button>
+    <section id="loginView" class="auth-card" hidden>
+        <div class="auth-brand">
+            <img src="icons/icon-192.png" alt="" />
+            <div><small>RESTAURANTES · INFORMES</small><strong>Dashboard</strong></div>
         </div>
         <p id="loginError"></p>
+        <div id="loginForm">
+            <button id="loginMicrosoft" type="button" disabled>Continuar con Microsoft</button>
+            <button id="loginGoogle" type="button" disabled>Continuar con Google</button>
+        </div>
     </section>
 
     <header id="dashboardHeader" hidden>
@@ -41,7 +45,7 @@
         </label>
         <button id="refresh">Refrescar</button>
         <label>
-            Auto <select id="interval">
+            Auto (datos) <select id="interval">
                 <option value="3000">3 segundos</option>
                 <option value="5000" selected>5 segundos</option>
                 <option value="10000">10 segundos</option>
@@ -112,7 +116,7 @@
                 <thead>
                     <tr>
                         <th>Tipo</th>
-                        <th>Cantidad</th>
+                        <th>Cobros</th>
                         <th>Monto</th>
                     </tr>
                 </thead>

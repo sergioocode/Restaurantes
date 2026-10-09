@@ -249,11 +249,7 @@ async function activateLogin(loginResponse) {
     return {
       restaurantId: restaurant.id,
       role: access?.role || allRestaurantsRole || 'Kds',
-      permissions: access?.permissions || (
-        allRestaurantsRole === 'Admin' || allRestaurantsRole === 'Manager'
-          ? ['kds.use', 'orders.recover']
-          : ['kds.use']
-      ),
+      permissions: access?.permissions || loginResponse.allRestaurantsPermissions || [],
       name: restaurant.name,
       code: restaurant.code
     };
@@ -425,6 +421,7 @@ window.setInterval(async () => {
 }, orderPollingIntervalMilliseconds);
 
 if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('controllerchange', () => window.location.reload());
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./service-worker.js', { updateViaCache: 'none' });
   });

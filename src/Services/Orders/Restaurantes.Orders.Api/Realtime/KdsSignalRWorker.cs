@@ -4,12 +4,15 @@ using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Restaurantes.Messaging.RabbitMq;
+using Restaurantes.Orders.Api.Security;
 using Restaurantes.Orders.Contracts.Events;
+using Restaurantes.Security;
 
 namespace Restaurantes.Orders.Api.Realtime;
 
 public sealed class KdsSignalRWorker(
-    IHubContext<KdsHub, IKdsClient> hubContext,
+    IHubContext<KdsHub, IKdsClient> kdsHubContext,
+    IHubContext<OrdersHub, IKdsClient> ordersHubContext,
     IOptions<RabbitMqOptions> options,
     ILogger<KdsSignalRWorker> logger
 ) : BackgroundService
@@ -89,14 +92,32 @@ public sealed class KdsSignalRWorker(
             KdsOrderUpdated notification =
                 JsonSerializer.Deserialize<KdsOrderUpdated>(eventArgs.Body.Span)
                 ?? throw new JsonException("KDS notification body is empty.");
-            HashSet<string> groups = [KdsHub.StationGroup(notification.RestaurantId, "CHEF")];
+            HashSet<string> kdsGroups = [KdsHub.StationGroup(notification.RestaurantId, "CHEF")];
             foreach (string stationCode in notification.StationCodes)
             {
-                groups.Add(KdsHub.StationGroup(notification.RestaurantId, stationCode));
+                kdsGroups.Add(KdsHub.StationGroup(notification.RestaurantId, stationCode));
             }
-            await Task.WhenAll(
-                groups.Select(group => hubContext.Clients.Group(group).OrderUpdated(notification))
-            );
+            List<Task> notifications = kdsGroups
+                .Select(group => kdsHubContext.Clients.Group(group).OrderUpdated(notification))
+                .ToList();
+            string? clientPermission = OrderClientAccess.PermissionForSource(notification.Source);
+            if (clientPermission == RestaurantPermissions.CommanderUse)
+            {
+                notifications.Add(
+                    ordersHubContext
+                        .Clients.Group(OrdersHub.CommanderGroup(notification.RestaurantId))
+                        .OrderUpdated(notification)
+                );
+            }
+            else if (clientPermission == RestaurantPermissions.PosUse)
+            {
+                notifications.Add(
+                    ordersHubContext
+                        .Clients.Group(OrdersHub.PosGroup(notification.RestaurantId))
+                        .OrderUpdated(notification)
+                );
+            }
+            await Task.WhenAll(notifications);
             await _channel.BasicAckAsync(eventArgs.DeliveryTag, false);
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)

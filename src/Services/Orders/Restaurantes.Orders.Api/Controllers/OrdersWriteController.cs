@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Restaurantes.Orders.Api.Security;
 using Restaurantes.Orders.Application;
 using Restaurantes.Orders.Contracts.Requests;
 using Restaurantes.Orders.Contracts.Responses;
@@ -39,7 +40,15 @@ public sealed class OrdersWriteController(
                 return Unauthorized();
             }
 
-            if (!User.CanAccessRestaurant(request.RestaurantId, RestaurantPermissions.OrdersCreate))
+            string? clientPermission = OrderClientAccess.PermissionForSource(request.Source);
+            if (
+                clientPermission is null
+                || !User.CanAccessRestaurant(
+                    request.RestaurantId,
+                    RestaurantPermissions.OrdersCreate
+                )
+                || !User.CanAccessRestaurant(request.RestaurantId, clientPermission)
+            )
             {
                 return Forbid();
             }
@@ -128,9 +137,7 @@ public sealed class OrdersWriteController(
                 return Unauthorized();
             }
 
-            if (
-                !User.CanAccessRestaurant(existing.RestaurantId, RestaurantPermissions.OrdersManage)
-            )
+            if (!User.CanManageOrder(existing.RestaurantId, existing.Source.ToString()))
             {
                 return Forbid();
             }
@@ -172,58 +179,58 @@ public sealed class OrdersWriteController(
         }
     }
 
-    [HttpPost("{id:guid}/stations/{stationCode}/start-preparation")]
+    [HttpPost("{id:guid}/lines/{lineId:guid}/start-preparation")]
     [ProducesResponseType<OrderResponse>(StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public Task<ActionResult<OrderResponse>> StartPreparation(
         Guid id,
-        string stationCode,
+        Guid lineId,
         CancellationToken cancellationToken
     )
     {
         return ExecuteAuthorizedTransitionAsync(
             id,
             RestaurantPermissions.KdsUse,
-            (orderId, token) => commandService.StartPreparationAsync(orderId, stationCode, token),
+            (orderId, token) => commandService.StartLinePreparationAsync(orderId, lineId, token),
             "Order cannot start preparation",
             cancellationToken
         );
     }
 
-    [HttpPost("{id:guid}/stations/{stationCode}/ready")]
+    [HttpPost("{id:guid}/lines/{lineId:guid}/ready")]
     [ProducesResponseType<OrderResponse>(StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public Task<ActionResult<OrderResponse>> MarkReady(
         Guid id,
-        string stationCode,
+        Guid lineId,
         CancellationToken cancellationToken
     )
     {
         return ExecuteAuthorizedTransitionAsync(
             id,
             RestaurantPermissions.KdsUse,
-            (orderId, token) => commandService.MarkReadyAsync(orderId, stationCode, token),
+            (orderId, token) => commandService.MarkLineReadyAsync(orderId, lineId, token),
             "Order cannot be marked as ready",
             cancellationToken
         );
     }
 
-    [HttpPost("{id:guid}/stations/{stationCode}/dispatch")]
+    [HttpPost("{id:guid}/lines/{lineId:guid}/dispatch")]
     [ProducesResponseType<OrderResponse>(StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public Task<ActionResult<OrderResponse>> DispatchStation(
         Guid id,
-        string stationCode,
+        Guid lineId,
         CancellationToken cancellationToken
     )
     {
         return ExecuteAuthorizedTransitionAsync(
             id,
             RestaurantPermissions.KdsUse,
-            (orderId, token) => commandService.DispatchStationAsync(orderId, stationCode, token),
+            (orderId, token) => commandService.DispatchLineAsync(orderId, lineId, token),
             "Kitchen pass cannot be dispatched",
             cancellationToken
         );
@@ -235,9 +242,8 @@ public sealed class OrdersWriteController(
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public Task<ActionResult<OrderResponse>> Deliver(Guid id, CancellationToken cancellationToken)
     {
-        return ExecuteAuthorizedTransitionAsync(
+        return ExecuteOrderManagementTransitionAsync(
             id,
-            RestaurantPermissions.OrdersManage,
             commandService.DeliverAsync,
             "Order cannot be delivered",
             cancellationToken
@@ -258,9 +264,8 @@ public sealed class OrdersWriteController(
     {
         string actor =
             User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.Identity?.Name ?? "unknown";
-        return ExecuteAuthorizedTransitionAsync(
+        return ExecuteOrderManagementTransitionAsync(
             id,
-            RestaurantPermissions.OrdersManage,
             (orderId, token) => commandService.CancelAsync(orderId, request.Reason, actor, token),
             "Order cannot be cancelled",
             cancellationToken,
@@ -284,7 +289,7 @@ public sealed class OrdersWriteController(
         Order? existing = await store.FindAsync(id, cancellationToken);
         return existing is null ? (ActionResult<OrderResponse>)NotFound()
             : User.Identity?.IsAuthenticated != true ? (ActionResult<OrderResponse>)Unauthorized()
-            : !User.CanAccessRestaurant(existing.RestaurantId, RestaurantPermissions.OrdersManage)
+            : !User.CanManageOrder(existing.RestaurantId, existing.Source.ToString())
                 ? (ActionResult<OrderResponse>)Forbid()
             : await ExecuteTransitionAsync(
                 id,
@@ -370,6 +375,28 @@ public sealed class OrdersWriteController(
         return existing is null ? (ActionResult<OrderResponse>)NotFound()
             : User.Identity?.IsAuthenticated != true ? (ActionResult<OrderResponse>)Unauthorized()
             : !User.CanAccessRestaurant(existing.RestaurantId, permission)
+                ? (ActionResult<OrderResponse>)Forbid()
+            : await ExecuteTransitionAsync(
+                id,
+                transition,
+                conflictTitle,
+                cancellationToken,
+                requiresOpenCashRegister ? existing.RestaurantId : null
+            );
+    }
+
+    private async Task<ActionResult<OrderResponse>> ExecuteOrderManagementTransitionAsync(
+        Guid id,
+        Func<Guid, CancellationToken, Task<OrderResponse?>> transition,
+        string conflictTitle,
+        CancellationToken cancellationToken,
+        bool requiresOpenCashRegister = false
+    )
+    {
+        Order? existing = await store.FindAsync(id, cancellationToken);
+        return existing is null ? (ActionResult<OrderResponse>)NotFound()
+            : User.Identity?.IsAuthenticated != true ? (ActionResult<OrderResponse>)Unauthorized()
+            : !User.CanManageOrder(existing.RestaurantId, existing.Source.ToString())
                 ? (ActionResult<OrderResponse>)Forbid()
             : await ExecuteTransitionAsync(
                 id,

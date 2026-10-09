@@ -14,6 +14,98 @@ namespace Restaurantes.Reporting.Infrastructure.Tests;
 public sealed class ReportingProjectionHandlerTests
 {
     [Fact]
+    public async Task Kitchen_ticket_ready_uses_ready_line_timestamp_while_station_is_incomplete()
+    {
+        DbContextOptions<ReportingReadDbContext> options =
+            new DbContextOptionsBuilder<ReportingReadDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .Options;
+        await using ReportingReadDbContext db = new(options);
+        ReportingProjectionHandler handler = new(db, TimeProvider.System);
+        Guid orderId = Guid.NewGuid();
+        Guid restaurantId = Guid.NewGuid();
+        Guid readyLineId = Guid.NewGuid();
+        Guid pendingLineId = Guid.NewGuid();
+        DateTime createdAtUtc = new(2026, 10, 9, 12, 0, 0, DateTimeKind.Utc);
+        DateTime readyAtUtc = createdAtUtc.AddMinutes(2);
+
+        await ProjectAsync(
+            handler,
+            Guid.NewGuid(),
+            new KitchenTicketReady(
+                orderId,
+                restaurantId,
+                null,
+                2,
+                null,
+                "Mesa 01",
+                "",
+                "DineIn",
+                "Pos",
+                "Immediate",
+                "CARNES",
+                4,
+                createdAtUtc,
+                createdAtUtc,
+                createdAtUtc.AddSeconds(30),
+                null,
+                [
+                    new OrderLineSnapshot(
+                        readyLineId,
+                        Guid.NewGuid(),
+                        "Hamburguesa",
+                        12m,
+                        1,
+                        "",
+                        null,
+                        "",
+                        "CARNES",
+                        "Carnes",
+                        KitchenStatus: "Ready",
+                        PreparationStartedAtUtc: createdAtUtc.AddSeconds(30),
+                        ReadyAtUtc: readyAtUtc
+                    ),
+                    new OrderLineSnapshot(
+                        pendingLineId,
+                        Guid.NewGuid(),
+                        "Entrecot",
+                        18m,
+                        1,
+                        "",
+                        null,
+                        "",
+                        "CARNES",
+                        "Carnes"
+                    ),
+                ],
+                [
+                    new OrderKitchenStationSnapshot(
+                        "CARNES",
+                        "Carnes",
+                        "InPreparation",
+                        false,
+                        1,
+                        createdAtUtc.AddSeconds(30),
+                        null,
+                        null
+                    ),
+                ]
+            )
+        );
+
+        OrderReportingFact order = await db.Orders.SingleAsync(
+            TestContext.Current.CancellationToken
+        );
+        Assert.Equal("InPreparation", order.OrderStatus);
+        Assert.Equal(readyAtUtc, order.UpdatedAtUtc);
+        Assert.Equal(
+            readyLineId,
+            JsonSerializer.Deserialize<OrderLineSnapshot[]>(order.LinesJson)![0].Id
+        );
+        Assert.Null(order.DeliveredAtUtc);
+    }
+
+    [Fact]
     public async Task Partial_payment_does_not_notify_dashboard_until_sale_is_completed()
     {
         DbContextOptions<ReportingReadDbContext> options =
@@ -117,6 +209,9 @@ public sealed class ReportingProjectionHandlerTests
             dashboard.PaymentMethods,
             x => x.Method == "Card" && x.Tickets == 1 && x.Sales == 6m
         );
+        OperationalOrder operationalOrder = Assert.Single(dashboard.OperationalOrders);
+        OperationalLine operationalLine = Assert.Single(operationalOrder.Lines);
+        Assert.Equal("Dispatched", operationalLine.KitchenStatus);
     }
 
     [Fact]
@@ -270,7 +365,21 @@ public sealed class ReportingProjectionHandlerTests
             "AfterService",
             1,
             now,
-            [],
+            [
+                new OrderLineSnapshot(
+                    Guid.NewGuid(),
+                    Guid.NewGuid(),
+                    "Hamburguesa",
+                    10m,
+                    1,
+                    "",
+                    null,
+                    "Carnes",
+                    "CARNES",
+                    "Carnes",
+                    KitchenStatus: "Dispatched"
+                ),
+            ],
             []
         );
         Guid orderMessageId = Guid.NewGuid();

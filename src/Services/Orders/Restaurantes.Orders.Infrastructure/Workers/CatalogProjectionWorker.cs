@@ -103,6 +103,7 @@ public sealed class CatalogProjectionWorker(
                             StationCode = e.PreparationStationCode,
                             StationName = e.PreparationStationName,
                             IsAvailable = e.IsAvailable,
+                            ExtraGroupsJson = JsonSerializer.Serialize(e.ExtraGroups ?? []),
                             Version = e.Version,
                             UpdatedAtUtc = e.OccurredAtUtc,
                         }
@@ -117,6 +118,7 @@ public sealed class CatalogProjectionWorker(
                     x.StationCode = e.PreparationStationCode;
                     x.StationName = e.PreparationStationName;
                     x.IsAvailable = e.IsAvailable;
+                    x.ExtraGroupsJson = JsonSerializer.Serialize(e.ExtraGroups ?? []);
                     x.Version = e.Version;
                     x.UpdatedAtUtc = e.OccurredAtUtc;
                 }
@@ -131,7 +133,14 @@ public sealed class CatalogProjectionWorker(
                     await db.KitchenStationConfigurations.SingleOrDefaultAsync(x =>
                         x.RestaurantId == e.RestaurantId && x.Code == e.Code
                     );
-                if (x is null)
+                if (e.IsDeleted)
+                {
+                    if (x is not null && x.Id == e.StationId && x.Version < e.Version)
+                    {
+                        db.KitchenStationConfigurations.Remove(x);
+                    }
+                }
+                else if (x is null)
                 {
                     db.KitchenStationConfigurations.Add(
                         new OrderKitchenStationConfiguration

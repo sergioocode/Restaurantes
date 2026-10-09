@@ -27,6 +27,10 @@ public sealed class DiningIntegrationService(
         {
             updatedSessionId = await ApplyOrderSubmitted(db, body);
         }
+        else if (type == typeof(KitchenTicketPreparationStarted).FullName)
+        {
+            updatedSessionId = await ApplyKitchenTicketPreparationStarted(db, body);
+        }
         else if (type == typeof(OrderDelivered).FullName)
         {
             updatedSessionId = await ApplyOrderDelivered(db, body);
@@ -232,7 +236,7 @@ public sealed class DiningIntegrationService(
         DiningSessionOrder order =
             await db.FindOrderAsync(e.OrderId)
             ?? throw new JsonException($"Dining order ''{e.OrderId}'' does not exist.");
-        order.OrderStatus = e.Status;
+        order.OrderStatus = AllKitchenStationsDispatched(e.Stations) ? "Delivered" : e.Status;
         order.Amount = e.Total;
         order.UpdatedAtUtc = e.CancelledAtUtc;
         return e.DiningSessionId;
@@ -280,6 +284,30 @@ public sealed class DiningIntegrationService(
             e.ReadyAtUtc
             ?? e.Stations.Single(station => station.Code == e.ChangedStationCode).ReadyAtUtc
             ?? e.PreparationStartedAtUtc;
+        return e.DiningSessionId;
+    }
+
+    private static async Task<Guid?> ApplyKitchenTicketPreparationStarted(
+        IDiningStore db,
+        ReadOnlyMemory<byte> body
+    )
+    {
+        KitchenTicketPreparationStarted e =
+            JsonSerializer.Deserialize<KitchenTicketPreparationStarted>(body.Span)
+            ?? throw new JsonException("KitchenTicketPreparationStarted is empty.");
+        if (e.DiningSessionId is null)
+        {
+            return null;
+        }
+
+        DiningSessionOrder order =
+            await db.FindOrderAsync(e.OrderId)
+            ?? throw new JsonException($"Dining order '{e.OrderId}' does not exist.");
+        order.OrderStatus = "InPreparation";
+        order.Amount = e
+            .Lines.Where(x => x.Status != "Cancelled")
+            .Sum(x => x.UnitPrice * x.Quantity);
+        order.UpdatedAtUtc = e.PreparationStartedAtUtc;
         return e.DiningSessionId;
     }
 

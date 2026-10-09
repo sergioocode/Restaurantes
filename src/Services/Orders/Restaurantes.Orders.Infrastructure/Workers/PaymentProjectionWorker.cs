@@ -79,8 +79,8 @@ public sealed class PaymentProjectionWorker(
                     ?? throw new JsonException("Empty payment");
                 orderId = e.OrderId;
                 paymentId = e.PaymentId;
-                amount = e.Amount;
-                status = "Paid";
+                amount = e.AmountPaid > 0 ? e.AmountPaid : e.Amount;
+                status = e.IsFullyPaid ? "Paid" : "PartiallyPaid";
                 occurred = e.CapturedAtUtc;
                 method = e.Method;
                 capturedAtUtc = e.CapturedAtUtc;

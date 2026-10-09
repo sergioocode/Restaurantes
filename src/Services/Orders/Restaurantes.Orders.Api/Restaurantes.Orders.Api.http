@@ -73,7 +73,7 @@ X-Customer-Session-Token: {{customerAccessToken}}
 @orderId = 00000000-0000-0000-0000-000000000000
 
 ### Vista CHEF: todas las estaciones del local
-GET {{ordersUrl}}/api/orders?restaurantId={{restaurantId}}&stationCode=CHEF
+GET {{ordersUrl}}/api/orders/kds?restaurantId={{restaurantId}}&stationCode=CHEF
 Authorization: Bearer {{accessToken}}
 
 ### Consultar un pedido proyectado

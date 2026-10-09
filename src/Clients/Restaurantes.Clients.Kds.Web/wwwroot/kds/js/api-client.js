@@ -26,7 +26,7 @@ export class KdsApiClient {
 
   async getOrders(restaurantId, stationCode) {
     const query = new URLSearchParams({ restaurantId, stationCode });
-    const response = await this.fetch('/api/orders?' + query);
+    const response = await this.fetch('/api/orders/kds?' + query);
     if (!response.ok) throw new Error('No se pudo consultar el KDS: HTTP ' + response.status);
     const payload = await response.json();
     return Array.isArray(payload) ? payload : [payload];

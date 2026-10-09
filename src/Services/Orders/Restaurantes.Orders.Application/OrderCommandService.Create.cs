@@ -74,12 +74,58 @@ public sealed partial class OrderCommandService
             request.Lines.Select(line =>
             {
                 OrderCatalogProduct p = products[line.ProductId];
+                CreateOrderExtraRequest[] requestedExtras = line.SelectedExtras?.ToArray() ?? [];
+                List<string> selectedExtraNames = [];
+                decimal extrasPrice = 0;
+                foreach (var group in p.ExtraGroups)
+                {
+                    var selections = requestedExtras.Where(x => x.GroupId == group.Id).ToArray();
+                    int selectionCount = selections.Sum(x => x.Quantity);
+                    if (
+                        selectionCount < group.MinSelections
+                        || selectionCount > group.MaxSelections
+                    )
+                        throw new ArgumentException(
+                            $"La selección de extras para {p.ProductName} no es válida."
+                        );
+
+                    foreach (var selection in selections)
+                    {
+                        var option = group.Options.FirstOrDefault(x =>
+                            x.ProductId == selection.ProductId
+                        );
+                        if (option is null || selection.Quantity is < 1 or > 99)
+                            throw new ArgumentException(
+                                $"Uno de los extras de {p.ProductName} no está disponible."
+                            );
+                        extrasPrice += option.Price * selection.Quantity;
+                        selectedExtraNames.Add($"{option.ProductName} × {selection.Quantity}");
+                    }
+                }
+                if (
+                    requestedExtras.Any(selection =>
+                        p.ExtraGroups.All(group => group.Id != selection.GroupId)
+                    )
+                )
+                    throw new ArgumentException($"Los extras de {p.ProductName} no son válidos.");
+                string notes = line.Notes?.Trim() ?? string.Empty;
+                if (selectedExtraNames.Count > 0)
+                {
+                    string extrasNote = $"Extras: {string.Join(", ", selectedExtraNames)}";
+                    notes = string.IsNullOrWhiteSpace(notes)
+                        ? extrasNote
+                        : $"{notes} · {extrasNote}";
+                }
+                if (notes.Length > 500)
+                    throw new ArgumentException(
+                        $"Las notas y extras de {p.ProductName} superan el límite permitido."
+                    );
                 return new OrderLineDraft(
                     p.ProductId,
                     p.ProductName,
-                    p.Price,
+                    p.Price + extrasPrice,
                     line.Quantity,
-                    line.Notes,
+                    notes,
                     p.CategoryId,
                     p.CategoryName,
                     p.StationCode,

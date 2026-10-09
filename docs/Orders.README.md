@@ -63,7 +63,8 @@ flowchart LR
         Consumer["Projection workers"]
         ReadDb[("orders_read")]
         ReadApi["Orders API · rutas de lectura y KDS"]
-        Hub["SignalR /hubs/kds"]
+        KdsHub["SignalR /hubs/kds"]
+        OrdersHub["SignalR /hubs/orders"]
     end
 
     Dining["Dining"]
@@ -93,7 +94,8 @@ flowchart LR
 
     ReadApi --> ReadDb
     Rabbit --> ReadApi
-    ReadApi --> Hub
+    ReadApi --> KdsHub
+    ReadApi --> OrdersHub
     Hub --> Clients
 ```
 
@@ -534,13 +536,14 @@ Esta estructura está pensada para responder a las necesidades del KDS sin hacer
 
 ## SignalR
 
-La API de lectura expone:
+La API de lectura expone un canal de monitor exclusivo para KDS y otro canal para notificaciones de pedidos consumidas por Comandero y TPV:
 
 ```text
 /hubs/kds
+/hubs/orders
 ```
 
-Después de actualizar la proyección, el consumer publica `KdsOrderUpdated`. `KdsSignalRWorker` consume esa notificación y la distribuye a grupos SignalR por restaurante y estación.
+Después de actualizar la proyección, el consumer publica `KdsOrderUpdated`. `KdsSignalRWorker` distribuye esa notificación al grupo KDS de cada estación y a los grupos de pedidos de Comandero y TPV. `/hubs/kds` exige `kds.use`; `/hubs/orders` valida `commander.use` o `pos.use` según el método de unión solicitado.
 
 El KDS puede suscribirse a:
 
@@ -580,8 +583,9 @@ Ruta base:
 
 | Método | Endpoint | Operación |
 | --- | --- | --- |
-| `GET` | `/api/orders?restaurantId={id}` | Pedidos de un restaurante. |
-| `GET` | `/api/orders?restaurantId={id}&stationCode={code}` | Vista filtrada por estación KDS. |
+| `GET` | `/api/orders/commander?restaurantId={id}` | Pedidos para Comandero; requiere `commander.use`. |
+| `GET` | `/api/orders/pos?restaurantId={id}` | Pedidos para TPV; requiere `pos.use`. |
+| `GET` | `/api/orders/kds?restaurantId={id}&stationCode={code}` | Vista filtrada por estación KDS; requiere `kds.use`. |
 | `GET` | `/api/orders/{id}` | Obtener la proyección de un pedido. |
 
 ## Gateways
@@ -603,10 +607,12 @@ Permisos relacionados:
 
 | Permiso | Uso |
 | --- | --- |
+| `pos.use` | Lectura de pedidos y notificaciones del TPV. |
+| `commander.use` | Lectura de pedidos y notificaciones del Comandero. |
 | `orders.create` | Creación desde POS / Comandero. |
 | `orders.manage` | Gestión general y transiciones operativas. |
 | `orders.recover` | Cancelación de recuperación operacional. |
-| `kds.use` | Operación de estaciones y lectura KDS. |
+| `kds.use` | Lectura y operación del monitor KDS. |
 
 ### Customer QR
 

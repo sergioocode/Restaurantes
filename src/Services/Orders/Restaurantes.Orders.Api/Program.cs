@@ -68,4 +68,5 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<KdsHub>("/hubs/kds");
+app.MapHub<OrdersHub>("/hubs/orders");
 await app.RunAsync();

@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Restaurantes.Orders.Api.Security;
 using Restaurantes.Orders.Application;
 using Restaurantes.Orders.Contracts.Responses;
+using Restaurantes.Orders.Domain;
 using Restaurantes.Security;
 
 namespace Restaurantes.Orders.Api.Controllers;
@@ -56,7 +58,6 @@ public sealed class OrdersReadController(
         return restaurantId == Guid.Empty || offset < 0
                 ? (ActionResult<IReadOnlyList<ManagementOrderResponse>>)BadRequest()
             : !User.CanAccessRestaurant(restaurantId, RestaurantPermissions.OrdersRead)
-            && !User.CanAccessRestaurant(restaurantId, RestaurantPermissions.OrdersManage)
                 ? (ActionResult<IReadOnlyList<ManagementOrderResponse>>)Forbid()
             : (ActionResult<IReadOnlyList<ManagementOrderResponse>>)
                 Ok(await management.ListAsync(restaurantId, date, offset, ct));
@@ -78,22 +79,85 @@ public sealed class OrdersReadController(
                 Ok(await settlements.ListAsync(restaurantId, offset, ct));
     }
 
-    [HttpGet]
+    [Authorize]
+    [HttpGet("kds")]
     [ProducesResponseType<IReadOnlyList<OrderResponse>>(StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyList<OrderResponse>>> List(
+    public Task<ActionResult<IReadOnlyList<OrderResponse>>> ListKds(
         [FromQuery] Guid restaurantId,
         CancellationToken cancellationToken,
         [FromQuery] string? stationCode = null
     )
     {
-        return restaurantId == Guid.Empty
-                ? (ActionResult<IReadOnlyList<OrderResponse>>)
-                    BadRequest("restaurantId is required.")
-            : !User.CanAccessRestaurant(restaurantId, RestaurantPermissions.KdsUse)
-            && !User.CanAccessRestaurant(restaurantId, RestaurantPermissions.OrdersManage)
-                ? (ActionResult<IReadOnlyList<OrderResponse>>)Forbid()
-            : (ActionResult<IReadOnlyList<OrderResponse>>)
-                Ok(await store.ListAsync(restaurantId, stationCode, cancellationToken));
+        return ListForPermission(
+            restaurantId,
+            stationCode,
+            RestaurantPermissions.KdsUse,
+            cancellationToken
+        );
+    }
+
+    [Authorize]
+    [HttpGet("commander")]
+    [ProducesResponseType<IReadOnlyList<OrderResponse>>(StatusCodes.Status200OK)]
+    public Task<ActionResult<IReadOnlyList<OrderResponse>>> ListCommander(
+        [FromQuery] Guid restaurantId,
+        CancellationToken cancellationToken
+    )
+    {
+        return ListForPermission(
+            restaurantId,
+            null,
+            RestaurantPermissions.CommanderUse,
+            cancellationToken,
+            nameof(OrderSource.Comandero)
+        );
+    }
+
+    [Authorize]
+    [HttpGet("pos")]
+    [ProducesResponseType<IReadOnlyList<OrderResponse>>(StatusCodes.Status200OK)]
+    public Task<ActionResult<IReadOnlyList<OrderResponse>>> ListPos(
+        [FromQuery] Guid restaurantId,
+        CancellationToken cancellationToken
+    )
+    {
+        return ListForPermission(
+            restaurantId,
+            null,
+            RestaurantPermissions.PosUse,
+            cancellationToken,
+            nameof(OrderSource.Pos),
+            nameof(OrderSource.CustomerQr)
+        );
+    }
+
+    private async Task<ActionResult<IReadOnlyList<OrderResponse>>> ListForPermission(
+        Guid restaurantId,
+        string? stationCode,
+        string permission,
+        CancellationToken cancellationToken,
+        params string[] allowedSources
+    )
+    {
+        if (restaurantId == Guid.Empty)
+        {
+            return BadRequest("restaurantId is required.");
+        }
+        if (!User.CanAccessRestaurant(restaurantId, permission))
+        {
+            return Forbid();
+        }
+
+        IReadOnlyList<OrderResponse> orders = await store.ListAsync(
+            restaurantId,
+            stationCode,
+            cancellationToken
+        );
+        return Ok(
+            allowedSources.Length == 0
+                ? orders
+                : orders.Where(order => allowedSources.Contains(order.Source)).ToArray()
+        );
     }
 
     [HttpGet("{id:guid}")]
@@ -113,7 +177,7 @@ public sealed class OrdersReadController(
 
         bool canManageOrder =
             User.Identity?.IsAuthenticated == true
-            && User.CanAccessRestaurant(order.RestaurantId, RestaurantPermissions.OrdersManage);
+            && User.CanManageOrder(order.RestaurantId, order.Source);
         if (order.Source == "CustomerQr" && !canManageOrder)
         {
             ObjectResult? denied = QrNetworkAccess.DeniedResult(HttpContext, configuration);

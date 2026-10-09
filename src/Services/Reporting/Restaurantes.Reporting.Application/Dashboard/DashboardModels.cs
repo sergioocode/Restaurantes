@@ -62,7 +62,8 @@ public sealed record OperationalLine(
     string ProductName,
     int Quantity,
     string CategoryName,
-    string PreparationStationCode
+    string PreparationStationCode,
+    string KitchenStatus
 );
 
 public sealed record DailyReportingSnapshot(

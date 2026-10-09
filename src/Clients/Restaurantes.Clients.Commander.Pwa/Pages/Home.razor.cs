@@ -9,6 +9,10 @@ namespace Restaurantes.Clients.Commander.Pwa.Pages;
 public partial class Home
 {
     private int? guestCount;
+    private int guestCountDraft = 2;
+    private bool guestCountDialogOpen;
+    private bool guestCountSessionOpenedHere;
+    private TableResponse? guestCountTable;
     private DiningSessionResponse? diningSession;
     private const string SessionKey = "restaurantes.commander.login";
     private string? message;
@@ -33,16 +37,18 @@ public partial class Home
     private Guid sessionId;
     private List<MenuItemResponse> menu = [];
     private string? category;
-    private Dictionary<Guid, int> quantities = [];
+    private List<CommanderCartLine> cart = [];
     private Dictionary<Guid, string> notes = [];
+    private MenuItemResponse? extraDialogProduct;
+    private Guid? editingExtraLineId;
+    private Dictionary<(Guid GroupId, Guid ProductId), int> extraSelections = [];
     private SessionBillResponse? bill;
     private bool billOpen;
     private Dictionary<Guid, OrderDetailResponse> billOrders = [];
     private CancellationTokenSource? realtimeRefresh;
 
-    private int ItemCount => quantities.Values.Sum();
-    private decimal Total =>
-        menu.Sum(item => item.Price * quantities.GetValueOrDefault(item.ProductId));
+    private int ItemCount => cart.Sum(line => line.Quantity);
+    private decimal Total => cart.Sum(line => UnitPrice(line) * line.Quantity);
     private List<string> Categories =>
         menu.Where(x => x.IsAvailable).Select(x => x.CategoryName).Distinct().Order().ToList();
     private List<MenuItemResponse> VisibleMenu =>
@@ -221,24 +227,206 @@ public partial class Home
     {
         await Run(async () =>
         {
+            guestCountSessionOpenedHere = !table.ActiveSessionId.HasValue;
             DiningSessionResponse session = table.ActiveSessionId.HasValue
                 ? await Api.ActiveSessionAsync(table.Id)
                 : await Api.OpenSessionAsync(table.Id);
-            selectedTable = table;
             sessionId = session.Id;
             diningSession = session;
             HasSessionOrders = activeOrders.Any(order => order.DiningSessionId == sessionId);
             guestCount = session.GuestCount;
-            menu = await Api.MenuAsync(restaurantId);
+            guestCountDraft = guestCount ?? 2;
+            guestCountDialogOpen = session.RequestGuestCount && session.GuestCount is null;
+            guestCountTable = guestCountDialogOpen ? table : null;
+            selectedTable = guestCountDialogOpen ? null : table;
+            menu = guestCountDialogOpen ? [] : await Api.MenuAsync(restaurantId);
             category = null;
-            quantities = menu.ToDictionary(x => x.ProductId, _ => 0);
             notes = menu.ToDictionary(x => x.ProductId, _ => string.Empty);
         });
     }
 
+    private async Task AcceptGuestCount()
+    {
+        if (
+            diningSession is null
+            || guestCountTable is null
+            || guestCountDraft is < 1 or > 999
+            || busy
+        )
+        {
+            return;
+        }
+
+        await Run(async () =>
+        {
+            diningSession = await Api.SetGuestCountAsync(sessionId, guestCountDraft);
+            guestCount = diningSession.GuestCount;
+            menu = await Api.MenuAsync(restaurantId);
+            selectedTable = guestCountTable;
+            guestCountTable = null;
+            guestCountDialogOpen = false;
+            guestCountSessionOpenedHere = false;
+            notes = menu.ToDictionary(x => x.ProductId, _ => string.Empty);
+        });
+    }
+
+    private async Task CancelGuestCount()
+    {
+        if (guestCountSessionOpenedHere && diningSession is not null && !HasSessionOrders)
+        {
+            await Run(async () =>
+            {
+                await Api.CancelSessionAsync(diningSession.Id);
+                BackToTables();
+                await LoadOperationalData();
+            });
+            return;
+        }
+
+        BackToTables();
+    }
+
     private void ChangeQuantity(Guid productId, int change)
     {
-        quantities[productId] = Math.Clamp(quantities[productId] + change, 0, 99);
+        MenuItemResponse? product = menu.FirstOrDefault(item => item.ProductId == productId);
+        if (product is null)
+        {
+            return;
+        }
+
+        if (change > 0 && product.ExtraGroups is { Count: > 0 })
+        {
+            extraDialogProduct = product;
+            editingExtraLineId = null;
+            extraSelections = [];
+            return;
+        }
+
+        CommanderCartLine? line = cart.LastOrDefault(item => item.ProductId == productId);
+        if (line is null)
+        {
+            if (change > 0)
+            {
+                cart.Add(new CommanderCartLine { ProductId = productId });
+            }
+
+            return;
+        }
+
+        line.Quantity = Math.Clamp(line.Quantity + change, 0, 99);
+        if (line.Quantity == 0)
+        {
+            cart.Remove(line);
+        }
+    }
+
+    private int ProductQuantity(Guid productId) =>
+        cart.Where(line => line.ProductId == productId).Sum(line => line.Quantity);
+
+    private MenuItemResponse ProductFor(CommanderCartLine line) =>
+        menu.First(item => item.ProductId == line.ProductId);
+
+    private decimal UnitPrice(CommanderCartLine line)
+    {
+        MenuItemResponse product = ProductFor(line);
+        return product.Price
+            + line.Extras.Sum(extra =>
+                product
+                    .ExtraGroups?.FirstOrDefault(group => group.Id == extra.GroupId)
+                    ?.Options.FirstOrDefault(option => option.ProductId == extra.ProductId)
+                    ?.Price * extra.Quantity
+                ?? 0
+            );
+    }
+
+    private void EditExtras(CommanderCartLine line)
+    {
+        extraDialogProduct = ProductFor(line);
+        editingExtraLineId = line.Id;
+        extraSelections = line.Extras.ToDictionary(
+            extra => (extra.GroupId, extra.ProductId),
+            extra => extra.Quantity
+        );
+    }
+
+    private int ExtraQuantity(ProductExtraGroup group, ProductExtraOption option) =>
+        extraSelections.GetValueOrDefault((group.Id, option.ProductId));
+
+    private int GroupExtraQuantity(ProductExtraGroup group) =>
+        extraSelections
+            .Where(selection => selection.Key.GroupId == group.Id)
+            .Sum(selection => selection.Value);
+
+    private void ChangeExtraQuantity(ProductExtraGroup group, ProductExtraOption option, int change)
+    {
+        var key = (group.Id, option.ProductId);
+        int current = extraSelections.GetValueOrDefault(key);
+        int next = Math.Clamp(current + change, 0, 99);
+        if (GroupExtraQuantity(group) + next - current > group.MaxSelections)
+        {
+            return;
+        }
+
+        if (next == 0)
+        {
+            extraSelections.Remove(key);
+        }
+        else
+        {
+            extraSelections[key] = next;
+        }
+    }
+
+    private bool CanAcceptExtras =>
+        extraDialogProduct?.ExtraGroups?.All(group =>
+            GroupExtraQuantity(group) >= group.MinSelections
+            && GroupExtraQuantity(group) <= group.MaxSelections
+        )
+        ?? false;
+
+    private void AcceptExtras()
+    {
+        if (extraDialogProduct is null || !CanAcceptExtras)
+        {
+            return;
+        }
+
+        List<CommanderCartExtra> selections = extraSelections
+            .Where(selection => selection.Value > 0)
+            .Select(selection => new CommanderCartExtra(
+                selection.Key.GroupId,
+                selection.Key.ProductId,
+                selection.Value
+            ))
+            .ToList();
+        if (editingExtraLineId is Guid lineId)
+        {
+            CommanderCartLine? line = cart.FirstOrDefault(item => item.Id == lineId);
+            if (line is not null)
+            {
+                line.Extras.Clear();
+                line.Extras.AddRange(selections);
+            }
+        }
+        else
+        {
+            cart.Add(
+                new CommanderCartLine
+                {
+                    ProductId = extraDialogProduct.ProductId,
+                    Extras = selections,
+                }
+            );
+        }
+
+        CloseExtras();
+    }
+
+    private void CloseExtras()
+    {
+        extraDialogProduct = null;
+        editingExtraLineId = null;
+        extraSelections = [];
     }
 
     private async Task SendOrder()
@@ -260,15 +448,13 @@ public partial class Home
                     restaurantId,
                     selectedTable,
                     sessionId,
-                    quantities,
+                    cart,
                     notes
                 );
                 HasSessionOrders = true;
-                foreach (Guid id in quantities.Keys.ToArray())
-                {
-                    quantities[id] = 0;
+                cart = [];
+                foreach (Guid id in notes.Keys.ToArray())
                     notes[id] = string.Empty;
-                }
                 activeOrders = await Api.OrdersAsync(restaurantId);
                 success = true;
                 message = $"Pedido {order.Id.ToString()[..8]} enviado a cocina.";
@@ -341,10 +527,26 @@ public partial class Home
         return billOrder.PaymentStatus != "Paid"
             && line.Status == "Active"
             && OrderProgress.CanCancelBeforePreparation(order.Status)
-            && order.Stations.Any(station =>
-                station.Code == line.PreparationStationCode && station.Status == "Pending"
-            );
+            && line.KitchenStatus == "Pending";
     }
+
+    private static string KitchenLineStatusLabel(string status) =>
+        status switch
+        {
+            "InPreparation" => "Preparando",
+            "Ready" => "Esperando chef",
+            "Dispatched" => "Despachado",
+            _ => "Pendiente",
+        };
+
+    private static string KitchenLineStatusClass(string status) =>
+        status switch
+        {
+            "InPreparation" => "preparing",
+            "Ready" => "awaiting-dispatch",
+            "Dispatched" => "dispatched",
+            _ => "pending",
+        };
 
     private async Task CancelLine(SessionBillOrderResponse order, OrderLineDetailResponse line)
     {
@@ -381,13 +583,18 @@ public partial class Home
 
     private void BackToTables()
     {
+        guestCountDialogOpen = false;
+        guestCountSessionOpenedHere = false;
+        guestCountTable = null;
         selectedTable = null;
         sessionId = Guid.Empty;
+        diningSession = null;
         HasSessionOrders = false;
         menu = [];
         category = null;
-        quantities = [];
+        cart = [];
         notes = [];
+        CloseExtras();
         bill = null;
         billOrders = [];
         billOpen = false;

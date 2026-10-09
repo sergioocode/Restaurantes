@@ -13,5 +13,9 @@ public sealed record OrderLineSnapshot(
     string PreparationStationName,
     string Status = "Active",
     DateTime? CancelledAtUtc = null,
-    string CancellationReason = ""
+    string CancellationReason = "",
+    string KitchenStatus = "Pending",
+    DateTime? PreparationStartedAtUtc = null,
+    DateTime? ReadyAtUtc = null,
+    DateTime? DispatchedAtUtc = null
 );

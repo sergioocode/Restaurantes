@@ -10,5 +10,9 @@ public sealed record OrderLineDetailResponse(
     string PreparationStationName,
     string Status,
     DateTime? CancelledAtUtc,
-    string CancellationReason
+    string CancellationReason,
+    string KitchenStatus = "Pending",
+    DateTime? PreparationStartedAtUtc = null,
+    DateTime? ReadyAtUtc = null,
+    DateTime? DispatchedAtUtc = null
 );

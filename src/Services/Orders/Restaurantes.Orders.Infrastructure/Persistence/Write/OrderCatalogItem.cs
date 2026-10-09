@@ -12,6 +12,7 @@ public sealed class OrderCatalogItem
     public string StationCode { get; set; } = string.Empty;
     public string StationName { get; set; } = string.Empty;
     public bool IsAvailable { get; set; }
+    public string ExtraGroupsJson { get; set; } = "[]";
     public int Version { get; set; }
     public DateTime UpdatedAtUtc { get; set; }
 }

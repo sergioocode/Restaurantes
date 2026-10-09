@@ -22,7 +22,11 @@ public sealed partial class OrderCommandService
                 x.PreparationStationName,
                 x.Status.ToString(),
                 x.CancelledAtUtc,
-                x.CancellationReason
+                x.CancellationReason,
+                x.KitchenStatus.ToString(),
+                x.PreparationStartedAtUtc,
+                x.ReadyAtUtc,
+                x.DispatchedAtUtc
             ))
             .ToList();
     }
@@ -126,7 +130,11 @@ public sealed partial class OrderCommandService
                     x.PreparationStationName,
                     x.Status.ToString(),
                     x.CancelledAtUtc,
-                    x.CancellationReason
+                    x.CancellationReason,
+                    x.KitchenStatus.ToString(),
+                    x.PreparationStartedAtUtc,
+                    x.ReadyAtUtc,
+                    x.DispatchedAtUtc
                 ))
                 .ToList(),
             o.Stations.OrderBy(x => x.Code)

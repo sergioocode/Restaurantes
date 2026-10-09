@@ -183,7 +183,7 @@ public sealed class Order
         Version++;
     }
 
-    public void StartStationPreparation(string stationCode, DateTime occurredAtUtc)
+    public void StartLinePreparation(Guid lineId, DateTime occurredAtUtc)
     {
         if (Status is not (OrderStatus.Submitted or OrderStatus.InPreparation))
         {
@@ -192,14 +192,16 @@ public sealed class Order
             );
         }
 
-        OrderKitchenStation station = FindStation(stationCode);
-        station.StartPreparation(occurredAtUtc);
+        OrderLine line = FindLine(lineId);
+        EnsureActive(line);
+        line.StartPreparation(occurredAtUtc);
+        SynchronizeStation(line.PreparationStationCode);
         Status = OrderStatus.InPreparation;
         PreparationStartedAtUtc ??= DateTime.SpecifyKind(occurredAtUtc, DateTimeKind.Utc);
         Version++;
     }
 
-    public void MarkStationReady(string stationCode, DateTime occurredAtUtc)
+    public void MarkLineReady(Guid lineId, DateTime occurredAtUtc)
     {
         if (Status is not (OrderStatus.Submitted or OrderStatus.InPreparation))
         {
@@ -208,18 +210,20 @@ public sealed class Order
             );
         }
 
-        OrderKitchenStation station = FindStation(stationCode);
-        station.MarkReady(occurredAtUtc);
+        OrderLine line = FindLine(lineId);
+        EnsureActive(line);
+        OrderKitchenStation station = FindStation(line.PreparationStationCode);
+        line.MarkReady(occurredAtUtc);
         if (!station.RequiresPrimaryDispatch)
         {
-            station.Dispatch(occurredAtUtc);
+            line.Dispatch(occurredAtUtc);
         }
         PreparationStartedAtUtc ??= station.PreparationStartedAtUtc;
         RecalculateKitchenStatus(occurredAtUtc);
         Version++;
     }
 
-    public void DispatchStation(string stationCode, DateTime occurredAtUtc)
+    public void DispatchLine(Guid lineId, DateTime occurredAtUtc)
     {
         if (Status is not (OrderStatus.InPreparation or OrderStatus.Ready))
         {
@@ -228,7 +232,9 @@ public sealed class Order
             );
         }
 
-        OrderKitchenStation station = FindStation(stationCode);
+        OrderLine line = FindLine(lineId);
+        EnsureActive(line);
+        OrderKitchenStation station = FindStation(line.PreparationStationCode);
         if (!station.RequiresPrimaryDispatch)
         {
             throw new InvalidOperationException(
@@ -250,7 +256,7 @@ public sealed class Order
                 $"Station '{station.Code}' cannot be dispatched before priority {earlierPass.Priority} ({earlierPass.Name})."
             );
         }
-        station.Dispatch(occurredAtUtc);
+        line.Dispatch(occurredAtUtc);
         RecalculateKitchenStatus(occurredAtUtc);
         Version++;
     }
@@ -272,46 +278,27 @@ public sealed class Order
             throw new InvalidOperationException("The order line is already cancelled.");
         }
 
-        OrderKitchenStation station = FindStation(line.PreparationStationCode);
-        if (station.Status != KitchenTicketStatus.Pending)
+        if (line.KitchenStatus != KitchenLineStatus.Pending)
         {
             throw new InvalidOperationException(
-                $"The line cannot be cancelled because station ''{station.Code}'' already started preparation."
+                "The line cannot be cancelled because preparation has already started."
             );
         }
 
         DateTime cancelledAtUtc = DateTime.SpecifyKind(occurredAtUtc, DateTimeKind.Utc);
         line.Cancel(reason, cancelledAtUtc);
-        if (
-            !_lines.Any(item =>
-                item.Status == OrderLineStatus.Active && item.PreparationStationCode == station.Code
-            )
-        )
+        if (Status != OrderStatus.Draft)
         {
-            station.Cancel();
+            RecalculateKitchenStatus(cancelledAtUtc);
         }
-
-        List<OrderKitchenStation> activeStations = _stations
-            .Where(item => item.Status != KitchenTicketStatus.Cancelled)
-            .ToList();
-        if (!_lines.Any(item => item.Status == OrderLineStatus.Active))
+        else if (!_lines.Any(item => item.Status == OrderLineStatus.Active))
         {
             Status = OrderStatus.Cancelled;
-        }
-        else if (Status != OrderStatus.Draft)
-        {
-            if (activeStations.All(item => item.Status == KitchenTicketStatus.Dispatched))
+            foreach (OrderKitchenStation station in _stations)
             {
-                Status = OrderStatus.Ready;
-                ReadyAtUtc ??= cancelledAtUtc;
-            }
-            else
-            {
-                Status = activeStations.Any(item =>
-                    item.Status is KitchenTicketStatus.InPreparation or KitchenTicketStatus.Ready
-                )
-                    ? OrderStatus.InPreparation
-                    : OrderStatus.Submitted;
+                station.SynchronizeWithLines(
+                    _lines.Where(item => item.PreparationStationCode == station.Code).ToList()
+                );
             }
         }
         Version++;
@@ -369,16 +356,61 @@ public sealed class Order
             );
     }
 
+    private OrderLine FindLine(Guid lineId)
+    {
+        return _lines.SingleOrDefault(item => item.Id == lineId)
+            ?? throw new InvalidOperationException("The order line does not belong to this order.");
+    }
+
+    private static void EnsureActive(OrderLine line)
+    {
+        if (line.Status != OrderLineStatus.Active)
+        {
+            throw new InvalidOperationException(
+                "Cancelled product lines cannot change kitchen status."
+            );
+        }
+    }
+
+    private void SynchronizeStation(string stationCode)
+    {
+        OrderKitchenStation station = FindStation(stationCode);
+        station.SynchronizeWithLines(
+            _lines.Where(line => line.PreparationStationCode == station.Code).ToList()
+        );
+    }
+
     private void RecalculateKitchenStatus(DateTime occurredAtUtc)
     {
+        if (Status == OrderStatus.Draft)
+        {
+            return;
+        }
+
+        foreach (OrderKitchenStation station in _stations)
+        {
+            station.SynchronizeWithLines(
+                _lines.Where(line => line.PreparationStationCode == station.Code).ToList()
+            );
+        }
+
         List<OrderKitchenStation> activeStations = _stations
             .Where(item => item.Status != KitchenTicketStatus.Cancelled)
             .ToList();
         DateTime utc = DateTime.SpecifyKind(occurredAtUtc, DateTimeKind.Utc);
+        if (!_lines.Any(line => line.Status == OrderLineStatus.Active))
+        {
+            Status = OrderStatus.Cancelled;
+            return;
+        }
         if (activeStations.All(item => item.Status == KitchenTicketStatus.Dispatched))
         {
             ReadyAtUtc ??= utc;
             Status = OrderStatus.Ready;
+        }
+        else if (activeStations.All(item => item.Status == KitchenTicketStatus.Pending))
+        {
+            Status = OrderStatus.Submitted;
         }
         else
         {
