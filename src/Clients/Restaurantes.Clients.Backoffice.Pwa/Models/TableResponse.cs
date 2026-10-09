@@ -2,7 +2,6 @@
 
 public sealed class TableResponse
 {
-    public bool RequestGuestCount { get; set; }
     public Guid ZoneId { get; set; }
     public Guid Id { get; set; }
     public Guid RestaurantId { get; set; }

@@ -441,7 +441,7 @@ public sealed class QrOrderTests : BunitContext
         IRenderedComponent<PosHome> cut = Render<PosHome>();
         using CancellationTokenSource refresh = new();
         SetField(cut.Instance, "realtimeRefresh", refresh);
-        PosBillOrder order = new(orderId, "Submitted", "Unpaid", 12m, DateTime.UtcNow);
+        PosBillOrder order = new(orderId, "Submitted", "Unpaid", 12m, 0m, DateTime.UtcNow);
         PosOrderLine line = new(
             lineId,
             "Producto",

@@ -42,7 +42,7 @@ public sealed partial class DiningService
                         table.RestaurantId,
                         table.Code,
                         table.Label,
-                        table.RequestGuestCount,
+                        requestGuestCount = table.Zone.RequestGuestCount ?? false,
                     },
                     session = (object?)null,
                     customerAccessToken = string.Empty,
@@ -98,7 +98,8 @@ public sealed partial class DiningService
                 );
         }
 
-        if ((table.RequestGuestCount && guestCount is null) || guestCount is < 1 or > 999)
+        bool requestGuestCount = table.Zone.RequestGuestCount ?? false;
+        if ((requestGuestCount && guestCount is null) || guestCount is < 1 or > 999)
         {
             return DiningResults.BadRequest(
                 new { detail = "Indica entre 1 y 999 comensales antes de pedir." }
@@ -110,7 +111,7 @@ public sealed partial class DiningService
             Id = Guid.NewGuid(),
             RestaurantId = table.RestaurantId,
             TableId = table.Id,
-            RequestGuestCount = table.RequestGuestCount,
+            RequestGuestCount = requestGuestCount,
             GuestCount = guestCount,
             Source = "CustomerQr",
             CustomerAccessToken = NewCustomerAccessToken(),

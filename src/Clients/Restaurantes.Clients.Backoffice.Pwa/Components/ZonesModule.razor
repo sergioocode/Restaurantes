@@ -8,6 +8,7 @@ else
         <form class="inline-form" @onsubmit="Host.CreateZone" @onsubmit:preventDefault>
             <input aria-label="Nombre de la zona" placeholder="Nueva zona, ej. Terraza" maxlength="80" required @bind="Host.zoneDraft.Name" />
             <input aria-label="Orden de la zona" type="number" min="0" @bind="Host.zoneDraft.SortOrder" />
+            <label class="check-line"><input type="checkbox" @bind="Host.zoneDraft.RequestGuestCount" /> Solicita cantidad de comensales antes de pedir</label>
             <button class="primary" disabled="@Host.busy">Agregar zona</button>
         </form>
         @if (Host.zones.Count == 0) { <p>Crea una zona antes de agregar mesas o puestos de barra.</p> }
@@ -16,6 +17,7 @@ else
             <div class="inline-form" @key="zone.Id">
                 <label>Zona<input maxlength="80" @bind="zone.Name" /></label>
                 <label>Orden<input type="number" min="0" @bind="zone.SortOrder" /></label>
+                <label class="check-line"><input type="checkbox" @bind="zone.RequestGuestCount" /> Solicita cantidad de comensales antes de pedir</label>
                 <span>@Host.tables.Count(x => x.ZoneId == zone.Id) ubicaciones</span>
                 <button class="primary" @onclick="() => Host.SaveZone(zone)" disabled="@Host.busy">Guardar zona</button>
                 <button class="secondary" @onclick="() => Host.DeleteZone(zone)" disabled="@(Host.busy || Host.tables.Any(x => x.ZoneId == zone.Id))">Eliminar zona vacía</button>

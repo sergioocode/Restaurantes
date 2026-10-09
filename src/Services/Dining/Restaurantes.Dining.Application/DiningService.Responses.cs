@@ -33,7 +33,7 @@ public sealed partial class DiningService
             table.Code,
             table.Label,
             table.ZoneId,
-            table.RequestGuestCount,
+            requestGuestCount = table.Zone.RequestGuestCount ?? false,
             zoneName = table.Zone.Name,
             zoneSortOrder = table.Zone.SortOrder,
             table.QrCode,
@@ -42,6 +42,7 @@ public sealed partial class DiningService
             table.IsActive,
             status = session is null ? "Available" : "Occupied",
             activeSessionId = session?.Id,
+            guestCount = session?.GuestCount,
         };
     }
 
@@ -54,7 +55,7 @@ public sealed partial class DiningService
             table.Code,
             table.Label,
             table.ZoneId,
-            table.RequestGuestCount,
+            requestGuestCount = table.Zone.RequestGuestCount ?? false,
             table.QrCode,
             qrPath = $"/api/dining/qr/{table.QrCode}/sessions",
             customerQrPath = $"/qr/{table.QrCode}",
@@ -76,7 +77,7 @@ public sealed partial class DiningService
                 table.Code,
                 table.Label,
                 table.ZoneId,
-                table.RequestGuestCount,
+                session.RequestGuestCount,
             },
             session = SessionResponse(session),
             customerAccessToken = session.CustomerAccessToken,

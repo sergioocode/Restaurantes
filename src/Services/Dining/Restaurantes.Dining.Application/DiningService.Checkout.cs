@@ -55,11 +55,15 @@ public sealed partial class DiningService
             return DiningResults.Forbid();
         }
 
-        if (session.Status == "Closed")
+        if (session.Status != "Open")
         {
             return session.CheckoutIdempotencyKey == request.IdempotencyKey
                 ? DiningResults.Ok(BillResponse(session))
                 : DiningResults.Conflict(new { detail = "The dining session is already closed." });
+        }
+        if (session.CheckoutIdempotencyKey == request.IdempotencyKey)
+        {
+            return DiningResults.Ok(BillResponse(session));
         }
         if (session.Orders.Count == 0)
         {
@@ -69,20 +73,87 @@ public sealed partial class DiningService
         }
 
         List<DiningSessionOrder> unpaidOrders = session
-            .Orders.Where(x => x.PaymentStatus != "Paid" && x.OrderStatus != "Cancelled")
+            .Orders.Where(x => x.AmountPaid < x.Amount && x.OrderStatus != "Cancelled")
             .ToList();
-        string? authorization = httpContext.Authorization;
-        foreach (DiningSessionOrder order in unpaidOrders)
+        if (unpaidOrders.Count == 0)
         {
+            return DiningResults.Conflict(new { detail = "There are no unpaid session orders." });
+        }
+
+        List<CheckoutOrderAllocation> allocations =
+            request.Allocations.Count == 0
+                ? unpaidOrders
+                    .Select(order => new CheckoutOrderAllocation(
+                        order.OrderId,
+                        order.Amount - order.AmountPaid
+                    ))
+                    .ToList()
+                : request.Allocations;
+        if (
+            allocations.Any(allocation => allocation.Amount <= 0)
+            || allocations.Select(allocation => allocation.OrderId).Distinct().Count()
+                != allocations.Count
+            || allocations.Any(allocation =>
+                !unpaidOrders.Any(order =>
+                    order.OrderId == allocation.OrderId
+                    && allocation.Amount <= order.Amount - order.AmountPaid
+                )
+            )
+        )
+        {
+            return DiningResults.BadRequest(new { detail = "Invalid payment allocations." });
+        }
+
+        decimal allocatedAmount = allocations.Sum(allocation => allocation.Amount);
+        if (allocatedAmount <= 0 || request.TipAmount < 0)
+        {
+            return DiningResults.BadRequest(new { detail = "Invalid payment amount or tip." });
+        }
+
+        decimal amountDue = allocatedAmount + request.TipAmount;
+        decimal amountReceived = request.AmountReceived ?? amountDue;
+        if (
+            amountReceived < amountDue
+            || amountReceived != decimal.Round(amountReceived, 2)
+            || request.Method == "Transfer" && amountReceived != amountDue
+        )
+        {
+            return DiningResults.BadRequest(new { detail = "Invalid amount received." });
+        }
+        decimal changeAmount = amountReceived - amountDue;
+
+        string? authorization = httpContext.Authorization;
+        decimal allocatedTip = 0;
+        for (int index = 0; index < allocations.Count; index++)
+        {
+            CheckoutOrderAllocation allocation = allocations[index];
+            DiningSessionOrder order = unpaidOrders.Single(x => x.OrderId == allocation.OrderId);
+            decimal remainingTip = Math.Max(0, request.TipAmount - allocatedTip);
+            decimal tip =
+                index == allocations.Count - 1
+                    ? remainingTip
+                    : Math.Min(
+                        remainingTip,
+                        Math.Round(
+                            request.TipAmount * allocation.Amount / allocatedAmount,
+                            2,
+                            MidpointRounding.AwayFromZero
+                        )
+                    );
+            allocatedTip += tip;
             DiningPaymentResult response = await payments.CaptureAsync(
-                order.OrderId,
+                allocation.OrderId,
                 new DiningPaymentRequest(
                     request.IdempotencyKey,
-                    unpaidOrders.Count,
+                    session.Orders.Count(x => x.OrderStatus != "Cancelled"),
+                    allocation.Amount,
+                    tip,
                     request.Method,
                     string.IsNullOrWhiteSpace(request.ExternalReference)
                         ? $"DINING-{session.Id:N}"
-                        : request.ExternalReference.Trim()
+                        : request.ExternalReference.Trim(),
+                    allocation.Amount + tip + (index == 0 ? changeAmount : 0),
+                    session.Id
                 ),
                 authorization,
                 ct
@@ -97,15 +168,16 @@ public sealed partial class DiningService
                     }
                 );
             }
-            order.PaymentStatus = "Paid";
+            order.AmountPaid = response.AmountPaid;
+            order.TipPaid = response.TipAmountPaid;
+            order.PaymentStatus = order.AmountPaid >= order.Amount ? "Paid" : "PartiallyPaid";
             order.UpdatedAtUtc = time.GetUtcNow().UtcDateTime;
         }
 
         DateTime now = time.GetUtcNow().UtcDateTime;
-        session.CompleteCheckout(request.IdempotencyKey, request.Method, now);
+        session.RecordPayment(request.IdempotencyKey, request.Method, now);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        await PublishTableChanged(realtime, session, "Available", time);
         return DiningResults.Ok(BillResponse(session));
     }
 
@@ -121,9 +193,13 @@ public sealed partial class DiningService
             session.Status,
             session.PaymentMethod,
             session.PaidAtUtc,
-            total = session.Orders.Sum(x => x.Amount),
-            outstanding = session.Orders.Where(x => x.PaymentStatus != "Paid").Sum(x => x.Amount),
+            total = session.Orders.Sum(x => x.Amount + x.TipPaid),
+            tipTotal = session.Orders.Sum(x => x.TipPaid),
+            outstanding = session
+                .Orders.Where(x => x.OrderStatus != "Cancelled")
+                .Sum(x => Math.Max(0, x.Amount - x.AmountPaid)),
             canCheckout = session.CanCheckout,
+            canRelease = session.CanRelease,
             orders = session
                 .Orders.OrderBy(x => x.AddedAtUtc)
                 .Select(x => new
@@ -132,6 +208,8 @@ public sealed partial class DiningService
                     x.OrderStatus,
                     x.PaymentStatus,
                     x.Amount,
+                    x.AmountPaid,
+                    x.TipPaid,
                     x.AddedAtUtc,
                 }),
         };

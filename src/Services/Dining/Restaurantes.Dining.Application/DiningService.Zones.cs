@@ -11,9 +11,18 @@ public sealed partial class DiningService
         CancellationToken ct
     )
     {
-        return !access.CanAccessRestaurant(principal, restaurantId, DiningPermission.TablesRead)
-            ? DiningResults.Forbid()
-            : DiningResults.Ok(await db.ListZonesAsync(restaurantId, ct));
+        if (!access.CanAccessRestaurant(principal, restaurantId, DiningPermission.TablesRead))
+        {
+            return DiningResults.Forbid();
+        }
+
+        List<DiningZone> zones = await db.ListZonesAsync(restaurantId, ct);
+        foreach (DiningZone zone in zones)
+        {
+            zone.RequestGuestCount ??= false;
+        }
+
+        return DiningResults.Ok(zones);
     }
 
     public async Task<DiningResult> CreateZone(
@@ -78,6 +87,7 @@ public sealed partial class DiningService
 
         zone.Name = name;
         zone.SortOrder = request.SortOrder;
+        zone.RequestGuestCount = request.RequestGuestCount;
         try
         {
             await db.SaveChangesAsync(ct);

@@ -59,7 +59,7 @@ public sealed partial class DiningService
             RestaurantId = table.RestaurantId,
             TableId = table.Id,
             OpenedByUserId = openedByUserId,
-            RequestGuestCount = table.RequestGuestCount,
+            RequestGuestCount = table.Zone.RequestGuestCount ?? false,
             Source = request.Source,
             OpenedAtUtc = time.GetUtcNow().UtcDateTime,
         };
@@ -209,6 +209,10 @@ public sealed partial class DiningService
             return DiningResults.Conflict(new { detail = "The dining session has no orders." });
         }
 
+        Guid[] unfinished = session
+            .Orders.Where(x => x.OrderStatus is not ("Delivered" or "Cancelled"))
+            .Select(x => x.OrderId)
+            .ToArray();
         Guid[] unpaid = session
             .Orders.Where(x => x.PaymentStatus != "Paid" && x.OrderStatus != "Cancelled")
             .Select(x => x.OrderId)
@@ -221,6 +225,22 @@ public sealed partial class DiningService
                     detail = "All active session orders must be paid before releasing the table.",
                     unpaidOrderIds = unpaid,
                 }
+            );
+        }
+        if (unfinished.Length > 0)
+        {
+            return DiningResults.Conflict(
+                new
+                {
+                    detail = "All active session orders must be delivered or cancelled before releasing the table.",
+                    unfinishedOrderIds = unfinished,
+                }
+            );
+        }
+        if (!session.CanRelease)
+        {
+            return DiningResults.Conflict(
+                new { detail = "The table is not ready to be released." }
             );
         }
 

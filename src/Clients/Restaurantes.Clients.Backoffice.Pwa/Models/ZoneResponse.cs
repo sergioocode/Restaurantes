@@ -2,6 +2,7 @@
 
 public sealed class ZoneResponse
 {
+    public bool RequestGuestCount { get; set; }
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public int SortOrder { get; set; }

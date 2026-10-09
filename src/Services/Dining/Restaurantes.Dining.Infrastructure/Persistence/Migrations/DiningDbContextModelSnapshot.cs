@@ -28,6 +28,14 @@ namespace Restaurantes.Dining.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<decimal>("AmountPaid")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<decimal>("TipPaid")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -82,6 +90,7 @@ namespace Restaurantes.Dining.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(30)");
 
                     b.Property<bool>("RequestGuestCount")
+                        .HasDefaultValue(false)
                         .HasColumnType("boolean");
 
                     b.Property<Guid>("RestaurantId")
@@ -126,6 +135,14 @@ namespace Restaurantes.Dining.Infrastructure.Persistence.Migrations
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
 
+                    b.Property<decimal>("AmountPaid")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<decimal>("TipPaid")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
                     b.Property<Guid>("DiningSessionId")
                         .HasColumnType("uuid");
 
@@ -154,6 +171,9 @@ namespace Restaurantes.Dining.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<bool?>("RequestGuestCount")
+                        .HasColumnType("boolean");
 
                     b.Property<DateTime?>("DeletedAtUtc")
                         .IsConcurrencyToken()
@@ -208,9 +228,6 @@ namespace Restaurantes.Dining.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
-
-                    b.Property<bool>("RequestGuestCount")
-                        .HasColumnType("boolean");
 
                     b.Property<Guid>("RestaurantId")
                         .HasColumnType("uuid");

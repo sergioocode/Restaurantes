@@ -17,7 +17,14 @@ public sealed partial class BackofficeApi
             zone.Id == Guid.Empty ? HttpMethod.Post : HttpMethod.Put,
             zone.Id == Guid.Empty ? path : $"{path}/{zone.Id}"
         );
-        request.Content = JsonContent.Create(new { zone.Name, zone.SortOrder });
+        request.Content = JsonContent.Create(
+            new
+            {
+                zone.Name,
+                zone.SortOrder,
+                zone.RequestGuestCount,
+            }
+        );
         using HttpResponseMessage response = await http.SendAsync(request);
         return await ReadAsync<ZoneResponse>(response);
     }
@@ -62,7 +69,6 @@ public sealed partial class BackofficeApi
             {
                 item.Label,
                 item.ZoneId,
-                item.RequestGuestCount,
                 item.IsActive,
             }
         );
