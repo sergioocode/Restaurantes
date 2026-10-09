@@ -21,14 +21,24 @@ public sealed class DiningSession
     public Guid? CancelledByUserId { get; set; }
     public List<DiningSessionOrder> Orders { get; set; } = [];
 
-    public bool CanCheckout => Status == "Open" && Orders.Count > 0;
+    public bool CanCheckout =>
+        Status == "Open"
+        && Orders.Any(order => order.AmountPaid < order.Amount && order.OrderStatus != "Cancelled");
 
-    public void CompleteCheckout(Guid idempotencyKey, string method, DateTime now)
+    public bool CanRelease =>
+        Status == "Open"
+        && Orders.Count > 0
+        && Orders.All(order => order.OrderStatus is "Delivered" or "Cancelled")
+        && Orders.All(order =>
+            order.AmountPaid >= order.Amount || order.OrderStatus == "Cancelled"
+        );
+
+    public void RecordPayment(Guid idempotencyKey, string method, DateTime now)
     {
         CheckoutIdempotencyKey = idempotencyKey;
         PaymentMethod = method;
         PaidAtUtc = now;
-        Close(now);
+        Version++;
     }
 
     public void Close(DateTime now)

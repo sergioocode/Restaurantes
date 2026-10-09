@@ -7,6 +7,8 @@ public sealed class DiningSessionOrder
     public string PaymentStatus { get; set; } = "Unpaid";
     public string OrderStatus { get; set; } = "Draft";
     public decimal Amount { get; set; }
+    public decimal AmountPaid { get; set; }
+    public decimal TipPaid { get; set; }
     public DateTime AddedAtUtc { get; set; }
     public DateTime UpdatedAtUtc { get; set; }
 }

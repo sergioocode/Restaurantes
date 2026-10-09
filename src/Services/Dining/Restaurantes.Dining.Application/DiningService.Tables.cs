@@ -37,7 +37,6 @@ public sealed partial class DiningService
             RestaurantId = restaurantId,
             ZoneId = zone.Id,
             Zone = zone,
-            RequestGuestCount = request.RequestGuestCount,
             Code = request.Code.Trim().ToUpperInvariant(),
             Label = request.Label.Trim(),
             QrCode = NewQrCode(),
@@ -108,7 +107,6 @@ public sealed partial class DiningService
 
         table.ZoneId = zone.Id;
         table.Zone = zone;
-        table.RequestGuestCount = request.RequestGuestCount;
         table.Label = request.Label.Trim();
         table.IsActive = request.IsActive;
         try

@@ -22,6 +22,7 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
     {
         return db
             .Tables.AsNoTracking()
+            .Include(x => x.Zone)
             .SingleOrDefaultAsync(
                 x => x.QrCode == code && x.DeletedAtUtc == null && x.IsActive,
                 ct
@@ -36,13 +37,19 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
             .SingleOrDefaultAsync(x => x.TableId == tableId && x.Status == "Open", ct);
     }
 
-    public Task<RestaurantTable?> LockTableAsync(Guid tableId, CancellationToken ct)
+    public async Task<RestaurantTable?> LockTableAsync(Guid tableId, CancellationToken ct)
     {
-        return db
+        RestaurantTable? table = await db
             .Tables.FromSqlInterpolated(
                 $"SELECT * FROM restaurant_tables WHERE \"Id\" = {tableId} FOR UPDATE"
             )
             .SingleOrDefaultAsync(ct);
+        if (table is not null)
+        {
+            await db.Entry(table).Reference(x => x.Zone).LoadAsync(ct);
+        }
+
+        return table;
     }
 
     public Task<bool> HasOpenSessionAsync(Guid tableId, CancellationToken ct)
@@ -78,13 +85,22 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
             .ToListAsync(ct);
     }
 
-    public Task<RestaurantTable?> LockQrTableAsync(string normalizedQrCode, CancellationToken ct)
+    public async Task<RestaurantTable?> LockQrTableAsync(
+        string normalizedQrCode,
+        CancellationToken ct
+    )
     {
-        return db
+        RestaurantTable? table = await db
             .Tables.FromSqlInterpolated(
                 $"SELECT * FROM restaurant_tables WHERE \"QrCode\" = {normalizedQrCode} FOR UPDATE"
             )
             .SingleOrDefaultAsync(ct);
+        if (table is not null)
+        {
+            await db.Entry(table).Reference(x => x.Zone).LoadAsync(ct);
+        }
+
+        return table;
     }
 
     public Task<DiningSession?> FindActiveSessionWithOrdersAsync(Guid tableId, CancellationToken ct)

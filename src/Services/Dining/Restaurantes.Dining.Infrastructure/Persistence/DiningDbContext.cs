@@ -20,6 +20,7 @@ public sealed class DiningDbContext(DbContextOptions<DiningDbContext> options) :
         zone.HasKey(x => x.Id);
         zone.HasAlternateKey(x => new { x.RestaurantId, x.Id });
         zone.Property(x => x.Name).HasMaxLength(80).IsRequired();
+        zone.Property(x => x.RequestGuestCount);
         zone.Property(x => x.DeletedAtUtc).IsConcurrencyToken();
         zone.HasIndex(x => new { x.RestaurantId, x.Name })
             .IsUnique()
@@ -50,6 +51,7 @@ public sealed class DiningDbContext(DbContextOptions<DiningDbContext> options) :
         session.Property(x => x.Status).HasMaxLength(20).IsRequired();
         session.Property(x => x.PaymentMethod).HasMaxLength(30);
         session.Property(x => x.CustomerAccessToken).HasMaxLength(64).IsRequired();
+        session.Property(x => x.RequestGuestCount).HasDefaultValue(false);
         session.Property(x => x.Version).IsConcurrencyToken();
         session
             .HasIndex(x => new { x.TableId, x.Status })
@@ -67,6 +69,8 @@ public sealed class DiningDbContext(DbContextOptions<DiningDbContext> options) :
         order.Property(x => x.PaymentStatus).HasMaxLength(20).IsRequired();
         order.Property(x => x.OrderStatus).HasMaxLength(30).IsRequired();
         order.Property(x => x.Amount).HasPrecision(12, 2);
+        order.Property(x => x.AmountPaid).HasPrecision(12, 2);
+        order.Property(x => x.TipPaid).HasPrecision(12, 2);
         order.HasIndex(x => x.DiningSessionId);
         order
             .HasOne<DiningSession>()
@@ -79,6 +83,8 @@ public sealed class DiningDbContext(DbContextOptions<DiningDbContext> options) :
         pending.ToTable("pending_payments");
         pending.HasKey(x => x.OrderId);
         pending.Property(x => x.Status).HasMaxLength(20).IsRequired();
+        pending.Property(x => x.AmountPaid).HasPrecision(12, 2);
+        pending.Property(x => x.TipPaid).HasPrecision(12, 2);
 
         EntityTypeBuilder<DiningInboxMessage> inbox = modelBuilder.Entity<DiningInboxMessage>();
         inbox.ToTable("inbox_messages");

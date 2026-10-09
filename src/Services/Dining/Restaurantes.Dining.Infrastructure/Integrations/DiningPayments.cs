@@ -1,5 +1,6 @@
 ﻿using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Restaurantes.Dining.Application;
 
 namespace Restaurantes.Dining.Infrastructure.Integrations;
@@ -27,9 +28,20 @@ public sealed class DiningPayments(IHttpClientFactory clients) : IDiningPayments
 
         payment.Content = JsonContent.Create(request);
         using HttpResponseMessage response = await payments.SendAsync(payment, ct);
-        string body = response.IsSuccessStatusCode
-            ? string.Empty
-            : await response.Content.ReadAsStringAsync(ct);
-        return new(response.IsSuccessStatusCode, (int)response.StatusCode, body);
+        string body = await response.Content.ReadAsStringAsync(ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            return new(false, (int)response.StatusCode, body);
+        }
+
+        using JsonDocument document = JsonDocument.Parse(body);
+        JsonElement root = document.RootElement;
+        decimal amountPaid = root.TryGetProperty("amountPaid", out JsonElement paid)
+            ? paid.GetDecimal()
+            : 0;
+        decimal tipPaid = root.TryGetProperty("tipAmountPaid", out JsonElement tip)
+            ? tip.GetDecimal()
+            : 0;
+        return new(true, (int)response.StatusCode, body, amountPaid, tipPaid);
     }
 }

@@ -56,7 +56,10 @@ public sealed partial class PosApi
         Guid sessionId,
         Guid idempotencyKey,
         string method,
-        string externalReference
+        string externalReference,
+        decimal tipAmount,
+        decimal amountReceived,
+        IReadOnlyList<CheckoutOrderAllocation> allocations
     )
     {
         using HttpRequestMessage request = Authorized(
@@ -69,11 +72,16 @@ public sealed partial class PosApi
                 idempotencyKey,
                 method,
                 externalReference,
+                tipAmount,
+                amountReceived,
+                allocations,
             }
         );
         using HttpResponseMessage response = await http.SendAsync(request);
         return await ReadAsync<SessionBillResponse>(response);
     }
+
+    public sealed record CheckoutOrderAllocation(Guid OrderId, decimal Amount);
 
     public async Task<DiningSessionResponse> ReleaseSessionAsync(Guid sessionId)
     {
