@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <ItemGroup>
     <ProjectReference Include="..\Restaurantes.CashRegister.Application\Restaurantes.CashRegister.Application.csproj" />
+    <ProjectReference Include="..\Restaurantes.CashRegister.Contracts\Restaurantes.CashRegister.Contracts.csproj" />
     <ProjectReference Include="..\Restaurantes.CashRegister.Infrastructure\Restaurantes.CashRegister.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Restaurantes.Security\Restaurantes.Security.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Restaurantes.ServiceDefaults\Restaurantes.ServiceDefaults.csproj" />

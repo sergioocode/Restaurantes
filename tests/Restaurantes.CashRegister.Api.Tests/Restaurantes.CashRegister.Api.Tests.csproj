@@ -14,5 +14,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\CashRegister\Restaurantes.CashRegister.Api\Restaurantes.CashRegister.Api.csproj" />
+    <ProjectReference Include="..\..\src\Services\CashRegister\Restaurantes.CashRegister.Contracts\Restaurantes.CashRegister.Contracts.csproj" />
   </ItemGroup>
 </Project>

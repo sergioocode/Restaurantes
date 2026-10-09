@@ -7,10 +7,12 @@
   <Folder Name="/src/" />
   <Folder Name="/tests/">
     <Project Path="tests/Restaurantes.CashRegister.Api.Tests/Restaurantes.CashRegister.Api.Tests.csproj" />
+    <Project Path="tests/Restaurantes.Catalog.Infrastructure.Tests/Restaurantes.Catalog.Infrastructure.Tests.csproj" />
     <Project Path="tests/Restaurantes.Clients.Pwa.Tests/Restaurantes.Clients.Pwa.Tests.csproj" />
     <Project Path="tests/Restaurantes.Hosts.Tests/Restaurantes.Hosts.Tests.csproj" />
     <Project Path="tests/Restaurantes.Payments.Api.Tests/Restaurantes.Payments.Api.Tests.csproj" />
     <Project Path="tests/Restaurantes.Reporting.Infrastructure.Tests/Restaurantes.Reporting.Infrastructure.Tests.csproj" />
+    <Project Path="tests/Restaurantes.Sales.Application.Tests/Restaurantes.Sales.Application.Tests.csproj" />
   </Folder>
   <Folder Name="/src/ApiGateways/">
     <Project Path="src/ApiGateways/Restaurantes.Gateway.Private/Restaurantes.Gateway.Private.csproj" />
@@ -38,6 +40,7 @@
   <Folder Name="/src/Services/CashRegister/">
     <Project Path="src/Services/CashRegister/Restaurantes.CashRegister.Api/Restaurantes.CashRegister.Api.csproj" />
     <Project Path="src/Services/CashRegister/Restaurantes.CashRegister.Application/Restaurantes.CashRegister.Application.csproj" />
+    <Project Path="src/Services/CashRegister/Restaurantes.CashRegister.Contracts/Restaurantes.CashRegister.Contracts.csproj" />
     <Project Path="src/Services/CashRegister/Restaurantes.CashRegister.Domain/Restaurantes.CashRegister.Domain.csproj" />
     <Project Path="src/Services/CashRegister/Restaurantes.CashRegister.Infrastructure/Restaurantes.CashRegister.Infrastructure.csproj" />
   </Folder>
@@ -51,17 +54,20 @@
   <Folder Name="/src/Services/Dining/">
     <Project Path="src/Services/Dining/Restaurantes.Dining.Api/Restaurantes.Dining.Api.csproj" />
     <Project Path="src/Services/Dining/Restaurantes.Dining.Application/Restaurantes.Dining.Application.csproj" />
+    <Project Path="src/Services/Dining/Restaurantes.Dining.Contracts/Restaurantes.Dining.Contracts.csproj" />
     <Project Path="src/Services/Dining/Restaurantes.Dining.Domain/Restaurantes.Dining.Domain.csproj" />
     <Project Path="src/Services/Dining/Restaurantes.Dining.Infrastructure/Restaurantes.Dining.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/src/Services/Identity/">
     <Project Path="src/Services/Identity/Restaurantes.Identity.Api/Restaurantes.Identity.Api.csproj" />
     <Project Path="src/Services/Identity/Restaurantes.Identity.Application/Restaurantes.Identity.Application.csproj" />
+    <Project Path="src/Services/Identity/Restaurantes.Identity.Contracts/Restaurantes.Identity.Contracts.csproj" />
     <Project Path="src/Services/Identity/Restaurantes.Identity.Domain/Restaurantes.Identity.Domain.csproj" />
     <Project Path="src/Services/Identity/Restaurantes.Identity.Infrastructure/Restaurantes.Identity.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/src/Services/Integrations/">
     <Project Path="src/Services/Integrations/Restaurantes.Integrations.Api/Restaurantes.Integrations.Api.csproj" />
+    <Project Path="src/Services/Integrations/Restaurantes.Integrations.Contracts/Restaurantes.Integrations.Contracts.csproj" />
   </Folder>
   <Folder Name="/src/Services/Orders/">
     <Project Path="src/Services/Orders/Restaurantes.Orders.Api/Restaurantes.Orders.Api.csproj" />

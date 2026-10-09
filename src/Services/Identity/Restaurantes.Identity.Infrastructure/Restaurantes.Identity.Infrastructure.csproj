@@ -9,6 +9,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Restaurantes.Identity.Application\Restaurantes.Identity.Application.csproj" />
+    <ProjectReference Include="..\Restaurantes.Identity.Contracts\Restaurantes.Identity.Contracts.csproj" />
     <ProjectReference Include="..\Restaurantes.Identity.Domain\Restaurantes.Identity.Domain.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Restaurantes.Security\Restaurantes.Security.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Restaurantes.ServiceDefaults\Restaurantes.ServiceDefaults.csproj" />

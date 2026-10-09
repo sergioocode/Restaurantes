@@ -9,11 +9,10 @@ public sealed class IntegrationsReadController : ControllerBase
     public ActionResult Get()
     {
         return Ok(
-            new
-            {
-                service = "Integrations",
-                capabilities = new[] { "providers", "webhooks", "delivery" },
-            }
+            new Restaurantes.Integrations.Contracts.Responses.IntegrationsResponse(
+                "Integrations",
+                ["providers", "webhooks", "delivery"]
+            )
         );
     }
 }
