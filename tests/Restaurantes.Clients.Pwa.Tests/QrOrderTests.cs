@@ -209,7 +209,7 @@ public sealed class QrOrderTests : BunitContext
                     : request.Method == HttpMethod.Post
                     && (path == "/api/orders" || path == $"/api/orders/{orderId}/submit")
                         ? JsonResponse(order)
-                    : request.Method == HttpMethod.Get && path == "/api/orders"
+                    : request.Method == HttpMethod.Get && path == "/api/orders/commander"
                         ? JsonResponse(new[] { order })
                     : new HttpResponseMessage(HttpStatusCode.NotFound);
             })
@@ -383,7 +383,7 @@ public sealed class QrOrderTests : BunitContext
                 string path = request.RequestUri!.AbsolutePath;
                 requests.Add(path);
                 return path == $"/api/orders/{orderId}/deliver" ? JsonResponse(pickup)
-                    : path == "/api/orders" && request.Method == HttpMethod.Get
+                    : path == "/api/orders/pos" && request.Method == HttpMethod.Get
                         ? JsonResponse(Array.Empty<PosOrder>())
                     : new HttpResponseMessage(HttpStatusCode.NotFound);
             })
@@ -408,7 +408,7 @@ public sealed class QrOrderTests : BunitContext
         await cut.InvokeAsync(() => (Task)deliver.Invoke(cut.Instance, null)!);
 
         Assert.Contains($"/api/orders/{orderId}/deliver", requests);
-        Assert.Contains("/api/orders", requests);
+        Assert.Contains("/api/orders/pos", requests);
         Assert.Contains("entregado", (string)GetField(cut.Instance, "message")!);
     }
 
@@ -503,7 +503,7 @@ public sealed class QrOrderTests : BunitContext
                     }
                     return JsonResponse(order);
                 }
-                return request.Method == HttpMethod.Get && path == "/api/orders"
+                return request.Method == HttpMethod.Get && path == "/api/orders/pos"
                     ? JsonResponse(Array.Empty<PosOrder>())
                     : new HttpResponseMessage(HttpStatusCode.NotFound);
             })
@@ -554,7 +554,7 @@ public sealed class QrOrderTests : BunitContext
 
         Assert.Contains($"/api/orders/{orderId}/submit", requests);
         Assert.Contains("Recogida", (string)GetField(cut.Instance, "message")!);
-        Assert.Contains("/api/orders", requests);
+        Assert.Contains("/api/orders/pos", requests);
         using JsonDocument orderBody = JsonDocument.Parse(createOrderBody!);
         Assert.Equal(JsonValueKind.Null, orderBody.RootElement.GetProperty("tableId").ValueKind);
         Assert.Equal(
