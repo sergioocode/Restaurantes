@@ -235,10 +235,13 @@ Sales utiliza este evento para:
 1. obtener o crear la venta;
 2. determinar el `SaleId`;
 3. actualizar `ExpectedOrderCount`;
-4. registrar el pedido como pagado;
-5. asociar importe, método de pago y origen;
-6. incorporar información de entrega previamente recibida, si existe;
-7. comprobar si la venta ya puede completarse.
+4. registrar el cobro individual en `Sale.Payments`;
+5. actualizar el total pagado del pedido y marcarlo pagado solo cuando el evento indique que se cubrió por completo;
+6. asociar importe, método de pago y origen;
+7. incorporar información de entrega previamente recibida, si existe;
+8. comprobar si la venta ya puede completarse.
+
+Payments publica un `PaymentCaptured` por cada cobro real, también para cobros parciales o pagos divididos en varias tandas. Sales persiste cada captura como un `SalePayment`; no espera al último cobro para guardarla. La venta, en cambio, solo pasa a `Completed` cuando ya se recibieron todos los pedidos esperados y todos están completamente pagados. En esa transición se publica un único `SaleCompleted`, con el total final y el desglose acumulado por método de pago. Los cobros parciales no publican un `SaleCompleted`.
 
 ### `PaymentRefunded`
 
@@ -328,6 +331,8 @@ Lines[]
 `SaleCompleted` representa que Sales ha consolidado correctamente una transacción de venta.
 
 Entre sus consumidores se encuentra **Reporting**, que utiliza este evento junto con sus propias proyecciones de Orders y Payments para construir información agregada del dashboard.
+
+El dashboard contabiliza ventas y tickets finalizados a partir de `SaleCompleted`. Por ello, los cobros parciales ya persistidos no aparecen como una venta finalizada hasta que se completa la cuenta.
 
 ## Persistencia
 

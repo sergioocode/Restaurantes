@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Restaurantes.Reporting.Application.Dashboard;
 using Restaurantes.Reporting.Infrastructure.Persistence.Read;
+using Restaurantes.Sales.Contracts.Events;
 
 namespace Restaurantes.Reporting.Infrastructure.Queries;
 
@@ -59,6 +60,13 @@ public sealed class ReportingReadStore(ReportingReadDbContext db) : IReportingRe
             fact.Total,
             fact.Source,
             fact.PaymentMethod,
+            (JsonSerializer.Deserialize<List<SalePaymentBreakdown>>(fact.PaymentMethodsJson) ?? [])
+                .Select(payment => new SalesPaymentMethod(
+                    payment.Method,
+                    payment.Payments,
+                    payment.Amount
+                ))
+                .ToList(),
             JsonSerializer.Deserialize<List<Guid>>(fact.OrderIdsJson) ?? [],
             JsonSerializer.Deserialize<List<SalesLine>>(fact.LinesJson) ?? []
         );

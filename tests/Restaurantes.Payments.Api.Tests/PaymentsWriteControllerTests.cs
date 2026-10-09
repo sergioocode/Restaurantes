@@ -67,6 +67,25 @@ public sealed class PaymentsWriteControllerTests
             return Task.FromResult<PayableOrder?>(orderId == order.OrderId ? order : null);
         }
 
+        public Task<PayableOrderCapture?> FindCaptureAsync(
+            Guid orderId,
+            Guid idempotencyKey,
+            CancellationToken cancellationToken
+        )
+        {
+            return Task.FromResult<PayableOrderCapture?>(null);
+        }
+
+        public Task SaveWithEventAsync(
+            PayableOrder order,
+            PayableOrderCapture capture,
+            object integrationEvent,
+            CancellationToken cancellationToken
+        )
+        {
+            throw new NotSupportedException();
+        }
+
         public Task SaveWithEventAsync(
             PayableOrder order,
             object integrationEvent,

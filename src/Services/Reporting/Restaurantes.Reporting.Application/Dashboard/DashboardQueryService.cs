@@ -59,8 +59,22 @@ public sealed class DashboardQueryService(
             .OrderByDescending(x => x.Sales)
             .ToList();
         List<SalesPaymentMethod> paymentMethods = sales
-            .GroupBy(x => string.IsNullOrWhiteSpace(x.PaymentMethod) ? "Unknown" : x.PaymentMethod)
-            .Select(g => new SalesPaymentMethod(g.Key, g.Count(), g.Sum(x => x.Total)))
+            .SelectMany(sale =>
+                sale.PaymentMethods.Count > 0
+                    ? sale.PaymentMethods
+                    :
+                    [
+                        new SalesPaymentMethod(
+                            sale.PaymentMethod == "Mixed"
+                                ? "UnavailableBreakdown"
+                                : sale.PaymentMethod,
+                            1,
+                            sale.Total
+                        ),
+                    ]
+            )
+            .GroupBy(x => string.IsNullOrWhiteSpace(x.Method) ? "Unknown" : x.Method)
+            .Select(g => new SalesPaymentMethod(g.Key, g.Sum(x => x.Tickets), g.Sum(x => x.Sales)))
             .OrderByDescending(x => x.Sales)
             .ToList();
         decimal total = sales.Sum(x => x.Total);

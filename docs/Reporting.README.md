@@ -374,10 +374,9 @@ Reporting consume:
 `PaymentCaptured` actualiza:
 
 - `PaymentTransactionId`;
-- `PaymentStatus = Paid`;
+- `PaymentStatus = PartiallyPaid` mientras el pedido conserve saldo pendiente, o `Paid` cuando el cobro lo completa;
 - método de pago;
-- `PaidAtUtc`;
-- reconocimiento de la venta.
+- `PaidAtUtc` y reconocimiento de la venta únicamente cuando el pedido queda pagado por completo.
 
 Cuando el evento no contiene un `PaymentTransactionId` válido, se utiliza `PaymentId` como identificador de transacción para la proyección.
 
@@ -388,6 +387,8 @@ Refunded
 ```
 
 y elimina `SaleRecognizedAtUtc` del hecho del pedido.
+
+Payments emite un `PaymentCaptured` por cada captura, incluidas las parciales. Reporting procesa cada evento y actualiza el hecho del pedido, pero las métricas comerciales del dashboard (`TotalSales`, tickets finalizados, ticket medio y desglose por método de pago) se calculan desde `CompletedSaleFact`, que se alimenta con `SaleCompleted`. Sales publica un único `SaleCompleted` cuando todos los pedidos esperados de la venta están completamente pagados. Así, una captura parcial queda registrada sin contabilizar prematuramente un ticket finalizado. El consumidor de Reporting tampoco publica `DashboardProjectionUpdated` por cada `PaymentCaptured`; notifica al dashboard los cambios de ventas al procesar `SaleCompleted`.
 
 En la implementación actual, una venta de un único pedido deja de computar en las métricas cuando ese pedido aparece como reembolsado.
 

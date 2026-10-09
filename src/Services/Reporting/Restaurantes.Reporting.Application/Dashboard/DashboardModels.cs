@@ -35,6 +35,7 @@ public sealed record CompletedSale(
     decimal Total,
     string Source,
     string PaymentMethod,
+    IReadOnlyList<SalesPaymentMethod> PaymentMethods,
     IReadOnlyList<Guid> OrderIds,
     IReadOnlyList<SalesLine> Lines
 );

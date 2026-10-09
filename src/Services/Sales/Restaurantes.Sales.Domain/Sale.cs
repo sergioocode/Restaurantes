@@ -13,6 +13,7 @@ public sealed class Sale
     public DateTime? CompletedAtUtc { get; set; }
     public DateOnly? BusinessDate { get; set; }
     public List<SaleOrder> Orders { get; set; } = [];
+    public List<SalePayment> Payments { get; set; } = [];
 
     public bool TryComplete(DateTime now)
     {
@@ -42,4 +43,13 @@ public sealed class SaleOrder
     public DateTime? PaidAtUtc { get; set; }
     public DateTime? DeliveredAtUtc { get; set; }
     public string LinesJson { get; set; } = "[]";
+}
+
+public sealed class SalePayment
+{
+    public Guid PaymentId { get; set; }
+    public Guid SaleId { get; set; }
+    public Guid TransactionId { get; set; }
+    public string Method { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
 }

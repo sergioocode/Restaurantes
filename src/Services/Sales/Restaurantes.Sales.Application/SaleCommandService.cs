@@ -20,11 +20,13 @@ public sealed class SaleCommandService(ISaleWriteStore store, TimeProvider timeP
         }
 
         Guid saleId =
-            integrationEvent.PaymentTransactionId is Guid transactionId
+            integrationEvent.SaleGroupId is Guid groupId && groupId != Guid.Empty ? groupId
+            : integrationEvent.PaymentTransactionId is Guid transactionId
             && transactionId != Guid.Empty
                 ? transactionId
-                : integrationEvent.PaymentId;
+            : integrationEvent.PaymentId;
         Sale? sale = await store.FindAsync(saleId, cancellationToken);
+        sale ??= await store.FindByOrderIdAsync(integrationEvent.OrderId, cancellationToken);
         if (sale is null)
         {
             sale = new Sale
@@ -41,6 +43,10 @@ public sealed class SaleCommandService(ISaleWriteStore store, TimeProvider timeP
         }
         else
         {
+            if (sale.PaymentMethod != integrationEvent.Method)
+            {
+                sale.PaymentMethod = "Mixed";
+            }
             if (
                 sale.BusinessDate is not null
                 && integrationEvent.BusinessDate is not null
@@ -58,7 +64,10 @@ public sealed class SaleCommandService(ISaleWriteStore store, TimeProvider timeP
             );
         }
 
-        if (sale.Orders.All(item => item.OrderId != integrationEvent.OrderId))
+        SaleOrder? saleOrder = sale.Orders.SingleOrDefault(item =>
+            item.OrderId == integrationEvent.OrderId
+        );
+        if (saleOrder is null)
         {
             DeliveredOrderSnapshot? delivery = await store.FindDeliveredOrderAsync(
                 integrationEvent.OrderId,
@@ -67,14 +76,51 @@ public sealed class SaleCommandService(ISaleWriteStore store, TimeProvider timeP
             sale.Orders.Add(
                 new SaleOrder
                 {
-                    SaleId = saleId,
+                    SaleId = sale.Id,
                     OrderId = integrationEvent.OrderId,
-                    Amount = integrationEvent.Amount,
-                    IsPaid = true,
-                    PaidAtUtc = integrationEvent.CapturedAtUtc,
+                    Amount =
+                        integrationEvent.AmountPaid > 0
+                            ? integrationEvent.AmountPaid
+                            : integrationEvent.Amount,
+                    IsPaid = integrationEvent.IsFullyPaid,
+                    PaidAtUtc = integrationEvent.IsFullyPaid
+                        ? integrationEvent.CapturedAtUtc
+                        : null,
                     IsDelivered = delivery is not null,
                     DeliveredAtUtc = delivery?.DeliveredAtUtc,
                     LinesJson = delivery?.LinesJson ?? "[]",
+                }
+            );
+        }
+        else
+        {
+            saleOrder.Amount = Math.Max(
+                saleOrder.Amount,
+                integrationEvent.AmountPaid > 0
+                    ? integrationEvent.AmountPaid
+                    : saleOrder.Amount + integrationEvent.Amount
+            );
+            if (integrationEvent.IsFullyPaid)
+            {
+                saleOrder.IsPaid = true;
+                saleOrder.PaidAtUtc = integrationEvent.CapturedAtUtc;
+            }
+        }
+
+        if (sale.Payments.All(item => item.PaymentId != integrationEvent.PaymentId))
+        {
+            sale.Payments.Add(
+                new SalePayment
+                {
+                    PaymentId = integrationEvent.PaymentId,
+                    SaleId = sale.Id,
+                    TransactionId =
+                        integrationEvent.PaymentTransactionId is Guid captureTransactionId
+                        && captureTransactionId != Guid.Empty
+                            ? captureTransactionId
+                            : integrationEvent.PaymentId,
+                    Method = integrationEvent.Method,
+                    Amount = integrationEvent.Amount,
                 }
             );
         }
@@ -169,7 +215,14 @@ public sealed class SaleCommandService(ISaleWriteStore store, TimeProvider timeP
                     sale.CompletedAtUtc!.Value,
                     sale.Orders.Select(item => item.OrderId).ToList(),
                     lines,
-                    sale.BusinessDate
+                    sale.BusinessDate,
+                    sale.Payments.GroupBy(item => item.Method)
+                        .Select(group => new SalePaymentBreakdown(
+                            group.Key,
+                            group.Select(item => item.TransactionId).Distinct().Count(),
+                            group.Sum(item => item.Amount)
+                        ))
+                        .ToList()
                 )
             );
         }

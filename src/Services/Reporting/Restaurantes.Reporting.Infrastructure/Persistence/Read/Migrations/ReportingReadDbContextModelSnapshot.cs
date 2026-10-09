@@ -48,6 +48,10 @@ namespace Restaurantes.Reporting.Infrastructure.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
 
+                    b.Property<string>("PaymentMethodsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
                     b.Property<Guid>("RestaurantId")
                         .HasColumnType("uuid");
 

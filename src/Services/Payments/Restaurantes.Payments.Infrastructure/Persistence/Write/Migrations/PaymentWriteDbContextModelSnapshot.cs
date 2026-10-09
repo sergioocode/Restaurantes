@@ -33,6 +33,14 @@ namespace Restaurantes.Payments.Infrastructure.Migrations
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
 
+                    b.Property<decimal>("AmountPaid")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<decimal>("TipAmountPaid")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
                     b.Property<Guid?>("CaptureIdempotencyKey")
                         .HasColumnType("uuid");
 
@@ -97,6 +105,21 @@ namespace Restaurantes.Payments.Infrastructure.Migrations
                     b.ToTable("payable_orders", (string)null);
                 });
 
+            modelBuilder.Entity("Restaurantes.Payments.Domain.PayableOrderCapture", b =>
+                {
+                    b.Property<Guid>("PaymentId").ValueGeneratedOnAdd().HasColumnType("uuid");
+                    b.Property<decimal>("Amount").HasPrecision(12, 2).HasColumnType("numeric(12,2)");
+                    b.Property<DateTime>("CapturedAtUtc").HasColumnType("timestamp with time zone");
+                    b.Property<string>("ExternalReference").IsRequired().HasMaxLength(160).HasColumnType("character varying(160)");
+                    b.Property<Guid>("IdempotencyKey").HasColumnType("uuid");
+                    b.Property<string>("Method").IsRequired().HasMaxLength(30).HasColumnType("character varying(30)");
+                    b.Property<Guid>("OrderId").HasColumnType("uuid");
+                    b.Property<decimal>("TipAmount").HasPrecision(12, 2).HasColumnType("numeric(12,2)");
+                    b.HasKey("PaymentId");
+                    b.HasIndex("OrderId", "IdempotencyKey").IsUnique();
+                    b.ToTable("payment_captures", (string)null);
+                });
+
             modelBuilder.Entity("Restaurantes.Payments.Infrastructure.PaymentInboxMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -141,6 +164,20 @@ namespace Restaurantes.Payments.Infrastructure.Migrations
                     b.HasIndex("ProcessedAtUtc", "OccurredAtUtc");
 
                     b.ToTable("outbox_messages", (string)null);
+                });
+
+            modelBuilder.Entity("Restaurantes.Payments.Domain.PayableOrderCapture", b =>
+                {
+                    b.HasOne("Restaurantes.Payments.Domain.PayableOrder", null)
+                        .WithMany("Captures")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Restaurantes.Payments.Domain.PayableOrder", b =>
+                {
+                    b.Navigation("Captures");
                 });
 #pragma warning restore 612, 618
         }

@@ -33,7 +33,7 @@ public sealed class ReportingReadController(
 
         IReadOnlyCollection<Guid>? restaurantIds =
             restaurantId.HasValue ? [restaurantId.Value]
-            : User.IsInRole("Admin") ? null
+            : User.HasGlobalRestaurantPermission(RestaurantPermissions.DashboardRead) ? null
             : AuthorizedRestaurants(User);
         return restaurantIds is { Count: 0 }
             ? (ActionResult<DailyDashboard>)Forbid()

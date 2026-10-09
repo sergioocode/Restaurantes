@@ -201,8 +201,7 @@ public sealed class CashRegisterService(
     internal static Dictionary<string, decimal> ExpectedByMethod(CashRegisterSession session)
     {
         Dictionary<string, decimal> totals = session
-            .Movements.Where(x => x.Type == CashMovementType.Sale)
-            .GroupBy(x => x.Method, StringComparer.OrdinalIgnoreCase)
+            .Movements.GroupBy(x => x.Method, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(
                 x => x.Key,
                 x => x.Sum(movement => movement.Amount),

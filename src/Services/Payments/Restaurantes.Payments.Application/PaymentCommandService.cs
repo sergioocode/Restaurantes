@@ -20,35 +20,69 @@ public sealed class PaymentCommandService(IPaymentWriteStore store, TimeProvider
             return null;
         }
 
+        PayableOrderCapture? previousCapture = await store.FindCaptureAsync(
+            orderId,
+            request.IdempotencyKey,
+            ct
+        );
+        if (previousCapture is not null)
+        {
+            return Map(order, previousCapture);
+        }
+
+        if (
+            order.Status == PaymentStatus.Paid
+            && order.CaptureIdempotencyKey == request.IdempotencyKey
+        )
+        {
+            return Map(order);
+        }
+
         DateTime now = time.GetUtcNow().UtcDateTime;
-        bool changed = order.Capture(
+        decimal amount = request.Amount ?? order.OutstandingAmount;
+        decimal amountDue = amount + request.TipAmount;
+        decimal tenderedAmount = request.TenderedAmount ?? amountDue;
+        if (
+            tenderedAmount < amountDue
+            || tenderedAmount != decimal.Round(tenderedAmount, 2)
+            || (request.Method is "Transfer" or "Online") && tenderedAmount != amountDue
+        )
+        {
+            throw new InvalidOperationException("Invalid amount received.");
+        }
+        PayableOrderCapture capture = order.Capture(
+            amount,
+            request.TipAmount,
             request.Method,
             request.ExternalReference,
             request.IdempotencyKey,
             now
         );
-        if (!changed)
-        {
-            return Map(order);
-        }
 
         PaymentCaptured e = new(
-            order.PaymentId!.Value,
+            capture.PaymentId,
             order.OrderId,
             order.RestaurantId,
-            order.Amount,
-            order.Method,
+            capture.Amount,
+            capture.Method,
             order.ServiceMode,
             order.Source,
-            order.ExternalReference,
+            capture.ExternalReference,
             now,
-            order.CaptureIdempotencyKey!.Value,
+            capture.IdempotencyKey,
             request.TransactionOrderCount,
             cashRegister.SessionId,
-            cashRegister.BusinessDate
+            cashRegister.BusinessDate,
+            capture.TipAmount,
+            order.AmountPaid,
+            order.Status == PaymentStatus.Paid,
+            order.TipAmountPaid,
+            tenderedAmount,
+            tenderedAmount - amountDue,
+            request.SaleGroupId
         );
-        await store.SaveWithEventAsync(order, e, ct);
-        return Map(order);
+        await store.SaveWithEventAsync(order, capture, e, ct);
+        return Map(order, capture);
     }
 
     public async Task<PaymentResponse?> RefundAsync(
@@ -88,9 +122,36 @@ public sealed class PaymentCommandService(IPaymentWriteStore store, TimeProvider
             x.RestaurantId,
             x.Amount,
             x.Method,
-            x.Status.ToString(),
+            PaymentStatusName(x),
             x.CapturedAtUtc,
-            x.RefundedAtUtc
+            x.RefundedAtUtc,
+            0,
+            x.AmountPaid,
+            x.OutstandingAmount,
+            x.TipAmountPaid
         );
     }
+
+    private static PaymentResponse Map(PayableOrder order, PayableOrderCapture capture)
+    {
+        return new(
+            capture.PaymentId,
+            capture.OrderId,
+            order.RestaurantId,
+            capture.Amount,
+            capture.Method,
+            PaymentStatusName(order),
+            capture.CapturedAtUtc,
+            order.RefundedAtUtc,
+            capture.TipAmount,
+            order.AmountPaid,
+            order.OutstandingAmount,
+            order.TipAmountPaid
+        );
+    }
+
+    private static string PaymentStatusName(PayableOrder order) =>
+        order.Status == PaymentStatus.Open && order.AmountPaid > 0
+            ? "PartiallyPaid"
+            : order.Status.ToString();
 }

@@ -20,7 +20,10 @@ public sealed class PaymentStatusQuery(PaymentWriteDbContext db) : IPaymentStatu
             )
             .Select(payment => new OrderPaymentStatusResponse(
                 payment.OrderId,
-                payment.Status.ToString()
+                payment.Status == Restaurantes.Payments.Domain.PaymentStatus.Open
+                && payment.AmountPaid > 0
+                    ? "PartiallyPaid"
+                    : payment.Status.ToString()
             ))
             .ToListAsync(ct);
     }

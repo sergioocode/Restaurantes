@@ -9,6 +9,7 @@ public sealed class SaleWriteDbContext(DbContextOptions<SaleWriteDbContext> opti
 {
     public DbSet<Sale> Sales => Set<Sale>();
     public DbSet<SaleOrder> SaleOrders => Set<SaleOrder>();
+    public DbSet<SalePayment> SalePayments => Set<SalePayment>();
     public DbSet<DeliveredOrderMarker> DeliveredOrders => Set<DeliveredOrderMarker>();
     public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
@@ -26,6 +27,10 @@ public sealed class SaleWriteDbContext(DbContextOptions<SaleWriteDbContext> opti
             .WithOne()
             .HasForeignKey(item => item.SaleId)
             .OnDelete(DeleteBehavior.Cascade);
+        sale.HasMany(item => item.Payments)
+            .WithOne()
+            .HasForeignKey(item => item.SaleId)
+            .OnDelete(DeleteBehavior.Cascade);
         sale.HasIndex(item => new { item.RestaurantId, item.CompletedAtUtc });
 
         EntityTypeBuilder<SaleOrder> order = modelBuilder.Entity<SaleOrder>();
@@ -34,6 +39,14 @@ public sealed class SaleWriteDbContext(DbContextOptions<SaleWriteDbContext> opti
         order.Property(item => item.Amount).HasPrecision(12, 2);
         order.Property(item => item.LinesJson).HasColumnType("jsonb").IsRequired();
         order.HasIndex(item => item.OrderId).IsUnique();
+
+        EntityTypeBuilder<SalePayment> payment = modelBuilder.Entity<SalePayment>();
+        payment.ToTable("sale_payments");
+        payment.Property(item => item.PaymentId).ValueGeneratedNever();
+        payment.HasKey(item => item.PaymentId);
+        payment.Property(item => item.Method).HasMaxLength(30).IsRequired();
+        payment.Property(item => item.Amount).HasPrecision(12, 2);
+        payment.HasIndex(item => item.SaleId);
 
         EntityTypeBuilder<DeliveredOrderMarker> marker =
             modelBuilder.Entity<DeliveredOrderMarker>();
