@@ -11,4 +11,5 @@ public sealed class CompletedSaleFact
     public DateOnly? BusinessDate { get; set; }
     public string OrderIdsJson { get; set; } = "[]";
     public string LinesJson { get; set; } = "[]";
+    public string PaymentMethodsJson { get; set; } = "[]";
 }

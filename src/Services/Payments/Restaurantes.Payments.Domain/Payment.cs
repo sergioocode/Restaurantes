@@ -18,6 +18,8 @@ public sealed class PayableOrder
     public string ServiceMode { get; private set; } = string.Empty;
     public string Source { get; private set; } = string.Empty;
     public decimal Amount { get; private set; }
+    public decimal AmountPaid { get; private set; }
+    public decimal TipAmountPaid { get; private set; }
     public Guid? PaymentId { get; private set; }
     public string Method { get; private set; } = string.Empty;
     public string ExternalReference { get; private set; } = string.Empty;
@@ -27,6 +29,9 @@ public sealed class PayableOrder
     public DateTime? CapturedAtUtc { get; private set; }
     public DateTime? RefundedAtUtc { get; private set; }
     public int Version { get; private set; }
+    public List<PayableOrderCapture> Captures { get; private set; } = [];
+
+    public decimal OutstandingAmount => Math.Max(0, Amount - AmountPaid);
 
     public static PayableOrder Create(
         Guid orderId,
@@ -56,31 +61,55 @@ public sealed class PayableOrder
             };
     }
 
-    public bool Capture(string method, string externalReference, Guid idempotencyKey, DateTime now)
+    public PayableOrderCapture Capture(
+        decimal amount,
+        decimal tipAmount,
+        string method,
+        string externalReference,
+        Guid idempotencyKey,
+        DateTime now
+    )
     {
         if (idempotencyKey == Guid.Empty)
         {
-            throw new ArgumentException("IdempotencyKey is required.");
+            throw new InvalidOperationException("IdempotencyKey is required.");
         }
 
-        if (Status == PaymentStatus.Paid && CaptureIdempotencyKey == idempotencyKey)
+        if (amount <= 0 || amount > OutstandingAmount || tipAmount < 0)
         {
-            return false;
+            throw new InvalidOperationException("Invalid payment amount or tip.");
         }
 
-        if (Status != PaymentStatus.Open)
+        if (
+            Status is PaymentStatus.Refunded
+            || (Status is PaymentStatus.Paid && OutstandingAmount == 0)
+        )
         {
-            throw new InvalidOperationException("Only open payments can be captured.");
+            throw new InvalidOperationException("Only outstanding payments can be captured.");
         }
 
-        PaymentId = Guid.NewGuid();
+        PayableOrderCapture capture = new()
+        {
+            PaymentId = Guid.NewGuid(),
+            OrderId = OrderId,
+            IdempotencyKey = idempotencyKey,
+            Amount = amount,
+            TipAmount = tipAmount,
+            Method = method.Trim(),
+            ExternalReference = externalReference.Trim(),
+            CapturedAtUtc = now,
+        };
+        Captures.Add(capture);
+        PaymentId = capture.PaymentId;
+        AmountPaid += amount;
+        TipAmountPaid += tipAmount;
         Method = method.Trim();
         ExternalReference = externalReference.Trim();
         CaptureIdempotencyKey = idempotencyKey;
-        Status = PaymentStatus.Paid;
+        Status = AmountPaid >= Amount ? PaymentStatus.Paid : PaymentStatus.Open;
         CapturedAtUtc = now;
         Version++;
-        return true;
+        return capture;
     }
 
     public void AdjustAmount(decimal amount)
@@ -112,4 +141,16 @@ public sealed class PayableOrder
         RefundedAtUtc = now;
         Version++;
     }
+}
+
+public sealed class PayableOrderCapture
+{
+    public Guid PaymentId { get; set; }
+    public Guid OrderId { get; set; }
+    public Guid IdempotencyKey { get; set; }
+    public decimal Amount { get; set; }
+    public decimal TipAmount { get; set; }
+    public string Method { get; set; } = string.Empty;
+    public string ExternalReference { get; set; } = string.Empty;
+    public DateTime CapturedAtUtc { get; set; }
 }

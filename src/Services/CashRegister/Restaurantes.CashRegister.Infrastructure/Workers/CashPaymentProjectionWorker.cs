@@ -123,11 +123,13 @@ public sealed class CashPaymentProjectionWorker(
                 e.PaymentId,
                 e.OrderId,
                 e.RestaurantId,
-                e.Amount,
+                e.Amount + e.TipAmount,
                 e.Method,
                 e.ExternalReference,
                 e.CapturedAtUtc,
-                e.CashRegisterSessionId
+                e.CashRegisterSessionId,
+                e.TenderedAmount,
+                e.ChangeAmount
             );
         }
         throw new NotSupportedException(ea.BasicProperties.Type);

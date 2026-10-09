@@ -13,5 +13,12 @@ public sealed record PaymentCaptured(
     Guid? PaymentTransactionId = null,
     int TransactionOrderCount = 1,
     Guid? CashRegisterSessionId = null,
-    DateOnly? BusinessDate = null
+    DateOnly? BusinessDate = null,
+    decimal TipAmount = 0,
+    decimal AmountPaid = 0,
+    bool IsFullyPaid = true,
+    decimal TipAmountPaid = 0,
+    decimal TenderedAmount = 0,
+    decimal ChangeAmount = 0,
+    Guid? SaleGroupId = null
 );

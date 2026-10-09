@@ -7,6 +7,61 @@ namespace Restaurantes.CashRegister.Api.Tests;
 public sealed class CashRegisterServiceTests
 {
     [Fact]
+    public async Task Card_overpayment_records_card_tender_and_cash_change_without_inflating_sales()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        CashRegisterSession session = new()
+        {
+            Id = Guid.NewGuid(),
+            RestaurantId = restaurantId,
+            Status = CashRegisterStatus.Open,
+            OpeningFloat = 20m,
+        };
+        TestStore store = new();
+        store.AddSession(session);
+        CashPaymentProjectionService projection = new(store, TimeProvider.System);
+        PaymentProjection payment = new(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            restaurantId,
+            11.90m,
+            "Card",
+            "CARD-1",
+            DateTime.UtcNow,
+            session.Id,
+            20m,
+            8.10m
+        );
+
+        await projection.Project(payment, CancellationToken.None);
+        await projection.Project(payment, CancellationToken.None);
+
+        Assert.Equal(3, session.Movements.Count);
+        Assert.Equal(11.90m, session.Movements.Single(x => x.Type == CashMovementType.Sale).Amount);
+        Assert.Equal(
+            8.10m,
+            session.Movements.Single(x => x.Type == CashMovementType.CardTender).Amount
+        );
+        Assert.Equal(
+            -8.10m,
+            session.Movements.Single(x => x.Type == CashMovementType.CashChange).Amount
+        );
+        CashRegisterService service = new(
+            store,
+            new TestIncompleteOrdersChecker(),
+            TimeProvider.System,
+            TimeZoneInfo.Utc
+        );
+        CashRegisterResponse current = Assert.IsType<CashRegisterResponse>(
+            (await service.Current(restaurantId, CancellationToken.None)).Value
+        );
+        Assert.Equal(11.90m, current.TotalSales);
+        Assert.Equal(11.90m, current.ExpectedTotal - current.OpeningFloat);
+        Assert.Equal(11.90m, current.ExpectedCash);
+    }
+
+    [Fact]
     public async Task Open_session_keeps_its_business_date_after_midnight_until_closed()
     {
         Guid restaurantId = Guid.NewGuid();
@@ -260,6 +315,7 @@ public sealed class CashRegisterServiceTests
     private sealed class TestStore : ICashRegisterStore
     {
         private readonly List<CashRegisterSession> sessions = [];
+        private readonly HashSet<Guid> processedMessages = [];
 
         public IReadOnlyList<CashRegisterSession> Sessions => sessions;
 
@@ -309,7 +365,7 @@ public sealed class CashRegisterServiceTests
 
         public Task<bool> HasProcessedMessageAsync(Guid messageId, CancellationToken ct)
         {
-            return Task.FromResult(false);
+            return Task.FromResult(processedMessages.Contains(messageId));
         }
 
         public Task<CashRegisterSession?> FindProjectionSessionAsync(
@@ -318,7 +374,7 @@ public sealed class CashRegisterServiceTests
             CancellationToken ct
         )
         {
-            throw new NotSupportedException();
+            return Task.FromResult(sessions.SingleOrDefault(x => x.Id == sessionId));
         }
 
         public void AddSession(CashRegisterSession session)
@@ -335,12 +391,12 @@ public sealed class CashRegisterServiceTests
 
         public void AddMovement(CashMovement movement)
         {
-            throw new NotSupportedException();
+            sessions.Single(x => x.Id == movement.CashRegisterSessionId).Movements.Add(movement);
         }
 
         public void MarkMessageProcessed(Guid messageId, DateTime processedAtUtc)
         {
-            throw new NotSupportedException();
+            processedMessages.Add(messageId);
         }
 
         public Task SaveChangesAsync(CancellationToken ct = default)

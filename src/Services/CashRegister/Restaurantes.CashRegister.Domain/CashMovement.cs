@@ -3,6 +3,8 @@
 public enum CashMovementType
 {
     Sale,
+    CardTender,
+    CashChange,
 }
 
 public sealed class CashMovement

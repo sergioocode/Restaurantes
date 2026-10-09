@@ -14,6 +14,112 @@ namespace Restaurantes.Reporting.Infrastructure.Tests;
 public sealed class ReportingProjectionHandlerTests
 {
     [Fact]
+    public async Task Partial_payment_does_not_notify_dashboard_until_sale_is_completed()
+    {
+        DbContextOptions<ReportingReadDbContext> options =
+            new DbContextOptionsBuilder<ReportingReadDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .Options;
+        await using ReportingReadDbContext db = new(options);
+        ReportingProjectionHandler handler = new(db, TimeProvider.System);
+        Guid orderId = Guid.NewGuid();
+        Guid restaurantId = Guid.NewGuid();
+        Guid accountId = Guid.NewGuid();
+        DateTime now = new(2026, 10, 9, 12, 0, 0, DateTimeKind.Utc);
+
+        await ProjectAsync(
+            handler,
+            Guid.NewGuid(),
+            new PaymentCaptured(
+                Guid.NewGuid(),
+                orderId,
+                restaurantId,
+                4m,
+                "Cash",
+                "DineIn",
+                "Pos",
+                "",
+                now,
+                AmountPaid: 4m,
+                IsFullyPaid: false,
+                SaleGroupId: accountId
+            )
+        );
+
+        OrderReportingFact order = await db.Orders.SingleAsync(
+            TestContext.Current.CancellationToken
+        );
+        Assert.Equal("PartiallyPaid", order.PaymentStatus);
+        Assert.Null(order.SaleRecognizedAtUtc);
+        Assert.Empty(db.OutboxMessages);
+
+        await ProjectAsync(
+            handler,
+            Guid.NewGuid(),
+            new PaymentCaptured(
+                Guid.NewGuid(),
+                orderId,
+                restaurantId,
+                6m,
+                "Card",
+                "DineIn",
+                "Pos",
+                "",
+                now.AddMinutes(1),
+                AmountPaid: 10m,
+                IsFullyPaid: true,
+                SaleGroupId: accountId
+            )
+        );
+        Assert.Equal("Paid", order.PaymentStatus);
+        Assert.Empty(db.OutboxMessages);
+
+        await ProjectAsync(
+            handler,
+            Guid.NewGuid(),
+            new SaleCompleted(
+                accountId,
+                restaurantId,
+                "Pos",
+                "Mixed",
+                10m,
+                now.AddMinutes(2),
+                [orderId],
+                [],
+                PaymentMethods:
+                [
+                    new SalePaymentBreakdown("Cash", 1, 4m),
+                    new SalePaymentBreakdown("Card", 1, 6m),
+                ]
+            )
+        );
+        Assert.Single(db.OutboxMessages);
+        Assert.Single(db.Sales);
+
+        DashboardQueryService query = new(
+            new ReportingReadStore(db),
+            TimeProvider.System,
+            TimeZoneInfo.Utc
+        );
+        DailyDashboard dashboard = await query.GetDailyAsync(
+            DateOnly.FromDateTime(now),
+            [restaurantId],
+            10,
+            TestContext.Current.CancellationToken
+        );
+        Assert.Equal(1, dashboard.CompletedSales);
+        Assert.Equal(10m, dashboard.TotalSales);
+        Assert.Contains(
+            dashboard.PaymentMethods,
+            x => x.Method == "Cash" && x.Tickets == 1 && x.Sales == 4m
+        );
+        Assert.Contains(
+            dashboard.PaymentMethods,
+            x => x.Method == "Card" && x.Tickets == 1 && x.Sales == 6m
+        );
+    }
+
+    [Fact]
     public async Task Sale_after_midnight_uses_cash_register_business_date_in_daily_totals()
     {
         DbContextOptions<ReportingReadDbContext> options =
@@ -231,7 +337,7 @@ public sealed class ReportingProjectionHandlerTests
         Assert.Equal(JsonSerializer.Serialize(new[] { orderId }), projectedSale.OrderIdsJson);
         Assert.Equal("[]", projectedSale.LinesJson);
         Assert.Equal(4, await db.InboxMessages.CountAsync(TestContext.Current.CancellationToken));
-        Assert.Equal(4, await db.OutboxMessages.CountAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(3, await db.OutboxMessages.CountAsync(TestContext.Current.CancellationToken));
     }
 
     private static Task ProjectAsync<T>(

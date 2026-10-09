@@ -81,15 +81,20 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
                     db.Orders.Add(fact);
                 }
 
-                fact.PaymentTransactionId =
-                    e.PaymentTransactionId is Guid transactionId && transactionId != Guid.Empty
-                        ? transactionId
+                if (e.IsFullyPaid || fact.PaymentStatus != "Paid")
+                {
+                    fact.PaymentTransactionId =
+                        e.SaleGroupId is Guid groupId && groupId != Guid.Empty ? groupId
+                        : e.PaymentTransactionId is Guid transactionId
+                        && transactionId != Guid.Empty
+                            ? transactionId
                         : e.PaymentId;
-                fact.PaymentStatus = "Paid";
-                fact.PaymentMethod = e.Method;
-                fact.PaidAtUtc = e.CapturedAtUtc;
-                fact.UpdatedAtUtc = e.CapturedAtUtc;
-                RecognizeSale(fact);
+                    fact.PaymentStatus = e.IsFullyPaid ? "Paid" : "PartiallyPaid";
+                    fact.PaymentMethod = e.Method;
+                    fact.PaidAtUtc = e.IsFullyPaid ? e.CapturedAtUtc : null;
+                    fact.UpdatedAtUtc = e.CapturedAtUtc;
+                    RecognizeSale(fact);
+                }
             }
             else if (type == typeof(PaymentRefunded).FullName)
             {
@@ -152,6 +157,7 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
                 fact.BusinessDate = e.BusinessDate;
                 fact.OrderIdsJson = JsonSerializer.Serialize(e.OrderIds);
                 fact.LinesJson = JsonSerializer.Serialize(saleLines);
+                fact.PaymentMethodsJson = JsonSerializer.Serialize(e.PaymentMethods ?? []);
             }
             else
             {
@@ -166,20 +172,23 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
                     ProcessedAtUtc = projectionUpdatedAtUtc,
                 }
             );
-            DashboardProjectionUpdated updated = new(
-                affectedOrderId,
-                affectedRestaurantId,
-                projectionUpdatedAtUtc
-            );
-            db.OutboxMessages.Add(
-                new ReportingOutboxMessage
-                {
-                    Id = Guid.NewGuid(),
-                    Type = typeof(DashboardProjectionUpdated).FullName!,
-                    Payload = JsonSerializer.Serialize(updated),
-                    OccurredAtUtc = projectionUpdatedAtUtc,
-                }
-            );
+            if (type != typeof(PaymentCaptured).FullName)
+            {
+                DashboardProjectionUpdated updated = new(
+                    affectedOrderId,
+                    affectedRestaurantId,
+                    projectionUpdatedAtUtc
+                );
+                db.OutboxMessages.Add(
+                    new ReportingOutboxMessage
+                    {
+                        Id = Guid.NewGuid(),
+                        Type = typeof(DashboardProjectionUpdated).FullName!,
+                        Payload = JsonSerializer.Serialize(updated),
+                        OccurredAtUtc = projectionUpdatedAtUtc,
+                    }
+                );
+            }
             await db.SaveChangesAsync(cancellationToken);
         }
     }

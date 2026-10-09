@@ -8,5 +8,9 @@ public sealed record PaymentResponse(
     string Method,
     string Status,
     DateTime? CapturedAtUtc,
-    DateTime? RefundedAtUtc
+    DateTime? RefundedAtUtc,
+    decimal TipAmount = 0,
+    decimal AmountPaid = 0,
+    decimal Outstanding = 0,
+    decimal TipAmountPaid = 0
 );
