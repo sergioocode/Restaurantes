@@ -24,6 +24,7 @@ else
                 <label class="availability"><input type="checkbox" @bind="item.RequiresPrimaryDispatch" disabled="@item.IsPrimary" /> Despacha principal</label>
                 <label class="availability"><input type="checkbox" @bind="item.IsActive" /> Activa</label>
                 <button class="primary" @onclick="() => Host.SaveStation(item)" disabled="@Host.busy">Guardar</button>
+                <button class="danger" @onclick="() => Host.DeleteStation(item)" disabled="@Host.busy">Eliminar</button>
             </article>
         }
     </div>

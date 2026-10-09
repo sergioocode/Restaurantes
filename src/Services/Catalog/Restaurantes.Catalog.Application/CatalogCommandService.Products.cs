@@ -22,34 +22,18 @@ public sealed partial class CatalogCommandService
         }
 
         DateTime now = timeProvider.GetUtcNow().UtcDateTime;
-        Product item = Product.Create(
-            sku,
-            request.Name,
-            request.CategoryId,
-            request.BasePrice,
-            now
-        );
+        Product item = Product.Create(sku, request.Name, request.CategoryId, now);
         ProductChanged message = new(
             item.Id,
             item.Sku,
             item.Name,
             item.CategoryId,
-            item.BasePrice,
             item.IsActive,
             item.Version,
             now
         );
         await store.SaveWithEventAsync(item, message, ct);
-        return new(
-            item.Id,
-            item.Sku,
-            item.Name,
-            item.CategoryId,
-            item.BasePrice,
-            item.IsActive,
-            item.Version,
-            now
-        );
+        return new(item.Id, item.Sku, item.Name, item.CategoryId, item.IsActive, item.Version, now);
     }
 
     public async Task<ProductResponse?> UpdateProductAsync(
@@ -66,27 +50,17 @@ public sealed partial class CatalogCommandService
         }
 
         DateTime now = timeProvider.GetUtcNow().UtcDateTime;
-        item.Update(request.Name, request.CategoryId, request.BasePrice, request.IsActive, now);
+        item.Update(request.Name, request.CategoryId, request.IsActive, now);
         ProductChanged message = new(
             item.Id,
             item.Sku,
             item.Name,
             item.CategoryId,
-            item.BasePrice,
             item.IsActive,
             item.Version,
             now
         );
         await store.SaveWithEventAsync(item, message, ct);
-        return new(
-            item.Id,
-            item.Sku,
-            item.Name,
-            item.CategoryId,
-            item.BasePrice,
-            item.IsActive,
-            item.Version,
-            now
-        );
+        return new(item.Id, item.Sku, item.Name, item.CategoryId, item.IsActive, item.Version, now);
     }
 }

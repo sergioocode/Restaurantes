@@ -10,5 +10,6 @@ public sealed record KitchenStationChanged(
     int Priority,
     bool IsActive,
     int Version,
-    DateTime OccurredAtUtc
+    DateTime OccurredAtUtc,
+    bool IsDeleted = false
 );

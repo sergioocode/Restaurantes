@@ -22,6 +22,9 @@ public sealed partial class BackofficeApi
         );
     }
 
+    public Task<List<MenuItemResponse>> EffectiveMenuAsync(Guid restaurantId) =>
+        GetAsync<List<MenuItemResponse>>($"/api/catalog/restaurants/{restaurantId}/menu");
+
     public Task<List<KitchenStationResponse>> StationsAsync(Guid restaurantId)
     {
         return GetAsync<List<KitchenStationResponse>>(
@@ -71,6 +74,19 @@ public sealed partial class BackofficeApi
         );
         using HttpResponseMessage response = await http.SendAsync(request);
         return await ReadAsync<KitchenStationResponse>(response);
+    }
+
+    public async Task DeleteStationAsync(KitchenStationResponse item)
+    {
+        using HttpRequestMessage request = Authorized(
+            HttpMethod.Delete,
+            $"/api/catalog/restaurants/{item.RestaurantId}/stations/{item.Id}"
+        );
+        using HttpResponseMessage response = await http.SendAsync(request);
+        if (!response.IsSuccessStatusCode)
+        {
+            await ReadAsync<object>(response);
+        }
     }
 
     public async Task<MenuItemResponse> ConfigureAsync(
@@ -125,6 +141,9 @@ public sealed partial class BackofficeApi
                 item.DefaultStationCode,
                 item.DefaultStationName,
                 item.IsActive,
+                item.ShowInPos,
+                item.ShowInCommander,
+                item.ShowInCustomerQr,
             }
         );
         using HttpResponseMessage response = await http.SendAsync(request);
@@ -142,7 +161,6 @@ public sealed partial class BackofficeApi
             {
                 item.Name,
                 item.CategoryId,
-                item.BasePrice,
                 item.IsActive,
             }
         );

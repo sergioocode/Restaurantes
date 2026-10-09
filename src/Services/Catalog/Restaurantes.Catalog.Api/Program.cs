@@ -1,6 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Restaurantes.Catalog.Api.Services;
 using Restaurantes.Catalog.Application;
 using Restaurantes.Catalog.Infrastructure;
+using Restaurantes.Catalog.Infrastructure.Media;
 using Restaurantes.Catalog.Infrastructure.Persistence.Read;
 using Restaurantes.Catalog.Infrastructure.Persistence.Write;
 using Restaurantes.Security;
@@ -12,6 +14,8 @@ builder.AddServiceDefaults();
 builder.Services.AddControllers();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<CatalogCommandService>();
+builder.Services.AddScoped<CatalogMenuSynchronizer>();
+builder.Services.AddCatalogMedia(builder.Configuration, builder.Environment);
 builder.Services.AddCatalogReadInfrastructure(builder.Configuration);
 builder.Services.AddCatalogWriteInfrastructure(builder.Configuration);
 builder.Services.AddRestaurantSecurity(builder.Configuration);

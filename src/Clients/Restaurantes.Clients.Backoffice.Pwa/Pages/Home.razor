@@ -48,7 +48,8 @@ else
     <main class="workspace">
         <aside class="sidebar">
             <h2>Módulos</h2>
-            @if (HasAnyLocalPermission("catalog.manage")) { <button class="@NavClass("menu")" @onclick='() => module = "menu"'>Menú por local</button> }
+            @if (HasAnyLocalPermission("catalog.manage")) { <button class="@NavClass("catalog-design")" @onclick='() => module = "catalog-design"'>Cartas</button> }
+            @if (HasAnyLocalPermission("catalog.manage")) { <button class="@NavClass("menu")" @onclick='() => module = "menu"'>Preparación por local</button> }
             @if (OrderRestaurants.Count > 0) { <button class="@NavClass("orders")" @onclick="OpenOrders">Pedidos</button> }
             @if (HasAnyLocalPermission("kds.use")) { <button class="@NavClass("stations")" @onclick='() => module = "stations"'>Estaciones KDS</button> }
             @if (HasAnyLocalPermission("tables.read")) { <button class="@NavClass("tables")" @onclick='() => module = "tables"'>Mesas y puestos de barra</button> }
@@ -56,6 +57,8 @@ else
             @if (IsAdmin) { <button class="@NavClass("restaurants")" @onclick='() => module = "restaurants"'>Locales</button> }
             @if (IsAdmin) { <button class="@NavClass("categories")" @onclick='() => module = "categories"'>Categorías</button> }
             @if (IsAdmin) { <button class="@NavClass("products")" @onclick='() => module = "products"'>Productos</button> }
+            @if (IsAdmin) { <button class="@NavClass("taxes")" @onclick='() => module = "taxes"'>Impuestos</button> }
+            @if (IsAdmin) { <button class="@NavClass("allergens")" @onclick='() => module = "allergens"'>Alérgenos</button> }
             @if (HasLocalPermission("reports.financial.read")) { <button disabled>Contabilidad <small>Próximo</small></button> }
             @if (HasLocalPermission("reports.marketing.read")) { <button disabled>Marketing y KPI <small>Próximo</small></button> }
             @if (HasLocalPermission("reports.kitchen.read")) { <button disabled>Tiempos de cocina <small>Próximo</small></button> }
@@ -75,6 +78,10 @@ else
             {
                 <MenuModule Host="this" />
             }
+            else if (module == "catalog-design")
+            {
+                <CatalogDesignModule Host="this" />
+            }
             else if (module == "orders")
             {
                 <OrdersModule Host="this" />
@@ -90,6 +97,14 @@ else
             else if (module == "products")
             {
                 <ProductsModule Host="this" />
+            }
+            else if (module == "taxes")
+            {
+                <TaxesModule Host="this" />
+            }
+            else if (module == "allergens")
+            {
+                <AllergensModule Host="this" />
             }
             else if (module == "restaurants")
             {

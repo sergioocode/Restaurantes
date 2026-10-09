@@ -13,4 +13,7 @@ public sealed class UpdateCategoryRequest
     [Required, StringLength(80)]
     public string DefaultStationName { get; init; } = "General";
     public bool IsActive { get; init; } = true;
+    public bool? ShowInPos { get; init; }
+    public bool? ShowInCommander { get; init; }
+    public bool? ShowInCustomerQr { get; init; }
 }

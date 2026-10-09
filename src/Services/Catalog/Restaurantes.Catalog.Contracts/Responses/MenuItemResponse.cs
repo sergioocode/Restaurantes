@@ -13,5 +13,10 @@ public sealed record MenuItemResponse(
     string PreparationStationCode,
     string PreparationStationName,
     int Version,
-    DateTime UpdatedAtUtc
+    DateTime UpdatedAtUtc,
+    string DefaultFormat = "PLATO",
+    string PhotoSmallUrl = "",
+    string PhotoMediumUrl = "",
+    string PhotoLargeUrl = "",
+    IReadOnlyList<ProductExtraGroup>? ExtraGroups = null
 );

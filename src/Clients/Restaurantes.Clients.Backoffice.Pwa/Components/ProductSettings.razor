@@ -1,0 +1,204 @@
+@using Restaurantes.Clients.Backoffice.Pwa.Models
+@inject Restaurantes.Clients.Backoffice.Pwa.Api.BackofficeApi Api
+
+<label>Impuesto
+    <select value="@TaxId" @onchange="SaveTax">
+        <option value="@Guid.Empty">Sin asignar</option>
+        @foreach (CatalogTaxModel tax in snapshot?.Taxes.Where(x => x.IsActive || x.Id == TaxId) ?? [])
+        {
+            <option value="@tax.Id">@tax.Name (@tax.Rate %)</option>
+        }
+    </select>
+</label>
+<div class="product-actions">
+    <button class="secondary" @onclick='() => Open("prices")'>Precios</button>
+    <button class="secondary" @onclick='() => Open("allergens")'>Alérgenos</button>
+    <button class="secondary" @onclick='() => Open("extras")'>Extras</button>
+    <button class="secondary" @onclick='() => Open("photo")'>Foto</button>
+</div>
+@if (panel is not null)
+{
+    <div class="product-dialog-backdrop">
+        <section class="product-dialog" role="dialog" aria-modal="true" aria-label="Configurar @Product.Name">
+            <header><h2>@Product.Name · @PanelTitle</h2><button class="secondary" @onclick="() => panel = null">Cerrar</button></header>
+            @if (panel == "allergens")
+            {
+                <div class="product-dialog-options">
+                    @foreach (CatalogAllergenModel allergen in snapshot?.Allergens.Where(x => x.IsActive || selectedAllergens.Contains(x.Id)) ?? [])
+                    {
+                        <label><input type="checkbox" checked="@selectedAllergens.Contains(allergen.Id)" @onchange="args => Toggle(selectedAllergens, allergen.Id, args)" /> @allergen.Name</label>
+                    }
+                </div>
+            }
+            else if (panel == "extras")
+            {
+                <p>Los extras se asocian aquí para todas las cartas. Cada carta puede cambiar su precio.</p>
+                <div class="product-dialog-options">
+                    @foreach (ProductResponse extra in ExtraCandidates())
+                    {
+                        <label><input type="checkbox" checked="@selectedExtras.Contains(extra.Id)" @onchange="args => Toggle(selectedExtras, extra.Id, args)" /> @extra.Name</label>
+                    }
+                </div>
+            }
+            else if (panel == "prices")
+            {
+                <p>@(IsExtraProduct ? "Precio predeterminado por ración." : "Precios predeterminados por formato.")</p>
+                @foreach (PriceDraft price in prices)
+                {
+                    <div class="product-price-row">
+                        <label>Formato<select @bind="price.Format">@foreach (string format in AvailablePriceFormats) { <option value="@format">@format</option> }</select></label>
+                        <label>Precio<input type="number" min="0" step="0.01" @bind="price.Amount" /></label>
+                        <button class="secondary" @onclick="() => prices.Remove(price)">Quitar</button>
+                    </div>
+                }
+                @if (!IsExtraProduct || !prices.Any(x => x.Format == "RACION"))
+                {
+                    <button class="secondary" @onclick="AddPrice">@(IsExtraProduct ? "Añadir precio" : "Añadir formato")</button>
+                }
+            }
+            else if (panel == "photo")
+            {
+                <p>Selecciona una imagen para listado, TPV y Cliente QR.</p>
+                @if (snapshot?.ProductPhotos.FirstOrDefault(x => x.ProductId == Product.Id) is { } existing)
+                {
+                    <img src="@($"/api/catalog/products/{Product.Id}/photos/card?v={existing.Revision}")" alt="Foto actual de @Product.Name" width="240" />
+                }
+                <InputFile OnChange="args => photo = args.File" accept="image/jpeg,image/png,image/webp" />
+                @if (photo is not null) { <p>@photo.Name</p> }
+            }
+            @if (!string.IsNullOrWhiteSpace(status)) { <p role="status">@status</p> }
+            <footer><button class="primary" @onclick="Save" disabled="@busy">Guardar</button></footer>
+        </section>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public ProductResponse Product { get; set; } = default!;
+    [Parameter, EditorRequired] public Home Host { get; set; } = default!;
+    private static readonly string[] PriceFormats = ["PLATO", "RACION", "TAPA", "MEDIA_RACION", "UNIDAD", "COMBO"];
+    [Parameter, EditorRequired] public CatalogDesignSnapshot Snapshot { get; set; } = default!;
+    [Parameter] public EventCallback OnSaved { get; set; }
+    private CatalogDesignSnapshot? snapshot => Snapshot;
+    private Guid TaxId => snapshot?.ProductTaxes.FirstOrDefault(x => x.ProductId == Product.Id)?.TaxId ?? Guid.Empty;
+    private bool IsExtraProduct => Host.categories.Any(x => x.Id == Product.CategoryId
+        && (x.Code.Equals("EXTRAS", StringComparison.OrdinalIgnoreCase)
+            || x.Code.Equals("EXTRA", StringComparison.OrdinalIgnoreCase)));
+    private IEnumerable<string> AvailablePriceFormats => IsExtraProduct ? new[] { "RACION" } : PriceFormats;
+    private string? panel;
+    private string PanelTitle => panel switch
+    {
+        "prices" => "Precios", "allergens" => "Alérgenos",
+        "extras" => "Extras", "photo" => "Foto", _ => "Producto",
+    };
+    private string? status;
+    private bool busy;
+    private HashSet<Guid> selectedAllergens = [];
+    private HashSet<Guid> selectedExtras = [];
+    private ProductDefinitionDraft definition = new();
+    private List<PriceDraft> prices = [];
+    private Microsoft.AspNetCore.Components.Forms.IBrowserFile? photo;
+
+    private async Task Refresh() => await OnSaved.InvokeAsync();
+
+    private async Task SaveTax(ChangeEventArgs args)
+    {
+        busy = true;
+        try
+        {
+            Guid id = Guid.TryParse(args.Value?.ToString(), out Guid parsed) ? parsed : Guid.Empty;
+            await Api.SaveProductTaxAsync(Product.Id, id);
+            await Refresh();
+            status = "Impuesto guardado.";
+        }
+        catch (Exception error) { status = error.Message; }
+        finally { busy = false; }
+    }
+
+    private void Open(string name)
+    {
+        panel = name;
+        status = null;
+        selectedAllergens = snapshot?.ProductAllergens.Where(x => x.ProductId == Product.Id)
+            .Select(x => x.AllergenId).ToHashSet() ?? [];
+        definition = new ProductDefinitionDraft
+        {
+            IsCombo = snapshot?.Configurations.Any(x => x.ProductId == Product.Id && x.IsCombo) ?? false,
+            AllowsExtras = snapshot?.Configurations.Any(x => x.ProductId == Product.Id && x.AllowsExtras) ?? false,
+            Groups = snapshot?.Groups.Where(x => x.ParentProductId == Product.Id)
+                .OrderBy(x => x.SortOrder).Select(x => new OptionGroupDraft
+                {
+                    Name = x.Name, Kind = x.Kind, MinSelections = x.MinSelections,
+                    MaxSelections = x.MaxSelections,
+                    ProductIds = snapshot.Options.Where(o => o.GroupId == x.Id)
+                        .OrderBy(o => o.SortOrder).Select(o => o.ProductId).ToList(),
+                }).ToList() ?? [],
+        };
+        selectedExtras = definition.Groups.Where(x => x.Kind == "Extra")
+            .SelectMany(x => x.ProductIds).ToHashSet();
+        prices = snapshot?.Prices.Where(x => x.ProductId == Product.Id
+            && x.RestaurantId == Guid.Empty && x.Channel == "LOCAL")
+            .Select(x => new PriceDraft { Channel = x.Channel, Format = x.Format, Amount = x.Amount })
+            .ToList() ?? [];
+        photo = null;
+    }
+
+    private IEnumerable<ProductResponse> ExtraCandidates() => Host.products.Where(x =>
+        x.Id != Product.Id && x.IsActive && Host.categories.Any(c =>
+            c.Id == x.CategoryId && (c.Code.Equals("EXTRAS", StringComparison.OrdinalIgnoreCase)
+                || c.Code.Equals("EXTRA", StringComparison.OrdinalIgnoreCase)
+                || c.Name.Equals("Extras", StringComparison.OrdinalIgnoreCase))))
+        .OrderBy(x => x.Name);
+
+    private void AddPrice()
+    {
+        string format = IsExtraProduct ? "RACION"
+            : definition.IsCombo ? "COMBO" : "PLATO";
+        prices.Add(new PriceDraft { Format = format });
+    }
+
+    private static void Toggle(HashSet<Guid> ids, Guid id, ChangeEventArgs args)
+    {
+        if (args.Value is true) ids.Add(id);
+        else ids.Remove(id);
+    }
+
+    private async Task Save()
+    {
+        busy = true;
+        status = null;
+        try
+        {
+            if (panel == "allergens")
+                await Api.SaveProductAllergensAsync(Product.Id, selectedAllergens);
+            else if (panel == "extras")
+            {
+                definition.Groups.RemoveAll(x => x.Kind == "Extra");
+                if (selectedExtras.Count > 0)
+                    definition.Groups.Add(new OptionGroupDraft
+                    {
+                        Name = "Extras", Kind = "Extra", MaxSelections = selectedExtras.Count,
+                        ProductIds = selectedExtras.ToList(),
+                    });
+                if (definition.IsCombo)
+                    definition.AllowsExtras = selectedExtras.Count > 0;
+                await Api.SaveProductDefinitionAsync(Product.Id, definition);
+            }
+            else if (panel == "prices")
+            {
+                List<PriceDraft> all = snapshot?.Prices.Where(x => x.ProductId == Product.Id
+                    && x.RestaurantId == Guid.Empty && x.Channel != "LOCAL")
+                    .Select(x => new PriceDraft { Channel = x.Channel, Format = x.Format, Amount = x.Amount })
+                    .ToList() ?? [];
+                all.AddRange(prices);
+                await Api.SaveProductPricesAsync(Product.Id, Guid.Empty, all);
+            }
+            else if (panel == "photo" && photo is not null)
+                await Api.UploadProductPhotoAsync(Product.Id, photo);
+            await Refresh();
+            panel = null;
+            status = "Producto actualizado.";
+        }
+        catch (Exception error) { status = error.Message; }
+        finally { busy = false; }
+    }
+}

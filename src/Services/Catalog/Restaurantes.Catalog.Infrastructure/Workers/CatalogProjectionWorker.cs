@@ -101,6 +101,9 @@ public sealed class CatalogProjectionWorker(
                                 DefaultStationCode = e.DefaultStationCode,
                                 DefaultStationName = e.DefaultStationName,
                                 IsActive = e.IsActive,
+                                ShowInPos = e.ShowInPos,
+                                ShowInCommander = e.ShowInCommander,
+                                ShowInCustomerQr = e.ShowInCustomerQr,
                                 Version = e.Version,
                                 UpdatedAtUtc = e.OccurredAtUtc,
                             }
@@ -113,6 +116,9 @@ public sealed class CatalogProjectionWorker(
                         x.DefaultStationCode = e.DefaultStationCode;
                         x.DefaultStationName = e.DefaultStationName;
                         x.IsActive = e.IsActive;
+                        x.ShowInPos = e.ShowInPos;
+                        x.ShowInCommander = e.ShowInCommander;
+                        x.ShowInCustomerQr = e.ShowInCustomerQr;
                         x.Version = e.Version;
                         x.UpdatedAtUtc = e.OccurredAtUtc;
                     }
@@ -143,7 +149,6 @@ public sealed class CatalogProjectionWorker(
                                 Sku = e.Sku,
                                 Name = e.Name,
                                 CategoryId = e.CategoryId,
-                                BasePrice = e.BasePrice,
                                 IsActive = e.IsActive,
                                 Version = e.Version,
                                 UpdatedAtUtc = e.OccurredAtUtc,
@@ -155,7 +160,6 @@ public sealed class CatalogProjectionWorker(
                         x.Sku = e.Sku;
                         x.Name = e.Name;
                         x.CategoryId = e.CategoryId;
-                        x.BasePrice = e.BasePrice;
                         x.IsActive = e.IsActive;
                         x.Version = e.Version;
                         x.UpdatedAtUtc = e.OccurredAtUtc;
@@ -233,7 +237,14 @@ public sealed class CatalogProjectionWorker(
                     )!;
                     e = e with { OccurredAtUtc = EnsureUtc(e.OccurredAtUtc) };
                     KitchenStationReadModel? x = await db.KitchenStations.FindAsync([e.StationId]);
-                    if (x is null)
+                    if (e.IsDeleted)
+                    {
+                        if (x is not null && x.Version < e.Version)
+                        {
+                            db.KitchenStations.Remove(x);
+                        }
+                    }
+                    else if (x is null)
                     {
                         db.KitchenStations.Add(
                             new KitchenStationReadModel
@@ -261,7 +272,7 @@ public sealed class CatalogProjectionWorker(
                         x.Version = e.Version;
                         x.UpdatedAtUtc = e.OccurredAtUtc;
                     }
-                    if (x is null || x.Version <= e.Version)
+                    if (!e.IsDeleted && (x is null || x.Version <= e.Version))
                     {
                         List<MenuItemReadModel> menuItems = await db
                             .MenuItems.Where(item =>

@@ -51,6 +51,15 @@ namespace Restaurantes.Catalog.Infrastructure.Persistence.Read.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
+                    b.Property<bool>("ShowInCommander")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("ShowInCustomerQr")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("ShowInPos")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -89,7 +98,6 @@ namespace Restaurantes.Catalog.Infrastructure.Persistence.Read.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
-
 
                     b.Property<string>("Code")
                         .IsRequired()
@@ -205,10 +213,6 @@ namespace Restaurantes.Catalog.Infrastructure.Persistence.Read.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
-
-                    b.Property<decimal>("BasePrice")
-                        .HasPrecision(12, 2)
-                        .HasColumnType("numeric(12,2)");
 
                     b.Property<Guid>("CategoryId")
                         .HasColumnType("uuid");

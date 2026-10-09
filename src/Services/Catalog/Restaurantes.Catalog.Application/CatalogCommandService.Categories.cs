@@ -24,7 +24,10 @@ public sealed partial class CatalogCommandService
             request.Name,
             request.DefaultStationCode,
             request.DefaultStationName,
-            now
+            now,
+            request.ShowInPos,
+            request.ShowInCommander,
+            request.ShowInCustomerQr
         );
         CategoryChanged message = new(
             item.Id,
@@ -34,7 +37,10 @@ public sealed partial class CatalogCommandService
             item.DefaultStationName,
             item.IsActive,
             item.Version,
-            now
+            now,
+            item.ShowInPos,
+            item.ShowInCommander,
+            item.ShowInCustomerQr
         );
         await store.SaveWithEventAsync(item, message, ct);
         return new(
@@ -45,7 +51,10 @@ public sealed partial class CatalogCommandService
             item.DefaultStationName,
             item.IsActive,
             item.Version,
-            now
+            now,
+            item.ShowInPos,
+            item.ShowInCommander,
+            item.ShowInCustomerQr
         );
     }
 
@@ -67,7 +76,10 @@ public sealed partial class CatalogCommandService
             request.DefaultStationCode,
             request.DefaultStationName,
             request.IsActive,
-            now
+            now,
+            request.ShowInPos ?? item.ShowInPos,
+            request.ShowInCommander ?? item.ShowInCommander,
+            request.ShowInCustomerQr ?? item.ShowInCustomerQr
         );
         CategoryChanged message = new(
             item.Id,
@@ -77,7 +89,10 @@ public sealed partial class CatalogCommandService
             item.DefaultStationName,
             item.IsActive,
             item.Version,
-            now
+            now,
+            item.ShowInPos,
+            item.ShowInCommander,
+            item.ShowInCustomerQr
         );
         await store.SaveWithEventAsync(item, message, ct);
         return new(
@@ -88,7 +103,10 @@ public sealed partial class CatalogCommandService
             item.DefaultStationName,
             item.IsActive,
             item.Version,
-            now
+            now,
+            item.ShowInPos,
+            item.ShowInCommander,
+            item.ShowInCustomerQr
         );
     }
 }
