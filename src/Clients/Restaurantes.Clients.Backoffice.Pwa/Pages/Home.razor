@@ -20,14 +20,16 @@ else if (login is null)
 {
     <main class="login-shell">
         <section class="login-card">
-            <img class="brand-icon" src="icons/icon-192.png" alt="" /><p class="eyebrow">ADMINISTRACIÓN</p><h1>Backoffice</h1>
-            <p>Acceso exclusivo/default perfil Manager.</p>
+            <div class="login-brand">
+                <img class="brand-icon" src="icons/icon-192.png" alt="" />
+                <div><p class="eyebrow">RESTAURANTES · ADMINISTRACIÓN</p><h1>Backoffice</h1></div>
+            </div>
             <div class="login-providers">
-                <button class="primary" type="button" @onclick='() => StartLogin("Microsoft")'
+                <button class="primary full" type="button" @onclick='() => StartLogin("Microsoft")'
                         disabled="@(providerSettings is null || providerSettings.ActiveProvider != "Microsoft" || !MicrosoftConfigured)">
                     Iniciar sesión con Microsoft
                 </button>
-                <button class="primary" type="button" @onclick='() => StartLogin("Google")'
+                <button class="primary full" type="button" @onclick='() => StartLogin("Google")'
                         disabled="@(providerSettings is null || providerSettings.ActiveProvider != "Google" || !GoogleConfigured)">
                     Iniciar sesión con Google
                 </button>
@@ -72,6 +74,15 @@ else
         <section class="content">
             <div class="page-title">
                 <div><p class="eyebrow">@ModuleEyebrow</p><h1>@ModuleTitle</h1></div>
+                @if ((module == "users" && CanManageUsers) || (module == "categories" && HasGlobalPermission("catalog.global.manage")))
+                {
+                    <div class="context-header-actions">
+                        <RestaurantContextSelector Host="this" />
+                        <button class="secondary" @onclick="RefreshModule" disabled="@busy">
+                            @(module == "users" ? "Actualizar usuarios" : "Actualizar categorías")
+                        </button>
+                    </div>
+                }
             </div>
 
             @if (module == "menu")

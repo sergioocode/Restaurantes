@@ -40,16 +40,7 @@ public partial class Home
     internal bool MicrosoftConfigured => providerSettings?.MicrosoftConfigured == true;
     internal bool GoogleConfigured => providerSettings?.GoogleConfigured == true;
 
-    private static readonly string[] Roles =
-    [
-        "Admin",
-        "Gerente",
-        "Contabilidad",
-        "Marketing",
-        "Manager",
-        "Camarero",
-        "Kds",
-    ];
+    private static readonly string[] Roles = ["Manager", "Camarero", "Kds"];
 
     internal bool IsAdmin => login?.AllRestaurantsRoles?.Contains("Admin") == true;
     internal Guid? CurrentUserId => login?.User.Id;
@@ -241,7 +232,14 @@ public partial class Home
             return;
         }
 
-        await LoadLocal();
+        await Run(async () =>
+        {
+            await LoadLocalCore();
+            if (module == "users" && CanManageUsers)
+            {
+                await LoadUsersCore();
+            }
+        });
     }
 
     internal bool HasAnyLocalPermission(string permission)
@@ -498,29 +496,6 @@ public partial class Home
         );
     }
 
-    internal async Task DeleteStation(KitchenStationResponse item)
-    {
-        bool confirmed = await Js.InvokeAsync<bool>(
-            "confirm",
-            $"¿Eliminar la estación KDS {item.Name} ({item.Code})?"
-        );
-        if (!confirmed)
-        {
-            return;
-        }
-
-        await Run(
-            async () =>
-            {
-                await Api.DeleteStationAsync(item);
-                stations = await ConfirmStationDeletion(item.Id);
-                ok = true;
-                message = "Estación KDS eliminada.";
-            },
-            false
-        );
-    }
-
     private async Task RefreshStations()
     {
         await Task.Delay(600);
@@ -615,7 +590,6 @@ public partial class Home
             async () =>
             {
                 RestaurantResponse created = await Api.CreateRestaurantAsync(restaurantDraft);
-                await Api.EnsureDefaultStationsAsync(created.Id);
                 restaurantDraft = new();
                 await Task.Delay(800);
                 restaurants = await Api.RestaurantsAsync();
@@ -624,7 +598,7 @@ public partial class Home
                 module = "restaurants";
                 ok = true;
                 message =
-                    "Local creado con las cuatro estaciones KDS predeterminadas. Asigna usuarios antes de operarlo.";
+                    "Local creado. Configura sus estaciones KDS y asigna usuarios antes de operarlo.";
             },
             false
         );
@@ -767,7 +741,8 @@ public partial class Home
 
     private async Task LoadUsersCore()
     {
-        users = await Api.UsersAsync();
+        List<StaffUserResponse> authorizedUsers = await Api.UsersAsync();
+        users = authorizedUsers.Where(user => user.RestaurantId == restaurantId).ToList();
     }
 
     internal async Task CreateUser()
@@ -775,19 +750,15 @@ public partial class Home
         await Run(
             async () =>
             {
-                if (!CanAssignAllRestaurants && userDraft.RestaurantId is null)
+                if (restaurantId == Guid.Empty)
                 {
                     throw new InvalidOperationException("Selecciona un local.");
                 }
 
-                userDraft.AllRestaurants = userDraft.RestaurantId is null;
+                userDraft.RestaurantId = restaurantId;
+                userDraft.AllRestaurants = false;
                 await Api.CreateUserAsync(userDraft);
-                userDraft = new();
-                if (!CanAssignAllRestaurants)
-                {
-                    userDraft.RestaurantId = ManageableRestaurants.FirstOrDefault()?.Id;
-                    userDraft.AllRestaurants = false;
-                }
+                userDraft = new() { RestaurantId = restaurantId, AllRestaurants = false };
                 await LoadUsersCore();
                 ok = true;
                 message = "Cuenta autorizada.";
@@ -801,12 +772,13 @@ public partial class Home
         await Run(
             async () =>
             {
-                if (!CanAssignAllRestaurants && user.RestaurantId is null)
+                if (restaurantId == Guid.Empty)
                 {
                     throw new InvalidOperationException("Selecciona un local.");
                 }
 
-                user.AllRestaurants = user.RestaurantId is null;
+                user.RestaurantId = restaurantId;
+                user.AllRestaurants = false;
                 await Api.UpdateUserAsync(user);
                 await LoadUsersCore();
                 ok = true;
@@ -985,23 +957,6 @@ public partial class Home
         }
         throw new InvalidOperationException(
             "La categoría se guardó, pero la proyección Read del catálogo no la confirmó. Comprueba Catalog Publisher, Consumer y RabbitMQ."
-        );
-    }
-
-    private async Task<List<KitchenStationResponse>> ConfirmStationDeletion(Guid stationId)
-    {
-        for (int attempt = 0; attempt < 20; attempt++)
-        {
-            List<KitchenStationResponse> projected = await Api.StationsAsync(restaurantId);
-            if (projected.All(x => x.Id != stationId))
-            {
-                return projected;
-            }
-
-            await Task.Delay(300);
-        }
-        throw new InvalidOperationException(
-            "La estación se eliminó, pero la lista de KDS aún no se actualizó. Comprueba Catalog Publisher, Consumer y RabbitMQ."
         );
     }
 

@@ -9,16 +9,7 @@ public sealed class IdentityService(
     TimeProvider time
 )
 {
-    private static readonly string[] Roles =
-    [
-        "Admin",
-        "Gerente",
-        "Contabilidad",
-        "Marketing",
-        "Manager",
-        "Camarero",
-        "Kds",
-    ];
+    private static readonly string[] Roles = ["Manager", "Camarero", "Kds"];
 
     public async Task<IdentityResult> GetProviderSettings(
         string activeProvider,
@@ -134,7 +125,8 @@ public sealed class IdentityService(
         return Ok(
             (await store.ListUsersAsync(ct))
                 .Where(user =>
-                    CanManageScope(
+                    Roles.Contains(user.Role, StringComparer.Ordinal)
+                    && CanManageScope(
                         canManageAllRestaurants,
                         managedRestaurantIds,
                         user.AllRestaurants,
