@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="..\Restaurantes.CashRegister.Domain\Restaurantes.CashRegister.Domain.csproj" />
+    <ProjectReference Include="..\Restaurantes.CashRegister.Contracts\Restaurantes.CashRegister.Contracts.csproj" />
   </ItemGroup>
 </Project>

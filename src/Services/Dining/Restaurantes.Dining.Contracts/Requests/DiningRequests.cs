@@ -1,10 +1,9 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
-namespace Restaurantes.Dining.Application;
+namespace Restaurantes.Dining.Contracts.Requests;
 
 public sealed class CreateTableRequest
 {
-    public bool RequestGuestCount { get; init; }
     public Guid ZoneId { get; init; }
 
     [Required, StringLength(40, MinimumLength = 1)]
@@ -16,7 +15,6 @@ public sealed class CreateTableRequest
 
 public sealed class UpdateTableRequest
 {
-    public bool RequestGuestCount { get; init; }
     public Guid ZoneId { get; init; }
 
     [Required, StringLength(80, MinimumLength = 1)]
@@ -35,15 +33,27 @@ public sealed class CheckoutSessionRequest
 {
     public Guid IdempotencyKey { get; init; }
 
-    [Required, RegularExpression("^(Card|Cash)$")]
+    [Range(0, 1_000_000)]
+    public decimal TipAmount { get; init; }
+
+    [Range(0, 1_000_000)]
+    public decimal? AmountReceived { get; init; }
+
+    public List<CheckoutOrderAllocation> Allocations { get; init; } = [];
+
+    [Required, RegularExpression("^(Card|Cash|Transfer)$")]
     public string Method { get; init; } = "Card";
 
     [StringLength(120)]
     public string ExternalReference { get; init; } = string.Empty;
 }
 
+public sealed record CheckoutOrderAllocation(Guid OrderId, decimal Amount);
+
 public sealed class SaveZoneRequest
 {
+    public bool RequestGuestCount { get; init; }
+
     [Required, StringLength(80, MinimumLength = 1)]
     public string Name { get; init; } = string.Empty;
 

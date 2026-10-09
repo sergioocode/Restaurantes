@@ -1,20 +1,4 @@
-﻿namespace Restaurantes.Identity.Application;
-
-public sealed record CreateAccountRequest(
-    string Email,
-    string DisplayName,
-    string Role,
-    bool AllRestaurants,
-    Guid? RestaurantId
-);
-
-public sealed record UpdateAccountRequest(
-    string DisplayName,
-    string Role,
-    bool AllRestaurants,
-    Guid? RestaurantId,
-    bool IsActive
-);
+namespace Restaurantes.Identity.Contracts.Responses;
 
 public sealed record ProviderSettingsResponse(
     string ActiveProvider,
@@ -34,8 +18,6 @@ public sealed record AccountResponse(
     bool IsLinked
 );
 
-public sealed record IssuedAccessToken(string Value, DateTime ExpiresAtUtc);
-
 public sealed record LoginUserResponse(Guid Id, string? Username, string DisplayName);
 
 public sealed record LoginRestaurantResponse(
@@ -52,23 +34,6 @@ public sealed record LoginResponse(
     DateTime ExpiresAtUtc,
     LoginUserResponse User,
     IReadOnlyCollection<string> AllRestaurantsRoles,
+    IReadOnlyCollection<string> AllRestaurantsPermissions,
     IReadOnlyCollection<LoginRestaurantResponse> Restaurants
-);
-
-public enum IdentityOutcome
-{
-    Ok,
-    Created,
-    NoContent,
-    BadRequest,
-    Unauthorized,
-    Forbidden,
-    NotFound,
-    Conflict,
-}
-
-public sealed record IdentityResult(
-    IdentityOutcome Outcome,
-    object? Value = null,
-    string? Location = null
 );
