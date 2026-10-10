@@ -1,26 +1,16 @@
 -- Reinicia los datos operativos locales de desarrollo en las dos instancias PostgreSQL.
 -- Conserva Identity, locales, catálogo, mesas, zonas y configuración.
 --
--- Antes de empezar:
---   1. Detén todos los servicios y workers de la aplicación.
---   2. Copia este archivo a ambos contenedores:
---      docker cp .\tools\postgres\reset-operational-data.sql restaurantes-postgres:/tmp/reset-operational-data.sql
---      docker cp .\tools\postgres\reset-operational-data.sql restaurantes-postgres-analytics:/tmp/reset-operational-data.sql
---   3. Ejecuta una vez en cada instancia, desde PowerShell:
---      docker exec -it restaurantes-postgres psql -U restaurants -d restaurants_operational -v confirm_reset=BORRAR -v reset_target=operational -f /tmp/reset-operational-data.sql
---      docker exec -it restaurantes-postgres-analytics psql -U restaurants -d restaurants_analytics -v confirm_reset=BORRAR -v reset_target=analytics -f /tmp/reset-operational-data.sql
---   4. Antes de arrancar los workers, abre RabbitMQ Management (http://localhost:15672),
---      ve a Queues and Streams y purga estas colas si existen, junto con sus sufijos
---      .retry.1, .retry.2 y .retry.3 y las DLQ indicadas:
---      dining.table-sessions, orders.kds.read-model, orders.kds.signalr,
---      payments.orders-integration, payments.payable-orders, payments.cash-register,
---      sales.checkout-process, sales.read-model, reporting.dashboard.read-model,
---      reporting.dashboard.signalr.projection-updated,
---      dining.dead-letter.messages, orders.kds.read-model.dead-letter,
---      payments.dead-letter.messages, sales.dead-letter.messages,
---      reporting.dead-letter.messages.
---      No purgues colas de Catalog ni RestaurantOperations porque sus datos se conservan.
---      Este archivo solo limpia PostgreSQL.
+-- Antes de empezar, detén todos los servicios y workers de la aplicación.
+-- Para limpiar las dos bases y purgar RabbitMQ en una sola operación, desde la raíz
+-- del repositorio ejecuta en PowerShell (si la ejecución de scripts está bloqueada,
+-- el primer comando solo la habilita durante esta sesión):
+--   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+--   .\tools\postgres\reset-operational-data.ps1 -ConfirmReset BORRAR
+-- El orquestador ejecuta este archivo para operational y analytics y después purga
+-- las colas de Dining, Orders, Payments, Sales y Reporting, incluidas las retry y DLQ.
+-- No purga colas de Catalog ni RestaurantOperations porque sus datos se conservan.
+-- La parte SQL de este archivo solo limpia PostgreSQL; RabbitMQ requiere Docker CLI.
 --
 -- Ejecuta cada modo contra su instancia indicada. El script verifica tanto el modo
 -- solicitado como current_database() para evitar limpiar la instancia equivocada.
