@@ -433,7 +433,7 @@ WITH restaurants("RestaurantId", "Adjustment") AS (
         "PreparationStationCode", "PreparationStationName", "Version", "UpdatedAtUtc"
     )
     SELECT gen_random_uuid(), r."RestaurantId", p."Id", pp."Amount" + r."Adjustment",
-           NOT (r."RestaurantId" = '33333333-3333-4333-8333-333333333333' AND p."Sku" = 'P003'),
+           true,
            c."DefaultStationCode", c."DefaultStationName", 1, now()
     FROM restaurants r CROSS JOIN products p
     JOIN categories c ON c."Id" = p."CategoryId"
