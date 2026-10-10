@@ -1451,6 +1451,14 @@ input, select {
     border-radius: 16px;
 }
 
+    .table-card.dining-location .table-card-meta {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 5px;
+        min-width: 0;
+    }
+
     .table-card.dining-location strong {
         margin-top: 18px;
         font-size: clamp(16px, 1.4vw, 21px);
@@ -1482,10 +1490,39 @@ input, select {
         font-weight: 800;
     }
 
+    .table-card.dining-location .table-order-statuses {
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        min-width: 0;
+    }
+
+    .table-card.dining-location .table-order-state {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+    }
+
+        .table-card.dining-location .table-order-state > span {
+            padding: 4px 6px;
+            border-radius: 7px;
+            background: #ecefeb;
+            color: #245c41;
+            font-size: 9px;
+            font-weight: 800;
+            line-height: 1.2;
+            white-space: nowrap;
+        }
+
     .table-card.dining-location.occupied .table-guest-count,
     .table-card.dining-location.occupied .table-kitchen-time {
         color: #fff;
     }
+
+        .table-card.dining-location.occupied .table-order-state > span {
+            background: #40594e;
+            color: #fff;
+        }
 
     .table-card.dining-location .table-status {
         top: 7px;

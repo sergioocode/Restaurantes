@@ -106,22 +106,48 @@
                         <div class="table-grid dining-table-grid">
                             @foreach (TableResponse table in FilteredTables)
                             {
+                                TableSessionOrderSnapshot? sessionOrderSnapshot = TableSessionSnapshot(table);
                                 <button class="table-card dining-location @table.Status.ToLowerInvariant()"
                                         @onclick="() => SelectTable(table)" disabled="@(busy || (!CashRegisterOpen && table.Status != "Occupied"))">
                                     <span class="table-status">@StatusLabel(table.Status)</span>
                                     <strong>@table.Label</strong>
                                     <small>@table.Code</small>
-                                    @if (TableKitchenTime(table) is string kitchenTime)
-                                    {
-                                        <small class="table-kitchen-time" title="Tiempo desde el envío a cocina" aria-label="@($"Tiempo desde el envío a cocina: {kitchenTime}")">⏱ @kitchenTime</small>
-                                    }
-                                    @if (table.GuestCount is > 0)
-                                    {
-                                        <small class="table-guest-count" title="@($"{table.GuestCount} comensales")" aria-label="@($"{table.GuestCount} comensales")"><span class="table-guest-icon" aria-hidden="true">👥</span> @table.GuestCount</small>
-                                    }
+                                    <div class="table-card-meta">
+                                        @if (TableKitchenTime(table) is string kitchenTime)
+                                        {
+                                            <small class="table-kitchen-time" title="Tiempo desde el envío a cocina" aria-label="@($"Tiempo desde el envío a cocina: {kitchenTime}")">⏱ @kitchenTime</small>
+                                        }
+                                        @if (table.GuestCount is > 0)
+                                        {
+                                            <small class="table-guest-count" title="@($"{table.GuestCount} comensales")" aria-label="@($"{table.GuestCount} comensales")"><span class="table-guest-icon" aria-hidden="true">👥</span> @table.GuestCount</small>
+                                        }
+                                        @if (sessionOrderSnapshot is { IsAvailable: true } && sessionOrderSnapshot.Orders.Count > 0)
+                                        {
+                                            <span class="table-order-statuses">
+                                                @foreach (DiningSessionOrderResponse order in sessionOrderSnapshot.Orders)
+                                                {
+                                                    <span class="table-order-state" title="@($"Comanda {order.OrderId.ToString()[..8]}")">
+                                                        <span>@order.OrderStatus</span>
+                                                        <span>@order.PaymentStatus</span>
+                                                    </span>
+                                                }
+                                            </span>
+                                        }
+                                    </div>
                                     @if (table.Status == "Occupied")
                                     {
-                                        <small class="order-progress">@TableOrderSummary(table)</small>
+                                        @if (sessionOrderSnapshot is null)
+                                        {
+                                            <small class="order-progress">Actualizando comandas…</small>
+                                        }
+                                        else if (!sessionOrderSnapshot.IsAvailable)
+                                        {
+                                            <small class="order-progress">Estado de comandas no disponible</small>
+                                        }
+                                        else if (sessionOrderSnapshot.Orders.Count == 0)
+                                        {
+                                            <small class="order-progress">@TableOrderSummary(table)</small>
+                                        }
                                     }
                                 </button>
                             }
