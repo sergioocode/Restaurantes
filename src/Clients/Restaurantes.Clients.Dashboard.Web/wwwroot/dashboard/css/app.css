@@ -142,6 +142,35 @@ select {
     border-radius: 6px
 }
 
+button {
+    cursor: pointer;
+    box-shadow: 0 2px 0 #0c1218, 0 3px 8px #0003;
+    transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+}
+
+button:hover:not(:disabled) {
+    filter: brightness(1.12);
+    box-shadow: 0 3px 0 #0c1218, 0 5px 12px #0005;
+}
+
+button:active:not(:disabled),
+button[aria-busy="true"] {
+    transform: translateY(2px);
+    box-shadow: 0 0 0 #0c1218, 0 1px 3px #0004;
+}
+
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+    outline: 2px solid #62d98b;
+    outline-offset: 2px;
+}
+
+button:disabled {
+    cursor: wait;
+    opacity: .8;
+}
+
 .grid {
     display: grid;
     grid-template-columns: repeat(12, 1fr);
@@ -204,19 +233,29 @@ small,
 
 .orders {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 560px), 620px));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 10px;
-    justify-content: start;
-    align-items: start
+    align-items: stretch
 }
 
 .order {
+    box-sizing: border-box;
     width: 100%;
-    max-width: 620px;
     border: 1px solid #344858;
     background: #121a22;
     border-radius: 8px;
     padding: 12px
+}
+
+.orders:has(> .order:only-child) > .order {
+    max-width: 620px
+}
+
+@media(max-width:1400px) {
+
+    .orders {
+        grid-template-columns: repeat(3, minmax(0, 1fr))
+    }
 }
 
 .order-head {
@@ -322,8 +361,19 @@ ul {
 
 @media(max-width:800px) {
 
+    .orders {
+        grid-template-columns: repeat(2, minmax(0, 1fr))
+    }
+
     .metric,
     .wide {
         grid-column: 1/-1
+    }
+}
+
+@media(max-width:520px) {
+
+    .orders {
+        grid-template-columns: 1fr
     }
 }

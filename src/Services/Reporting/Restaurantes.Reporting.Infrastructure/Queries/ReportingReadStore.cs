@@ -43,8 +43,15 @@ public sealed class ReportingReadStore(ReportingReadDbContext db) : IReportingRe
         ).ToHashSet();
         List<OrderReportingFact> orderFacts = await orderQuery
             .Where(x => x.CreatedAtUtc >= startUtc && x.CreatedAtUtc < endUtc)
+            .GroupBy(x => x.RestaurantId)
+            .SelectMany(restaurantOrders =>
+                restaurantOrders
+                    .OrderByDescending(x => x.CreatedAtUtc)
+                    .ThenByDescending(x => x.OrderId)
+                    .Take(orderLimit)
+            )
             .OrderByDescending(x => x.CreatedAtUtc)
-            .Take(orderLimit)
+            .ThenByDescending(x => x.OrderId)
             .ToListAsync(ct);
         return new(
             saleFacts.Select(MapSale).ToList(),
