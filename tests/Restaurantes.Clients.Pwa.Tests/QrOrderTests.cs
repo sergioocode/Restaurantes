@@ -245,6 +245,10 @@ public sealed class QrOrderTests : BunitContext
             "HasSessionOrders",
             BindingFlags.Instance | BindingFlags.NonPublic
         )!;
+        PropertyInfo itemCount = typeof(CommanderHome).GetProperty(
+            "ItemCount",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        )!;
 
         await cut.InvokeAsync(() => (Task)selectTable.Invoke(cut.Instance, [table])!);
         Assert.Contains($"GET /api/dining/tables/{tableId}/active-session", requests);
@@ -258,7 +262,7 @@ public sealed class QrOrderTests : BunitContext
         Assert.Contains("enviado a cocina", (string)GetField(cut.Instance, "message")!);
         Assert.Contains("POST /api/orders", requests);
         Assert.Contains($"POST /api/orders/{orderId}/submit", requests);
-        Assert.Equal(0, ((Dictionary<Guid, int>)GetField(cut.Instance, "quantities")!)[productId]);
+        Assert.Equal(0, (int)itemCount.GetValue(cut.Instance)!);
 
         await cut.InvokeAsync(() => backToTables.Invoke(cut.Instance, null));
         Assert.False((bool)hasSessionOrders.GetValue(cut.Instance)!);

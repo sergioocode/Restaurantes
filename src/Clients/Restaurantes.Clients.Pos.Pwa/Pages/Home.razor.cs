@@ -30,6 +30,7 @@ public partial class Home
     private string customerName = string.Empty;
     private bool takeawayOpen;
     private List<OrderResponse> activeOrders = [];
+    private Dictionary<Guid, TableSessionOrderSnapshot> tableSessionOrderSnapshots = [];
     private List<OrderResponse> pickupOrders = [];
     private OrderResponse? selectedPickup;
     private OrderDetailResponse? pickupDetail;
@@ -283,6 +284,7 @@ public partial class Home
         cashRegister = await Api.CurrentCashRegisterAsync(restaurantId);
         PrepareReconciliation();
         await LoadPickupOrdersCore();
+        await LoadVisibleTableSessionOrdersAsync();
     }
 
     private async Task LoadPickupOrders()
@@ -298,21 +300,118 @@ public partial class Home
         await LoadPickupOrders();
     }
 
-    private void SelectZone(Guid zoneId)
+    private async Task SelectZone(Guid zoneId)
     {
         selectedZoneId = zoneId;
         tableFilter = "All";
         pickupView = false;
+        StateHasChanged();
+        await LoadVisibleTableSessionOrdersAsync();
     }
 
     private void SetTables(List<TableResponse> refreshedTables)
     {
         tables = refreshedTables;
+        tableSessionOrderSnapshots = tableSessionOrderSnapshots
+            .Where(snapshot =>
+                refreshedTables.Any(table =>
+                    table.Id == snapshot.Key
+                    && table.Status == "Occupied"
+                    && table.ActiveSessionId == snapshot.Value.SessionId
+                )
+            )
+            .ToDictionary(snapshot => snapshot.Key, snapshot => snapshot.Value);
         if (selectedZoneId is Guid zoneId && tables.All(x => x.ZoneId != zoneId))
         {
             selectedZoneId = null;
             tableFilter = "All";
         }
+    }
+
+    private async Task LoadVisibleTableSessionOrdersAsync()
+    {
+        if (selectedZoneId is not Guid zoneId)
+        {
+            tableSessionOrderSnapshots = [];
+            return;
+        }
+        if (pickupView || selectedTable is not null || takeawayOpen)
+        {
+            return;
+        }
+
+        Guid requestedRestaurantId = restaurantId;
+        TableResponse[] occupiedTables = tables
+            .Where(table =>
+                table.ZoneId == zoneId
+                && table.Status == "Occupied"
+                && table.ActiveSessionId.HasValue
+            )
+            .ToArray();
+        using SemaphoreSlim concurrencyLimit = new(5);
+        Task<(Guid TableId, TableSessionOrderSnapshot? Snapshot)>[] requests = occupiedTables
+            .Select(async table =>
+            {
+                await concurrencyLimit.WaitAsync();
+                try
+                {
+                    DiningSessionResponse activeSession = await Api.ActiveSessionAsync(table.Id);
+                    if (activeSession.Id != table.ActiveSessionId)
+                    {
+                        return (table.Id, null);
+                    }
+
+                    return (
+                        table.Id,
+                        new TableSessionOrderSnapshot(activeSession.Id, activeSession.Orders)
+                    );
+                }
+                catch
+                {
+                    return (
+                        table.Id,
+                        new TableSessionOrderSnapshot(
+                            table.ActiveSessionId.GetValueOrDefault(),
+                            [],
+                            false
+                        )
+                    );
+                }
+                finally
+                {
+                    concurrencyLimit.Release();
+                }
+            })
+            .ToArray();
+        (Guid TableId, TableSessionOrderSnapshot? Snapshot)[] results = await Task.WhenAll(
+            requests
+        );
+
+        if (restaurantId != requestedRestaurantId || selectedZoneId != zoneId)
+        {
+            return;
+        }
+
+        foreach ((Guid tableId, TableSessionOrderSnapshot? snapshot) in results)
+        {
+            if (snapshot is not null)
+            {
+                tableSessionOrderSnapshots[tableId] = snapshot;
+            }
+        }
+    }
+
+    private TableSessionOrderSnapshot? TableSessionSnapshot(TableResponse table)
+    {
+        return
+            table.ActiveSessionId is Guid sessionId
+            && tableSessionOrderSnapshots.TryGetValue(
+                table.Id,
+                out TableSessionOrderSnapshot? snapshot
+            )
+            && snapshot.SessionId == sessionId
+            ? snapshot
+            : null;
     }
 
     private async Task LoadPickupOrdersCore()
@@ -1521,6 +1620,7 @@ public partial class Home
             {
                 SetTables(await Api.TablesAsync(restaurantId));
                 await LoadPickupOrdersCore();
+                await LoadVisibleTableSessionOrdersAsync();
                 if (session is not null)
                 {
                     TableResponse? current = tables.FirstOrDefault(x => x.Id == session.TableId);
@@ -1610,6 +1710,7 @@ public partial class Home
 
                     SetTables(await Api.TablesAsync(restaurantId));
                     await LoadPickupOrdersCore();
+                    await LoadVisibleTableSessionOrdersAsync();
                     cashRegister = await Api.CurrentCashRegisterAsync(restaurantId);
                     PrepareReconciliation();
                     StateHasChanged();
@@ -1653,4 +1754,10 @@ public partial class Home
         await Realtime.DisconnectAsync();
         await DiningRealtime.DisconnectAsync();
     }
+
+    private sealed record TableSessionOrderSnapshot(
+        Guid SessionId,
+        List<DiningSessionOrderResponse> Orders,
+        bool IsAvailable = true
+    );
 }
