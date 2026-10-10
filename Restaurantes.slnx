@@ -15,6 +15,9 @@
     <Project Path="tests/Restaurantes.Reporting.Infrastructure.Tests/Restaurantes.Reporting.Infrastructure.Tests.csproj" />
     <Project Path="tests/Restaurantes.Sales.Application.Tests/Restaurantes.Sales.Application.Tests.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/order-simulator/Restaurantes.OrderSimulator/Restaurantes.OrderSimulator.csproj" />
+  </Folder>
   <Folder Name="/src/ApiGateways/">
     <Project Path="src/ApiGateways/Restaurantes.Gateway.Private/Restaurantes.Gateway.Private.csproj" />
     <Project Path="src/ApiGateways/Restaurantes.Gateway.Public/Restaurantes.Gateway.Public.csproj" />

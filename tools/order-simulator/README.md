@@ -1,0 +1,49 @@
+# Simulador de pedidos
+
+Herramienta local para generar pedidos en dos restaurantes a través del Gateway privado. Crea pedidos POS en mesas libres, avanza cada línea por las operaciones normales del KDS, entrega la comanda, registra el cobro y libera la mesa. No accede directamente a la base de datos ni publica eventos por su cuenta.
+
+## Preparar la configuración
+
+1. Copia `simulator.sample.json` como `simulator.local.json`.
+2. Sustituye los dos `RestaurantId` por los IDs de BCN y del otro local.
+3. Ajusta los productos máximos, los métodos de pago y las propinas.
+4. Configura `OpeningFloat` si quieres un fondo inicial distinto de cero.
+5. Pega los tokens locales de TPV y KDS en `PosAccessToken` y `KdsAccessToken` para cada restaurante. El token de TPV necesita permisos para gestionar caja y catálogo, crear pedidos, gestionar/entregar pedidos, consultar mesas, cobrar y liberar mesas; el de KDS necesita permiso para usar KDS.
+
+`simulator.sample.json` contiene los campos de token vacíos. La herramienta lee los cuatro tokens desde `simulator.local.json`, que está excluido de Git; no los solicita por consola ni los escribe en logs. Si falta un campo, informa su nombre y se detiene. Si la URL de la API no es local, el programa también se detiene por seguridad; para otra URL hay que cambiar explícitamente `AllowNonLocalApi` en la configuración.
+
+Para obtenerlos en el equipo de desarrollo, inicia sesión en TPV o KDS, abre las herramientas del navegador (F12 → Consola) y ejecuta el comando correspondiente. Pega el valor en el campo correspondiente de `simulator.local.json`.
+
+```javascript
+// TPV
+copy(JSON.parse(sessionStorage.getItem('restaurantes.pos.login')).accessToken)
+
+// KDS
+copy(JSON.parse(sessionStorage.getItem('restaurantes.kds.login')).accessToken)
+```
+
+## Ejecutar
+
+Desde la raíz del repositorio:
+
+```powershell
+dotnet run --project tools/order-simulator/Restaurantes.OrderSimulator -- --config tools/order-simulator/simulator.local.json
+```
+
+El `ApiBaseUrl` de ejemplo apunta al Gateway privado de desarrollo (`http://localhost:5001`). Abre los KDS en ambos locales para observar los cambios. `Ctrl+C` detiene la creación de pedidos nuevos y deja terminar los pedidos que ya están en curso.
+
+Antes de generar pedidos, valida el acceso de TPV y KDS de ambos locales, además de sus menús, mesas y cajas. Si un local no supera la validación, no inicia pedidos en ninguno. Después abre automáticamente la caja de cada local con su `OpeningFloat`; si ya está abierta, la reutiliza. La deja abierta al finalizar.
+
+Durante `RunDurationMinutes` (10 minutos de forma predeterminada), cada local consulta cada segundo las mesas disponibles y lanza pedidos hasta cubrir `OrdersPerBatch` flujos simultáneos (20 por local de forma predeterminada). Al pagar y liberar una mesa, vuelve a entrar en la rotación. Cuando acaba el tiempo o se pulsa `Ctrl+C`, no inicia más pedidos y espera a que terminen los que siguen activos. No hay límite total de pedidos ni espera de tres minutos entre tandas; el total depende del ritmo al que se completen y liberen mesas. Todos los mensajes de consola incluyen fecha, hora local, milisegundos y zona horaria.
+
+## Comportamiento aleatorio
+
+- Elige productos disponibles del menú de cada local, cantidades de 1 a 3 y excluye los productos de la categoría `Extras` como platos independientes. Solo añade extras configurados para el producto elegido, respetando sus grupos y límites.
+- Abre sesiones con una cantidad aleatoria de 2 a 10 comensales cuando la zona la solicita; zonas como barra, que no lo piden, no reciben ese dato.
+- No simula duración de cocción: inicia y marca cada línea como lista inmediatamente. Los pases que requieren despacho principal se despachan en orden de prioridad y el simulador comprueba que cada estación quede `Dispatched` y el pedido `Ready` antes de entregarlo y cobrarlo.
+- Con `SplitProbability` puede dividir la cuenta entre comensales y pagarla usando `Card`, `Cash` y `Transfer`; los pedidos divididos combinan los tres medios. `Methods.Weight` controla la frecuencia en el resto de pagos.
+- Elige una propina positiva de `TipPercentages` en todos los pedidos, la reparte entre los pagos y puede registrar cambio cuando el medio es efectivo. Transferencia siempre se paga exacta, según las reglas de TPV.
+- `OrdersPerBatch` controla cuántos pedidos mantiene simultáneamente por local; con el valor predeterminado de 20 puede haber hasta 40 entre ambos. `RunDurationMinutes` determina durante cuánto tiempo acepta pedidos nuevos. Un pedido se paga solo después de confirmar el despacho KDS y el estado `Ready`; al completar el pago se cierra la sesión y la mesa vuelve a estar disponible para la siguiente ronda.
+- `RandomSeed` ayuda a repetir selecciones y repartos durante la depuración; la concurrencia puede cambiar el orden exacto de las operaciones.
+
+Antes de cobrar, el simulador espera a que Dining refleje el pedido como entregado. Después del último pago, espera a que la cuenta quede saldada y `CanRelease` confirme que la mesa ya se puede liberar; entonces cierra la sesión. Consulta estas proyecciones cada dos segundos y sigue esperando hasta que el estado llegue, también durante el drenaje final. Los pagos se registran como operaciones locales de caja; no se envían cargos a un proveedor bancario. `Online` no se ofrece porque la pantalla de cobro del TPV para estas cuentas admite tarjeta, efectivo y transferencia.

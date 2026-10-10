@@ -1,0 +1,47 @@
+{
+  "ApiBaseUrl": "http://localhost:5001",
+  "AllowNonLocalApi": false,
+  "RandomSeed": null,
+  "OrdersPerBatch": 20,
+  "RunDurationMinutes": 10,
+  "Restaurants": [
+    {
+      "Name": "Barcelona",
+      "RestaurantId": "00000000-0000-0000-0000-000000000001",
+      "OpeningFloat": 0,
+      "PosAccessToken": "",
+      "KdsAccessToken": "",
+      "GuestCount": { "Minimum": 2, "Maximum": 10 },
+      "MaxProductsPerOrder": 4,
+      "Payment": {
+        "SplitProbability": 0.35,
+        "CashOverpayProbability": 0.4,
+        "TipPercentages": [5, 8, 10, 15],
+        "Methods": [
+          { "Name": "Card", "Weight": 50 },
+          { "Name": "Cash", "Weight": 35 },
+          { "Name": "Transfer", "Weight": 15 }
+        ]
+      }
+    },
+    {
+      "Name": "Madrid",
+      "RestaurantId": "00000000-0000-0000-0000-000000000002",
+      "OpeningFloat": 0,
+      "PosAccessToken": "",
+      "KdsAccessToken": "",
+      "GuestCount": { "Minimum": 2, "Maximum": 10 },
+      "MaxProductsPerOrder": 5,
+      "Payment": {
+        "SplitProbability": 0.5,
+        "CashOverpayProbability": 0.5,
+        "TipPercentages": [5, 8, 10, 15],
+        "Methods": [
+          { "Name": "Card", "Weight": 40 },
+          { "Name": "Cash", "Weight": 40 },
+          { "Name": "Transfer", "Weight": 20 }
+        ]
+      }
+    }
+  ]
+}
