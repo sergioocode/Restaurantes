@@ -313,6 +313,53 @@ public sealed class ReportingProjectionHandlerTests
     }
 
     [Fact]
+    public async Task Daily_snapshot_applies_operational_order_limit_per_restaurant()
+    {
+        DbContextOptions<ReportingReadDbContext> options =
+            new DbContextOptionsBuilder<ReportingReadDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .Options;
+        await using ReportingReadDbContext db = new(options);
+        Guid madridId = Guid.NewGuid();
+        Guid barcelonaId = Guid.NewGuid();
+        DateTime startUtc = new(2026, 10, 5, 0, 0, 0, DateTimeKind.Utc);
+        DateTime endUtc = startUtc.AddDays(1);
+        OrderReportingFact[] orders = Enumerable
+            .Range(0, 3)
+            .SelectMany(index =>
+                new[] { madridId, barcelonaId }.Select(restaurantId => new OrderReportingFact
+                {
+                    OrderId = Guid.NewGuid(),
+                    RestaurantId = restaurantId,
+                    CreatedAtUtc = startUtc.AddMinutes(index),
+                    UpdatedAtUtc = startUtc.AddMinutes(index),
+                })
+            )
+            .ToArray();
+        db.Orders.AddRange(orders);
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        ReportingReadStore store = new(db);
+        DailyReportingSnapshot snapshot = await store.GetDailySnapshotAsync(
+            new DateOnly(2026, 10, 5),
+            startUtc,
+            endUtc,
+            null,
+            2,
+            TestContext.Current.CancellationToken
+        );
+
+        Assert.Equal(4, snapshot.OperationalOrders.Count);
+        Assert.Equal(
+            new[] { 2, 2 },
+            snapshot
+                .OperationalOrders.GroupBy(order => order.RestaurantId)
+                .Select(group => group.Count())
+                .OrderBy(count => count)
+        );
+    }
+
+    [Fact]
     public async Task Cancelled_projection_does_not_record_an_inbox_message()
     {
         DbContextOptions<ReportingReadDbContext> options =

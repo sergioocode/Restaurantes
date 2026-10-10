@@ -46,20 +46,20 @@ async function load({ includeHealth = true, forceDeadLetters = false } = {}) {
     const requestGeneration = ++dashboardRequestGeneration;
     const requestedDate = $('date').value;
     const requestedRestaurant = $('restaurant').value;
+    const requestedOrderLimit = $('orderLimit').value;
     try {
         const params = new URLSearchParams();
         if (requestedDate) params.set('date', requestedDate);
         if (requestedRestaurant) params.set('restaurantId', requestedRestaurant);
-        params.set('orderLimit', $('orderLimit').value);
-        if (includeHealth) {
-            void loadHealth();
-            void loadDeadLetters(forceDeadLetters);
-        }
-        const d = await authorizedFetch('/api/reporting/dashboard/daily?' + params).then(r => r.json());
+        params.set('orderLimit', requestedOrderLimit);
+        const requests = [authorizedFetch('/api/reporting/dashboard/daily?' + params).then(r => r.json())];
+        if (includeHealth) requests.push(loadHealth(), loadDeadLetters(forceDeadLetters));
+        const [d] = await Promise.all(requests);
         if (
             requestGeneration !== dashboardRequestGeneration
             || requestedDate !== $('date').value
             || requestedRestaurant !== $('restaurant').value
+            || requestedOrderLimit !== $('orderLimit').value
         ) return;
         $('sales').textContent = money.format(d.totalSales);
         $('orders').textContent = d.completedSales;
@@ -128,7 +128,7 @@ function check(r) {
 function authorizedFetch(path, options = {}) {
     const headers = new Headers(options.headers || {});
     headers.set('Authorization', 'Bearer ' + access.accessToken);
-    return fetch(gatewayOrigin + path, { ...options, headers }).then(check)
+    return fetch(gatewayOrigin + path, { ...options, headers, cache: 'no-store' }).then(check)
 }
 
 function fill(node, items, row) {
@@ -203,15 +203,34 @@ function lineStatusMarker(status) {
 }
 
 function schedule() {
-    clearInterval(timer);
+    clearTimeout(timer);
     const ms = +$('interval').value;
-    if (ms) timer = setInterval(load, ms)
+    if (!ms) return;
+    const refreshAfterCurrentLoad = async () => {
+        await load();
+        if (+$('interval').value === ms) timer = setTimeout(refreshAfterCurrentLoad, ms);
+    };
+    timer = setTimeout(refreshAfterCurrentLoad, ms);
 }
-$('refresh').onclick = () => load({ forceDeadLetters: true });
 $('interval').onchange = schedule;
 $('date').onchange = load;
 $('restaurant').onchange = async () => { await load(); realtime() };
-$('orderLimit').onchange = load;
+$('orderLimit').onchange = () => { void load({ includeHealth: false }) };
+
+$('refresh').title = 'Actualizar datos, salud de servicios y colas DLQ ahora';
+$('refresh').onclick = async () => {
+    const button = $('refresh');
+    button.disabled = true;
+    button.textContent = 'Actualizando…';
+    button.setAttribute('aria-busy', 'true');
+    try {
+        await load({ forceDeadLetters: true });
+    } finally {
+        button.disabled = false;
+        button.textContent = 'Refrescar';
+        button.removeAttribute('aria-busy');
+    }
+};
 
 $('logout').onclick = logout;
 
@@ -244,7 +263,7 @@ function logout() {
     socket = null;
     access = null;
     deadLetterRefreshAt = 0;
-    clearInterval(timer);
+    clearTimeout(timer);
     sessionStorage.removeItem(sessionKey);
     showLogin()
 }
