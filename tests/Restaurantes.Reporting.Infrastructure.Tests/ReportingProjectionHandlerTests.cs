@@ -118,6 +118,45 @@ public sealed class ReportingProjectionHandlerTests
         Guid restaurantId = Guid.NewGuid();
         Guid accountId = Guid.NewGuid();
         DateTime now = new(2026, 10, 9, 12, 0, 0, DateTimeKind.Utc);
+        Guid productId = Guid.NewGuid();
+
+        await ProjectAsync(
+            handler,
+            Guid.NewGuid(),
+            new OrderCreated(
+                orderId,
+                restaurantId,
+                Guid.NewGuid(),
+                2,
+                Guid.NewGuid(),
+                "Mesa 1",
+                "",
+                "DineIn",
+                "Pos",
+                "OnAccount",
+                1,
+                now,
+                [
+                    new OrderLineSnapshot(
+                        Guid.NewGuid(),
+                        productId,
+                        "Hamburguesa",
+                        10m,
+                        1,
+                        "",
+                        null,
+                        "Carnes",
+                        "CARNES",
+                        "Carnes",
+                        KitchenStatus: "Dispatched"
+                    ),
+                ],
+                []
+            )
+        );
+        int outboxCountAfterOrder = await db.OutboxMessages.CountAsync(
+            TestContext.Current.CancellationToken
+        );
 
         await ProjectAsync(
             handler,
@@ -143,7 +182,10 @@ public sealed class ReportingProjectionHandlerTests
         );
         Assert.Equal("PartiallyPaid", order.PaymentStatus);
         Assert.Null(order.SaleRecognizedAtUtc);
-        Assert.Empty(db.OutboxMessages);
+        Assert.Equal(
+            outboxCountAfterOrder,
+            await db.OutboxMessages.CountAsync(TestContext.Current.CancellationToken)
+        );
 
         await ProjectAsync(
             handler,
@@ -164,7 +206,10 @@ public sealed class ReportingProjectionHandlerTests
             )
         );
         Assert.Equal("Paid", order.PaymentStatus);
-        Assert.Empty(db.OutboxMessages);
+        Assert.Equal(
+            outboxCountAfterOrder,
+            await db.OutboxMessages.CountAsync(TestContext.Current.CancellationToken)
+        );
 
         await ProjectAsync(
             handler,
@@ -185,7 +230,10 @@ public sealed class ReportingProjectionHandlerTests
                 ]
             )
         );
-        Assert.Single(db.OutboxMessages);
+        Assert.Equal(
+            outboxCountAfterOrder + 1,
+            await db.OutboxMessages.CountAsync(TestContext.Current.CancellationToken)
+        );
         Assert.Single(db.Sales);
 
         DashboardQueryService query = new(
@@ -397,6 +445,7 @@ public sealed class ReportingProjectionHandlerTests
         Guid paymentId = Guid.NewGuid();
         Guid transactionId = Guid.NewGuid();
         Guid saleId = Guid.NewGuid();
+        Guid productId = Guid.NewGuid();
         DateTime now = DateTime.UtcNow;
 
         OrderCreated order = new(
@@ -415,7 +464,7 @@ public sealed class ReportingProjectionHandlerTests
             [
                 new OrderLineSnapshot(
                     Guid.NewGuid(),
-                    Guid.NewGuid(),
+                    productId,
                     "Hamburguesa",
                     10m,
                     1,
@@ -491,7 +540,12 @@ public sealed class ReportingProjectionHandlerTests
         );
         Assert.Equal(saleId, projectedSale.SaleId);
         Assert.Equal(JsonSerializer.Serialize(new[] { orderId }), projectedSale.OrderIdsJson);
-        Assert.Equal("[]", projectedSale.LinesJson);
+        Assert.Equal(
+            JsonSerializer.Serialize(
+                new[] { new SaleLineSnapshot(productId, "Hamburguesa", 10m, 1, "Carnes", "CARNES") }
+            ),
+            projectedSale.LinesJson
+        );
         Assert.Equal(4, await db.InboxMessages.CountAsync(TestContext.Current.CancellationToken));
         Assert.Equal(3, await db.OutboxMessages.CountAsync(TestContext.Current.CancellationToken));
     }
