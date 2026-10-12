@@ -4,7 +4,8 @@ public sealed record ManagementOrderLineResponse(
     string ProductName,
     int Quantity,
     decimal UnitPrice,
-    string Status
+    string Status,
+    string Format = ""
 );
 
 public sealed record ManagementOrderResponse(
@@ -19,5 +20,6 @@ public sealed record ManagementOrderResponse(
     DateTimeOffset CreatedAtLocal,
     string? PaymentMethod,
     DateTimeOffset? PaymentCapturedAtLocal,
-    List<ManagementOrderLineResponse> Lines
+    List<ManagementOrderLineResponse> Lines,
+    int? GuestCount = null
 );

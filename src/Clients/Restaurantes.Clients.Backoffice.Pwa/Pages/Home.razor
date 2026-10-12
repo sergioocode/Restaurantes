@@ -179,41 +179,101 @@ else
         <div class="toast @(ok ? "ok" : "error")">@message</div>
     }
 }
-@if (selectedOrder is not null)
+@if (selectedSale is SaleResponse sale && selectedSaleOrder is ManagementOrderResponse saleOrder)
 {
     <div class="order-details-overlay">
-        <article class="order-details">
+        <article class="order-details sales-receipt">
             <div class="order-details-actions">
-                <button class="secondary" @onclick="PrintOrderDetails">Imprimir</button>
-                <button class="secondary" @onclick="CloseOrderDetails">Cerrar</button>
+                <button class="primary receipt-icon-button" @onclick="PrintSaleTicket" aria-label="Imprimir ticket de venta" title="Imprimir con Chrome">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                        <path d="M6 14h12v7H6zM18 12h.01" />
+                    </svg>
+                </button>
+                <button class="ghost receipt-icon-button" @onclick="CloseSaleTicket" aria-label="Cerrar ticket de venta" title="Cerrar">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <path d="m18 6-12 12M6 6l12 12" />
+                    </svg>
+                </button>
             </div>
-            <header class="order-ticket-header">
-                <h2>Copia del pedido</h2>
-                <strong>@RestaurantName(selectedOrder.RestaurantId)</strong>
-                <span>@(string.IsNullOrEmpty(selectedOrder.TableLabel) ? selectedOrder.CustomerName : selectedOrder.TableLabel)</span>
-                <span>@selectedOrder.CreatedAtLocal.ToString("dd/MM/yyyy HH:mm")</span>
-                <span>Pedido @selectedOrder.Id</span>
-                <span>@selectedOrder.Source · @selectedOrder.Status</span>
-                @if (selectedOrder.PaymentMethod is not null && selectedOrder.PaymentCapturedAtLocal is not null)
+            <header class="account-preview-header">
+                <p class="eyebrow">TICKET DE VENTA</p>
+                <h2>@RestaurantName(sale.RestaurantId)</h2>
+                @if (RestaurantFor(sale.RestaurantId)?.Company is RestaurantCompanyResponse company)
                 {
-                    <span>Forma de pago: @PaymentMethodLabel(selectedOrder.PaymentMethod)</span>
-                    <span>Pagado: @selectedOrder.PaymentCapturedAtLocal.Value.ToString("dd/MM/yyyy HH:mm")</span>
+                    <p>@company.LegalName</p>
+                    <p>@company.FiscalAddress</p>
+                    <p>CIF: @company.TaxId</p>
+                    @if (!string.IsNullOrWhiteSpace(company.Phone))
+                    {
+                        <p>Tlf.: @company.Phone</p>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(company.Email))
+                    {
+                        <p>Email: @company.Email</p>
+                    }
+                }
+                else if (!string.IsNullOrWhiteSpace(RestaurantFor(sale.RestaurantId)?.Address))
+                {
+                    <p>@RestaurantFor(sale.RestaurantId)!.Address</p>
+                }
+                <p>Ticket: @sale.Id.ToString("N").ToUpperInvariant()</p>
+                <p>Fecha: @sale.CompletedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</p>
+                <p>@(string.IsNullOrEmpty(saleOrder.TableLabel) ? saleOrder.CustomerName : saleOrder.TableLabel)</p>
+                @if (saleOrder.GuestCount is int guests && guests > 0)
+                {
+                    <p>Comensales: @guests</p>
                 }
             </header>
-            <hr />
-            @foreach (ManagementOrderLineResponse line in selectedOrder.Lines)
+            <div class="account-preview-lines">
+            @if (sale.Lines.Count > 0)
             {
-                <div class="order-ticket-line">
-                    <span>@line.Quantity × @line.ProductName @if (line.Status == "Cancelled") {
-                        <small>(Cancelado)</small>
+                @foreach (SaleLineSnapshot line in sale.Lines)
+                {
+                    <div class="account-preview-line">
+                        <span>@line.Quantity × @line.ProductName@(!string.IsNullOrWhiteSpace(line.Format) ? $" · {TicketFormatLabel(line.Format)}" : "")</span>
+                        <strong>@((line.Quantity * line.UnitPrice).ToString("0.00")) €</strong>
+                    </div>
+                }
+            }
+            else
+            {
+                @foreach (ManagementOrderResponse relatedOrder in historyOrders.Where(order => sale.OrderIds.Contains(order.Id)))
+                {
+                    @foreach (ManagementOrderLineResponse line in relatedOrder.Lines.Where(line => line.Status != "Cancelled"))
+                    {
+                        <div class="account-preview-line">
+                            <span>@line.Quantity × @line.ProductName@(!string.IsNullOrWhiteSpace(line.Format) ? $" · {TicketFormatLabel(line.Format)}" : "")</span>
+                            <strong>@((line.Quantity * line.UnitPrice).ToString("0.00")) €</strong>
+                        </div>
                     }
-                </span>
-                <strong>@((line.Quantity * line.UnitPrice).ToString("0.00")) €</strong>
+                }
+            }
             </div>
-        }
-        <hr />
-        <div class="order-ticket-total"><strong>Total</strong><strong>@selectedOrder.Total.ToString("0.00") €</strong></div>
-        <p class="order-ticket-copy">Copia del pedido</p>
-    </article>
-</div>
+            <div class="account-preview-total"><span>Total (IVA incluido)</span><strong>@sale.Total.ToString("0.00") €</strong></div>
+            @if (saleOrder.GuestCount is int diners && diners > 0)
+            {
+                <p class="account-preview-per-person">Total por comensal (@diners): @Math.Round(sale.Total / diners, 2, MidpointRounding.AwayFromZero).ToString("0.00") €</p>
+            }
+            <section class="account-preview-tips" aria-label="Detalle del pago">
+                @if (sale.PaymentMethods is { Count: > 0 })
+                {
+                    @foreach (SalePaymentBreakdown payment in sale.PaymentMethods)
+                    {
+                        <div><span>Medio de pago · @PaymentMethodLabel(payment.Method)</span><strong>@payment.Amount.ToString("0.00") €</strong></div>
+                    }
+                }
+                else
+                {
+                    <div><span>Medio de pago</span><strong>@(sale.PaymentMethod == "Mixed" ? "Sin desglose disponible" : PaymentMethodLabel(sale.PaymentMethod))</strong></div>
+                }
+                @if (sale.TipTotal > 0)
+                {
+                    <div><span>Propina</span><strong>@sale.TipTotal.ToString("0.00") €</strong></div>
+                }
+                <div><span>Total cobrado</span><strong>@((sale.Total + sale.TipTotal).ToString("0.00")) €</strong></div>
+            </section>
+            <p class="account-preview-footer">Gracias por su visita.</p>
+        </article>
+    </div>
 }

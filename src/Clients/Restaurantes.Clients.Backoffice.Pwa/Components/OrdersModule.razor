@@ -15,7 +15,17 @@
             </div>
             <span>@order.Source · @order.Status</span>
             <strong>@order.Total.ToString("0.00") €</strong>
-            <button class="secondary" @onclick="() => Host.ShowOrderDetails(order)">Ver ticket</button>
+            @if (Host.SaleForOrder(order.Id) is SaleResponse sale && Host.IsFirstOrderInSale(sale, order.Id))
+            {
+                <div class="order-ticket-actions">
+                    <button class="secondary report-icon-button" @onclick="() => Host.ShowSaleTicket(sale, order)" aria-label="Ver ticket de venta" title="Ver ticket de venta">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                            <path d="M5 2h14v20l-4-2-3 2-3-2-4 2z" />
+                            <path d="M8 7h8M8 11h8M8 15h5" />
+                        </svg>
+                    </button>
+                </div>
+            }
         </article>
     }
     @if (Host.historyOrders.Count == 0 && !Host.busy)

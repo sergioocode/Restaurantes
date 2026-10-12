@@ -14,4 +14,11 @@ public sealed partial class BackofficeApi
             $"/api/orders/management?restaurantId={restaurantId}&date={date:yyyy-MM-dd}&offset={offset}"
         );
     }
+
+    public Task<List<SaleResponse>> SalesAsync(Guid restaurantId, DateOnly date, int offset)
+    {
+        return GetAsync<List<SaleResponse>>(
+            $"/api/sales?restaurantId={restaurantId}&date={date:yyyy-MM-dd}&offset={offset}"
+        );
+    }
 }

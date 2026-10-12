@@ -721,6 +721,100 @@ input, select {
     margin-bottom: 18px;
 }
 
+.bill-title-actions, .account-preview-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.account-preview-icon-button {
+    display: grid;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    place-items: center;
+}
+
+.account-preview {
+    width: min(420px, 100%);
+    max-height: calc(100vh - 36px);
+    overflow: auto;
+    padding: 24px;
+    color: #17201c;
+    background: #fff;
+    box-shadow: 0 20px 70px #0005;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 14px;
+}
+
+.account-preview-header {
+    padding-bottom: 16px;
+    text-align: center;
+}
+
+.account-preview-header h2, .account-preview-header p {
+    margin: 4px 0;
+}
+
+.sales-ticket .account-preview-header h2 {
+    font-size: clamp(14px, 5vw, 20px);
+    white-space: nowrap;
+}
+
+.account-preview-header .eyebrow {
+    color: #bc572a;
+    font-family: inherit;
+    font-weight: 900;
+}
+
+.account-preview-lines {
+    display: grid;
+    gap: 8px;
+    padding: 14px 0;
+    border-top: 1px dashed #414943;
+    border-bottom: 1px dashed #414943;
+}
+
+.account-preview-line, .account-preview-total, .account-preview-tips > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.account-preview-line strong, .account-preview-total strong, .account-preview-tips strong {
+    white-space: nowrap;
+}
+
+.account-preview-total {
+    align-items: baseline;
+    margin-top: 14px;
+    font-size: 16px;
+}
+
+.account-preview-per-person, .account-preview-footer {
+    text-align: center;
+}
+
+.account-preview-tips {
+    margin-top: 18px;
+    padding-top: 12px;
+    border-top: 1px dashed #9aa19b;
+}
+
+.account-preview-tips p {
+    margin: 0 0 8px;
+    text-align: center;
+    font-weight: 700;
+}
+
+.account-preview-tips > div {
+    padding: 3px 0;
+}
+
+.account-preview-footer {
+    margin: 18px 0 0;
+}
+
     .bill-title .eyebrow {
         margin-top: 0;
     }
@@ -887,6 +981,24 @@ input, select {
 
 .bill-actions {
     margin-top: 16px;
+}
+
+.bill-actions-with-ticket {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr) max-content;
+    align-items: center;
+}
+
+.bill-actions-with-ticket > button:first-child {
+    justify-self: start;
+}
+
+.bill-actions-with-ticket > button:nth-child(2) {
+    justify-self: center;
+}
+
+.bill-actions-with-ticket > button:last-child {
+    justify-self: end;
 }
 
 .payment-methods, .tip-options {
@@ -1770,6 +1882,11 @@ input, select {
         visibility: visible !important;
     }
 
+    .account-preview-backdrop, .account-preview-backdrop *,
+    .sales-ticket-backdrop, .sales-ticket-backdrop * {
+        visibility: visible !important;
+    }
+
     .modal-backdrop {
         position: absolute;
         inset: 0;
@@ -1786,6 +1903,35 @@ input, select {
         max-height: none;
         padding: 0;
         box-shadow: none;
+    }
+
+    .account-preview-backdrop, .sales-ticket-backdrop {
+        position: absolute;
+        inset: 0;
+        display: block;
+        padding: 0;
+        overflow: visible;
+        background: white;
+        backdrop-filter: none;
+    }
+
+    .account-preview, .sales-ticket {
+        position: absolute;
+        inset: 0 auto auto 0;
+        width: 72mm;
+        max-height: none;
+        overflow: visible;
+        padding: 0;
+        box-shadow: none;
+        font-size: 10pt;
+    }
+
+    .sales-ticket .account-preview-header h2 {
+        font-size: 13px;
+    }
+
+    .account-preview-actions, .no-print {
+        display: none !important;
     }
 
         .cash-register-card button, .cash-register-card input, .cash-no-print {

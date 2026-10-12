@@ -31,8 +31,10 @@ public partial class Home
     internal List<ProductResponse> products = [];
     internal List<KitchenStationResponse> stations = [];
     internal List<ManagementOrderResponse> historyOrders = [];
+    internal List<SaleResponse> historySales = [];
     internal DateOnly historyDate = DateOnly.FromDateTime(DateTime.Today);
-    internal ManagementOrderResponse? selectedOrder;
+    internal SaleResponse? selectedSale;
+    internal ManagementOrderResponse? selectedSaleOrder;
     internal List<RestaurantResponse> restaurants = [];
     internal List<CompanyResponse> companies = [];
     internal List<TableResponse> tables = [];
@@ -491,6 +493,7 @@ public partial class Home
                 module == "daily-orders-report" ? ReportRestaurants : OrderRestaurants
             ).Where(restaurant => restaurant.Id == restaurantId);
             List<ManagementOrderResponse> result = [];
+            List<SaleResponse> sales = [];
             foreach (RestaurantResponse restaurant in allowed)
             {
                 int offset = 0;
@@ -509,26 +512,58 @@ public partial class Home
 
                     offset += page.Count;
                 }
+                if (module == "daily-orders-report")
+                {
+                    int saleOffset = 0;
+                    while (true)
+                    {
+                        List<SaleResponse> page = await Api.SalesAsync(
+                            restaurant.Id,
+                            historyDate,
+                            saleOffset
+                        );
+                        sales.AddRange(page);
+                        if (page.Count < 100)
+                        {
+                            break;
+                        }
+
+                        saleOffset += page.Count;
+                    }
+                }
             }
             historyOrders = result.OrderByDescending(order => order.CreatedAtUtc).ToList();
+            historySales = sales;
         });
     }
 
-    internal Task ShowOrderDetails(ManagementOrderResponse order)
+    internal SaleResponse? SaleForOrder(Guid orderId) =>
+        historySales.FirstOrDefault(sale => sale.OrderIds.Contains(orderId));
+
+    internal bool IsFirstOrderInSale(SaleResponse sale, Guid orderId) =>
+        historyOrders
+            .Where(order => sale.OrderIds.Contains(order.Id))
+            .OrderBy(order => order.CreatedAtUtc)
+            .Select(order => order.Id)
+            .FirstOrDefault() == orderId;
+
+    internal Task ShowSaleTicket(SaleResponse sale, ManagementOrderResponse order)
     {
         return InvokeAsync(() =>
         {
-            selectedOrder = order;
+            selectedSale = sale;
+            selectedSaleOrder = order;
             StateHasChanged();
         });
     }
 
-    internal void CloseOrderDetails()
+    internal void CloseSaleTicket()
     {
-        selectedOrder = null;
+        selectedSale = null;
+        selectedSaleOrder = null;
     }
 
-    internal Task PrintOrderDetails()
+    internal Task PrintSaleTicket()
     {
         return Js.InvokeVoidAsync("window.print").AsTask();
     }
@@ -539,10 +574,27 @@ public partial class Home
         {
             "Card" => "Tarjeta / datáfono",
             "Cash" => "Efectivo",
+            "Transfer" => "Transferencia",
             "Online" => "Pago online",
+            "Cheque" => "Cheque",
             _ => method,
         };
     }
+
+    internal static string TicketFormatLabel(string format) =>
+        format switch
+        {
+            "PLATO" => "Plato",
+            "RACION" => "Ración",
+            "MEDIA_RACION" => "Media ración",
+            "TAPA" => "Tapa",
+            "UNIDAD" => "Unidad",
+            "TERCIO" => "Tercio",
+            "VASO" => "Vaso",
+            "COPA" => "Copa",
+            "COMBO" => "Combo",
+            _ => format,
+        };
 
     private async Task RefreshStationsCore()
     {
@@ -1265,6 +1317,9 @@ public partial class Home
     {
         return restaurants.FirstOrDefault(x => x.Id == id)?.Name ?? id.ToString();
     }
+
+    internal RestaurantResponse? RestaurantFor(Guid id) =>
+        restaurants.FirstOrDefault(restaurant => restaurant.Id == id);
 
     internal string RestaurantNameWithId(Guid id)
     {
