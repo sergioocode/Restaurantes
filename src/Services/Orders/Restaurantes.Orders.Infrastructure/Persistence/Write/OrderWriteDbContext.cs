@@ -57,6 +57,7 @@ public sealed class OrderWriteDbContext(DbContextOptions<OrderWriteDbContext> op
         line.ToTable("order_lines");
         line.HasKey(item => item.Id);
         line.Property(item => item.ProductName).HasMaxLength(160).IsRequired();
+        line.Property(item => item.Format).HasMaxLength(40).IsRequired();
         line.Property(item => item.UnitPrice).HasPrecision(12, 2);
         line.Property(item => item.Notes).HasMaxLength(500);
         line.Property(item => item.CategoryName)
@@ -90,6 +91,8 @@ public sealed class OrderWriteDbContext(DbContextOptions<OrderWriteDbContext> op
         catalog.HasKey(item => item.Id);
         catalog.Property(item => item.ProductName).HasMaxLength(160).IsRequired();
         catalog.Property(item => item.Price).HasPrecision(12, 2);
+        catalog.Property(item => item.DefaultFormat).HasMaxLength(40).IsRequired();
+        catalog.Property(item => item.FormatsJson).HasColumnType("jsonb").IsRequired();
         catalog.Property(item => item.CategoryName).HasMaxLength(120).IsRequired();
         catalog.Property(item => item.StationCode).HasMaxLength(40).IsRequired();
         catalog.Property(item => item.StationName).HasMaxLength(80).IsRequired();

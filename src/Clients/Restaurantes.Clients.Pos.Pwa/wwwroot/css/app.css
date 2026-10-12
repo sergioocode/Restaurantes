@@ -426,11 +426,24 @@ input, select {
 
 .category-tabs {
     flex: 0 0 auto;
-    margin-bottom: 16px;
+    margin-bottom: 8px;
     overflow-x: auto;
     overflow-y: hidden;
     flex-wrap: nowrap;
     padding-bottom: 4px;
+}
+
+.format-tabs {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 8px;
+    margin-bottom: 16px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+
+.format-tabs .filter {
+    white-space: nowrap;
 }
 
     .category-tabs .filter {

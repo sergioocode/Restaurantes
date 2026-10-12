@@ -14,5 +14,6 @@ public sealed record OrderLineDetailResponse(
     string KitchenStatus = "Pending",
     DateTime? PreparationStartedAtUtc = null,
     DateTime? ReadyAtUtc = null,
-    DateTime? DispatchedAtUtc = null
+    DateTime? DispatchedAtUtc = null,
+    string Format = ""
 );

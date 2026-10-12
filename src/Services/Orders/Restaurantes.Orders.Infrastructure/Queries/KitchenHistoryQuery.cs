@@ -86,7 +86,8 @@ public sealed class KitchenHistoryQuery(OrderWriteDbContext db, TimeZoneInfo tim
                         .Select(line => new KitchenHistoryLineResponse(
                             line.ProductName,
                             line.Quantity,
-                            line.Status.ToString()
+                            line.Status.ToString(),
+                            line.Format
                         ))
                         .ToList()
                 );

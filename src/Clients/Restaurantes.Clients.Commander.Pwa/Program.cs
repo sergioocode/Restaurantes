@@ -15,6 +15,5 @@ builder.Services.AddScoped(_ => new HttpClient
 });
 builder.Services.AddScoped<CommanderApi>();
 builder.Services.AddScoped<OrderRealtimeClient>();
-builder.Services.AddScoped<DiningRealtimeClient>();
 
 await builder.Build().RunAsync();

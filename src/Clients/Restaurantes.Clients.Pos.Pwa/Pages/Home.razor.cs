@@ -43,10 +43,15 @@ public partial class Home
     private DiningSessionResponse? session;
     private List<MenuItemResponse> menu = [];
     private List<PosCartLine> cart = [];
+    private Dictionary<Guid, MenuItemResponse> cartProducts = [];
+    private int menuRefreshVersion;
     private MenuItemResponse? extraDialogProduct;
     private Guid? editingExtraLineId;
     private Dictionary<(Guid GroupId, Guid ProductId), int> extraSelections = [];
     private string? category;
+    private string? selectedFormat;
+    private string extraDialogFormat = "PLATO";
+    private decimal extraDialogPrice;
     private SessionBillResponse? bill;
     private string? billLoadError;
     private bool billOpen;
@@ -104,18 +109,103 @@ public partial class Home
             .ThenBy(x => x.Key.ZoneName)
             .ToList();
     private List<TableResponse> TablesInSelectedZone =>
-        selectedZoneId is Guid zoneId ? tables.Where(x => x.ZoneId == zoneId).ToList() : [];
+        selectedZoneId is Guid zoneId
+            ? tables.Where(x => x.ZoneId == zoneId && x.IsActive).ToList()
+            : [];
     private List<TableResponse> FilteredTables =>
         TablesInSelectedZone
             .Where(x => tableFilter == "All" || x.Status == tableFilter)
             .OrderBy(x => x.Code)
             .ToList();
     private List<string> Categories => menu.Select(x => x.CategoryName).Distinct().Order().ToList();
-    private List<MenuItemResponse> VisibleMenu =>
+
+    private static IReadOnlyList<MenuItemFormatPrice> PricesFor(MenuItemResponse item) =>
+        item.Formats is { Count: > 0 }
+            ? item.Formats
+            : [new MenuItemFormatPrice(item.DefaultFormat, item.Price)];
+
+    private string DefaultFormatForCategory(string categoryName)
+    {
+        MenuItemResponse[] items = menu.Where(x => x.IsAvailable && x.CategoryName == categoryName)
+            .ToArray();
+        string categoryIdentity = $"{items.FirstOrDefault()?.CategoryCode} {categoryName}";
+        bool isBeer = new[] { "cervez", "beer" }.Any(term =>
+            categoryIdentity.Contains(term, StringComparison.OrdinalIgnoreCase)
+        );
+        bool isDrink =
+            isBeer
+            || new[]
+            {
+                "bebid",
+                "drink",
+                "vino",
+                "wine",
+                "cóctel",
+                "coctel",
+                "café",
+                "cafe",
+                "licor",
+                "refresc",
+                "zumo",
+                "agua",
+                "infusi",
+            }.Any(term => categoryIdentity.Contains(term, StringComparison.OrdinalIgnoreCase));
+        string[] preferred =
+            isBeer ? ["COPA", "UNIDAD", "TERCIO", "VASO"]
+            : isDrink ? ["UNIDAD", "COPA", "VASO", "TERCIO"]
+            : ["PLATO"];
+        return preferred.FirstOrDefault(format =>
+                items.Any(item => PricesFor(item).Any(price => price.Format == format))
+            )
+            ?? items.FirstOrDefault()?.DefaultFormat
+            ?? "PLATO";
+    }
+
+    private string FormatFor(MenuItemResponse item) =>
+        selectedFormat ?? DefaultFormatForCategory(item.CategoryName);
+
+    private List<string> AvailableFormats =>
         menu.Where(x => x.IsAvailable && (category is null || x.CategoryName == category))
+            .SelectMany(PricesFor)
+            .Select(x => x.Format)
+            .Where(x => category is null || x != DefaultFormatForCategory(category))
+            .Distinct()
+            .Order()
+            .ToList();
+    private List<MenuItemResponse> VisibleMenu =>
+        menu.Where(x =>
+                x.IsAvailable
+                && (category is null || x.CategoryName == category)
+                && PricesFor(x).Any(price => price.Format == FormatFor(x))
+            )
             .OrderBy(x => x.CategoryName)
             .ThenBy(x => x.ProductName)
             .ToList();
+
+    private decimal DisplayPrice(MenuItemResponse item) =>
+        PricesFor(item).FirstOrDefault(x => x.Format == FormatFor(item))?.Price ?? item.Price;
+
+    private static string FormatLabel(string format) =>
+        format switch
+        {
+            "PLATO" => "Plato",
+            "RACION" => "Ración",
+            "MEDIA_RACION" => "Media ración",
+            "TAPA" => "Tapa",
+            "UNIDAD" => "Unidad",
+            "TERCIO" => "Tercio",
+            "VASO" => "Vaso",
+            "COPA" => "Copa",
+            "COMBO" => "Combo",
+            _ => format,
+        };
+
+    private void SelectCategory(string? value)
+    {
+        category = value;
+        selectedFormat = null;
+    }
+
     private List<PosCartLine> Cart => cart;
     private int ItemCount => cart.Sum(x => x.Quantity);
     private decimal Total => cart.Sum(line => UnitPrice(line) * line.Quantity);
@@ -128,7 +218,7 @@ public partial class Home
     protected override async Task OnInitializedAsync()
     {
         Realtime.OrderUpdated += HandleOrderUpdated;
-        DiningRealtime.TableChanged += HandleTableChanged;
+        CatalogRealtime.MenuChanged += HandleMenuChanged;
         try
         {
             providerSettings = await Api.ProviderAsync();
@@ -216,7 +306,7 @@ public partial class Home
     {
         await Js.InvokeVoidAsync("sessionStorage.removeItem", SessionKey);
         await Realtime.DisconnectAsync();
-        await DiningRealtime.DisconnectAsync();
+        await CatalogRealtime.DisconnectAsync();
         if (reconciliation is not null)
         {
             await reconciliation.CancelAsync();
@@ -472,6 +562,8 @@ public partial class Home
             hasSessionOrders = session.Orders.Count > 0;
             menu = guestCountDialogOpen ? [] : await Api.MenuAsync(restaurantId);
             cart = [];
+            cartProducts.Clear();
+            menuRefreshVersion++;
         });
     }
 
@@ -487,6 +579,7 @@ public partial class Home
             session = await Api.SetGuestCountAsync(session.Id, guestCountDraft);
             guestCount = session.GuestCount;
             menu = await Api.MenuAsync(restaurantId);
+            menuRefreshVersion++;
             selectedTable = guestCountTable;
             guestCountTable = null;
             guestCountDialogOpen = false;
@@ -527,6 +620,8 @@ public partial class Home
             customerName = string.Empty;
             menu = await Api.MenuAsync(restaurantId);
             cart = [];
+            cartProducts.Clear();
+            menuRefreshVersion++;
         });
     }
 
@@ -535,20 +630,45 @@ public partial class Home
         MenuItemResponse? product = menu.FirstOrDefault(x => x.ProductId == productId);
         if (product is null)
             return;
+        string format = FormatFor(product);
+        decimal price = DisplayPrice(product);
         if (product.ExtraGroups is { Count: > 0 })
         {
             extraDialogProduct = product;
+            extraDialogFormat = format;
+            extraDialogPrice = price;
             editingExtraLineId = null;
             extraSelections = [];
             return;
         }
-        AddCartUnit(productId, []);
+        AddCartUnit(productId, format, price, []);
     }
 
-    private void AddCartUnit(Guid productId, List<PosCartExtra> extras)
+    private void AddCartUnit(
+        Guid productId,
+        string format,
+        decimal price,
+        List<PosCartExtra> extras
+    )
     {
+        MenuItemResponse product =
+            extraDialogProduct is { } dialogProduct && dialogProduct.ProductId == productId
+                ? dialogProduct
+                : menu.First(x => x.ProductId == productId);
+        decimal expectedUnitPrice =
+            price
+            + extras.Sum(extra =>
+                product
+                    .ExtraGroups?.FirstOrDefault(group => group.Id == extra.GroupId)
+                    ?.Options.FirstOrDefault(option => option.ProductId == extra.ProductId)
+                    ?.Price * extra.Quantity
+                ?? 0
+            );
         PosCartLine? existing = cart.FirstOrDefault(line =>
             line.ProductId == productId
+            && line.Format == format
+            && line.BasePrice == price
+            && line.ExpectedUnitPrice == expectedUnitPrice
             && string.IsNullOrWhiteSpace(line.Notes)
             && SameExtras(line.Extras, extras)
         );
@@ -558,7 +678,16 @@ public partial class Home
             return;
         }
 
-        cart.Add(new PosCartLine { ProductId = productId, Extras = extras });
+        PosCartLine line = new()
+        {
+            ProductId = productId,
+            Format = format,
+            BasePrice = price,
+            ExpectedUnitPrice = expectedUnitPrice,
+            Extras = extras,
+        };
+        cart.Add(line);
+        cartProducts[line.Id] = product;
     }
 
     private static bool SameExtras(
@@ -570,19 +699,13 @@ public partial class Home
             .SequenceEqual(right.OrderBy(extra => extra.GroupId).ThenBy(extra => extra.ProductId));
 
     private MenuItemResponse ProductFor(PosCartLine line) =>
-        menu.First(x => x.ProductId == line.ProductId);
+        cartProducts.TryGetValue(line.Id, out MenuItemResponse? product)
+            ? product
+            : menu.First(x => x.ProductId == line.ProductId);
 
     private decimal UnitPrice(PosCartLine line)
     {
-        MenuItemResponse product = ProductFor(line);
-        return product.Price
-            + line.Extras.Sum(extra =>
-                product
-                    .ExtraGroups?.FirstOrDefault(group => group.Id == extra.GroupId)
-                    ?.Options.FirstOrDefault(option => option.ProductId == extra.ProductId)
-                    ?.Price * extra.Quantity
-                ?? 0
-            );
+        return line.ExpectedUnitPrice;
     }
 
     private void ChangeCartQuantity(Guid lineId, int change)
@@ -592,12 +715,17 @@ public partial class Home
             return;
         line.Quantity = Math.Clamp(line.Quantity + change, 0, 99);
         if (line.Quantity == 0)
+        {
             cart.Remove(line);
+            cartProducts.Remove(line.Id);
+        }
     }
 
     private void EditExtras(PosCartLine line)
     {
         extraDialogProduct = ProductFor(line);
+        extraDialogFormat = line.Format;
+        extraDialogPrice = line.BasePrice;
         editingExtraLineId = line.Id;
         extraSelections = line.Extras.ToDictionary(x => (x.GroupId, x.ProductId), x => x.Quantity);
     }
@@ -645,12 +773,26 @@ public partial class Home
             {
                 line.Extras.Clear();
                 line.Extras.AddRange(selections);
+                line.ExpectedUnitPrice =
+                    line.BasePrice
+                    + selections.Sum(extra =>
+                        extraDialogProduct
+                            .ExtraGroups?.FirstOrDefault(group => group.Id == extra.GroupId)
+                            ?.Options.FirstOrDefault(option => option.ProductId == extra.ProductId)
+                            ?.Price * extra.Quantity
+                        ?? 0
+                    );
                 MergeMatchingCartLine(line);
             }
         }
         else
         {
-            AddCartUnit(extraDialogProduct.ProductId, selections);
+            AddCartUnit(
+                extraDialogProduct.ProductId,
+                extraDialogFormat,
+                extraDialogPrice,
+                selections
+            );
         }
         CloseExtras();
     }
@@ -660,6 +802,9 @@ public partial class Home
         PosCartLine? matching = cart.FirstOrDefault(candidate =>
             candidate.Id != line.Id
             && candidate.ProductId == line.ProductId
+            && candidate.Format == line.Format
+            && candidate.BasePrice == line.BasePrice
+            && candidate.ExpectedUnitPrice == line.ExpectedUnitPrice
             && candidate.Notes == line.Notes
             && SameExtras(candidate.Extras, line.Extras)
         );
@@ -675,11 +820,14 @@ public partial class Home
 
         matching.Quantity += line.Quantity;
         cart.Remove(line);
+        cartProducts.Remove(line.Id);
     }
 
     private void CloseExtras()
     {
         extraDialogProduct = null;
+        extraDialogFormat = "PLATO";
+        extraDialogPrice = 0;
         editingExtraLineId = null;
         extraSelections = [];
     }
@@ -724,6 +872,7 @@ public partial class Home
                     );
 
                 cart.Clear();
+                cartProducts.Clear();
                 hasSessionOrders = HasLocation;
                 success = true;
                 message = IsTakeaway
@@ -1280,7 +1429,10 @@ public partial class Home
         serviceMode = "DineIn";
         menu = [];
         cart = [];
+        cartProducts.Clear();
+        menuRefreshVersion++;
         category = null;
+        selectedFormat = null;
         hasSessionOrders = false;
         bill = null;
         billOrders = [];
@@ -1535,9 +1687,9 @@ public partial class Home
         if (clearMessage)
         {
             message = null;
+            success = false;
         }
 
-        success = false;
         busy = true;
         try
         {
@@ -1545,6 +1697,7 @@ public partial class Home
         }
         catch (Exception ex)
         {
+            success = false;
             message = ex.Message;
         }
         finally
@@ -1558,7 +1711,7 @@ public partial class Home
         try
         {
             await Realtime.ConnectAsync(restaurantId);
-            await DiningRealtime.ConnectAsync(restaurantId);
+            await CatalogRealtime.ConnectAsync(restaurantId);
             SetTables(await Api.TablesAsync(restaurantId));
             StateHasChanged();
         }
@@ -1573,28 +1726,34 @@ public partial class Home
         return ScheduleRealtimeRefresh(notification.RestaurantId);
     }
 
-    private async Task HandleTableChanged(DiningTableChangedNotification notification)
+    private async Task HandleMenuChanged(Guid changedRestaurantId)
     {
-        if (login is null || notification.RestaurantId != restaurantId)
-        {
+        if (
+            login is null
+            || (changedRestaurantId != Guid.Empty && changedRestaurantId != restaurantId)
+        )
             return;
-        }
-
-        await InvokeAsync(() =>
+        await InvokeAsync(async () =>
         {
-            int index = tables.FindIndex(table => table.Id == notification.TableId);
-            if (index >= 0)
+            if (selectedTable is null && !takeawayOpen)
+                return;
+            int version = ++menuRefreshVersion;
+            Guid currentRestaurantId = restaurantId;
+            try
             {
-                tables[index] = tables[index] with
+                List<MenuItemResponse> updated = await Api.MenuAsync(currentRestaurantId);
+                if (version == menuRefreshVersion && currentRestaurantId == restaurantId)
                 {
-                    Status = notification.Status,
-                    ActiveSessionId = notification.ActiveSessionId,
-                };
+                    menu = updated;
+                    StateHasChanged();
+                }
+            }
+            catch (Exception exception)
+            {
+                message = $"No se pudo actualizar la carta: {exception.Message}";
                 StateHasChanged();
             }
         });
-
-        await ScheduleRealtimeRefresh(notification.RestaurantId);
     }
 
     private Task ScheduleRealtimeRefresh(Guid changedRestaurantId)
@@ -1732,7 +1891,7 @@ public partial class Home
     public async ValueTask DisposeAsync()
     {
         Realtime.OrderUpdated -= HandleOrderUpdated;
-        DiningRealtime.TableChanged -= HandleTableChanged;
+        CatalogRealtime.MenuChanged -= HandleMenuChanged;
         if (realtimeRefresh is not null)
         {
             await realtimeRefresh.CancelAsync();
@@ -1752,7 +1911,7 @@ public partial class Home
 
         kitchenClockRefresh?.Dispose();
         await Realtime.DisconnectAsync();
-        await DiningRealtime.DisconnectAsync();
+        await CatalogRealtime.DisconnectAsync();
     }
 
     private sealed record TableSessionOrderSnapshot(

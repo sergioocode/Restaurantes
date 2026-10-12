@@ -422,7 +422,8 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
                 line.KitchenStatus,
                 line.PreparationStartedAtUtc,
                 line.ReadyAtUtc,
-                line.DispatchedAtUtc
+                line.DispatchedAtUtc,
+                line.Format
             ))
             .ToList();
     }

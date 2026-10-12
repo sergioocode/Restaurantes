@@ -1,5 +1,21 @@
 import { formatKitchenDuration, kitchenClock } from './kitchen-clock.js';
 
+export function productFormatLabel(format) {
+  if (!format) return '';
+  const labels = {
+    PLATO: 'Plato',
+    RACION: 'Ración',
+    MEDIA_RACION: 'Media ración',
+    TAPA: 'Tapa',
+    UNIDAD: 'Unidad',
+    TERCIO: 'Tercio',
+    VASO: 'Vaso',
+    COPA: 'Copa',
+    COMBO: 'Combo'
+  };
+  return ' [' + (labels[format] || format.replaceAll('_', ' ')) + ']';
+}
+
 export function orderDestinationLabel(order) {
   return order.tableLabel?.trim()
     || order.customerName?.trim()
@@ -153,7 +169,8 @@ export class OrderRenderer {
     const productNotes = extrasMarker < 0
       ? notes
       : notes.slice(0, extrasMarker).replace(/[·\s]+$/, '').trim();
-    name.textContent = line.quantity + ' × ' + line.productName + ' [' + line.categoryName + ']'
+    name.textContent = line.quantity + ' × ' + line.productName
+      + productFormatLabel(line.format) + ' · ' + line.categoryName
       + (productNotes ? ' — ' + productNotes : '');
     description.append(name);
     if (extrasMarker >= 0) {

@@ -98,6 +98,8 @@ public sealed class CatalogProjectionWorker(
                             ProductId = e.ProductId,
                             ProductName = e.ProductName,
                             Price = e.Price,
+                            DefaultFormat = e.DefaultFormat,
+                            FormatsJson = JsonSerializer.Serialize(e.Formats ?? []),
                             CategoryId = e.CategoryId,
                             CategoryName = e.CategoryName,
                             StationCode = e.PreparationStationCode,
@@ -113,6 +115,8 @@ public sealed class CatalogProjectionWorker(
                 {
                     x.ProductName = e.ProductName;
                     x.Price = e.Price;
+                    x.DefaultFormat = e.DefaultFormat;
+                    x.FormatsJson = JsonSerializer.Serialize(e.Formats ?? []);
                     x.CategoryId = e.CategoryId;
                     x.CategoryName = e.CategoryName;
                     x.StationCode = e.PreparationStationCode;

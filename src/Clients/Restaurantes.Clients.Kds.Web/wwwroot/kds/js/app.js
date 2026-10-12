@@ -1,5 +1,5 @@
 import { KdsApiClient } from './api-client.js';
-import { orderDestinationLabel, OrderRenderer } from './order-renderer.js';
+import { orderDestinationLabel, OrderRenderer, productFormatLabel } from './order-renderer.js';
 import { KdsRealtimeClient } from './realtime-client.js';
 
 const sessionKey = 'restaurantes.kds.login';
@@ -302,6 +302,7 @@ async function openHistory() {
       for (const line of order.lines) {
         const row = document.createElement('p');
         row.textContent = line.quantity + ' × ' + line.productName
+          + productFormatLabel(line.format)
           + (line.status === 'Cancelled' ? ' · Cancelado' : '');
         card.append(row);
       }

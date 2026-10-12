@@ -26,7 +26,8 @@ public sealed partial class OrderCommandService
                 x.KitchenStatus.ToString(),
                 x.PreparationStartedAtUtc,
                 x.ReadyAtUtc,
-                x.DispatchedAtUtc
+                x.DispatchedAtUtc,
+                x.Format
             ))
             .ToList();
     }
@@ -134,7 +135,8 @@ public sealed partial class OrderCommandService
                     x.KitchenStatus.ToString(),
                     x.PreparationStartedAtUtc,
                     x.ReadyAtUtc,
-                    x.DispatchedAtUtc
+                    x.DispatchedAtUtc,
+                    x.Format
                 ))
                 .ToList(),
             o.Stations.OrderBy(x => x.Code)
