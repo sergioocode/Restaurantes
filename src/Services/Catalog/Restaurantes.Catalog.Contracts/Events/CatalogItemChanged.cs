@@ -16,5 +16,7 @@ public sealed record CatalogItemChanged(
     string PreparationStationName,
     int Version,
     DateTime OccurredAtUtc,
-    IReadOnlyList<ProductExtraGroup>? ExtraGroups = null
+    IReadOnlyList<ProductExtraGroup>? ExtraGroups = null,
+    string DefaultFormat = "PLATO",
+    IReadOnlyList<MenuItemFormatPrice>? Formats = null
 );

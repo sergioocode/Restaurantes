@@ -69,6 +69,56 @@ public sealed class RestaurantKitchenStation
         UpdatedAtUtc = now;
     }
 
+    public void SetName(string name, DateTime now)
+    {
+        Name = Category.Required(name, 80);
+        Touch(now);
+    }
+
+    public void SetPriority(int priority, DateTime now)
+    {
+        if (IsPrimary)
+        {
+            throw new InvalidOperationException("The primary KDS priority cannot be changed.");
+        }
+
+        ConfigureDispatch(false, RequiresPrimaryDispatch, priority);
+        Touch(now);
+    }
+
+    public void SetActive(bool isActive, DateTime now)
+    {
+        IsActive = isActive;
+        Touch(now);
+    }
+
+    public void SetPrimary(bool isPrimary, DateTime now)
+    {
+        ConfigureDispatch(
+            isPrimary,
+            isPrimary ? false : RequiresPrimaryDispatch,
+            isPrimary ? 0 : Math.Max(1, Priority)
+        );
+        Touch(now);
+    }
+
+    public void SetRequiresPrimaryDispatch(bool requiresDispatch, DateTime now)
+    {
+        if (IsPrimary)
+        {
+            throw new InvalidOperationException("The primary KDS cannot require its own dispatch.");
+        }
+
+        RequiresPrimaryDispatch = requiresDispatch;
+        Touch(now);
+    }
+
+    private void Touch(DateTime now)
+    {
+        Version++;
+        UpdatedAtUtc = now;
+    }
+
     private void ConfigureDispatch(bool isPrimary, bool requiresPrimaryDispatch, int priority)
     {
         if (isPrimary)

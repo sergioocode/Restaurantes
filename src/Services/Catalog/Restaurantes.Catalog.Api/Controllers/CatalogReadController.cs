@@ -51,7 +51,9 @@ public sealed class CatalogReadController(ICatalogReadStore store) : ControllerB
         CancellationToken ct
     )
     {
-        return !User.CanAccessRestaurant(restaurantId, RestaurantPermissions.KdsUse)
+        return
+            !User.CanAccessRestaurant(restaurantId, RestaurantPermissions.KdsUse)
+            && !User.CanAccessRestaurant(restaurantId, RestaurantPermissions.CatalogManage)
             ? (ActionResult<IReadOnlyList<KitchenStationResponse>>)Forbid()
             : (ActionResult<IReadOnlyList<KitchenStationResponse>>)
                 Ok(await store.ListStationsAsync(restaurantId, ct));

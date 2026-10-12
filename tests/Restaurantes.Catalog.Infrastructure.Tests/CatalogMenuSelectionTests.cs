@@ -10,7 +10,7 @@ namespace Restaurantes.Catalog.Infrastructure.Tests;
 public sealed class CatalogMenuSelectionTests
 {
     [Fact]
-    public async Task Local_active_menu_overrides_default_and_inactive_local_uses_default()
+    public async Task Global_menu_is_filtered_by_local_product_availability()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         Guid restaurantId = Guid.NewGuid();
@@ -28,16 +28,18 @@ public sealed class CatalogMenuSelectionTests
         DateTime now = DateTime.UtcNow;
         Category category = Category.Create("MAIN", "Principales", "GENERAL", "General", now);
         Product product = Product.Create("PASTA", "Pasta", category.Id, now);
+        Product extra = Product.Create("EXTRA", "Ingrediente", category.Id, now);
         Guid taxId = Guid.NewGuid();
-        CatalogMenu standard = new() { RestaurantId = Guid.Empty, Name = "General" };
-        CatalogMenu local = new()
+        Guid extraGroupId = Guid.NewGuid();
+        CatalogMenu standard = new()
         {
-            RestaurantId = restaurantId,
-            Name = "Cena",
+            RestaurantId = Guid.Empty,
+            Name = "General",
             IsActive = true,
         };
         write.Categories.Add(category);
         write.Products.Add(product);
+        write.Products.Add(extra);
         write.Taxes.Add(
             new CatalogTax
             {
@@ -48,22 +50,38 @@ public sealed class CatalogMenuSelectionTests
             }
         );
         product.AssignTax(taxId);
-        write.CatalogMenus.AddRange(standard, local);
-        write.CatalogMenuEntries.AddRange(
+        extra.AssignTax(taxId);
+        write.ProductOptionGroups.Add(
+            new ProductOptionGroup
+            {
+                Id = extraGroupId,
+                ParentProductId = product.Id,
+                Name = "Extras",
+                Kind = "Extra",
+                MaxSelections = 1,
+            }
+        );
+        write.ProductOptions.Add(
+            new ProductOption { GroupId = extraGroupId, ProductId = extra.Id }
+        );
+        write.RestaurantProductAvailabilities.Add(
+            new RestaurantProductAvailability
+            {
+                RestaurantId = restaurantId,
+                ProductId = extra.Id,
+                IsAvailable = false,
+            }
+        );
+        write.CatalogMenus.Add(standard);
+        write.CatalogMenuEntries.Add(
             new CatalogMenuEntry
             {
                 MenuId = standard.Id,
                 ProductId = product.Id,
                 DefaultFormat = "PLATO",
-            },
-            new CatalogMenuEntry
-            {
-                MenuId = local.Id,
-                ProductId = product.Id,
-                DefaultFormat = "RACION",
             }
         );
-        write.CatalogMenuPrices.AddRange(
+        write.CatalogMenuPrices.Add(
             new CatalogMenuPrice
             {
                 MenuId = standard.Id,
@@ -71,14 +89,26 @@ public sealed class CatalogMenuSelectionTests
                 Channel = "LOCAL",
                 Format = "PLATO",
                 Amount = 10,
-            },
+            }
+        );
+        write.CatalogMenuPrices.Add(
             new CatalogMenuPrice
             {
-                MenuId = local.Id,
+                MenuId = standard.Id,
                 ProductId = product.Id,
                 Channel = "LOCAL",
                 Format = "RACION",
-                Amount = 14,
+                Amount = 7,
+            }
+        );
+        write.CatalogMenuPrices.Add(
+            new CatalogMenuPrice
+            {
+                MenuId = standard.Id,
+                ProductId = extra.Id,
+                Channel = "LOCAL",
+                Format = "RACION",
+                Amount = 2,
             }
         );
         read.Categories.Add(
@@ -102,20 +132,53 @@ public sealed class CatalogMenuSelectionTests
                 IsActive = true,
             }
         );
+        read.Products.Add(
+            new ProductReadModel
+            {
+                Id = extra.Id,
+                Sku = extra.Sku,
+                Name = extra.Name,
+                CategoryId = category.Id,
+                IsActive = true,
+            }
+        );
         await write.SaveChangesAsync(ct);
         await read.SaveChangesAsync(ct);
 
         CatalogReadStore store = new(read, write);
-        var selected = Assert.Single(await store.ListMenuAsync(restaurantId, ct));
-        Assert.Equal(14, selected.Price);
-        Assert.Equal("RACION", selected.DefaultFormat);
+        Assert.Empty(await store.ListMenuAsync(restaurantId, ct));
 
-        local.IsActive = false;
+        write.RestaurantProductAvailabilities.Add(
+            new RestaurantProductAvailability
+            {
+                RestaurantId = restaurantId,
+                ProductId = product.Id,
+                IsAvailable = true,
+            }
+        );
         await write.SaveChangesAsync(ct);
-        var fallback = Assert.Single(await store.ListMenuAsync(restaurantId, ct));
-        Assert.Equal(10, fallback.Price);
-        Assert.Equal("PLATO", fallback.DefaultFormat);
+        var selected = Assert.Single(await store.ListMenuAsync(restaurantId, ct));
+        Assert.Equal(10, selected.Price);
+        Assert.Equal("PLATO", selected.DefaultFormat);
+        Assert.Contains(selected.Formats!, x => x.Format == "PLATO" && x.Price == 10);
+        Assert.Contains(selected.Formats!, x => x.Format == "RACION" && x.Price == 7);
+        Assert.Equal(2, Assert.Single(Assert.Single(selected.ExtraGroups!).Options).Price);
 
+        product.SetActive(false, DateTime.UtcNow);
+        await write.SaveChangesAsync(ct);
+        Assert.Empty(await store.ListMenuAsync(restaurantId, ct));
+
+        product.SetActive(true, DateTime.UtcNow);
+        await write.SaveChangesAsync(ct);
+        Assert.Single(await store.ListMenuAsync(restaurantId, ct));
+
+        write.RestaurantProductAvailabilities.Single(x => x.ProductId == product.Id).IsAvailable =
+            false;
+        await write.SaveChangesAsync(ct);
+        Assert.Empty(await store.ListMenuAsync(restaurantId, ct));
+
+        write.RestaurantProductAvailabilities.Single(x => x.ProductId == product.Id).IsAvailable =
+            true;
         product.AssignTax(null);
         await write.SaveChangesAsync(ct);
         Assert.Empty(await store.ListMenuAsync(restaurantId, ct));

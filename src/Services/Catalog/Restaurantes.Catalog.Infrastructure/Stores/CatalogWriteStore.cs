@@ -30,6 +30,17 @@ public sealed class CatalogWriteStore(CatalogWriteDbContext db) : ICatalogWriteS
         return db.Products.SingleOrDefaultAsync(x => x.Id == id, ct);
     }
 
+    public async Task DisableLocalProductAvailabilityAsync(Guid productId, CancellationToken ct)
+    {
+        RestaurantProductAvailability[] selections = await db
+            .RestaurantProductAvailabilities.Where(x => x.ProductId == productId && x.IsAvailable)
+            .ToArrayAsync(ct);
+        foreach (RestaurantProductAvailability selection in selections)
+        {
+            selection.IsAvailable = false;
+        }
+    }
+
     public Task<RestaurantMenuItem?> FindMenuItemAsync(
         Guid restaurantId,
         Guid productId,

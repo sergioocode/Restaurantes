@@ -2,6 +2,7 @@ namespace Restaurantes.Clients.Backoffice.Pwa.Models;
 
 public sealed class CatalogDesignSnapshot
 {
+    public List<ProductResponse> Products { get; set; } = [];
     public List<CatalogTaxModel> Taxes { get; set; } = [];
     public List<CatalogAllergenModel> Allergens { get; set; } = [];
     public List<ProductTaxModel> ProductTaxes { get; set; } = [];
@@ -11,10 +12,14 @@ public sealed class CatalogDesignSnapshot
     public List<ProductOptionGroupModel> Groups { get; set; } = [];
     public List<ProductOptionModel> Options { get; set; } = [];
     public List<CatalogPriceModel> Prices { get; set; } = [];
-    public List<CatalogMenuModel> Menus { get; set; } = [];
-    public List<CatalogMenuEntryModel> Entries { get; set; } = [];
-    public List<CatalogMenuChannelModel> MenuChannels { get; set; } = [];
-    public List<CatalogMenuPriceModel> MenuPrices { get; set; } = [];
+    public List<RestaurantProductAvailabilityModel> LocalAvailability { get; set; } = [];
+}
+
+public sealed class RestaurantProductAvailabilityModel
+{
+    public Guid RestaurantId { get; set; }
+    public Guid ProductId { get; set; }
+    public bool IsAvailable { get; set; }
 }
 
 public sealed class CatalogTaxModel
@@ -89,41 +94,6 @@ public sealed class CatalogPriceModel
     public decimal Amount { get; set; }
 }
 
-public sealed class CatalogMenuModel
-{
-    public Guid Id { get; set; }
-    public Guid RestaurantId { get; set; }
-    public string Name { get; set; } = "";
-    public bool IsActive { get; set; }
-}
-
-public sealed class CatalogMenuEntryModel
-{
-    public Guid Id { get; set; }
-    public Guid MenuId { get; set; }
-    public Guid ProductId { get; set; }
-    public bool IsAvailable { get; set; }
-    public string DefaultFormat { get; set; } = "PLATO";
-    public int SortOrder { get; set; }
-}
-
-public sealed class CatalogMenuPriceModel
-{
-    public Guid MenuId { get; set; }
-    public Guid ProductId { get; set; }
-    public string Channel { get; set; } = "LOCAL";
-    public string Format { get; set; } = "PLATO";
-    public decimal Amount { get; set; }
-}
-
-public sealed class CatalogMenuChannelModel
-{
-    public Guid MenuEntryId { get; set; }
-    public string Channel { get; set; } = "";
-    public bool IsPublished { get; set; }
-    public string ExternalId { get; set; } = "";
-}
-
 public sealed class ProductDefinitionDraft
 {
     public bool IsCombo { get; set; }
@@ -145,35 +115,4 @@ public sealed class PriceDraft
     public string Channel { get; set; } = "LOCAL";
     public string Format { get; set; } = "UNIDAD";
     public decimal Amount { get; set; }
-}
-
-public sealed class CatalogMenuDraft
-{
-    public Guid RestaurantId { get; set; }
-    public string Name { get; set; } = "Carta";
-    public List<CatalogMenuEntryDraft> Entries { get; set; } = [];
-    public List<CatalogMenuPriceDraft> Prices { get; set; } = [];
-}
-
-public sealed class CatalogMenuPriceDraft
-{
-    public Guid ProductId { get; set; }
-    public string Channel { get; set; } = "LOCAL";
-    public string Format { get; set; } = "PLATO";
-    public decimal Amount { get; set; }
-}
-
-public sealed class CatalogMenuEntryDraft
-{
-    public Guid ProductId { get; set; }
-    public bool IsAvailable { get; set; } = true;
-    public string DefaultFormat { get; set; } = "PLATO";
-    public List<CatalogMenuChannelDraft> Channels { get; set; } = [];
-}
-
-public sealed class CatalogMenuChannelDraft
-{
-    public string Channel { get; set; } = "GLOVO";
-    public bool IsPublished { get; set; }
-    public string ExternalId { get; set; } = "";
 }

@@ -298,11 +298,19 @@ namespace Restaurantes.Catalog.Infrastructure.Persistence.Write.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("RestaurantId", "IsActive")
-                        .IsUnique()
-                        .HasFilter("\"IsActive\" = TRUE");
+                    b.HasIndex("RestaurantId").IsUnique();
 
-                    b.ToTable("catalog_menus", (string)null);
+                    b.ToTable("catalog_menus", (string)null, t => t.HasCheckConstraint("CK_catalog_menus_global_only", "\"RestaurantId\" = '00000000-0000-0000-0000-000000000000'"));
+                });
+
+            modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.RestaurantProductAvailability", b =>
+                {
+                    b.Property<Guid>("RestaurantId").HasColumnType("uuid");
+                    b.Property<Guid>("ProductId").HasColumnType("uuid");
+                    b.Property<bool>("IsAvailable").HasColumnType("boolean");
+                    b.HasKey("RestaurantId", "ProductId");
+                    b.HasIndex("ProductId");
+                    b.ToTable("restaurant_product_availability", (string)null);
                 });
 
             modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.CatalogMenuChannel", b =>
@@ -373,6 +381,12 @@ namespace Restaurantes.Catalog.Infrastructure.Persistence.Write.Migrations
                     b.HasKey("MenuId", "ProductId", "Channel", "Format");
                     b.HasIndex("ProductId");
                     b.ToTable("catalog_menu_prices", (string)null);
+                });
+
+            modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.RestaurantProductAvailability", b =>
+                {
+                    b.HasOne("Restaurantes.Catalog.Domain.Product", null)
+                        .WithMany().HasForeignKey("ProductId").OnDelete(DeleteBehavior.Cascade).IsRequired();
                 });
 
             modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.CatalogPrice", b =>

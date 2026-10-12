@@ -75,6 +75,90 @@ public sealed partial class CatalogCommandService
         return ToResponse(item);
     }
 
+    public Task<KitchenStationResponse?> SetStationNameAsync(
+        Guid restaurantId,
+        Guid stationId,
+        string name,
+        CancellationToken ct
+    ) => ChangeStationAsync(restaurantId, stationId, (item, now) => item.SetName(name, now), ct);
+
+    public Task<KitchenStationResponse?> SetStationPriorityAsync(
+        Guid restaurantId,
+        Guid stationId,
+        int priority,
+        CancellationToken ct
+    ) =>
+        ChangeStationAsync(
+            restaurantId,
+            stationId,
+            (item, now) => item.SetPriority(priority, now),
+            ct
+        );
+
+    public Task<KitchenStationResponse?> SetStationActiveAsync(
+        Guid restaurantId,
+        Guid stationId,
+        bool active,
+        CancellationToken ct
+    ) =>
+        ChangeStationAsync(restaurantId, stationId, (item, now) => item.SetActive(active, now), ct);
+
+    public Task<KitchenStationResponse?> SetStationPrimaryAsync(
+        Guid restaurantId,
+        Guid stationId,
+        bool primary,
+        CancellationToken ct
+    ) =>
+        ChangeStationAsync(
+            restaurantId,
+            stationId,
+            (item, now) => item.SetPrimary(primary, now),
+            ct
+        );
+
+    public Task<KitchenStationResponse?> SetStationRequiresPrimaryDispatchAsync(
+        Guid restaurantId,
+        Guid stationId,
+        bool requiresDispatch,
+        CancellationToken ct
+    ) =>
+        ChangeStationAsync(
+            restaurantId,
+            stationId,
+            (item, now) => item.SetRequiresPrimaryDispatch(requiresDispatch, now),
+            ct
+        );
+
+    private async Task<KitchenStationResponse?> ChangeStationAsync(
+        Guid restaurantId,
+        Guid stationId,
+        Action<RestaurantKitchenStation, DateTime> change,
+        CancellationToken ct
+    )
+    {
+        RestaurantKitchenStation? item = await store.FindStationAsync(restaurantId, stationId, ct);
+        if (item is null)
+        {
+            return null;
+        }
+
+        DateTime now = timeProvider.GetUtcNow().UtcDateTime;
+        change(item, now);
+        if (
+            item.IsActive
+            && item.IsPrimary
+            && await store.HasOtherActivePrimaryStationAsync(restaurantId, stationId, ct)
+        )
+        {
+            throw new InvalidOperationException(
+                "Only one active primary KDS is allowed per restaurant."
+            );
+        }
+
+        await SaveStationAsync(item, now, ct);
+        return ToResponse(item);
+    }
+
     private async Task SaveStationAsync(
         RestaurantKitchenStation item,
         DateTime now,

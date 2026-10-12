@@ -21,6 +21,8 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
     public DbSet<ProductOption> ProductOptions => Set<ProductOption>();
     public DbSet<CatalogPrice> Prices => Set<CatalogPrice>();
     public DbSet<CatalogMenu> CatalogMenus => Set<CatalogMenu>();
+    public DbSet<RestaurantProductAvailability> RestaurantProductAvailabilities =>
+        Set<RestaurantProductAvailability>();
     public DbSet<CatalogMenuPrice> CatalogMenuPrices => Set<CatalogMenuPrice>();
     public DbSet<CatalogMenuEntry> CatalogMenuEntries => Set<CatalogMenuEntry>();
     public DbSet<CatalogMenuChannel> CatalogMenuChannels => Set<CatalogMenuChannel>();
@@ -179,10 +181,23 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
         {
             x.ToTable("catalog_menus");
             x.HasKey(m => m.Id);
-            x.HasIndex(m => new { m.RestaurantId, m.IsActive })
-                .IsUnique()
-                .HasFilter("\"IsActive\" = TRUE");
+            x.HasIndex(m => m.RestaurantId).IsUnique();
+            x.ToTable(t =>
+                t.HasCheckConstraint(
+                    "CK_catalog_menus_global_only",
+                    "\"RestaurantId\" = '00000000-0000-0000-0000-000000000000'"
+                )
+            );
             x.Property(m => m.Name).HasMaxLength(120).IsRequired();
+        });
+        b.Entity<RestaurantProductAvailability>(x =>
+        {
+            x.ToTable("restaurant_product_availability");
+            x.HasKey(a => new { a.RestaurantId, a.ProductId });
+            x.HasOne<Product>()
+                .WithMany()
+                .HasForeignKey(a => a.ProductId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
         b.Entity<CatalogMenuEntry>(x =>
         {

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Restaurantes.Catalog.Api.Realtime;
 using Restaurantes.Catalog.Api.Services;
 using Restaurantes.Catalog.Domain;
 using Restaurantes.Catalog.Infrastructure.Persistence.Write;
@@ -11,7 +12,8 @@ namespace Restaurantes.Catalog.Api.Controllers;
 [ApiController, Authorize, Route("api/catalog/design")]
 public sealed class CatalogDesignController(
     CatalogWriteDbContext db,
-    CatalogMenuSynchronizer synchronizer
+    CatalogMenuSynchronizer synchronizer,
+    CatalogNotifications notifications
 ) : ControllerBase
 {
     private static readonly HashSet<string> Formats =
@@ -21,11 +23,13 @@ public sealed class CatalogDesignController(
         "TAPA",
         "MEDIA_RACION",
         "UNIDAD",
+        "COPA",
+        "TERCIO",
+        "VASO",
         "EXTRA",
         "COMBO",
     ];
     private static readonly HashSet<string> Channels = ["LOCAL", "DELIVERY", "GLOVO", "UBER"];
-    private static readonly HashSet<string> Platforms = ["GLOVO", "UBER"];
 
     private bool CanManageGlobal() =>
         User.HasAnyRestaurantPermission(RestaurantPermissions.CatalogGlobalManage);
@@ -44,19 +48,25 @@ public sealed class CatalogDesignController(
         }
 
         CatalogPrice[] prices = await db.Prices.AsNoTracking().ToArrayAsync(ct);
-        CatalogMenu[] menus = await db.CatalogMenus.AsNoTracking().ToArrayAsync(ct);
-        Guid[] visibleMenuIds = menus
-            .Where(m => m.RestaurantId == Guid.Empty || CanManageScope(m.RestaurantId))
-            .Select(m => m.Id)
-            .ToArray();
-        CatalogMenuEntry[] entries = await db
-            .CatalogMenuEntries.AsNoTracking()
-            .Where(e => visibleMenuIds.Contains(e.MenuId))
+        RestaurantProductAvailability[] localAvailability = await db
+            .RestaurantProductAvailabilities.AsNoTracking()
             .ToArrayAsync(ct);
-        Guid[] entryIds = entries.Select(e => e.Id).ToArray();
         return Ok(
             new
             {
+                products = await db
+                    .Products.AsNoTracking()
+                    .Select(x => new
+                    {
+                        x.Id,
+                        x.Sku,
+                        x.Name,
+                        x.CategoryId,
+                        x.IsActive,
+                        x.Version,
+                        x.UpdatedAtUtc,
+                    })
+                    .ToArrayAsync(ct),
                 taxes = await db.Taxes.AsNoTracking().OrderBy(x => x.Name).ToArrayAsync(ct),
                 allergens = await db.Allergens.AsNoTracking().OrderBy(x => x.Name).ToArrayAsync(ct),
                 productTaxes = await db
@@ -71,18 +81,7 @@ public sealed class CatalogDesignController(
                 prices = prices.Where(p =>
                     p.RestaurantId == Guid.Empty || CanManageScope(p.RestaurantId)
                 ),
-                menus = menus.Where(m =>
-                    m.RestaurantId == Guid.Empty || CanManageScope(m.RestaurantId)
-                ),
-                entries,
-                menuPrices = await db
-                    .CatalogMenuPrices.AsNoTracking()
-                    .Where(x => visibleMenuIds.Contains(x.MenuId))
-                    .ToArrayAsync(ct),
-                menuChannels = await db
-                    .CatalogMenuChannels.AsNoTracking()
-                    .Where(x => entryIds.Contains(x.MenuEntryId))
-                    .ToArrayAsync(ct),
+                localAvailability = localAvailability.Where(x => CanManageScope(x.RestaurantId)),
             }
         );
     }
@@ -169,9 +168,18 @@ public sealed class CatalogDesignController(
             return BadRequest("El impuesto no existe o está inactivo.");
         product.AssignTax(taxId == Guid.Empty ? null : taxId);
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        await db.SaveChangesAsync(ct);
-        await synchronizer.SyncAffectedMenus(Guid.Empty, ct);
-        await transaction.CommitAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            await synchronizer.SyncAffectedMenus(Guid.Empty, ct);
+            await transaction.CommitAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Conflict(
+                "El producto cambió durante el guardado. Recarga e inténtalo de nuevo."
+            );
+        }
         return NoContent();
     }
 
@@ -427,243 +435,51 @@ public sealed class CatalogDesignController(
         await db.SaveChangesAsync(ct);
         await synchronizer.SyncAffectedMenus(Guid.Empty, ct);
         await transaction.CommitAsync(ct);
+        await notifications.MenuChanged(Guid.Empty);
         return NoContent();
     }
 
-    [HttpPut("menus/{menuId:guid}")]
-    public async Task<IActionResult> SaveMenu(Guid menuId, MenuInput input, CancellationToken ct)
+    [HttpPut("restaurants/{restaurantId:guid}/products/{productId:guid}/availability")]
+    public async Task<IActionResult> SetLocalAvailability(
+        Guid restaurantId,
+        Guid productId,
+        [FromBody] bool available,
+        CancellationToken ct
+    )
     {
-        if (!CanManageScope(input.RestaurantId))
+        if (restaurantId == Guid.Empty || !CanManageScope(restaurantId))
             return Forbid();
-        if (
-            !ValidName(input.Name)
-            || input.Entries.Select(x => x.ProductId).Distinct().Count() != input.Entries.Count
-            || input.Entries.Any(x =>
-                !Formats.Contains(x.DefaultFormat)
-                || x.Channels.Any(c => !Platforms.Contains(c.Channel) || c.ExternalId.Length > 160)
-                || x.Channels.Select(c => c.Channel).Distinct().Count() != x.Channels.Count
-            )
-            || input.Prices.Any(x =>
-                !Channels.Contains(x.Channel)
-                || !Formats.Contains(x.Format)
-                || x.Amount < 0
-                || x.Amount > 9999999999m
-            )
-            || input.Prices.Select(x => (x.ProductId, x.Channel, x.Format)).Distinct().Count()
-                != input.Prices.Count
-            || input.Entries.Any(x =>
-                x.IsAvailable
-                && !input.Prices.Any(p =>
-                    p.ProductId == x.ProductId
-                    && p.Channel == "LOCAL"
-                    && p.Format == x.DefaultFormat
-                )
-            )
-        )
-            return BadRequest("Carta o canales inválidos.");
-        Guid[] productIds = input.Entries.Select(x => x.ProductId).ToArray();
-        if (await db.Products.CountAsync(x => productIds.Contains(x.Id), ct) != productIds.Length)
-            return BadRequest("La carta contiene productos inexistentes.");
-        Guid[] pricedProductIds = input.Prices.Select(x => x.ProductId).Distinct().ToArray();
-        if (
-            await db.Products.CountAsync(x => pricedProductIds.Contains(x.Id), ct)
-            != pricedProductIds.Length
-        )
-            return BadRequest("La carta contiene precios de productos inexistentes.");
-        Guid[] extraGroupIds = await db
-            .ProductOptionGroups.AsNoTracking()
-            .Where(x => x.Kind == "Extra" && productIds.Contains(x.ParentProductId))
-            .Select(x => x.Id)
-            .ToArrayAsync(ct);
-        Guid[] allowedExtraIds = await db
-            .ProductOptions.AsNoTracking()
-            .Where(x => extraGroupIds.Contains(x.GroupId))
-            .Select(x => x.ProductId)
-            .Distinct()
-            .ToArrayAsync(ct);
-        if (pricedProductIds.Except(productIds).Except(allowedExtraIds).Any())
-            return BadRequest(
-                "La carta no puede asociar extras; solo cambiar el precio de los predeterminados."
-            );
+        CatalogMenu? menu = await db
+            .CatalogMenus.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.RestaurantId == Guid.Empty && x.IsActive, ct);
+        Product? product = await db
+            .Products.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == productId, ct);
+        if (menu is null || product is null)
+            return BadRequest("El producto no existe en el catálogo global.");
+        if (available && !product.IsActive)
+            return BadRequest("El producto está desactivado en el catálogo global.");
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        CatalogMenu? menu =
-            menuId == Guid.Empty
-                ? null
-                : await db.CatalogMenus.SingleOrDefaultAsync(x => x.Id == menuId, ct);
-        if (menuId != Guid.Empty && menu is null)
-            return NotFound();
-        if (menu is not null && menu.RestaurantId != input.RestaurantId)
-            return BadRequest("Ámbito inválido.");
-        if (menu is null)
-        {
-            if (
-                input.RestaurantId == Guid.Empty
-                && await db.CatalogMenus.AnyAsync(x => x.RestaurantId == Guid.Empty, ct)
-            )
-                return BadRequest("Ya existe una carta predeterminada.");
-            menu = new CatalogMenu { RestaurantId = input.RestaurantId };
-            db.CatalogMenus.Add(menu);
-        }
-        menu.Name = input.Name.Trim();
-        await db.CatalogMenuPrices.Where(x => x.MenuId == menu.Id).ExecuteDeleteAsync(ct);
-        Guid[] oldEntryIds = await db
-            .CatalogMenuEntries.Where(x => x.MenuId == menu.Id)
-            .Select(x => x.Id)
-            .ToArrayAsync(ct);
-        await db
-            .CatalogMenuChannels.Where(x => oldEntryIds.Contains(x.MenuEntryId))
-            .ExecuteDeleteAsync(ct);
-        await db.CatalogMenuEntries.Where(x => x.MenuId == menu.Id).ExecuteDeleteAsync(ct);
-        foreach (var (entry, order) in input.Entries.Select((e, i) => (e, i)))
-        {
-            Guid entryId = Guid.NewGuid();
-            db.CatalogMenuEntries.Add(
-                new CatalogMenuEntry
+        RestaurantProductAvailability? selection =
+            await db.RestaurantProductAvailabilities.SingleOrDefaultAsync(
+                x => x.RestaurantId == restaurantId && x.ProductId == productId,
+                ct
+            );
+        if (selection is null)
+            db.RestaurantProductAvailabilities.Add(
+                new RestaurantProductAvailability
                 {
-                    Id = entryId,
-                    MenuId = menu.Id,
-                    ProductId = entry.ProductId,
-                    IsAvailable = entry.IsAvailable,
-                    DefaultFormat = entry.DefaultFormat,
-                    SortOrder = order,
+                    RestaurantId = restaurantId,
+                    ProductId = productId,
+                    IsAvailable = available,
                 }
             );
-            db.CatalogMenuChannels.AddRange(
-                entry.Channels.Select(c => new CatalogMenuChannel
-                {
-                    MenuEntryId = entryId,
-                    Channel = c.Channel,
-                    IsPublished = c.IsPublished,
-                    ExternalId = c.ExternalId.Trim(),
-                })
-            );
-        }
-        db.CatalogMenuPrices.AddRange(
-            input.Prices.Select(x => new CatalogMenuPrice
-            {
-                MenuId = menu.Id,
-                ProductId = x.ProductId,
-                Channel = x.Channel,
-                Format = x.Format,
-                Amount = x.Amount,
-            })
-        );
-        await db.SaveChangesAsync(ct);
-        await synchronizer.SyncAffectedMenus(input.RestaurantId, ct);
-        await transaction.CommitAsync(ct);
-        return Ok(menu);
-    }
-
-    [HttpPut("menus/{menuId:guid}/active")]
-    public async Task<IActionResult> ActivateMenu(Guid menuId, CancellationToken ct)
-    {
-        CatalogMenu? menu = await db.CatalogMenus.SingleOrDefaultAsync(x => x.Id == menuId, ct);
-        if (menu is null)
-            return NotFound();
-        if (!CanManageScope(menu.RestaurantId))
-            return Forbid();
-        CatalogMenuEntry[] activeEntries = await db
-            .CatalogMenuEntries.AsNoTracking()
-            .Where(x => x.MenuId == menuId && x.IsAvailable)
-            .ToArrayAsync(ct);
-        if (activeEntries.Length == 0)
-            return BadRequest("La carta necesita productos disponibles.");
-        Guid[] activeProductIds = activeEntries.Select(x => x.ProductId).ToArray();
-        if (
-            await db.Products.CountAsync(
-                x =>
-                    activeProductIds.Contains(x.Id)
-                    && x.TaxId != null
-                    && db.Taxes.Any(t => t.Id == x.TaxId && t.IsActive),
-                ct
-            ) != activeProductIds.Length
-        )
-            return BadRequest("Todos los productos disponibles necesitan un impuesto.");
-        Guid[] activeExtraGroupIds = await db
-            .ProductOptionGroups.AsNoTracking()
-            .Where(x => x.Kind == "Extra" && activeProductIds.Contains(x.ParentProductId))
-            .Select(x => x.Id)
-            .ToArrayAsync(ct);
-        Guid[] activeExtraIds = await db
-            .ProductOptions.AsNoTracking()
-            .Where(x => activeExtraGroupIds.Contains(x.GroupId))
-            .Select(x => x.ProductId)
-            .Distinct()
-            .ToArrayAsync(ct);
-        if (
-            await db.Products.CountAsync(
-                x =>
-                    activeExtraIds.Contains(x.Id)
-                    && x.TaxId != null
-                    && db.Taxes.Any(t => t.Id == x.TaxId && t.IsActive),
-                ct
-            ) != activeExtraIds.Length
-        )
-            return BadRequest("Todos los extras necesitan un impuesto.");
-        CatalogMenuPrice[] localPrices = await db
-            .CatalogMenuPrices.AsNoTracking()
-            .Where(x => x.MenuId == menuId && x.Channel == "LOCAL")
-            .ToArrayAsync(ct);
-        if (
-            activeEntries.Any(x =>
-                !localPrices.Any(p => p.ProductId == x.ProductId && p.Format == x.DefaultFormat)
-            )
-        )
-            return BadRequest("Cada producto necesita el precio de su formato inicial.");
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        if (menu.RestaurantId == Guid.Empty)
-            await db
-                .CatalogMenus.Where(x => x.Id != menuId && x.IsActive)
-                .ExecuteUpdateAsync(x => x.SetProperty(m => m.IsActive, false), ct);
         else
-        {
-            await db
-                .CatalogMenus.Where(x =>
-                    x.Id != menuId && x.RestaurantId == menu.RestaurantId && x.IsActive
-                )
-                .ExecuteUpdateAsync(x => x.SetProperty(m => m.IsActive, false), ct);
-            await db
-                .CatalogMenus.Where(x => x.RestaurantId == Guid.Empty && x.IsActive)
-                .ExecuteUpdateAsync(x => x.SetProperty(m => m.IsActive, false), ct);
-        }
-        menu.IsActive = true;
+            selection.IsAvailable = available;
         await db.SaveChangesAsync(ct);
-        await synchronizer.SyncAffectedMenus(menu.RestaurantId, ct);
+        await synchronizer.SyncAffectedMenus(restaurantId, ct);
         await transaction.CommitAsync(ct);
-        return NoContent();
-    }
-
-    [HttpPut("menus/{menuId:guid}/inactive")]
-    public async Task<IActionResult> DeactivateMenu(Guid menuId, CancellationToken ct)
-    {
-        CatalogMenu? menu = await db.CatalogMenus.SingleOrDefaultAsync(x => x.Id == menuId, ct);
-        if (menu is null)
-            return NotFound();
-        if (!CanManageScope(menu.RestaurantId))
-            return Forbid();
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        menu.IsActive = false;
-        await db.SaveChangesAsync(ct);
-        await synchronizer.SyncAffectedMenus(menu.RestaurantId, ct);
-        await transaction.CommitAsync(ct);
-        return NoContent();
-    }
-
-    [HttpDelete("menus/{menuId:guid}")]
-    public async Task<IActionResult> DeleteLocalMenu(Guid menuId, CancellationToken ct)
-    {
-        CatalogMenu? menu = await db.CatalogMenus.SingleOrDefaultAsync(x => x.Id == menuId, ct);
-        if (menu is null)
-            return NotFound();
-        if (menu.RestaurantId == Guid.Empty)
-            return BadRequest("La carta general no se elimina.");
-        if (!CanManageScope(menu.RestaurantId))
-            return Forbid();
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        db.CatalogMenus.Remove(menu);
-        await db.SaveChangesAsync(ct);
-        await synchronizer.SyncAffectedMenus(menu.RestaurantId, ct);
-        await transaction.CommitAsync(ct);
+        await notifications.MenuChanged(restaurantId);
         return NoContent();
     }
 
@@ -689,27 +505,4 @@ public sealed class CatalogDesignController(
     );
 
     public sealed record PriceInput(string Channel, string Format, decimal Amount);
-
-    public sealed record MenuInput(
-        Guid RestaurantId,
-        string Name,
-        List<MenuEntryInput> Entries,
-        List<MenuPriceInput> Prices
-    );
-
-    public sealed record MenuPriceInput(
-        Guid ProductId,
-        string Channel,
-        string Format,
-        decimal Amount
-    );
-
-    public sealed record MenuEntryInput(
-        Guid ProductId,
-        bool IsAvailable,
-        string DefaultFormat,
-        List<MenuChannelInput> Channels
-    );
-
-    public sealed record MenuChannelInput(string Channel, bool IsPublished, string ExternalId);
 }

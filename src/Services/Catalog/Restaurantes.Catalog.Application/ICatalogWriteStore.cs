@@ -8,6 +8,7 @@ public interface ICatalogWriteStore
     Task<bool> ProductSkuExistsAsync(string sku, CancellationToken ct);
     Task<Category?> FindCategoryAsync(Guid id, CancellationToken ct);
     Task<Product?> FindProductAsync(Guid id, CancellationToken ct);
+    Task DisableLocalProductAvailabilityAsync(Guid productId, CancellationToken ct);
     Task<RestaurantMenuItem?> FindMenuItemAsync(
         Guid restaurantId,
         Guid productId,

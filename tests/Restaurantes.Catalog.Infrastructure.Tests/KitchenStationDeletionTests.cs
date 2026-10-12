@@ -50,6 +50,52 @@ public sealed class KitchenStationLifecycleTests
         Assert.Equal(station.Id, message.StationId);
     }
 
+    [Fact]
+    public async Task Field_updates_preserve_other_station_values()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        await using CatalogWriteDbContext db = CreateDb();
+        Guid restaurantId = Guid.NewGuid();
+        RestaurantKitchenStation station = RestaurantKitchenStation.Create(
+            restaurantId,
+            "BEBIDAS",
+            "Bebidas",
+            false,
+            true,
+            3,
+            DateTime.UtcNow
+        );
+        db.KitchenStations.Add(station);
+        await db.SaveChangesAsync(ct);
+
+        CatalogCommandService service = new(new CatalogWriteStore(db), TimeProvider.System);
+        await service.SetStationNameAsync(restaurantId, station.Id, "Barra", ct);
+        KitchenStationResponse? updated = await service.SetStationPriorityAsync(
+            restaurantId,
+            station.Id,
+            5,
+            ct
+        );
+
+        Assert.NotNull(updated);
+        Assert.Equal("Barra", updated.Name);
+        Assert.Equal(5, updated.Priority);
+        Assert.True(updated.RequiresPrimaryDispatch);
+        Assert.True(updated.IsActive);
+
+        KitchenStationResponse? deactivated = await service.SetStationActiveAsync(
+            restaurantId,
+            station.Id,
+            false,
+            ct
+        );
+        Assert.NotNull(deactivated);
+        Assert.Equal("Barra", deactivated.Name);
+        Assert.Equal(5, deactivated.Priority);
+        Assert.True(deactivated.RequiresPrimaryDispatch);
+        Assert.False(deactivated.IsActive);
+    }
+
     private static CatalogWriteDbContext CreateDb() =>
         new(
             new DbContextOptionsBuilder<CatalogWriteDbContext>()
