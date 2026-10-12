@@ -58,6 +58,7 @@ public sealed class OrdersReadController(
         return restaurantId == Guid.Empty || offset < 0
                 ? (ActionResult<IReadOnlyList<ManagementOrderResponse>>)BadRequest()
             : !User.CanAccessRestaurant(restaurantId, RestaurantPermissions.OrdersRead)
+            && !User.CanAccessRestaurant(restaurantId, RestaurantPermissions.OrdersReportRead)
                 ? (ActionResult<IReadOnlyList<ManagementOrderResponse>>)Forbid()
             : (ActionResult<IReadOnlyList<ManagementOrderResponse>>)
                 Ok(await management.ListAsync(restaurantId, date, offset, ct));

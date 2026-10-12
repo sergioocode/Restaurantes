@@ -1,23 +1,55 @@
-﻿@if (Host.IsAdmin)
+@using Restaurantes.Clients.Backoffice.Pwa.Models
+
+@if (!Host.CanViewCompanySettings)
 {
-    <details class="admin-panel" open><summary>Nuevo local · solo Admin</summary>
-        <form class="inline-form" @onsubmit="Host.CreateRestaurant" @onsubmit:preventDefault>
-            <input placeholder="Código" @bind="Host.restaurantDraft.Code" /><input placeholder="Nombre" @bind="Host.restaurantDraft.Name" />
-            <input class="wide" placeholder="Dirección" @bind="Host.restaurantDraft.Address" /><button class="primary" disabled="@Host.busy">Agregar Local</button>
-        </form>
-    </details>
+    <NoAccessPanel />
 }
-<div class="restaurant-list">
-    @foreach (RestaurantResponse restaurant in Host.restaurants.OrderBy(x => x.Name))
+else
+{
+    @if (Host.CanManageRestaurantSettings)
     {
-        <section class="settings-panel restaurant-settings @(restaurant.IsActive ? "" : "inactive")" @key="restaurant.Id">
-            <div class="restaurant-identity"><strong>@restaurant.Code</strong><small>ID @restaurant.Id</small></div>
-            <label>Nombre<input @bind="restaurant.Name" /></label><label>Dirección<input @bind="restaurant.Address" /></label>
-            <label class="availability"><input type="checkbox" @bind="restaurant.IsActive" /> Local activo</label>
-            <button class="primary" @onclick="() => Host.SaveRestaurant(restaurant)" disabled="@Host.busy">Guardar</button>
-        </section>
+        <details class="admin-panel" open>
+            <summary>Nuevo local</summary>
+            <form class="inline-form restaurant-create-form" @onsubmit="Host.CreateRestaurant" @onsubmit:preventDefault>
+                <input placeholder="Código" @bind="Host.restaurantDraft.Code" disabled="@Host.busy" />
+                <input placeholder="Nombre comercial" @bind="Host.restaurantDraft.Name" disabled="@Host.busy" />
+                <input class="wide" placeholder="Dirección del local" @bind="Host.restaurantDraft.Address" disabled="@Host.busy" />
+                <select aria-label="Empresa del local" @bind="Host.restaurantDraft.CompanyId" disabled="@(Host.busy || Host.companies.Count == 0)">
+                    <option value="">Selecciona empresa</option>
+                    @foreach (CompanyResponse company in Host.companies.OrderBy(x => x.LegalName))
+                    {
+                        <option value="@company.Id">@company.LegalName · @company.TaxId</option>
+                    }
+                </select>
+                <button class="primary" disabled="@(Host.busy || Host.companies.Count == 0 || Host.restaurantDraft.CompanyId is null)">Agregar</button>
+            </form>
+        </details>
     }
-</div>
+    <div class="restaurant-list">
+        @foreach (RestaurantResponse restaurant in Host.VisibleCompanyRestaurants.OrderBy(x => x.Name))
+        {
+            <section class="settings-panel restaurant-settings @(restaurant.IsActive ? "" : "inactive")" @key="restaurant.Id">
+                <div class="restaurant-identity"><strong>@restaurant.Code</strong><small>ID @restaurant.Id</small></div>
+                <label>Nombre<input @bind="restaurant.Name" disabled="@(!Host.CanManageRestaurantSettings)" /></label>
+                <label>Dirección<input @bind="restaurant.Address" disabled="@(!Host.CanManageRestaurantSettings)" /></label>
+                <label>Empresa
+                    <select value="@restaurant.CompanyId" @onchange="args => Host.ChangeRestaurantCompany(restaurant, args)" disabled="@(!Host.CanManageRestaurantSettings || Host.busy)">
+                        <option value="">Selecciona empresa</option>
+                        @foreach (CompanyResponse company in Host.companies.OrderBy(x => x.LegalName))
+                        {
+                            <option value="@company.Id">@company.LegalName · @company.TaxId</option>
+                        }
+                    </select>
+                </label>
+                <label class="availability"><input type="checkbox" checked="@restaurant.IsActive" @onchange="args => Host.ChangeRestaurantActive(restaurant, args)" disabled="@(!Host.CanManageRestaurantSettings || Host.busy)" /> Local activo</label>
+                @if (Host.CanManageRestaurantSettings)
+                {
+                    <button class="primary" @onclick="() => Host.SaveRestaurant(restaurant)" disabled="@Host.busy">Guardar</button>
+                }
+            </section>
+        }
+    </div>
+}
 
 @code {
     [Parameter, EditorRequired]

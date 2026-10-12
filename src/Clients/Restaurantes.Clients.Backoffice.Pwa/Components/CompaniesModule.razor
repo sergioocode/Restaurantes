@@ -1,0 +1,53 @@
+@using Restaurantes.Clients.Backoffice.Pwa.Models
+
+@if (!Host.CanViewCompanySettings)
+{
+    <NoAccessPanel />
+}
+else
+{
+    @if (Host.CanManageCompanySettings)
+    {
+        <details class="admin-panel" open>
+            <summary>Nueva empresa</summary>
+            <form class="inline-form company-create-form" @onsubmit="Host.CreateCompany" @onsubmit:preventDefault>
+                <input placeholder="Razón social" @bind="Host.companyDraft.LegalName" disabled="@Host.busy" />
+                <input placeholder="CIF / NIF" @bind="Host.companyDraft.TaxId" disabled="@Host.busy" />
+                <input class="wide" placeholder="Dirección fiscal" @bind="Host.companyDraft.FiscalAddress" disabled="@Host.busy" />
+                <input type="tel" placeholder="Teléfono" @bind="Host.companyDraft.Phone" disabled="@Host.busy" />
+                <input type="email" placeholder="Email" @bind="Host.companyDraft.Email" disabled="@Host.busy" />
+                <button class="primary" disabled="@Host.busy">Agregar</button>
+            </form>
+        </details>
+    }
+    @if (Host.companies.Count == 0)
+    {
+        <p class="muted">No hay empresas registradas.</p>
+    }
+    <div class="company-list">
+        @foreach (CompanyResponse company in Host.companies.OrderBy(x => x.LegalName))
+        {
+            <section class="settings-panel company-settings" @key="company.Id">
+                <label>Razón social<input @bind="company.LegalName" disabled="@(!Host.CanManageCompanySettings)" /></label>
+                <label>CIF / NIF<input @bind="company.TaxId" disabled="@(!Host.CanManageCompanySettings)" /></label>
+                <label>Dirección fiscal<input @bind="company.FiscalAddress" disabled="@(!Host.CanManageCompanySettings)" /></label>
+                <label>Teléfono<input type="tel" @bind="company.Phone" disabled="@(!Host.CanManageCompanySettings)" /></label>
+                <label>Email<input type="email" @bind="company.Email" disabled="@(!Host.CanManageCompanySettings)" /></label>
+                @if (Host.CanManageCompanySettings)
+                {
+                    <button class="primary product-name-save" @onclick="() => Host.SaveCompany(company)" disabled="@Host.busy" aria-label="Guardar empresa" title="Guardar empresa">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                            <path d="M4 3h13l3 3v15H4z" />
+                            <path d="M7 3v6h10V3M7 21v-8h10v8M14 3v4" />
+                        </svg>
+                    </button>
+                }
+            </section>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Home Host { get; set; } = default!;
+}

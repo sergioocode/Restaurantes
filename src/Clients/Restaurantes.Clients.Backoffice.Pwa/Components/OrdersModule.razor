@@ -1,18 +1,6 @@
 ﻿@using Restaurantes.Clients.Backoffice.Pwa.Models
 
 <div class="order-filters">
-    @if (Host.IsAdmin)
-    {
-        <label>Local
-            <select @bind="Host.historyRestaurantId">
-                <option value="@Guid.Empty">Todos los locales autorizados</option>
-                @foreach (RestaurantResponse restaurant in Host.OrderRestaurants)
-                {
-                    <option value="@restaurant.Id">@restaurant.Name</option>
-                }
-            </select>
-        </label>
-    }
     <label>Fecha
         <input type="date" @bind="Host.historyDate" />
     </label>
@@ -32,7 +20,7 @@
     }
     @if (Host.historyOrders.Count == 0 && !Host.busy)
     {
-        <p class="muted">No hay pedidos para esta fecha@(Host.IsAdmin ? " y los locales seleccionados" : "").</p>
+        <p class="muted">No hay pedidos para esta fecha.</p>
     }
 </div>
 

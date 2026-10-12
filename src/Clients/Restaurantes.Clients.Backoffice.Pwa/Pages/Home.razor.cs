@@ -12,7 +12,14 @@ public partial class Home
         status == "Occupied" ? "Ocupada" : "Disponible";
 
     private const string SessionKey = "restaurantes.backoffice.login";
+    private const string OrdersReportReadPermission = "orders.report.read";
     private string module = "catalog-design";
+    private string[] selectedNavigationNodes = [];
+    private List<NavigationNode> navigationNodes = [];
+    private static readonly Dictionary<string, object> SidebarAttributes = new()
+    {
+        ["class"] = "backoffice-sidebar",
+    };
     internal string search = "";
     private string? message;
     internal bool busy;
@@ -24,24 +31,97 @@ public partial class Home
     internal List<ProductResponse> products = [];
     internal List<KitchenStationResponse> stations = [];
     internal List<ManagementOrderResponse> historyOrders = [];
-    internal Guid historyRestaurantId;
     internal DateOnly historyDate = DateOnly.FromDateTime(DateTime.Today);
     internal ManagementOrderResponse? selectedOrder;
     internal List<RestaurantResponse> restaurants = [];
+    internal List<CompanyResponse> companies = [];
     internal List<TableResponse> tables = [];
     internal List<StaffUserResponse> users = [];
+    internal bool sidebarOpen = true;
     internal CategoryDraft categoryDraft = new();
     internal ProductDraft productDraft = new();
     internal RestaurantDraft restaurantDraft = new();
+    internal CompanyDraft companyDraft = new();
     internal TableDraft tableDraft = new();
     internal List<ZoneResponse> zones = [];
     internal ZoneResponse zoneDraft = new();
     internal KitchenStationDraft stationDraft = new();
     internal StaffUserDraft userDraft = new();
     internal ProviderSettingsResponse? providerSettings;
+    internal bool CanViewCompanySettings =>
+        IsAdmin
+        || login?.AllRestaurantsRoles?.Any(role => role is "Gerente" or "Contabilidad") == true
+        || login?.Restaurants.Any(access => access.Role is "Gerente" or "Contabilidad") == true;
+    internal bool CanManageCompanySettings => IsAdmin;
+    internal bool CanManageRestaurantSettings => IsAdmin || HasLocalPermission("tables.manage");
     private CatalogDesignModule? catalogDesignModule;
     private TaxesModule? taxesModule;
     private AllergensModule? allergensModule;
+
+    internal List<NavigationNode> NavigationNodes => navigationNodes;
+
+    private List<NavigationNode> BuildNavigationNodes()
+    {
+        List<NavigationNode> nodes = [];
+        List<NavigationNode> locationChildren = [];
+        if (HasAnyLocalPermission("tables.read"))
+        {
+            locationChildren.Add(new("tables", "Mesas", "group-locations"));
+            locationChildren.Add(new("zones", "Zonas", "group-locations"));
+        }
+        if (IsCurrentRestaurantManager)
+        {
+            locationChildren.Add(new("stations", "Estaciones KDS", "group-locations"));
+        }
+        AddGroup(nodes, "group-locations", "Ubicaciones", locationChildren);
+
+        List<NavigationNode> productChildren = [];
+        if (IsCurrentRestaurantManager)
+        {
+            productChildren.Add(new("catalog-design", "Carta del local", "group-products"));
+        }
+        if (IsAdmin)
+        {
+            productChildren.Add(new("products", "Carta Global", "group-products"));
+            productChildren.Add(new("taxes", "Impuestos", "group-products"));
+            productChildren.Add(new("allergens", "Alérgenos", "group-products"));
+            productChildren.Add(new("categories", "Categorías", "group-products"));
+        }
+        AddGroup(nodes, "group-products", "Productos", productChildren);
+
+        List<NavigationNode> reportChildren = [];
+        if (HasAnyLocalPermission(OrdersReportReadPermission))
+        {
+            reportChildren.Add(new("daily-orders-report", "Pedidos por día", "group-reports"));
+        }
+        if (HasLocalPermission("reports.marketing.read"))
+        {
+            reportChildren.Add(new("kitchen-times-report", "Tiempos de cocina", "group-reports"));
+        }
+        AddGroup(nodes, "group-reports", "Informes", reportChildren);
+
+        List<NavigationNode> configurationChildren = [];
+        if (CanViewCompanySettings)
+        {
+            configurationChildren.Add(new("companies", "Empresas", "group-configuration"));
+            configurationChildren.Add(new("restaurants", "Locales", "group-configuration"));
+        }
+        if (IsAdmin)
+        {
+            configurationChildren.Add(new("users", "Usuarios", "group-configuration"));
+        }
+        AddGroup(nodes, "group-configuration", "Configuración", configurationChildren);
+
+        List<NavigationNode> managementChildren = [];
+        if (HasLocalPermission("payments.refund"))
+        {
+            managementChildren.Add(new("refunds", "Devoluciones", "group-management"));
+        }
+        AddGroup(nodes, "group-management", "Gestión", managementChildren);
+
+        return nodes;
+    }
+
     internal bool MicrosoftConfigured => providerSettings?.MicrosoftConfigured == true;
     internal bool GoogleConfigured => providerSettings?.GoogleConfigured == true;
 
@@ -79,6 +159,18 @@ public partial class Home
                     )
                 )
                 .ToList();
+    internal List<RestaurantResponse> VisibleCompanyRestaurants =>
+        IsAdmin
+        || login?.AllRestaurantsRoles?.Any(role => role is "Gerente" or "Contabilidad") == true
+            ? restaurants
+            : restaurants
+                .Where(restaurant =>
+                    login?.Restaurants.Any(access =>
+                        access.RestaurantId == restaurant.Id
+                        && access.Role is "Gerente" or "Contabilidad"
+                    ) == true
+                )
+                .ToList();
     internal List<RestaurantResponse> OrderRestaurants =>
         restaurants
             .Where(x =>
@@ -93,6 +185,17 @@ public partial class Home
                 ) == true
             )
             .ToList();
+    internal List<RestaurantResponse> ReportRestaurants =>
+        restaurants
+            .Where(x =>
+                login?.AllRestaurantsPermissions?.Contains(OrdersReportReadPermission) == true
+                || login?.Restaurants.Any(a =>
+                    a.RestaurantId == x.Id && a.Permissions.Contains(OrdersReportReadPermission)
+                ) == true
+            )
+            .ToList();
+    internal List<RestaurantResponse> ContextRestaurants =>
+        module == "daily-orders-report" ? ReportRestaurants : SelectableRestaurants;
     internal RestaurantResponse? CurrentRestaurant =>
         restaurants.FirstOrDefault(x => x.Id == restaurantId);
     internal List<ProductResponse> VisibleProducts =>
@@ -109,7 +212,9 @@ public partial class Home
         {
             "tables" or "zones" => "OPERACIÓN DEL LOCAL",
             "orders" => "OPERACIÓN DEL LOCAL",
+            "daily-orders-report" => "INFORMES",
             "restaurants" => "CADENA",
+            "companies" => "CADENA",
             "categories" or "products" or "taxes" or "allergens" => "CATÁLOGO GLOBAL",
             "catalog-design" => "CATÁLOGO DEL LOCAL",
             "users" => "SEGURIDAD",
@@ -121,10 +226,12 @@ public partial class Home
             "tables" => "Mesas",
             "zones" => "Zonas del restaurante",
             "restaurants" => "Locales",
+            "companies" => "Empresas",
             "stations" => "Estaciones Kitchen Display System",
             "orders" => "Pedidos",
+            "daily-orders-report" => "Pedidos por día",
             "categories" => "Categorías",
-            "products" => "Productos",
+            "products" => "Carta Global",
             "taxes" => "Impuestos",
             "allergens" => "Alérgenos",
             "catalog-design" => "Carta del local",
@@ -133,17 +240,20 @@ public partial class Home
         };
 
     private bool ShowRestaurantContextSelector =>
-        IsAdmin && (module is "users" or "categories" or "tables" or "zones");
+        (IsAdmin && (module is "users" or "categories" or "tables" or "zones"))
+        || (module == "daily-orders-report" && ReportRestaurants.Count > 0);
 
     private string? RefreshLabel =>
         module switch
         {
             "catalog-design" when IsCurrentRestaurantManager => "Recargar",
-            "orders" when !IsAdmin && OrderRestaurants.Count > 0 => "Consultar pedidos",
+            "orders" when OrderRestaurants.Count > 0 => "Consultar pedidos",
+            "daily-orders-report" when ReportRestaurants.Count > 0 => "Consultar pedidos",
             "stations" when IsCurrentRestaurantManager => "Actualizar estaciones",
             "tables" when HasLocalPermission("tables.manage") => "Actualizar mesas",
             "zones" when HasLocalPermission("tables.manage") => "Actualizar zonas",
-            "restaurants" when IsAdmin => "Actualizar locales",
+            "restaurants" when CanViewCompanySettings => "Actualizar locales",
+            "companies" when CanViewCompanySettings => "Actualizar empresas",
             "categories" when HasGlobalPermission("catalog.global.manage") =>
                 "Actualizar categorías",
             "products" when HasGlobalPermission("catalog.global.manage") => "Recargar",
@@ -152,6 +262,55 @@ public partial class Home
             "users" when CanManageUsers => "Actualizar usuarios",
             _ => null,
         };
+
+    internal void ToggleSidebar() => sidebarOpen = !sidebarOpen;
+
+    private static void AddGroup(
+        List<NavigationNode> nodes,
+        string id,
+        string text,
+        List<NavigationNode> children
+    )
+    {
+        if (children.Count == 0)
+        {
+            return;
+        }
+        nodes.Add(new(id, text, HasChildren: true, Expanded: true));
+        nodes.AddRange(children);
+    }
+
+    internal void BeforeNavigationSelect(Syncfusion.Blazor.Navigations.NodeSelectEventArgs args)
+    {
+        if (args.NodeData.Id.StartsWith("group-", StringComparison.Ordinal))
+        {
+            args.Cancel = true;
+        }
+        else if (args.NodeData.Id is "kitchen-times-report" or "refunds")
+        {
+            args.Cancel = true;
+        }
+    }
+
+    internal async Task OnNavigationSelected(Syncfusion.Blazor.Navigations.NodeSelectEventArgs args)
+    {
+        string selected = args.NodeData.Id;
+        if (selected.StartsWith("group-", StringComparison.Ordinal))
+        {
+            return;
+        }
+        SetModule(selected);
+        if (selected is "orders" or "daily-orders-report")
+        {
+            await RefreshOrders();
+        }
+    }
+
+    private void SetModule(string value)
+    {
+        module = value;
+        selectedNavigationNodes = [value];
+    }
 
     private Task RefreshCurrentModule() =>
         module switch
@@ -193,13 +352,14 @@ public partial class Home
             }
             Api.AccessToken = login.AccessToken;
             AuthState.SetSession(login);
-            module = IsAdmin ? "products" : "catalog-design";
+            SetModule(IsAdmin ? "products" : "catalog-design");
             restaurantId =
                 login
                     .Restaurants.FirstOrDefault(x => x.Permissions.Contains("backoffice.access"))
                     ?.RestaurantId
                 ?? Guid.Empty;
             await LoadAllCore();
+            navigationNodes = BuildNavigationNodes();
         }
         catch (Exception exception)
         {
@@ -243,7 +403,7 @@ public partial class Home
 
         Api.AccessToken = login.AccessToken;
         AuthState.SetSession(login);
-        module = IsAdmin ? "products" : "catalog-design";
+        SetModule(IsAdmin ? "products" : "catalog-design");
         restaurantId =
             login
                 .Restaurants.FirstOrDefault(x => x.Permissions.Contains("backoffice.access"))
@@ -255,6 +415,7 @@ public partial class Home
             JsonSerializer.Serialize(login)
         );
         await LoadAllCore();
+        navigationNodes = BuildNavigationNodes();
     }
 
     private async Task Logout()
@@ -280,7 +441,12 @@ public partial class Home
             {
                 await LoadUsersCore();
             }
+            navigationNodes = BuildNavigationNodes();
         });
+        if (module is "orders" or "daily-orders-report")
+        {
+            await RefreshOrders();
+        }
     }
 
     internal bool HasAnyLocalPermission(string permission)
@@ -299,12 +465,13 @@ public partial class Home
         {
             "catalog-design" => Run(RefreshProductsCore),
             "stations" => Run(RefreshStationsCore),
-            "orders" => RefreshOrders(),
+            "orders" or "daily-orders-report" => RefreshOrders(),
             "tables" => Run(RefreshTablesCore),
             "zones" => Run(RefreshTablesCore),
             "categories" => Run(RefreshCategoriesCore),
             "products" => Run(RefreshProductsCore),
             "restaurants" => Run(RefreshRestaurantsCore),
+            "companies" => Run(RefreshCompanySettingsCore),
             "users" => Run(LoadUsersCore),
             _ => Task.CompletedTask,
         };
@@ -312,7 +479,7 @@ public partial class Home
 
     internal async Task OpenOrders()
     {
-        module = "orders";
+        SetModule("orders");
         await RefreshOrders();
     }
 
@@ -320,15 +487,9 @@ public partial class Home
     {
         return Run(async () =>
         {
-            IEnumerable<RestaurantResponse> allowed = OrderRestaurants;
-            if (!IsAdmin)
-            {
-                allowed = allowed.Where(restaurant => restaurant.Id == restaurantId);
-            }
-            else if (historyRestaurantId != Guid.Empty)
-            {
-                allowed = allowed.Where(restaurant => restaurant.Id == historyRestaurantId);
-            }
+            IEnumerable<RestaurantResponse> allowed = (
+                module == "daily-orders-report" ? ReportRestaurants : OrderRestaurants
+            ).Where(restaurant => restaurant.Id == restaurantId);
             List<ManagementOrderResponse> result = [];
             foreach (RestaurantResponse restaurant in allowed)
             {
@@ -411,6 +572,12 @@ public partial class Home
     private async Task RefreshRestaurantsCore()
     {
         restaurants = await Api.RestaurantsAsync();
+        companies = await Api.CompaniesAsync();
+    }
+
+    private async Task RefreshCompanySettingsCore()
+    {
+        companies = await Api.CompaniesAsync();
     }
 
     private async Task LoadAllCore()
@@ -418,6 +585,7 @@ public partial class Home
         categories = await Api.CategoriesAsync();
         products = await Api.ProductsAsync();
         restaurants = await Api.RestaurantsAsync();
+        companies = await Api.CompaniesAsync();
         if (!CanAssignAllRestaurants && userDraft.RestaurantId is null)
         {
             userDraft.RestaurantId = ManageableRestaurants.FirstOrDefault()?.Id;
@@ -736,11 +904,10 @@ public partial class Home
             {
                 RestaurantResponse created = await Api.CreateRestaurantAsync(restaurantDraft);
                 restaurantDraft = new();
-                await Task.Delay(800);
-                restaurants = await Api.RestaurantsAsync();
+                restaurants.Add(created);
                 restaurantId = created.Id;
                 await LoadLocalCore();
-                module = "restaurants";
+                SetModule("restaurants");
                 ok = true;
                 message =
                     "Local creado. Configura sus estaciones KDS y asigna usuarios antes de operarlo.";
@@ -754,11 +921,112 @@ public partial class Home
         await Run(
             async () =>
             {
-                await Api.UpdateRestaurantAsync(restaurant);
-                await Task.Delay(600);
-                restaurants = await Api.RestaurantsAsync();
+                RestaurantResponse updated = await Api.UpdateRestaurantAsync(restaurant);
+                restaurant.Name = updated.Name;
+                restaurant.Address = updated.Address;
+                restaurant.Version = updated.Version;
+                restaurant.UpdatedAtUtc = updated.UpdatedAtUtc;
                 ok = true;
                 message = "Local actualizado.";
+            },
+            false
+        );
+    }
+
+    internal Task ChangeRestaurantCompany(RestaurantResponse restaurant, ChangeEventArgs args)
+    {
+        if (!Guid.TryParse(args.Value?.ToString(), out Guid companyId))
+        {
+            return Task.CompletedTask;
+        }
+
+        Guid? previous = restaurant.CompanyId;
+        restaurant.CompanyId = companyId;
+        return SaveRestaurantSelectionAsync(
+            async () =>
+            {
+                RestaurantResponse updated = await Api.SetRestaurantCompanyAsync(
+                    restaurant.Id,
+                    companyId
+                );
+                restaurant.CompanyId = updated.CompanyId;
+                restaurant.Version = updated.Version;
+                restaurant.UpdatedAtUtc = updated.UpdatedAtUtc;
+                ok = true;
+                message = "Empresa del local actualizada.";
+            },
+            () => restaurant.CompanyId = previous
+        );
+    }
+
+    internal Task ChangeRestaurantActive(RestaurantResponse restaurant, ChangeEventArgs args)
+    {
+        if (!bool.TryParse(args.Value?.ToString(), out bool isActive))
+        {
+            return Task.CompletedTask;
+        }
+
+        bool previous = restaurant.IsActive;
+        restaurant.IsActive = isActive;
+        return SaveRestaurantSelectionAsync(
+            async () =>
+            {
+                RestaurantResponse updated = await Api.SetRestaurantActiveAsync(
+                    restaurant.Id,
+                    isActive
+                );
+                restaurant.IsActive = updated.IsActive;
+                restaurant.Version = updated.Version;
+                restaurant.UpdatedAtUtc = updated.UpdatedAtUtc;
+                ok = true;
+                message = "Estado del local actualizado.";
+            },
+            () => restaurant.IsActive = previous
+        );
+    }
+
+    private async Task SaveRestaurantSelectionAsync(Func<Task> save, Action rollback)
+    {
+        await Run(save, false);
+        if (ok)
+        {
+            return;
+        }
+
+        rollback();
+    }
+
+    internal async Task CreateCompany()
+    {
+        await Run(
+            async () =>
+            {
+                CompanyResponse created = await Api.CreateCompanyAsync(companyDraft);
+                companyDraft = new();
+                companies.Add(created);
+                companies = companies.OrderBy(item => item.LegalName).ToList();
+                ok = true;
+                message = "Empresa agregada.";
+            },
+            false
+        );
+    }
+
+    internal async Task SaveCompany(CompanyResponse company)
+    {
+        await Run(
+            async () =>
+            {
+                CompanyResponse updated = await Api.UpdateCompanyAsync(company);
+                company.LegalName = updated.LegalName;
+                company.TaxId = updated.TaxId;
+                company.FiscalAddress = updated.FiscalAddress;
+                company.Phone = updated.Phone;
+                company.Email = updated.Email;
+                company.Version = updated.Version;
+                company.UpdatedAtUtc = updated.UpdatedAtUtc;
+                ok = true;
+                message = "Empresa actualizada.";
             },
             false
         );
@@ -985,10 +1253,13 @@ public partial class Home
             ?? "Sin asignar";
     }
 
-    private string NavClass(string value)
-    {
-        return module == value ? "nav-active" : "";
-    }
+    internal sealed record NavigationNode(
+        string Id,
+        string Text,
+        string? ParentId = null,
+        bool HasChildren = false,
+        bool Expanded = false
+    );
 
     internal string RestaurantName(Guid id)
     {

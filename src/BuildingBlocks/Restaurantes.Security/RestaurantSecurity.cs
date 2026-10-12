@@ -34,6 +34,7 @@ public static class RestaurantPermissions
     public const string TablesRelease = "tables.release";
     public const string OrdersCreate = "orders.create";
     public const string OrdersRead = "orders.read";
+    public const string OrdersReportRead = "orders.report.read";
     public const string OrdersManage = "orders.manage";
     public const string OrdersRecover = "orders.recover";
     public const string PaymentsCapture = "payments.capture";
@@ -62,6 +63,7 @@ public static class RestaurantPermissions
                 TablesRelease,
                 OrdersCreate,
                 OrdersRead,
+                OrdersReportRead,
                 OrdersManage,
                 OrdersRecover,
                 PaymentsCapture,
@@ -79,19 +81,30 @@ public static class RestaurantPermissions
             [
                 BackofficeAccess,
                 OrdersRead,
+                OrdersReportRead,
                 DashboardRead,
                 FinancialReportsRead,
                 PaymentsRefund,
+                MarketingReportsRead,
+                KitchenReportsRead,
             ],
             "Contabilidad" =>
             [
                 BackofficeAccess,
                 OrdersRead,
+                OrdersReportRead,
                 DashboardRead,
                 FinancialReportsRead,
                 PaymentsRefund,
             ],
-            "Marketing" => [DashboardRead, FinancialReportsRead, MarketingReportsRead],
+            "Marketing" =>
+            [
+                BackofficeAccess,
+                OrdersReportRead,
+                DashboardRead,
+                FinancialReportsRead,
+                MarketingReportsRead,
+            ],
             "Manager" =>
             [
                 BackofficeAccess,
@@ -101,11 +114,14 @@ public static class RestaurantPermissions
                 TablesRelease,
                 OrdersCreate,
                 OrdersRead,
+                OrdersReportRead,
                 OrdersManage,
                 OrdersRecover,
                 PaymentsCapture,
+                PaymentsRefund,
                 CashRegisterManage,
                 CatalogManage,
+                DashboardRead,
                 KitchenReportsRead,
             ],
             "Camarero" => [CommanderUse, TablesRead, OrdersCreate, OrdersManage],
