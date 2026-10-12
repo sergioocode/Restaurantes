@@ -23,6 +23,7 @@ public static class DependencyInjection
             )
         );
         services.AddScoped<IRestaurantWriteStore, RestaurantWriteStore>();
+        services.AddScoped<ICompanyWriteStore, CompanyWriteStore>();
         return services;
     }
 
@@ -42,6 +43,7 @@ public static class DependencyInjection
             )
         );
         services.AddScoped<IRestaurantReadStore, RestaurantReadStore>();
+        services.AddScoped<ICompanyReadStore, CompanyReadStore>();
         return services;
     }
 }

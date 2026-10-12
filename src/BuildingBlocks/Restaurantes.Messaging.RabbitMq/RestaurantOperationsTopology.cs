@@ -6,6 +6,7 @@ public static class RestaurantOperationsTopology
 {
     public const string ExchangeName = "restaurant-operations.events";
     public const string RestaurantChangedRoutingKey = "restaurant.changed.v1";
+    public const string CompanyChangedRoutingKey = "company.changed.v1";
     public const string ReadModelQueueName = "restaurant-operations.read-model";
     public const string DeadLetterExchangeName = "restaurant-operations.dead-letter";
     public const string DeadLetterQueueName = "restaurant-operations.read-model.dead-letter";
@@ -46,7 +47,6 @@ public static class RestaurantOperationsTopology
             arguments: null,
             cancellationToken: cancellationToken
         );
-
         Dictionary<string, object?> queueArguments = new()
         {
             ["x-dead-letter-exchange"] = DeadLetterExchangeName,
@@ -66,6 +66,13 @@ public static class RestaurantOperationsTopology
             queue: ReadModelQueueName,
             exchange: ExchangeName,
             routingKey: RestaurantChangedRoutingKey,
+            arguments: null,
+            cancellationToken: cancellationToken
+        );
+        await channel.QueueBindAsync(
+            queue: ReadModelQueueName,
+            exchange: ExchangeName,
+            routingKey: CompanyChangedRoutingKey,
             arguments: null,
             cancellationToken: cancellationToken
         );

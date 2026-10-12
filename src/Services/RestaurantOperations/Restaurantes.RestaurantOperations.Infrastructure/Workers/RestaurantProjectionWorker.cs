@@ -110,53 +110,42 @@ public sealed class RestaurantProjectionWorker(
                 throw new JsonException("RabbitMQ message does not contain a valid MessageId.");
             }
 
-            if (eventArgs.BasicProperties.Type != typeof(RestaurantChanged).FullName)
-            {
-                throw new NotSupportedException(
-                    $"Unsupported event type: {eventArgs.BasicProperties.Type}"
-                );
-            }
-
-            RestaurantChanged integrationEvent =
-                JsonSerializer.Deserialize<RestaurantChanged>(eventArgs.Body.Span)
-                ?? throw new JsonException("RabbitMQ message body is empty.");
-            integrationEvent = integrationEvent with
-            {
-                OccurredAtUtc = EnsureUtc(integrationEvent.OccurredAtUtc),
-            };
-
             await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
             RestaurantReadDbContext dbContext =
                 scope.ServiceProvider.GetRequiredService<RestaurantReadDbContext>();
 
             if (!await dbContext.InboxMessages.AnyAsync(item => item.Id == messageId))
             {
-                RestaurantReadModel? projection = await dbContext.Restaurants.FindAsync([
-                    integrationEvent.RestaurantId,
-                ]);
-                if (projection is null)
+                string? eventType = eventArgs.BasicProperties.Type;
+                if (eventType == typeof(RestaurantChanged).FullName)
                 {
-                    dbContext.Restaurants.Add(
-                        new RestaurantReadModel
+                    RestaurantChanged integrationEvent =
+                        JsonSerializer.Deserialize<RestaurantChanged>(eventArgs.Body.Span)
+                        ?? throw new JsonException("RabbitMQ message body is empty.");
+                    await ProjectRestaurantAsync(
+                        dbContext,
+                        integrationEvent with
                         {
-                            Id = integrationEvent.RestaurantId,
-                            Code = integrationEvent.Code,
-                            Name = integrationEvent.Name,
-                            Address = integrationEvent.Address,
-                            IsActive = integrationEvent.IsActive,
-                            Version = integrationEvent.Version,
-                            UpdatedAtUtc = integrationEvent.OccurredAtUtc,
+                            OccurredAtUtc = EnsureUtc(integrationEvent.OccurredAtUtc),
                         }
                     );
                 }
-                else if (projection.Version < integrationEvent.Version)
+                else if (eventType == typeof(CompanyChanged).FullName)
                 {
-                    projection.Code = integrationEvent.Code;
-                    projection.Name = integrationEvent.Name;
-                    projection.Address = integrationEvent.Address;
-                    projection.IsActive = integrationEvent.IsActive;
-                    projection.Version = integrationEvent.Version;
-                    projection.UpdatedAtUtc = integrationEvent.OccurredAtUtc;
+                    CompanyChanged integrationEvent =
+                        JsonSerializer.Deserialize<CompanyChanged>(eventArgs.Body.Span)
+                        ?? throw new JsonException("RabbitMQ message body is empty.");
+                    await ProjectCompanyAsync(
+                        dbContext,
+                        integrationEvent with
+                        {
+                            OccurredAtUtc = EnsureUtc(integrationEvent.OccurredAtUtc),
+                        }
+                    );
+                }
+                else
+                {
+                    throw new NotSupportedException($"Unsupported event type: {eventType}");
                 }
 
                 dbContext.InboxMessages.Add(
@@ -210,6 +199,78 @@ public sealed class RestaurantProjectionWorker(
     private static DateTime EnsureUtc(DateTime value)
     {
         return value.Kind == DateTimeKind.Utc ? value : value.ToUniversalTime();
+    }
+
+    private static async Task ProjectRestaurantAsync(
+        RestaurantReadDbContext dbContext,
+        RestaurantChanged integrationEvent
+    )
+    {
+        RestaurantReadModel? projection = await dbContext.Restaurants.FindAsync([
+            integrationEvent.RestaurantId,
+        ]);
+        if (projection is null)
+        {
+            dbContext.Restaurants.Add(
+                new RestaurantReadModel
+                {
+                    Id = integrationEvent.RestaurantId,
+                    Code = integrationEvent.Code,
+                    Name = integrationEvent.Name,
+                    Address = integrationEvent.Address,
+                    CompanyId = integrationEvent.CompanyId,
+                    IsActive = integrationEvent.IsActive,
+                    Version = integrationEvent.Version,
+                    UpdatedAtUtc = integrationEvent.OccurredAtUtc,
+                }
+            );
+        }
+        else if (projection.Version < integrationEvent.Version)
+        {
+            projection.Code = integrationEvent.Code;
+            projection.Name = integrationEvent.Name;
+            projection.Address = integrationEvent.Address;
+            projection.CompanyId = integrationEvent.CompanyId;
+            projection.IsActive = integrationEvent.IsActive;
+            projection.Version = integrationEvent.Version;
+            projection.UpdatedAtUtc = integrationEvent.OccurredAtUtc;
+        }
+    }
+
+    private static async Task ProjectCompanyAsync(
+        RestaurantReadDbContext dbContext,
+        CompanyChanged integrationEvent
+    )
+    {
+        CompanyReadModel? projection = await dbContext.Companies.FindAsync([
+            integrationEvent.CompanyId,
+        ]);
+        if (projection is null)
+        {
+            dbContext.Companies.Add(
+                new CompanyReadModel
+                {
+                    Id = integrationEvent.CompanyId,
+                    LegalName = integrationEvent.LegalName,
+                    TaxId = integrationEvent.TaxId,
+                    FiscalAddress = integrationEvent.FiscalAddress,
+                    Phone = integrationEvent.Phone,
+                    Email = integrationEvent.Email,
+                    Version = integrationEvent.Version,
+                    UpdatedAtUtc = integrationEvent.OccurredAtUtc,
+                }
+            );
+        }
+        else if (projection.Version < integrationEvent.Version)
+        {
+            projection.LegalName = integrationEvent.LegalName;
+            projection.TaxId = integrationEvent.TaxId;
+            projection.FiscalAddress = integrationEvent.FiscalAddress;
+            projection.Phone = integrationEvent.Phone;
+            projection.Email = integrationEvent.Email;
+            projection.Version = integrationEvent.Version;
+            projection.UpdatedAtUtc = integrationEvent.OccurredAtUtc;
+        }
     }
 
     private async Task DisposeBrokerResourcesAsync()

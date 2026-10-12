@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using Restaurantes.Messaging.RabbitMq;
+using Restaurantes.RestaurantOperations.Contracts.Events;
 using Restaurantes.RestaurantOperations.Infrastructure.Persistence;
 using Restaurantes.RestaurantOperations.Infrastructure.Persistence.Write;
 
@@ -111,9 +112,20 @@ public sealed class OutboxPublisherWorker(
                     Type = message.Type,
                 };
 
+                string routingKey = message.Type switch
+                {
+                    var type when type == typeof(RestaurantChanged).FullName =>
+                        RestaurantOperationsTopology.RestaurantChangedRoutingKey,
+                    var type when type == typeof(CompanyChanged).FullName =>
+                        RestaurantOperationsTopology.CompanyChangedRoutingKey,
+                    _ => throw new NotSupportedException(
+                        $"Unsupported outbox event type: {message.Type}"
+                    ),
+                };
+
                 await channel.BasicPublishAsync(
                     exchange: RestaurantOperationsTopology.ExchangeName,
-                    routingKey: RestaurantOperationsTopology.RestaurantChangedRoutingKey,
+                    routingKey,
                     mandatory: true,
                     basicProperties: properties,
                     body: Encoding.UTF8.GetBytes(message.Payload),
