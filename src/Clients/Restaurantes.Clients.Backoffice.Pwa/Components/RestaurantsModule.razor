@@ -1,21 +1,20 @@
-@if (Host.IsAdmin)
+﻿@if (Host.IsAdmin)
 {
-    <details class="admin-panel"><summary>Nuevo local · solo Admin</summary>
+    <details class="admin-panel" open><summary>Nuevo local · solo Admin</summary>
         <form class="inline-form" @onsubmit="Host.CreateRestaurant" @onsubmit:preventDefault>
             <input placeholder="Código" @bind="Host.restaurantDraft.Code" /><input placeholder="Nombre" @bind="Host.restaurantDraft.Name" />
-            <input class="wide" placeholder="Dirección" @bind="Host.restaurantDraft.Address" /><button class="primary" disabled="@Host.busy">Agregar</button>
+            <input class="wide" placeholder="Dirección" @bind="Host.restaurantDraft.Address" /><button class="primary" disabled="@Host.busy">Agregar Local</button>
         </form>
     </details>
 }
-<div class="module-toolbar"><button class="secondary" @onclick="Host.RefreshModule" disabled="@Host.busy">Actualizar locales</button></div>
 <div class="restaurant-list">
     @foreach (RestaurantResponse restaurant in Host.restaurants.OrderBy(x => x.Name))
     {
-        <section class="settings-panel restaurant-settings" @key="restaurant.Id">
-            <div><strong>@restaurant.Code</strong><small>ID @restaurant.Id</small></div>
+        <section class="settings-panel restaurant-settings @(restaurant.IsActive ? "" : "inactive")" @key="restaurant.Id">
+            <div class="restaurant-identity"><strong>@restaurant.Code</strong><small>ID @restaurant.Id</small></div>
             <label>Nombre<input @bind="restaurant.Name" /></label><label>Dirección<input @bind="restaurant.Address" /></label>
             <label class="availability"><input type="checkbox" @bind="restaurant.IsActive" /> Local activo</label>
-            <button class="primary" @onclick="() => Host.SaveRestaurant(restaurant)" disabled="@Host.busy">Guardar local</button>
+            <button class="primary" @onclick="() => Host.SaveRestaurant(restaurant)" disabled="@Host.busy">Guardar</button>
         </section>
     }
 </div>

@@ -50,11 +50,10 @@ else
     <main class="workspace">
         <aside class="sidebar">
             <h2>Módulos</h2>
-            @if (HasAnyLocalPermission("catalog.manage")) { <button class="@NavClass("catalog-design")" @onclick='() => module = "catalog-design"'>Cartas</button> }
-            @if (HasAnyLocalPermission("catalog.manage")) { <button class="@NavClass("menu")" @onclick='() => module = "menu"'>Preparación por local</button> }
-            @if (OrderRestaurants.Count > 0) { <button class="@NavClass("orders")" @onclick="OpenOrders">Pedidos</button> }
-            @if (HasAnyLocalPermission("kds.use")) { <button class="@NavClass("stations")" @onclick='() => module = "stations"'>Estaciones KDS</button> }
-            @if (HasAnyLocalPermission("tables.read")) { <button class="@NavClass("tables")" @onclick='() => module = "tables"'>Mesas y puestos de barra</button> }
+            @if (IsCurrentRestaurantManager) { <button class="@NavClass("catalog-design")" @onclick='() => module = "catalog-design"'>Carta del local</button> }
+            @if (!IsAdmin && OrderRestaurants.Count > 0) { <button class="@NavClass("orders")" @onclick="OpenOrders">Pedidos</button> }
+            @if (IsCurrentRestaurantManager) { <button class="@NavClass("stations")" @onclick='() => module = "stations"'>Estaciones KDS</button> }
+            @if (HasAnyLocalPermission("tables.read")) { <button class="@NavClass("tables")" @onclick='() => module = "tables"'>Mesas</button> }
             @if (HasAnyLocalPermission("tables.read")) { <button class="@NavClass("zones")" @onclick='() => module = "zones"'>Zonas</button> }
             @if (IsAdmin) { <button class="@NavClass("restaurants")" @onclick='() => module = "restaurants"'>Locales</button> }
             @if (IsAdmin) { <button class="@NavClass("categories")" @onclick='() => module = "categories"'>Categorías</button> }
@@ -63,7 +62,6 @@ else
             @if (IsAdmin) { <button class="@NavClass("allergens")" @onclick='() => module = "allergens"'>Alérgenos</button> }
             @if (HasLocalPermission("reports.financial.read")) { <button disabled>Contabilidad <small>Próximo</small></button> }
             @if (HasLocalPermission("reports.marketing.read")) { <button disabled>Marketing y KPI <small>Próximo</small></button> }
-            @if (HasLocalPermission("reports.kitchen.read")) { <button disabled>Tiempos de cocina <small>Próximo</small></button> }
             <AuthorizeView Roles="Admin">
                 <Authorized>
                     <button class="@NavClass("users")" @onclick='() => module = "users"'>Usuarios y perfiles</button>
@@ -74,32 +72,35 @@ else
         <section class="content">
             <div class="page-title">
                 <div><p class="eyebrow">@ModuleEyebrow</p><h1>@ModuleTitle</h1></div>
-                @if ((module == "users" && CanManageUsers) || (module == "categories" && HasGlobalPermission("catalog.global.manage")))
+                @if (ShowRestaurantContextSelector || RefreshLabel is not null)
                 {
                     <div class="context-header-actions">
-                        <RestaurantContextSelector Host="this" />
-                        <button class="secondary" @onclick="RefreshModule" disabled="@busy">
-                            @(module == "users" ? "Actualizar usuarios" : "Actualizar categorías")
-                        </button>
+                        @if (ShowRestaurantContextSelector)
+                        {
+                            <RestaurantContextSelector Host="this" />
+                        }
+                        @if (RefreshLabel is { } refreshLabel)
+                        {
+                            <button class="secondary" @onclick="RefreshCurrentModule" disabled="@busy">@refreshLabel</button>
+                        }
                     </div>
                 }
             </div>
 
-            @if (module == "menu")
+            @if (module == "catalog-design")
             {
-                <MenuModule Host="this" />
-            }
-            else if (module == "catalog-design")
-            {
-                <CatalogDesignModule Host="this" />
+                @if (IsCurrentRestaurantManager) { <CatalogDesignModule Host="this" @ref="catalogDesignModule" /> }
+                else { <NoAccessPanel /> }
             }
             else if (module == "orders")
             {
-                <OrdersModule Host="this" />
+                @if (!IsAdmin && OrderRestaurants.Count > 0) { <OrdersModule Host="this" /> }
+                else { <NoAccessPanel /> }
             }
             else if (module == "stations")
             {
-                <StationsModule Host="this" />
+                @if (IsCurrentRestaurantManager) { <StationsModule Host="this" /> }
+                else { <NoAccessPanel /> }
             }
             else if (module == "categories")
             {
@@ -111,11 +112,11 @@ else
             }
             else if (module == "taxes")
             {
-                <TaxesModule Host="this" />
+                <TaxesModule Host="this" @ref="taxesModule" />
             }
             else if (module == "allergens")
             {
-                <AllergensModule Host="this" />
+                <AllergensModule Host="this" @ref="allergensModule" />
             }
             else if (module == "restaurants")
             {
