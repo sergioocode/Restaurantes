@@ -4,6 +4,8 @@
     <ServiceWorkerAssetsManifest>service-worker-assets.js</ServiceWorkerAssetsManifest>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Syncfusion.Blazor.Navigations" Version="35.1.37" />
+    <PackageReference Include="Syncfusion.Blazor.Themes" Version="35.1.37" />
     <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="10.0.12" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.12" />
     <PackageReference

@@ -1,5 +1,6 @@
 ﻿@page "/"
 @using System.Text.Json
+@using Syncfusion.Blazor.Navigations
 @inject BackofficeApi Api
 @inject IJSRuntime Js
 @inject NavigationManager Nav
@@ -34,109 +35,149 @@ else if (login is null)
                     Iniciar sesión con Google
                 </button>
             </div>
-            @if (!string.IsNullOrWhiteSpace(message)) { <p class="error">@message</p> }
+            @if (!string.IsNullOrWhiteSpace(message))
+            {
+                <p class="error">@message</p>
+            }
         </section>
     </main>
 }
 else
 {
     <header class="topbar">
-        <div><p class="eyebrow">RESTAURANTES · BACKOFFICE</p><strong>@login.User.DisplayName</strong></div>
+        <div class="topbar-brand">
+            <button class="sidebar-menu-toggle" type="button" aria-label="Abrir o cerrar el menú" aria-expanded="@sidebarOpen" @onclick="ToggleSidebar">
+                <span aria-hidden="true">☰</span>
+            </button>
+            <div><p class="eyebrow">RESTAURANTES · BACKOFFICE</p><strong>@login.User.DisplayName</strong></div>
+        </div>
         <div class="top-actions">
             <button class="secondary" @onclick="Logout">Salir</button>
         </div>
     </header>
 
-    <main class="workspace">
-        <aside class="sidebar">
-            <h2>Módulos</h2>
-            @if (IsCurrentRestaurantManager) { <button class="@NavClass("catalog-design")" @onclick='() => module = "catalog-design"'>Carta del local</button> }
-            @if (!IsAdmin && OrderRestaurants.Count > 0) { <button class="@NavClass("orders")" @onclick="OpenOrders">Pedidos</button> }
-            @if (IsCurrentRestaurantManager) { <button class="@NavClass("stations")" @onclick='() => module = "stations"'>Estaciones KDS</button> }
-            @if (HasAnyLocalPermission("tables.read")) { <button class="@NavClass("tables")" @onclick='() => module = "tables"'>Mesas</button> }
-            @if (HasAnyLocalPermission("tables.read")) { <button class="@NavClass("zones")" @onclick='() => module = "zones"'>Zonas</button> }
-            @if (IsAdmin) { <button class="@NavClass("restaurants")" @onclick='() => module = "restaurants"'>Locales</button> }
-            @if (IsAdmin) { <button class="@NavClass("categories")" @onclick='() => module = "categories"'>Categorías</button> }
-            @if (IsAdmin) { <button class="@NavClass("products")" @onclick='() => module = "products"'>Productos</button> }
-            @if (IsAdmin) { <button class="@NavClass("taxes")" @onclick='() => module = "taxes"'>Impuestos</button> }
-            @if (IsAdmin) { <button class="@NavClass("allergens")" @onclick='() => module = "allergens"'>Alérgenos</button> }
-            @if (HasLocalPermission("reports.financial.read")) { <button disabled>Contabilidad <small>Próximo</small></button> }
-            @if (HasLocalPermission("reports.marketing.read")) { <button disabled>Marketing y KPI <small>Próximo</small></button> }
-            <AuthorizeView Roles="Admin">
-                <Authorized>
-                    <button class="@NavClass("users")" @onclick='() => module = "users"'>Usuarios y perfiles</button>
-                </Authorized>
-            </AuthorizeView>
-        </aside>
+    <div class="backoffice-shell">
+        <SfSidebar @attributes="SidebarAttributes" @bind-IsOpen="sidebarOpen" Width="260px" Target=".workspace" Position="SidebarPosition.Left"
+                   Type="SidebarType.Auto" Animate="true">
+            <ChildContent>
+                <aside class="sidebar" aria-label="Navegación del Backoffice">
+                    <SfTreeView TValue="NavigationNode" CssClass="sidebar-tree" @bind-SelectedNodes="selectedNavigationNodes">
+                        <TreeViewEvents TValue="NavigationNode" NodeSelecting="BeforeNavigationSelect" NodeSelected="OnNavigationSelected" />
+                        <TreeViewFieldsSettings TValue="NavigationNode" Id="Id" Text="Text" ParentID="ParentId" HasChildren="HasChildren" Expanded="Expanded" DataSource="@NavigationNodes" />
+                    </SfTreeView>
+                </aside>
+            </ChildContent>
+        </SfSidebar>
 
-        <section class="content">
-            <div class="page-title">
-                <div><p class="eyebrow">@ModuleEyebrow</p><h1>@ModuleTitle</h1></div>
-                @if (ShowRestaurantContextSelector || RefreshLabel is not null)
+        <main class="workspace">
+            <section class="content">
+                <div class="page-title">
+                    <div><p class="eyebrow">@ModuleEyebrow</p><h1>@ModuleTitle</h1></div>
+                    @if (ShowRestaurantContextSelector || RefreshLabel is not null)
+                    {
+                        <div class="context-header-actions">
+                            @if (ShowRestaurantContextSelector)
+                            {
+                                <RestaurantContextSelector Host="this" />
+                            }
+                            @if (RefreshLabel is { } refreshLabel)
+                            {
+                                <button class="secondary" @onclick="RefreshCurrentModule" disabled="@busy">@refreshLabel</button>
+                            }
+                        </div>
+                    }
+                </div>
+
+                @if (module == "catalog-design")
                 {
-                    <div class="context-header-actions">
-                        @if (ShowRestaurantContextSelector)
-                        {
-                            <RestaurantContextSelector Host="this" />
-                        }
-                        @if (RefreshLabel is { } refreshLabel)
-                        {
-                            <button class="secondary" @onclick="RefreshCurrentModule" disabled="@busy">@refreshLabel</button>
-                        }
-                    </div>
-                }
-            </div>
+                    @if (IsCurrentRestaurantManager)
+                    {
+                        <CatalogDesignModule Host="this" @ref="catalogDesignModule" />
+                    }
+                    else
+                    {
 
-            @if (module == "catalog-design")
-            {
-                @if (IsCurrentRestaurantManager) { <CatalogDesignModule Host="this" @ref="catalogDesignModule" /> }
-                else { <NoAccessPanel /> }
-            }
-            else if (module == "orders")
-            {
-                @if (!IsAdmin && OrderRestaurants.Count > 0) { <OrdersModule Host="this" /> }
-                else { <NoAccessPanel /> }
-            }
-            else if (module == "stations")
-            {
-                @if (IsCurrentRestaurantManager) { <StationsModule Host="this" /> }
-                else { <NoAccessPanel /> }
-            }
-            else if (module == "categories")
-            {
-                <CategoriesModule Host="this" />
-            }
-            else if (module == "products")
-            {
-                <ProductsModule Host="this" />
-            }
-            else if (module == "taxes")
-            {
-                <TaxesModule Host="this" @ref="taxesModule" />
-            }
-            else if (module == "allergens")
-            {
-                <AllergensModule Host="this" @ref="allergensModule" />
-            }
-            else if (module == "restaurants")
-            {
-                <RestaurantsModule Host="this" />
-            }
-            else if (module == "users")
-            {
-                <UsersModule Host="this" />
-            }
-            else if (module == "tables")
-            {
-                <TablesModule Host="this" />
-            }
-            else if (module == "zones")
-            {
-                <ZonesModule Host="this" />
-            }
-        </section>
-    </main>
-    @if (!string.IsNullOrWhiteSpace(message)) { <div class="toast @(ok ? "ok" : "error")">@message</div> }
+                        <NoAccessPanel />
+                    }
+                }
+                else if (module == "orders")
+                {
+                    @if (OrderRestaurants.Count > 0)
+                    {
+                        <OrdersModule Host="this" />
+                    }
+                    else
+                    {
+
+                        <NoAccessPanel />
+                    }
+                }
+                else if (module == "daily-orders-report")
+                {
+                    @if (ReportRestaurants.Count > 0)
+                    {
+                        <OrdersModule Host="this" />
+                    }
+                    else
+                    {
+                        <NoAccessPanel />
+                    }
+                }
+                else if (module == "stations")
+                {
+                    @if (IsCurrentRestaurantManager)
+                    {
+                        <StationsModule Host="this" />
+                    }
+                    else
+                    {
+
+                        <NoAccessPanel />
+                    }
+                }
+                else if (module == "categories")
+                {
+                    <CategoriesModule Host="this" />
+                }
+                else if (module == "products")
+                {
+                    <ProductsModule Host="this" />
+                }
+                else if (module == "taxes")
+                {
+                    <TaxesModule Host="this" @ref="taxesModule" />
+                }
+                else if (module == "allergens")
+                {
+                    <AllergensModule Host="this" @ref="allergensModule" />
+                }
+                else if (module == "restaurants")
+                {
+                    <RestaurantsModule Host="this" />
+                }
+                else if (module == "companies")
+                {
+                    <CompaniesModule Host="this" />
+                }
+                else if (module == "users")
+                {
+                    <UsersModule Host="this" />
+                }
+                else if (module == "tables")
+                {
+                    <TablesModule Host="this" />
+                }
+                else if (module == "zones")
+                {
+                    <ZonesModule Host="this" />
+                }
+            </section>
+        </main>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div class="toast @(ok ? "ok" : "error")">@message</div>
+    }
 }
 @if (selectedOrder is not null)
 {
@@ -163,13 +204,16 @@ else
             @foreach (ManagementOrderLineResponse line in selectedOrder.Lines)
             {
                 <div class="order-ticket-line">
-                    <span>@line.Quantity × @line.ProductName @if (line.Status == "Cancelled") { <small>(Cancelado)</small> }</span>
-                    <strong>@((line.Quantity * line.UnitPrice).ToString("0.00")) €</strong>
-                </div>
-            }
-            <hr />
-            <div class="order-ticket-total"><strong>Total</strong><strong>@selectedOrder.Total.ToString("0.00") €</strong></div>
-            <p class="order-ticket-copy">Copia del pedido</p>
-        </article>
-    </div>
+                    <span>@line.Quantity × @line.ProductName @if (line.Status == "Cancelled") {
+                        <small>(Cancelado)</small>
+                    }
+                </span>
+                <strong>@((line.Quantity * line.UnitPrice).ToString("0.00")) €</strong>
+            </div>
+        }
+        <hr />
+        <div class="order-ticket-total"><strong>Total</strong><strong>@selectedOrder.Total.ToString("0.00") €</strong></div>
+        <p class="order-ticket-copy">Copia del pedido</p>
+    </article>
+</div>
 }
