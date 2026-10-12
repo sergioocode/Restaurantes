@@ -12,5 +12,7 @@ public sealed record SaleResponse(
     int OrderCount,
     DateTime CompletedAtUtc,
     IReadOnlyList<Guid> OrderIds,
-    IReadOnlyList<SaleLineSnapshot> Lines
+    IReadOnlyList<SaleLineSnapshot> Lines,
+    decimal TipTotal = 0,
+    IReadOnlyList<SalePaymentBreakdown>? PaymentMethods = null
 );

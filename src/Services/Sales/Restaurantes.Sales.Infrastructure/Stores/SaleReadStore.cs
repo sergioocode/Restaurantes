@@ -21,6 +21,7 @@ public sealed class SaleReadStore(SaleReadDbContext dbContext, TimeZoneInfo time
     public async Task<IReadOnlyList<SaleResponse>> ListAsync(
         Guid? restaurantId,
         DateOnly? date,
+        int offset,
         CancellationToken cancellationToken
     )
     {
@@ -50,6 +51,8 @@ public sealed class SaleReadStore(SaleReadDbContext dbContext, TimeZoneInfo time
         return (
             await query
                 .OrderByDescending(item => item.CompletedAtUtc)
+                .ThenByDescending(item => item.Id)
+                .Skip(Math.Max(0, offset))
                 .Take(100)
                 .ToListAsync(cancellationToken)
         )
@@ -69,7 +72,9 @@ public sealed class SaleReadStore(SaleReadDbContext dbContext, TimeZoneInfo time
             sale.OrderCount,
             sale.CompletedAtUtc,
             JsonSerializer.Deserialize<List<Guid>>(sale.OrderIdsJson) ?? [],
-            JsonSerializer.Deserialize<List<SaleLineSnapshot>>(sale.LinesJson) ?? []
+            JsonSerializer.Deserialize<List<SaleLineSnapshot>>(sale.LinesJson) ?? [],
+            sale.TipTotal,
+            JsonSerializer.Deserialize<List<SalePaymentBreakdown>>(sale.PaymentMethodsJson) ?? []
         );
     }
 }

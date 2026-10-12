@@ -52,4 +52,5 @@ public sealed class SalePayment
     public Guid TransactionId { get; set; }
     public string Method { get; set; } = string.Empty;
     public decimal Amount { get; set; }
+    public decimal TipAmount { get; set; }
 }
