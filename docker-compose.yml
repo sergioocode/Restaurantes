@@ -1,6 +1,17 @@
 name: restaurantes
 
 services:
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite
+    container_name: restaurantes-azurite
+    command: >-
+      azurite-blob --location /data --blobHost 0.0.0.0
+    ports:
+      - "127.0.0.1:10000:10000"
+    volumes:
+      - restaurant-azurite-data:/data
+    restart: unless-stopped
+
   postgres:
     image: postgres:18-alpine
     container_name: restaurantes-postgres
@@ -211,6 +222,7 @@ services:
 
 
 volumes:
+  restaurant-azurite-data:
   restaurant-postgres-operational-data:
   restaurant-postgres-analytics-data:
   restaurant-pgadmin-data:
