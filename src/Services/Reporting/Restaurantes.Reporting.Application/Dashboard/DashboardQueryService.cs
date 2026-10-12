@@ -38,10 +38,17 @@ public sealed class DashboardQueryService(
             .ToList();
         List<SalesProduct> products = sales
             .SelectMany(x => x.Lines)
-            .GroupBy(x => new { x.ProductId, x.ProductName })
+            .GroupBy(x => new
+            {
+                x.ProductId,
+                x.ProductName,
+                x.Format,
+            })
             .Select(g => new SalesProduct(
                 g.Key.ProductId,
-                g.Key.ProductName,
+                string.IsNullOrWhiteSpace(g.Key.Format)
+                    ? g.Key.ProductName
+                    : $"{g.Key.ProductName} [{FormatLabel(g.Key.Format)}]",
                 g.Sum(x => x.Quantity),
                 g.Sum(x => x.UnitPrice * x.Quantity)
             ))
@@ -91,4 +98,18 @@ public sealed class DashboardQueryService(
             time.GetUtcNow().UtcDateTime
         );
     }
+
+    private static string FormatLabel(string format) =>
+        format switch
+        {
+            "PLATO" => "Plato",
+            "RACION" => "Ración",
+            "MEDIA_RACION" => "Media ración",
+            "TAPA" => "Tapa",
+            "UNIDAD" => "Unidad",
+            "TERCIO" => "Tercio",
+            "VASO" => "Vaso",
+            "COPA" => "Copa",
+            _ => format,
+        };
 }

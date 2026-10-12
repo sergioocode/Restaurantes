@@ -138,7 +138,8 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
                         item.UnitPrice,
                         item.Quantity,
                         item.CategoryName,
-                        item.PreparationStationCode
+                        item.PreparationStationCode,
+                        item.Format
                     ))
                     .ToList();
                 CompletedSaleFact fact =
