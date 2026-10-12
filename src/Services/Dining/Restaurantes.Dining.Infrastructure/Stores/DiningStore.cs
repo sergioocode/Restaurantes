@@ -57,6 +57,16 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
         return db.Sessions.AnyAsync(x => x.TableId == tableId && x.Status == "Open", ct);
     }
 
+    public Task<bool> HasSalesForTableAsync(Guid tableId, CancellationToken ct)
+    {
+        return db.Sessions.AnyAsync(
+            session =>
+                session.TableId == tableId
+                && (session.PaidAtUtc != null || session.Orders.Any(order => order.AmountPaid > 0)),
+            ct
+        );
+    }
+
     public Task<DiningSession> ReadRequiredActiveSessionAsync(Guid tableId, CancellationToken ct)
     {
         return db
@@ -167,14 +177,6 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
                 $"SELECT * FROM dining_zones WHERE \"Id\" = {zoneId} AND \"RestaurantId\" = {restaurantId} FOR UPDATE"
             )
             .SingleOrDefaultAsync(ct);
-    }
-
-    public Task<bool> HasTablesInZoneAsync(Guid restaurantId, Guid zoneId, CancellationToken ct)
-    {
-        return db.Tables.AnyAsync(
-            x => x.ZoneId == zoneId && x.RestaurantId == restaurantId && x.DeletedAtUtc == null,
-            ct
-        );
     }
 
     public void Add<T>(T entity)

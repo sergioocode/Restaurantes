@@ -1,7 +1,6 @@
 ﻿using System.Net;
 using Microsoft.AspNetCore.HttpOverrides;
 using Restaurantes.Dining.Api;
-using Restaurantes.Dining.Api.Realtime;
 using Restaurantes.Dining.Application;
 using Restaurantes.Dining.Infrastructure;
 using Restaurantes.Security;
@@ -34,10 +33,8 @@ builder.Services.AddScoped<DiningService>();
 builder.Services.AddScoped<DiningIntegrationService>();
 builder.Services.AddSingleton<IDiningAuthorization, DiningAuthorization>();
 builder.Services.AddDiningInfrastructure(builder.Configuration);
-builder.Services.AddScoped<IDiningNotifications, DiningNotifications>();
 builder.Services.AddRestaurantSecurity(builder.Configuration);
 builder.Services.AddControllers();
-builder.Services.AddSignalR();
 
 WorkerHost.ConfigureServices(builder.Services, builder.Configuration);
 WebApplication app = builder.Build();
@@ -48,5 +45,4 @@ app.UseForwardedHeaders();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-app.MapHub<DiningHub>("/hubs/dining");
 await app.RunAsync();

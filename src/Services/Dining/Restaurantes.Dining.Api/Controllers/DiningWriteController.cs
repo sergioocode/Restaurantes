@@ -140,12 +140,6 @@ public sealed class DiningWriteController(DiningService service, IConfiguration 
         return Execute(() => service.UpdateZone(restaurantId, zoneId, request, User, ct));
     }
 
-    [HttpDelete("restaurants/{restaurantId:guid}/zones/{zoneId:guid}")]
-    public Task<IActionResult> DeleteZone(Guid restaurantId, Guid zoneId, CancellationToken ct)
-    {
-        return Execute(() => service.DeleteZone(restaurantId, zoneId, User, ct));
-    }
-
     private async Task<IActionResult> Execute(Func<Task<DiningResult>> operation)
     {
         return this.ToActionResult(await operation());

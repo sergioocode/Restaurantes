@@ -122,7 +122,6 @@ public sealed partial class DiningService
         {
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
-            await PublishTableChanged(realtime, session, "Occupied", time);
             return DiningResults.Created(
                 $"/api/dining/sessions/{session.Id}",
                 QrSessionResponse(table, session)

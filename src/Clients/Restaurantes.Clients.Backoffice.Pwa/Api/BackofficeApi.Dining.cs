@@ -29,19 +29,6 @@ public sealed partial class BackofficeApi
         return await ReadAsync<ZoneResponse>(response);
     }
 
-    public async Task DeleteZoneAsync(Guid restaurantId, Guid zoneId)
-    {
-        using HttpRequestMessage request = Authorized(
-            HttpMethod.Delete,
-            $"/api/dining/restaurants/{restaurantId}/zones/{zoneId}"
-        );
-        using HttpResponseMessage response = await http.SendAsync(request);
-        if (!response.IsSuccessStatusCode)
-        {
-            await ReadAsync<object>(response);
-        }
-    }
-
     public Task<List<TableResponse>> TablesAsync(Guid restaurantId)
     {
         return GetAsync<List<TableResponse>>($"/api/dining/restaurants/{restaurantId}/tables");

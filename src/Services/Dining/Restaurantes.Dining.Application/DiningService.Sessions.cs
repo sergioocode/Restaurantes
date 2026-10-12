@@ -68,7 +68,6 @@ public sealed partial class DiningService
         {
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
-            await PublishTableChanged(realtime, session, "Occupied", time);
             return DiningResults.Created(
                 $"/api/dining/sessions/{session.Id}",
                 SessionResponse(session)
@@ -246,7 +245,6 @@ public sealed partial class DiningService
 
         session.Close(time.GetUtcNow().UtcDateTime);
         await db.SaveChangesAsync(ct);
-        await PublishTableChanged(realtime, session, "Available", time);
         return DiningResults.Ok(SessionResponse(session));
     }
 
@@ -309,7 +307,6 @@ public sealed partial class DiningService
         DateTime now = time.GetUtcNow().UtcDateTime;
         session.Cancel(cancelledByUserId, now);
         await db.SaveChangesAsync(ct);
-        await PublishTableChanged(realtime, session, "Available", time);
         return DiningResults.Ok(SessionResponse(session));
     }
 }
