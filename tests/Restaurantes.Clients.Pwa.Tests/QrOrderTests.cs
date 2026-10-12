@@ -14,7 +14,6 @@ using Xunit;
 using CommanderApi = Restaurantes.Clients.Commander.Pwa.Api.CommanderApi;
 using CommanderBill = Restaurantes.Clients.Commander.Pwa.Models.SessionBillResponse;
 using CommanderBillOrder = Restaurantes.Clients.Commander.Pwa.Models.SessionBillOrderResponse;
-using CommanderDiningRealtime = Restaurantes.Clients.Commander.Pwa.Realtime.DiningRealtimeClient;
 using CommanderHome = Restaurantes.Clients.Commander.Pwa.Pages.Home;
 using CommanderMenuItem = Restaurantes.Clients.Commander.Pwa.Models.MenuItemResponse;
 using CommanderOrder = Restaurantes.Clients.Commander.Pwa.Models.OrderResponse;
@@ -26,7 +25,7 @@ using CommanderTable = Restaurantes.Clients.Commander.Pwa.Models.TableResponse;
 using PosApi = Restaurantes.Clients.Pos.Pwa.Api.PosApi;
 using PosBillOrder = Restaurantes.Clients.Pos.Pwa.Models.SessionBillOrderResponse;
 using PosCashRegister = Restaurantes.Clients.Pos.Pwa.Models.CashRegisterResponse;
-using PosDiningRealtime = Restaurantes.Clients.Pos.Pwa.Realtime.DiningRealtimeClient;
+using PosCatalogRealtime = Restaurantes.Clients.Pos.Pwa.Realtime.CatalogRealtimeClient;
 using PosHome = Restaurantes.Clients.Pos.Pwa.Pages.Home;
 using PosOrder = Restaurantes.Clients.Pos.Pwa.Models.OrderResponse;
 using PosOrderDetail = Restaurantes.Clients.Pos.Pwa.Models.OrderDetailResponse;
@@ -75,7 +74,6 @@ public sealed class QrOrderTests : BunitContext
         CommanderApi api = new(http);
         Services.AddSingleton(api);
         Services.AddSingleton(new CommanderOrderRealtime(http, api));
-        Services.AddSingleton(new CommanderDiningRealtime(http, api));
         Services.AddSingleton<IJSRuntime, EmptyJsRuntime>();
 
         IRenderedComponent<CommanderHome> cut = Render<CommanderHome>();
@@ -94,7 +92,7 @@ public sealed class QrOrderTests : BunitContext
         PosApi api = new(http);
         Services.AddSingleton(api);
         Services.AddSingleton(new PosOrderRealtime(http, api));
-        Services.AddSingleton(new PosDiningRealtime(http, api));
+        Services.AddSingleton(new PosCatalogRealtime(http, api));
         Services.AddSingleton<IJSRuntime, EmptyJsRuntime>();
 
         IRenderedComponent<PosHome> cut = Render<PosHome>();
@@ -220,7 +218,6 @@ public sealed class QrOrderTests : BunitContext
         CommanderApi api = new(http);
         Services.AddSingleton(api);
         Services.AddSingleton(new CommanderOrderRealtime(http, api));
-        Services.AddSingleton(new CommanderDiningRealtime(http, api));
         Services.AddSingleton<IJSRuntime, EmptyJsRuntime>();
 
         IRenderedComponent<CommanderHome> cut = Render<CommanderHome>();
@@ -277,7 +274,7 @@ public sealed class QrOrderTests : BunitContext
         PosApi api = new(http);
         Services.AddSingleton(api);
         Services.AddSingleton(new PosOrderRealtime(http, api));
-        Services.AddSingleton(new PosDiningRealtime(http, api));
+        Services.AddSingleton(new PosCatalogRealtime(http, api));
         Services.AddSingleton<IJSRuntime, EmptyJsRuntime>();
 
         IRenderedComponent<PosHome> cut = Render<PosHome>();
@@ -332,7 +329,6 @@ public sealed class QrOrderTests : BunitContext
         CommanderApi api = new(http);
         Services.AddSingleton(api);
         Services.AddSingleton(new CommanderOrderRealtime(http, api));
-        Services.AddSingleton(new CommanderDiningRealtime(http, api));
         Services.AddSingleton<IJSRuntime, ConfirmingJsRuntime>();
 
         IRenderedComponent<CommanderHome> cut = Render<CommanderHome>();
@@ -398,7 +394,7 @@ public sealed class QrOrderTests : BunitContext
         PosApi api = new(http);
         Services.AddSingleton(api);
         Services.AddSingleton(new PosOrderRealtime(http, api));
-        Services.AddSingleton(new PosDiningRealtime(http, api));
+        Services.AddSingleton(new PosCatalogRealtime(http, api));
         Services.AddSingleton<IJSRuntime, ConfirmingJsRuntime>();
 
         IRenderedComponent<PosHome> cut = Render<PosHome>();
@@ -439,7 +435,7 @@ public sealed class QrOrderTests : BunitContext
         PosApi api = new(http);
         Services.AddSingleton(api);
         Services.AddSingleton(new PosOrderRealtime(http, api));
-        Services.AddSingleton(new PosDiningRealtime(http, api));
+        Services.AddSingleton(new PosCatalogRealtime(http, api));
         Services.AddSingleton<IJSRuntime, ConfirmingJsRuntime>();
 
         IRenderedComponent<PosHome> cut = Render<PosHome>();
@@ -518,7 +514,7 @@ public sealed class QrOrderTests : BunitContext
         PosApi api = new(http);
         Services.AddSingleton(api);
         Services.AddSingleton(new PosOrderRealtime(http, api));
-        Services.AddSingleton(new PosDiningRealtime(http, api));
+        Services.AddSingleton(new PosCatalogRealtime(http, api));
         Services.AddSingleton<IJSRuntime, ConfirmingJsRuntime>();
 
         IRenderedComponent<PosHome> cut = Render<PosHome>();
