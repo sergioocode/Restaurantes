@@ -11,5 +11,6 @@ public sealed record OrderLineDraft(
     string PreparationStationCode,
     string PreparationStationName,
     bool RequiresPrimaryDispatch,
-    int Priority
+    int Priority,
+    string Format = ""
 );

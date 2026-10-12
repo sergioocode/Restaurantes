@@ -2,6 +2,8 @@ namespace Restaurantes.Orders.Application;
 
 public sealed record OrderExtraOption(Guid ProductId, string ProductName, decimal Price);
 
+public sealed record OrderCatalogFormat(string Format, decimal Price);
+
 public sealed record OrderExtraGroup(
     Guid Id,
     string Name,
@@ -22,5 +24,7 @@ public sealed record OrderCatalogProduct(
     bool RequiresPrimaryDispatch,
     int Priority,
     bool IsAvailable,
-    IReadOnlyList<OrderExtraGroup> ExtraGroups
+    IReadOnlyList<OrderExtraGroup> ExtraGroups,
+    string DefaultFormat,
+    IReadOnlyList<OrderCatalogFormat> Formats
 );

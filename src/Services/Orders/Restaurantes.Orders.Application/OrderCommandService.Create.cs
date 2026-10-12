@@ -50,7 +50,8 @@ public sealed partial class OrderCommandService
             ct
         );
         List<Guid> unavailable = ids.Where(id =>
-                !products.TryGetValue(id, out OrderCatalogProduct? p) || !p.IsAvailable
+                !products.TryGetValue(id, out OrderCatalogProduct? p)
+                || (source != OrderSource.Pos && !p.IsAvailable)
             )
             .ToList();
         if (unavailable.Count > 0)
@@ -74,10 +75,25 @@ public sealed partial class OrderCommandService
             request.Lines.Select(line =>
             {
                 OrderCatalogProduct p = products[line.ProductId];
+                string format = string.IsNullOrWhiteSpace(line.Format)
+                    ? p.DefaultFormat
+                    : line.Format.Trim().ToUpperInvariant();
+                OrderCatalogFormat? currentFormatPrice = p.Formats.FirstOrDefault(x =>
+                    x.Format == format
+                );
+                OrderCatalogFormat? formatPrice =
+                    source == OrderSource.Pos
+                        ? new OrderCatalogFormat(format, currentFormatPrice?.Price ?? p.Price)
+                        : currentFormatPrice;
+                if (formatPrice is null)
+                    throw new ArgumentException(
+                        $"El formato {format} de {p.ProductName} no está disponible."
+                    );
                 CreateOrderExtraRequest[] requestedExtras = line.SelectedExtras?.ToArray() ?? [];
                 List<string> selectedExtraNames = [];
                 decimal extrasPrice = 0;
-                foreach (var group in p.ExtraGroups)
+                IReadOnlyList<OrderExtraGroup> extraGroups = p.ExtraGroups;
+                foreach (var group in extraGroups)
                 {
                     var selections = requestedExtras.Where(x => x.GroupId == group.Id).ToArray();
                     int selectionCount = selections.Sum(x => x.Quantity);
@@ -104,7 +120,7 @@ public sealed partial class OrderCommandService
                 }
                 if (
                     requestedExtras.Any(selection =>
-                        p.ExtraGroups.All(group => group.Id != selection.GroupId)
+                        extraGroups.All(group => group.Id != selection.GroupId)
                     )
                 )
                     throw new ArgumentException($"Los extras de {p.ProductName} no son válidos.");
@@ -123,7 +139,9 @@ public sealed partial class OrderCommandService
                 return new OrderLineDraft(
                     p.ProductId,
                     p.ProductName,
-                    p.Price + extrasPrice,
+                    source == OrderSource.Pos && line.ExpectedUnitPrice is decimal unitPrice
+                        ? unitPrice
+                        : formatPrice.Price + extrasPrice,
                     line.Quantity,
                     notes,
                     p.CategoryId,
@@ -131,7 +149,8 @@ public sealed partial class OrderCommandService
                     p.StationCode,
                     p.StationName,
                     p.RequiresPrimaryDispatch,
-                    p.Priority
+                    p.Priority,
+                    format
                 );
             }),
             now,

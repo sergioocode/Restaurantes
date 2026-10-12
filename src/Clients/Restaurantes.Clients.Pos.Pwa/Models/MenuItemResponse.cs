@@ -13,8 +13,12 @@ public sealed record MenuItemResponse(
     string PreparationStationCode,
     string PreparationStationName,
     string PhotoSmallUrl = "",
-    IReadOnlyList<ProductExtraGroup>? ExtraGroups = null
+    IReadOnlyList<ProductExtraGroup>? ExtraGroups = null,
+    string DefaultFormat = "PLATO",
+    IReadOnlyList<MenuItemFormatPrice>? Formats = null
 );
+
+public sealed record MenuItemFormatPrice(string Format, decimal Price);
 
 public sealed record ProductExtraGroup(
     Guid Id,
@@ -35,6 +39,9 @@ public sealed class PosCartLine
 {
     public Guid Id { get; init; } = Guid.NewGuid();
     public Guid ProductId { get; init; }
+    public string Format { get; init; } = "PLATO";
+    public decimal BasePrice { get; init; }
+    public decimal ExpectedUnitPrice { get; set; }
     public int Quantity { get; set; } = 1;
     public string Notes { get; set; } = string.Empty;
     public List<PosCartExtra> Extras { get; init; } = [];

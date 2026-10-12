@@ -6,5 +6,6 @@ public sealed record SaleLineSnapshot(
     decimal UnitPrice,
     int Quantity,
     string CategoryName,
-    string PreparationStationCode
+    string PreparationStationCode,
+    string Format = ""
 );

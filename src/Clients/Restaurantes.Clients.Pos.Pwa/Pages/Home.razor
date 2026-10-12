@@ -2,7 +2,7 @@
 @implements IAsyncDisposable
 @inject PosApi Api
 @inject OrderRealtimeClient Realtime
-@inject DiningRealtimeClient DiningRealtime
+@inject CatalogRealtimeClient CatalogRealtime
 @inject IJSRuntime Js
 @inject NavigationManager Nav
 
@@ -194,14 +194,23 @@
                     </div>
 
                     <div class="category-tabs">
-                        <button class="@CategoryClass(null)" @onclick="() => category = null">Todo</button>
+                        <button class="@CategoryClass(null)" @onclick="() => SelectCategory(null)">Todo</button>
                         @foreach (string itemCategory in Categories)
                         {
-                            <button class="@CategoryClass(itemCategory)" @onclick="() => category = itemCategory">@itemCategory</button>
+                            <button class="@CategoryClass(itemCategory)" @onclick="() => SelectCategory(itemCategory)">@(itemCategory == "Merchandising" ? "Merch" : itemCategory)</button>
+                        }
+                    </div>
+
+                    <div class="format-tabs" aria-label="Formato">
+                        <button class="@(selectedFormat is null ? "filter active" : "filter")" @onclick="() => selectedFormat = null">@(category is null ? "Carta" : FormatLabel(DefaultFormatForCategory(category)))</button>
+                        @foreach (string format in AvailableFormats)
+                        {
+                            <button class="@(selectedFormat == format ? "filter active" : "filter")" @onclick="() => selectedFormat = format">@FormatLabel(format)</button>
                         }
                     </div>
 
                     <div class="product-grid">
+                        @if (VisibleMenu.Count == 0) { <p class="empty">No hay productos en este formato.</p> }
                         @foreach (MenuItemResponse item in VisibleMenu)
                         {
                             <button class="product-tile" @onclick="() => SelectProduct(item.ProductId)">
@@ -209,7 +218,7 @@
                                 @if (item.ExtraGroups is { Count: > 0 }) { <span class="extra-marker" title="Producto con extras">E</span> }
                                 <strong>@item.ProductName</strong>
                                 <span class="product-tile-price">
-                                    <em>@item.Price.ToString("0.00") €</em>
+                                    <em>@DisplayPrice(item).ToString("0.00") €</em>
                                     @if (!string.IsNullOrWhiteSpace(item.PhotoSmallUrl))
                                     {
                                         <img src="@item.PhotoSmallUrl" alt="" loading="lazy" decoding="async" />
@@ -227,7 +236,7 @@
                         {
                             MenuItemResponse item = ProductFor(line);
                             <article>
-                                <div class="line-main"><strong>@item.ProductName</strong><span>@((UnitPrice(line) * line.Quantity).ToString("0.00")) €</span></div>
+                                <div class="line-main"><strong>@item.ProductName · @FormatLabel(line.Format)</strong><span>@((UnitPrice(line) * line.Quantity).ToString("0.00")) €</span></div>
                                 @foreach (PosCartExtra extra in line.Extras)
                                 {
                                     ProductExtraOption? option = item.ExtraGroups?.FirstOrDefault(group => group.Id == extra.GroupId)?.Options.FirstOrDefault(option => option.ProductId == extra.ProductId);
@@ -265,7 +274,7 @@
                 <div class="modal-backdrop" @onclick="CloseExtras">
                     <section class="bill-card extras-card" role="dialog" aria-modal="true" aria-labelledby="extras-title" @onclick:stopPropagation>
                         <div class="bill-title">
-                            <div><p class="eyebrow">EXTRAS</p><h2 id="extras-title">@extraDialogProduct.ProductName</h2></div>
+                            <div><p class="eyebrow">EXTRAS</p><h2 id="extras-title">@extraDialogProduct.ProductName · @FormatLabel(extraDialogFormat)</h2></div>
                             <button class="ghost" @onclick="CloseExtras">Cancelar</button>
                         </div>
                         @foreach (ProductExtraGroup group in extraDialogProduct.ExtraGroups ?? [])
@@ -343,11 +352,11 @@
                                                     <div class="bill-line @(line.Status == "Cancelled" ? "cancelled" : "")">
                                                         @if (line.Status != "Cancelled")
                                                         {
-                                                            <span>@line.Quantity × @line.ProductName · @line.PreparationStationName <small class="line-kitchen @KitchenLineStatusClass(line.KitchenStatus)" title="@KitchenLineStatusLabel(line.KitchenStatus)" aria-label="@KitchenLineStatusLabel(line.KitchenStatus)">@KitchenLineStatusIcon(line.KitchenStatus)</small></span>
+                                                            <span>@line.Quantity × @line.ProductName@(!string.IsNullOrEmpty(line.Format) ? $" · {FormatLabel(line.Format)}" : "") · @line.PreparationStationName <small class="line-kitchen @KitchenLineStatusClass(line.KitchenStatus)" title="@KitchenLineStatusLabel(line.KitchenStatus)" aria-label="@KitchenLineStatusLabel(line.KitchenStatus)">@KitchenLineStatusIcon(line.KitchenStatus)</small></span>
                                                         }
                                                         else
                                                         {
-                                                            <span>@line.Quantity × @line.ProductName · @line.PreparationStationName</span>
+                                                            <span>@line.Quantity × @line.ProductName@(!string.IsNullOrEmpty(line.Format) ? $" · {FormatLabel(line.Format)}" : "") · @line.PreparationStationName</span>
                                                         }
                                                         @if (CanCancelLine(order, detail, line))
                                                         {
@@ -470,11 +479,11 @@
                                         <div class="bill-line @(line.Status == "Cancelled" ? "cancelled" : "")">
                                             @if (line.Status != "Cancelled")
                                             {
-                                                <span>@line.Quantity × @line.ProductName · @line.PreparationStationName <small class="line-kitchen @KitchenLineStatusClass(line.KitchenStatus)" title="@KitchenLineStatusLabel(line.KitchenStatus)" aria-label="@KitchenLineStatusLabel(line.KitchenStatus)">@KitchenLineStatusIcon(line.KitchenStatus)</small></span>
+                                                <span>@line.Quantity × @line.ProductName@(!string.IsNullOrEmpty(line.Format) ? $" · {FormatLabel(line.Format)}" : "") · @line.PreparationStationName <small class="line-kitchen @KitchenLineStatusClass(line.KitchenStatus)" title="@KitchenLineStatusLabel(line.KitchenStatus)" aria-label="@KitchenLineStatusLabel(line.KitchenStatus)">@KitchenLineStatusIcon(line.KitchenStatus)</small></span>
                                             }
                                             else
                                             {
-                                                <span>@line.Quantity × @line.ProductName · @line.PreparationStationName</span>
+                                                <span>@line.Quantity × @line.ProductName@(!string.IsNullOrEmpty(line.Format) ? $" · {FormatLabel(line.Format)}" : "") · @line.PreparationStationName</span>
                                             }
                                             @if (CanCancelPickupLine(line))
                                             {

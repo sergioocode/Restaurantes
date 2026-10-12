@@ -43,7 +43,9 @@ public sealed class OrderCatalogStore(OrderWriteDbContext dbContext) : IOrderCat
                     configuration?.RequiresPrimaryDispatch ?? false,
                     configuration?.Priority ?? 1,
                     item.IsAvailable,
-                    MapExtraGroups(item.ExtraGroupsJson)
+                    MapExtraGroups(item.ExtraGroupsJson),
+                    item.DefaultFormat,
+                    MapFormats(item.FormatsJson, item.DefaultFormat, item.Price)
                 );
             }
         );
@@ -67,5 +69,17 @@ public sealed class OrderCatalogStore(OrderWriteDbContext dbContext) : IOrderCat
                     .ToArray()
             ))
             .ToArray();
+    }
+
+    private static OrderCatalogFormat[] MapFormats(
+        string json,
+        string defaultFormat,
+        decimal defaultPrice
+    )
+    {
+        OrderCatalogFormat[] formats = JsonSerializer.Deserialize<OrderCatalogFormat[]>(json) ?? [];
+        return formats.Length == 0
+            ? [new OrderCatalogFormat(defaultFormat, defaultPrice)]
+            : formats;
     }
 }

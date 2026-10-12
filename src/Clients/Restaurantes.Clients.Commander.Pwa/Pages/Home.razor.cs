@@ -28,7 +28,9 @@ public partial class Home
     private List<TableResponse> FilteredTables { get; set; } = [];
     private IEnumerable<TableResponse> TablesInSelectedZone =>
         selectedZoneId is Guid zoneId
-            ? FilteredTables.Where(table => table.ZoneId == zoneId).OrderBy(table => table.Code)
+            ? FilteredTables
+                .Where(table => table.ZoneId == zoneId && table.IsActive)
+                .OrderBy(table => table.Code)
             : [];
     private string SelectedZoneName =>
         FilteredTables.FirstOrDefault(table => table.ZoneId == selectedZoneId)?.ZoneName ?? "";
@@ -74,7 +76,6 @@ public partial class Home
     protected override async Task OnInitializedAsync()
     {
         Realtime.OrderUpdated += HandleOrderUpdated;
-        DiningRealtime.TableChanged += HandleTableChanged;
         try
         {
             providerSettings = await Api.ProviderAsync();
@@ -159,7 +160,6 @@ public partial class Home
     {
         await Js.InvokeVoidAsync("sessionStorage.removeItem", SessionKey);
         await Realtime.DisconnectAsync();
-        await DiningRealtime.DisconnectAsync();
         Api.AccessToken = null;
         login = null;
         restaurants = [];
@@ -204,7 +204,9 @@ public partial class Home
 
     private async Task LoadOperationalData()
     {
-        FilteredTables = await Api.TablesAsync(restaurantId);
+        FilteredTables = (await Api.TablesAsync(restaurantId))
+            .Where(table => table.IsActive)
+            .ToList();
         if (selectedZoneId is Guid zoneId && FilteredTables.All(table => table.ZoneId != zoneId))
         {
             selectedZoneId = null;
@@ -653,7 +655,6 @@ public partial class Home
         try
         {
             await Realtime.ConnectAsync(restaurantId);
-            await DiningRealtime.ConnectAsync(restaurantId);
         }
         catch (Exception exception)
         {
@@ -662,11 +663,6 @@ public partial class Home
     }
 
     private Task HandleOrderUpdated(OrderRealtimeNotification notification)
-    {
-        return ScheduleRealtimeRefresh(notification.RestaurantId);
-    }
-
-    private Task HandleTableChanged(DiningTableChangedNotification notification)
     {
         return ScheduleRealtimeRefresh(notification.RestaurantId);
     }
@@ -692,7 +688,9 @@ public partial class Home
             await Task.Delay(400, cancellationToken);
             await InvokeAsync(async () =>
             {
-                FilteredTables = await Api.TablesAsync(restaurantId);
+                FilteredTables = (await Api.TablesAsync(restaurantId))
+                    .Where(table => table.IsActive)
+                    .ToList();
                 activeOrders = await Api.OrdersAsync(restaurantId);
                 if (selectedTable is not null)
                 {
@@ -729,7 +727,6 @@ public partial class Home
     public async ValueTask DisposeAsync()
     {
         Realtime.OrderUpdated -= HandleOrderUpdated;
-        DiningRealtime.TableChanged -= HandleTableChanged;
         if (realtimeRefresh is not null)
         {
             await realtimeRefresh.CancelAsync();
@@ -737,6 +734,5 @@ public partial class Home
 
         realtimeRefresh?.Dispose();
         await Realtime.DisconnectAsync();
-        await DiningRealtime.DisconnectAsync();
     }
 }

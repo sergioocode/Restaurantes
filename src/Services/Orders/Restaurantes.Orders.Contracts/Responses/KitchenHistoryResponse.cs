@@ -1,6 +1,11 @@
 ﻿namespace Restaurantes.Orders.Contracts.Responses;
 
-public sealed record KitchenHistoryLineResponse(string ProductName, int Quantity, string Status);
+public sealed record KitchenHistoryLineResponse(
+    string ProductName,
+    int Quantity,
+    string Status,
+    string Format = ""
+);
 
 public sealed record KitchenHistoryResponse(
     Guid OrderId,

@@ -158,6 +158,11 @@ namespace Restaurantes.Orders.Infrastructure.Persistence.Write.Migrations
                     b.Property<DateTime?>("DispatchedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Format")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
                     b.Property<int>("KitchenStatus")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
@@ -267,7 +272,16 @@ namespace Restaurantes.Orders.Infrastructure.Persistence.Write.Migrations
                     b.Property<Guid>("CategoryId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("DefaultFormat")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
                     b.Property<string>("ExtraGroupsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("FormatsJson")
                         .IsRequired()
                         .HasColumnType("jsonb");
 

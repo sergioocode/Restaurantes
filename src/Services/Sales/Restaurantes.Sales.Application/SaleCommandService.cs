@@ -166,7 +166,8 @@ public sealed class SaleCommandService(ISaleWriteStore store, TimeProvider timeP
                     item.UnitPrice,
                     item.Quantity,
                     item.CategoryName,
-                    item.PreparationStationCode
+                    item.PreparationStationCode,
+                    item.Format
                 ))
         );
         await store.UpsertDeliveredOrderAsync(

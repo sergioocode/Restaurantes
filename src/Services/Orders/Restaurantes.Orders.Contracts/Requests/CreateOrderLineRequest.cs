@@ -6,6 +6,11 @@ public sealed class CreateOrderLineRequest
 {
     public Guid ProductId { get; init; }
 
+    [StringLength(40)]
+    public string? Format { get; init; }
+
+    public decimal? ExpectedUnitPrice { get; init; }
+
     [Range(1, 100)]
     public int Quantity { get; init; }
 

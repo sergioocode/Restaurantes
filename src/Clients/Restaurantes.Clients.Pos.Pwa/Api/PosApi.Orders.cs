@@ -119,6 +119,8 @@ public sealed partial class PosApi
             .Select(line => new
             {
                 productId = line.ProductId,
+                format = line.Format,
+                expectedUnitPrice = line.ExpectedUnitPrice,
                 quantity = line.Quantity,
                 notes = line.Notes,
                 selectedExtras = line
