@@ -12,6 +12,7 @@ builder.AddServiceDefaults();
 builder.Services.AddControllers();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<RestaurantCommandService>();
+builder.Services.AddScoped<CompanyCommandService>();
 builder.Services.AddRestaurantOperationsReadInfrastructure(builder.Configuration);
 builder.Services.AddRestaurantOperationsWriteInfrastructure(builder.Configuration);
 builder.Services.AddRestaurantSecurity(builder.Configuration);

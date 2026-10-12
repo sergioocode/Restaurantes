@@ -12,4 +12,7 @@ public sealed class CreateRestaurantRequest
 
     [Required, StringLength(300, MinimumLength = 3)]
     public string Address { get; init; } = string.Empty;
+
+    [Required]
+    public Guid? CompanyId { get; init; }
 }

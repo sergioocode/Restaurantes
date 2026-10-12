@@ -17,6 +17,7 @@ public sealed class RestaurantReadStore(RestaurantReadDbContext dbContext) : IRe
                 item.Code,
                 item.Name,
                 item.Address,
+                item.CompanyId,
                 item.IsActive,
                 item.Version,
                 item.UpdatedAtUtc
@@ -36,6 +37,7 @@ public sealed class RestaurantReadStore(RestaurantReadDbContext dbContext) : IRe
                 item.Code,
                 item.Name,
                 item.Address,
+                item.CompanyId,
                 item.IsActive,
                 item.Version,
                 item.UpdatedAtUtc

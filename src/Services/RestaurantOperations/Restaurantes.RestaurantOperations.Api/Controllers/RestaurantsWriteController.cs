@@ -34,8 +34,9 @@ public sealed class RestaurantsWriteController(RestaurantCommandService commandS
                 Conflict(
                     new ProblemDetails
                     {
-                        Title = "Restaurant code already exists",
-                        Detail = $"A restaurant with code '{request.Code}' already exists.",
+                        Title = "Restaurant could not be created",
+                        Detail =
+                            $"The code '{request.Code}' may already exist, or the selected company is unavailable.",
                         Status = StatusCodes.Status409Conflict,
                     }
                 )
@@ -60,6 +61,56 @@ public sealed class RestaurantsWriteController(RestaurantCommandService commandS
         RestaurantResponse? restaurant = await commandService.UpdateAsync(
             id,
             request,
+            cancellationToken
+        );
+        return restaurant is null
+            ? NotFound()
+            : Accepted($"/api/restaurant-operations/restaurants/{restaurant.Id}", restaurant);
+    }
+
+    [HttpPut("{id:guid}/company")]
+    [ProducesResponseType<RestaurantResponse>(StatusCodes.Status202Accepted)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<RestaurantResponse>> SetCompany(
+        Guid id,
+        SetRestaurantCompanyRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        if (!User.IsInRole("Admin"))
+        {
+            return Forbid();
+        }
+
+        RestaurantResponse? restaurant = await commandService.SetCompanyAsync(
+            id,
+            request.CompanyId!.Value,
+            cancellationToken
+        );
+        return restaurant is null
+            ? NotFound()
+            : Accepted($"/api/restaurant-operations/restaurants/{restaurant.Id}", restaurant);
+    }
+
+    [HttpPut("{id:guid}/active")]
+    [ProducesResponseType<RestaurantResponse>(StatusCodes.Status202Accepted)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<RestaurantResponse>> SetActive(
+        Guid id,
+        SetRestaurantActiveRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        if (!User.CanAccessRestaurant(id, RestaurantPermissions.TablesManage))
+        {
+            return Forbid();
+        }
+
+        RestaurantResponse? restaurant = await commandService.SetActiveAsync(
+            id,
+            request.IsActive,
             cancellationToken
         );
         return restaurant is null

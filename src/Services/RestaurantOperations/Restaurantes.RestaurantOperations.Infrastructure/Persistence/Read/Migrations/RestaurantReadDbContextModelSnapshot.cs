@@ -59,6 +59,9 @@ namespace Restaurantes.RestaurantOperations.Infrastructure.Persistence.Read.Migr
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
 
+                    b.Property<Guid?>("CompanyId")
+                        .HasColumnType("uuid");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
@@ -79,6 +82,49 @@ namespace Restaurantes.RestaurantOperations.Infrastructure.Persistence.Read.Migr
                         .IsUnique();
 
                     b.ToTable("restaurant_views", (string)null);
+                });
+
+            modelBuilder.Entity("Restaurantes.RestaurantOperations.Infrastructure.Persistence.Read.CompanyReadModel", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)");
+
+                    b.Property<string>("FiscalAddress")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("LegalName")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("TaxId")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TaxId")
+                        .IsUnique();
+
+                    b.ToTable("company_views", (string)null);
                 });
 #pragma warning restore 612, 618
         }

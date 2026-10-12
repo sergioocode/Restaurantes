@@ -5,6 +5,7 @@ public sealed record RestaurantChanged(
     string Code,
     string Name,
     string Address,
+    Guid? CompanyId,
     bool IsActive,
     int Version,
     DateTime OccurredAtUtc
