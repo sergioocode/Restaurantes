@@ -8,6 +8,7 @@ public interface ISaleReadStore
     Task<IReadOnlyList<SaleResponse>> ListAsync(
         Guid? restaurantId,
         DateOnly? date,
+        int offset,
         CancellationToken cancellationToken
     );
 }

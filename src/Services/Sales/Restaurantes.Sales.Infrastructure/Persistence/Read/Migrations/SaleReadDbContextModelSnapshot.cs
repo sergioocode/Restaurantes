@@ -45,6 +45,10 @@ namespace Restaurantes.Sales.Infrastructure.Persistence.Read.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb");
 
+                    b.Property<string>("PaymentMethodsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
                     b.Property<string>("PaymentMethod")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -64,6 +68,10 @@ namespace Restaurantes.Sales.Infrastructure.Persistence.Read.Migrations
                         .HasColumnType("character varying(30)");
 
                     b.Property<decimal>("Total")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<decimal>("TipTotal")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
 

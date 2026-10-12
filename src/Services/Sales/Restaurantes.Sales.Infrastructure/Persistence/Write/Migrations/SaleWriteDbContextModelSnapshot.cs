@@ -83,6 +83,10 @@ namespace Restaurantes.Sales.Infrastructure.Persistence.Write.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
 
+                    b.Property<decimal>("TipAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
                     b.Property<Guid>("SaleId")
                         .HasColumnType("uuid");
 

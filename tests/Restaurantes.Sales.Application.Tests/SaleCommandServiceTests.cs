@@ -19,7 +19,7 @@ public sealed class SaleCommandServiceTests
 
         await service.ProcessAsync(
             Guid.NewGuid(),
-            Captured(orderId, restaurantId, accountId, 4m, 4m, false, "Cash"),
+            Captured(orderId, restaurantId, accountId, 4m, 4m, false, "Cash", tipAmount: 0.5m),
             TestContext.Current.CancellationToken
         );
 
@@ -28,13 +28,14 @@ public sealed class SaleCommandServiceTests
 
         await service.ProcessAsync(
             Guid.NewGuid(),
-            Captured(orderId, restaurantId, accountId, 6m, 10m, true, "Card"),
+            Captured(orderId, restaurantId, accountId, 6m, 10m, true, "Card", tipAmount: 1m),
             TestContext.Current.CancellationToken
         );
 
         SaleCompleted completed = Assert.Single(store.Completed);
         Assert.Equal(accountId, completed.SaleId);
         Assert.Equal(10m, completed.Total);
+        Assert.Equal(1.5m, completed.TipTotal);
         Assert.Equal("Mixed", completed.PaymentMethod);
         Assert.Equal([orderId], completed.OrderIds);
         Assert.Contains(
@@ -116,7 +117,8 @@ public sealed class SaleCommandServiceTests
         bool fullyPaid,
         string method,
         int orderCount = 1,
-        Guid? transactionId = null
+        Guid? transactionId = null,
+        decimal tipAmount = 0
     ) =>
         new(
             Guid.NewGuid(),
@@ -132,7 +134,8 @@ public sealed class SaleCommandServiceTests
             orderCount,
             AmountPaid: amountPaid,
             IsFullyPaid: fullyPaid,
-            SaleGroupId: accountId
+            SaleGroupId: accountId,
+            TipAmount: tipAmount
         );
 
     private sealed class InMemorySaleStore : ISaleWriteStore

@@ -10,7 +10,8 @@ public sealed record SaleCompleted(
     IReadOnlyList<Guid> OrderIds,
     IReadOnlyList<SaleLineSnapshot> Lines,
     DateOnly? BusinessDate = null,
-    IReadOnlyList<SalePaymentBreakdown>? PaymentMethods = null
+    IReadOnlyList<SalePaymentBreakdown>? PaymentMethods = null,
+    decimal TipTotal = 0
 );
 
 public sealed record SalePaymentBreakdown(string Method, int Payments, decimal Amount);

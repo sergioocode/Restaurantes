@@ -7,10 +7,12 @@ public sealed class SaleReadModel
     public string Source { get; set; } = string.Empty;
     public string PaymentMethod { get; set; } = string.Empty;
     public decimal Total { get; set; }
+    public decimal TipTotal { get; set; }
     public string Status { get; set; } = "Completed";
     public int OrderCount { get; set; }
     public DateTime CompletedAtUtc { get; set; }
     public DateOnly? BusinessDate { get; set; }
     public string OrderIdsJson { get; set; } = "[]";
     public string LinesJson { get; set; } = "[]";
+    public string PaymentMethodsJson { get; set; } = "[]";
 }

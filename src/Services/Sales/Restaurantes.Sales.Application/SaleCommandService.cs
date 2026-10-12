@@ -121,6 +121,7 @@ public sealed class SaleCommandService(ISaleWriteStore store, TimeProvider timeP
                             : integrationEvent.PaymentId,
                     Method = integrationEvent.Method,
                     Amount = integrationEvent.Amount,
+                    TipAmount = integrationEvent.TipAmount,
                 }
             );
         }
@@ -223,7 +224,8 @@ public sealed class SaleCommandService(ISaleWriteStore store, TimeProvider timeP
                             group.Select(item => item.TransactionId).Distinct().Count(),
                             group.Sum(item => item.Amount)
                         ))
-                        .ToList()
+                        .ToList(),
+                    sale.Payments.Sum(item => item.TipAmount)
                 )
             );
         }

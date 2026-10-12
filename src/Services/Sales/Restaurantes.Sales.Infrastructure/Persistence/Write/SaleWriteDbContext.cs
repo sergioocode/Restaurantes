@@ -46,6 +46,7 @@ public sealed class SaleWriteDbContext(DbContextOptions<SaleWriteDbContext> opti
         payment.HasKey(item => item.PaymentId);
         payment.Property(item => item.Method).HasMaxLength(30).IsRequired();
         payment.Property(item => item.Amount).HasPrecision(12, 2);
+        payment.Property(item => item.TipAmount).HasPrecision(12, 2);
         payment.HasIndex(item => item.SaleId);
 
         EntityTypeBuilder<DeliveredOrderMarker> marker =

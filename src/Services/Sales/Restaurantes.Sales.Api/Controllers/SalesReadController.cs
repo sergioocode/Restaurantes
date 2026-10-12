@@ -11,10 +11,11 @@ public sealed class SalesReadController(ISaleReadStore store) : ControllerBase
     public async Task<ActionResult<IReadOnlyList<SaleResponse>>> List(
         Guid? restaurantId,
         DateOnly? date,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        int offset = 0
     )
     {
-        return Ok(await store.ListAsync(restaurantId, date, cancellationToken));
+        return Ok(await store.ListAsync(restaurantId, date, offset, cancellationToken));
     }
 
     [HttpGet("{id:guid}")]
