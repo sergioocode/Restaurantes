@@ -1,29 +1,30 @@
-<RestaurantContextSelector Host="Host" />
-@if (!Host.HasLocalPermission("tables.manage")) { <NoAccessPanel /> }
+﻿@if (!Host.HasLocalPermission("tables.manage")) { <NoAccessPanel /> }
 else
 {
-    <div class="module-toolbar"><button class="secondary" @onclick="Host.RefreshModule" disabled="@Host.busy">Actualizar zonas</button></div>
-    <section class="admin-panel">
-        <h3>Zonas del restaurante</h3>
+    <details class="admin-panel" open>
+        <summary>Nueva zona</summary>
         <form class="inline-form" @onsubmit="Host.CreateZone" @onsubmit:preventDefault>
             <input aria-label="Nombre de la zona" placeholder="Nueva zona, ej. Terraza" maxlength="80" required @bind="Host.zoneDraft.Name" />
-            <input aria-label="Orden de la zona" type="number" min="0" @bind="Host.zoneDraft.SortOrder" />
-            <label class="check-line"><input type="checkbox" @bind="Host.zoneDraft.RequestGuestCount" /> Solicita cantidad de comensales antes de pedir</label>
-            <button class="primary" disabled="@Host.busy">Agregar zona</button>
+            <input class="zone-order-input" aria-label="Orden de la zona" type="number" min="0" @bind="Host.zoneDraft.SortOrder" />
+            <label class="availability"><input type="checkbox" @bind="Host.zoneDraft.RequestGuestCount" /> Solicita cantidad de comensales antes de pedir</label>
+            <button class="primary" disabled="@Host.busy">Agregar Zona</button>
         </form>
+    </details>
+    <div class="maintenance-list">
         @if (Host.zones.Count == 0) { <p>Crea una zona antes de agregar mesas o puestos de barra.</p> }
         @foreach (ZoneResponse zone in Host.zones.OrderBy(x => x.SortOrder).ThenBy(x => x.Name))
         {
-            <div class="inline-form" @key="zone.Id">
-                <label>Zona<input maxlength="80" @bind="zone.Name" /></label>
-                <label>Orden<input type="number" min="0" @bind="zone.SortOrder" /></label>
-                <label class="check-line"><input type="checkbox" @bind="zone.RequestGuestCount" /> Solicita cantidad de comensales antes de pedir</label>
-                <span>@Host.tables.Count(x => x.ZoneId == zone.Id) ubicaciones</span>
-                <button class="primary" @onclick="() => Host.SaveZone(zone)" disabled="@Host.busy">Guardar zona</button>
-                <button class="secondary" @onclick="() => Host.DeleteZone(zone)" disabled="@(Host.busy || Host.tables.Any(x => x.ZoneId == zone.Id))">Eliminar zona vacía</button>
-            </div>
+                    <article class="admin-panel zone-entry" @key="zone.Id">
+                <div class="inline-form">
+                    <label>Zona<input maxlength="80" @bind="zone.Name" /></label>
+                    <label>Orden<input class="zone-order-input" type="number" min="0" @bind="zone.SortOrder" /></label>
+                            <label class="availability"><input type="checkbox" @bind="zone.RequestGuestCount" /> Solicita cantidad de comensales antes de pedir</label>
+                            <label>Mesas<input class="zone-count-input" value="@Host.tables.Count(x => x.ZoneId == zone.Id)" readonly /></label>
+                    <button class="primary" @onclick="() => Host.SaveZone(zone)" disabled="@Host.busy">Guardar</button>
+                </div>
+            </article>
         }
-    </section>
+    </div>
 }
 
 @code {

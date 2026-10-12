@@ -5,11 +5,7 @@ using Restaurantes.Payments.Contracts.Events;
 
 namespace Restaurantes.Dining.Application;
 
-public sealed class DiningIntegrationService(
-    IDiningStore db,
-    TimeProvider time,
-    IDiningNotifications notifications
-)
+public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
 {
     public async Task ProcessAsync(Guid messageId, string type, ReadOnlyMemory<byte> body)
     {
@@ -71,33 +67,9 @@ public sealed class DiningIntegrationService(
         if (updatedSessionId is Guid sessionId)
         {
             await db.SaveChangesAsync();
-            await NotifySessionChanged(sessionId);
         }
         db.MarkMessageProcessed(messageId, time.GetUtcNow().UtcDateTime);
         await db.SaveChangesAsync();
-    }
-
-    private async Task NotifySessionChanged(Guid sessionId)
-    {
-        DiningSession? session = await db.ReadSessionWithOrdersAsync(
-            sessionId,
-            CancellationToken.None
-        );
-        if (session is null || session.Status != "Open")
-        {
-            return;
-        }
-
-        await notifications.TableChanged(
-            new DiningTableChanged(
-                session.RestaurantId,
-                session.TableId,
-                "Occupied",
-                session.Id,
-                session.Source,
-                time.GetUtcNow().UtcDateTime
-            )
-        );
     }
 
     private static async Task ApplyOrderCreated(IDiningStore db, ReadOnlyMemory<byte> body)

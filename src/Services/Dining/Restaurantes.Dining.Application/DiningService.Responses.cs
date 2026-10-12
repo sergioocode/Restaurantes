@@ -5,25 +5,6 @@ namespace Restaurantes.Dining.Application;
 
 public sealed partial class DiningService
 {
-    private static Task PublishTableChanged(
-        IDiningNotifications realtime,
-        DiningSession session,
-        string status,
-        TimeProvider time
-    )
-    {
-        return realtime.TableChanged(
-            new DiningTableChanged(
-                session.RestaurantId,
-                session.TableId,
-                status,
-                status == "Occupied" ? session.Id : null,
-                session.Source,
-                time.GetUtcNow().UtcDateTime
-            )
-        );
-    }
-
     private static object TableResponse(RestaurantTable table, DiningSession? session)
     {
         return new

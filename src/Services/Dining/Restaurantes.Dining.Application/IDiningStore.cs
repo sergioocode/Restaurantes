@@ -9,6 +9,7 @@ public interface IDiningStore
     Task<DiningSession?> ReadActiveSessionWithOrdersAsync(Guid tableId, CancellationToken ct);
     Task<RestaurantTable?> LockTableAsync(Guid tableId, CancellationToken ct);
     Task<bool> HasOpenSessionAsync(Guid tableId, CancellationToken ct);
+    Task<bool> HasSalesForTableAsync(Guid tableId, CancellationToken ct);
     Task<DiningSession> ReadRequiredActiveSessionAsync(Guid tableId, CancellationToken ct);
     Task<Dictionary<Guid, DiningSession>> ReadActiveSessionsAsync(
         Guid restaurantId,
@@ -28,7 +29,6 @@ public interface IDiningStore
     Task<List<DiningZone>> ListZonesAsync(Guid restaurantId, CancellationToken ct);
     Task<DiningZone?> FindZoneAsync(Guid restaurantId, Guid zoneId, CancellationToken ct);
     Task<DiningZone?> LockZoneAsync(Guid restaurantId, Guid zoneId, CancellationToken ct);
-    Task<bool> HasTablesInZoneAsync(Guid restaurantId, Guid zoneId, CancellationToken ct);
     void Add<T>(T entity)
         where T : class;
     void Detach(DiningSession session);

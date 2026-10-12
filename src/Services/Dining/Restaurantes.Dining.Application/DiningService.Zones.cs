@@ -111,44 +111,4 @@ public sealed partial class DiningService
             );
         }
     }
-
-    public async Task<DiningResult> DeleteZone(
-        Guid restaurantId,
-        Guid zoneId,
-        ClaimsPrincipal principal,
-        CancellationToken ct
-    )
-    {
-        if (!access.CanAccessRestaurant(principal, restaurantId, DiningPermission.TablesManage))
-        {
-            return DiningResults.Forbid();
-        }
-
-        await using IDiningTransaction transaction = await db.BeginTransactionAsync(ct);
-        DiningZone? zone = await db.LockZoneAsync(restaurantId, zoneId, ct);
-        if (zone is null)
-        {
-            return DiningResults.NotFound();
-        }
-
-        if (zone.DeletedAtUtc is not null)
-        {
-            return DiningResults.NoContent();
-        }
-
-        if (await db.HasTablesInZoneAsync(restaurantId, zoneId, ct))
-        {
-            return DiningResults.Conflict(
-                new
-                {
-                    detail = "La zona contiene ubicaciones sin eliminar, incluidas las inactivas. Muévelas o elimínalas primero.",
-                }
-            );
-        }
-
-        zone.DeletedAtUtc = time.GetUtcNow().UtcDateTime;
-        await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
-        return DiningResults.NoContent();
-    }
 }

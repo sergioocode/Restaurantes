@@ -38,7 +38,17 @@ public sealed partial class DiningService
         if (await db.HasOpenSessionAsync(tableId, ct))
         {
             return DiningResults.Conflict(
-                new { detail = "La ubicación está en uso. Cierra su sesión antes de eliminarla." }
+                new { detail = "La mesa está ocupada. Cierra su sesión antes de eliminarla." }
+            );
+        }
+
+        if (await db.HasSalesForTableAsync(tableId, ct))
+        {
+            return DiningResults.Conflict(
+                new
+                {
+                    detail = "La mesa tiene ventas asociadas. Desactívala para conservar su historial.",
+                }
             );
         }
 
