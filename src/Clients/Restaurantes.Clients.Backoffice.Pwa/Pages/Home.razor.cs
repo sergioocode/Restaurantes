@@ -1,12 +1,16 @@
 ﻿using System.Text.Json;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
+using Restaurantes.Clients.Backoffice.Pwa.Components;
 using Restaurantes.Clients.Backoffice.Pwa.Models;
 
 namespace Restaurantes.Clients.Backoffice.Pwa.Pages;
 
 public partial class Home
 {
+    internal static string StatusLabel(string status) =>
+        status == "Occupied" ? "Ocupada" : "Disponible";
+
     private const string SessionKey = "restaurantes.backoffice.login";
     private string module = "catalog-design";
     internal string search = "";
@@ -18,7 +22,6 @@ public partial class Home
     internal Guid restaurantId;
     internal List<CategoryResponse> categories = [];
     internal List<ProductResponse> products = [];
-    private List<MenuItemResponse> menu = [];
     internal List<KitchenStationResponse> stations = [];
     internal List<ManagementOrderResponse> historyOrders = [];
     internal Guid historyRestaurantId;
@@ -27,7 +30,6 @@ public partial class Home
     internal List<RestaurantResponse> restaurants = [];
     internal List<TableResponse> tables = [];
     internal List<StaffUserResponse> users = [];
-    internal Dictionary<Guid, MenuEditor> editors = [];
     internal CategoryDraft categoryDraft = new();
     internal ProductDraft productDraft = new();
     internal RestaurantDraft restaurantDraft = new();
@@ -37,12 +39,19 @@ public partial class Home
     internal KitchenStationDraft stationDraft = new();
     internal StaffUserDraft userDraft = new();
     internal ProviderSettingsResponse? providerSettings;
+    private CatalogDesignModule? catalogDesignModule;
+    private TaxesModule? taxesModule;
+    private AllergensModule? allergensModule;
     internal bool MicrosoftConfigured => providerSettings?.MicrosoftConfigured == true;
     internal bool GoogleConfigured => providerSettings?.GoogleConfigured == true;
 
     private static readonly string[] Roles = ["Manager", "Camarero", "Kds"];
 
     internal bool IsAdmin => login?.AllRestaurantsRoles?.Contains("Admin") == true;
+    internal bool IsCurrentRestaurantManager =>
+        !IsAdmin
+        && CurrentRoleFor(restaurantId) == "Manager"
+        && HasLocalPermission("catalog.manage");
     internal Guid? CurrentUserId => login?.User.Id;
     private bool HasBackofficeAccess =>
         HasGlobalPermission("backoffice.access")
@@ -102,14 +111,14 @@ public partial class Home
             "orders" => "OPERACIÓN DEL LOCAL",
             "restaurants" => "CADENA",
             "categories" or "products" or "taxes" or "allergens" => "CATÁLOGO GLOBAL",
-            "catalog-design" => "CONFIGURACIÓN DE CARTAS",
+            "catalog-design" => "CATÁLOGO DEL LOCAL",
             "users" => "SEGURIDAD",
             _ => "CATÁLOGO DEL LOCAL",
         };
     private string ModuleTitle =>
         module switch
         {
-            "tables" => "Mesas y puestos de barra",
+            "tables" => "Mesas",
             "zones" => "Zonas del restaurante",
             "restaurants" => "Locales",
             "stations" => "Estaciones Kitchen Display System",
@@ -118,9 +127,39 @@ public partial class Home
             "products" => "Productos",
             "taxes" => "Impuestos",
             "allergens" => "Alérgenos",
-            "catalog-design" => "Cartas y precios por local",
+            "catalog-design" => "Carta del local",
             "users" => "Usuarios, roles y locales",
-            _ => "Preparación y estaciones KDS",
+            _ => "Backoffice",
+        };
+
+    private bool ShowRestaurantContextSelector =>
+        IsAdmin && (module is "users" or "categories" or "tables" or "zones");
+
+    private string? RefreshLabel =>
+        module switch
+        {
+            "catalog-design" when IsCurrentRestaurantManager => "Recargar",
+            "orders" when !IsAdmin && OrderRestaurants.Count > 0 => "Consultar pedidos",
+            "stations" when IsCurrentRestaurantManager => "Actualizar estaciones",
+            "tables" when HasLocalPermission("tables.manage") => "Actualizar mesas",
+            "zones" when HasLocalPermission("tables.manage") => "Actualizar zonas",
+            "restaurants" when IsAdmin => "Actualizar locales",
+            "categories" when HasGlobalPermission("catalog.global.manage") =>
+                "Actualizar categorías",
+            "products" when HasGlobalPermission("catalog.global.manage") => "Recargar",
+            "taxes" when HasGlobalPermission("catalog.global.manage") => "Actualizar impuestos",
+            "allergens" when HasGlobalPermission("catalog.global.manage") => "Actualizar alérgenos",
+            "users" when CanManageUsers => "Actualizar usuarios",
+            _ => null,
+        };
+
+    private Task RefreshCurrentModule() =>
+        module switch
+        {
+            "catalog-design" => catalogDesignModule?.Refresh() ?? Task.CompletedTask,
+            "taxes" => taxesModule?.Refresh() ?? Task.CompletedTask,
+            "allergens" => allergensModule?.Refresh() ?? Task.CompletedTask,
+            _ => RefreshModule(),
         };
 
     protected override async Task OnInitializedAsync()
@@ -154,6 +193,7 @@ public partial class Home
             }
             Api.AccessToken = login.AccessToken;
             AuthState.SetSession(login);
+            module = IsAdmin ? "products" : "catalog-design";
             restaurantId =
                 login
                     .Restaurants.FirstOrDefault(x => x.Permissions.Contains("backoffice.access"))
@@ -203,6 +243,7 @@ public partial class Home
 
         Api.AccessToken = login.AccessToken;
         AuthState.SetSession(login);
+        module = IsAdmin ? "products" : "catalog-design";
         restaurantId =
             login
                 .Restaurants.FirstOrDefault(x => x.Permissions.Contains("backoffice.access"))
@@ -256,7 +297,7 @@ public partial class Home
     {
         return module switch
         {
-            "menu" => Run(RefreshMenuCore),
+            "catalog-design" => Run(RefreshProductsCore),
             "stations" => Run(RefreshStationsCore),
             "orders" => RefreshOrders(),
             "tables" => Run(RefreshTablesCore),
@@ -267,13 +308,6 @@ public partial class Home
             "users" => Run(LoadUsersCore),
             _ => Task.CompletedTask,
         };
-    }
-
-    private async Task RefreshMenuCore()
-    {
-        categories = await Api.CategoriesAsync();
-        products = await Api.ProductsAsync();
-        await LoadLocalCore();
     }
 
     internal async Task OpenOrders()
@@ -287,7 +321,11 @@ public partial class Home
         return Run(async () =>
         {
             IEnumerable<RestaurantResponse> allowed = OrderRestaurants;
-            if (historyRestaurantId != Guid.Empty)
+            if (!IsAdmin)
+            {
+                allowed = allowed.Where(restaurant => restaurant.Id == restaurantId);
+            }
+            else if (historyRestaurantId != Guid.Empty)
             {
                 allowed = allowed.Where(restaurant => restaurant.Id == historyRestaurantId);
             }
@@ -398,73 +436,23 @@ public partial class Home
         await LoadLocalCore();
     }
 
-    private async Task LoadLocal()
-    {
-        await Run(LoadLocalCore);
-    }
-
     private async Task LoadLocalCore()
     {
         if (SelectableRestaurants.Count == 0)
         {
-            menu = [];
             stations = [];
             tables = [];
             zones = [];
             return;
         }
-        menu = HasLocalPermission("catalog.manage") ? await Api.MenuAsync(restaurantId) : [];
-        stations = HasLocalPermission("kds.use") ? await Api.StationsAsync(restaurantId) : [];
+        stations =
+            HasLocalPermission("kds.use") || IsCurrentRestaurantManager
+                ? await Api.StationsAsync(restaurantId)
+                : [];
         tables = HasLocalPermission("tables.read") ? await Api.TablesAsync(restaurantId) : [];
         zones = HasLocalPermission("tables.read") ? await Api.ZonesAsync(restaurantId) : [];
         tableDraft = new() { ZoneId = zones.FirstOrDefault()?.Id ?? Guid.Empty };
         zoneDraft = new();
-        editors = products.ToDictionary(
-            p => p.Id,
-            p =>
-            {
-                MenuItemResponse? m = menu.FirstOrDefault(x => x.ProductId == p.Id);
-                CategoryResponse? c = categories.FirstOrDefault(x => x.Id == p.CategoryId);
-                return new MenuEditor
-                {
-                    Price = m?.Price ?? 0,
-                    IsAvailable = m?.IsAvailable ?? false,
-                    PreparationStationCode =
-                        m?.PreparationStationCode ?? c?.DefaultStationCode ?? "GENERAL",
-                    PreparationStationName =
-                        m?.PreparationStationName ?? c?.DefaultStationName ?? "General",
-                };
-            }
-        );
-    }
-
-    internal async Task SaveMenuItem(ProductResponse p)
-    {
-        await Run(
-            async () =>
-            {
-                MenuItemResponse? effective = (
-                    await Api.EffectiveMenuAsync(restaurantId)
-                ).FirstOrDefault(x => x.ProductId == p.Id);
-                editors[p.Id].Price = effective?.Price ?? 0;
-                editors[p.Id].IsAvailable = effective is not null;
-                MenuItemResponse accepted = await Api.ConfigureAsync(
-                    restaurantId,
-                    p.Id,
-                    editors[p.Id]
-                );
-                MenuItemResponse saved = await ConfirmMenuProjection(accepted);
-                menu.RemoveAll(x => x.ProductId == p.Id);
-                menu.Add(saved);
-                editors[p.Id].Price = saved.Price;
-                editors[p.Id].IsAvailable = saved.IsAvailable;
-                editors[p.Id].PreparationStationCode = saved.PreparationStationCode;
-                editors[p.Id].PreparationStationName = saved.PreparationStationName;
-                ok = true;
-                message = $"Estación de {p.Name} actualizada para {CurrentRestaurant?.Name}.";
-            },
-            false
-        );
     }
 
     internal async Task CreateStation()
@@ -482,25 +470,124 @@ public partial class Home
         );
     }
 
-    internal async Task SaveStation(KitchenStationResponse item)
+    internal async Task<bool> SaveStationName(KitchenStationResponse item, string name)
     {
+        if (!IsCurrentRestaurantManager || busy)
+        {
+            return false;
+        }
+
         await Run(
             async () =>
             {
-                await Api.UpdateStationAsync(item);
-                await RefreshStations();
+                ApplyStation(item, await Api.SetStationNameAsync(item, name));
                 ok = true;
-                message = "Estación KDS actualizada.";
+                message = "Nombre KDS actualizado.";
             },
             false
         );
+        return ok;
+    }
+
+    internal async Task<bool> SaveStationPriority(KitchenStationResponse item, int priority)
+    {
+        if (!IsCurrentRestaurantManager || busy || item.IsPrimary)
+        {
+            return false;
+        }
+
+        await Run(
+            async () =>
+            {
+                ApplyStation(item, await Api.SetStationPriorityAsync(item, priority));
+                ok = true;
+                message = "Prioridad KDS actualizada.";
+            },
+            false
+        );
+        return ok;
+    }
+
+    internal async Task SetStationFlag(KitchenStationResponse item, string field, bool selected)
+    {
+        if (!IsCurrentRestaurantManager || busy)
+        {
+            return;
+        }
+
+        KitchenStationResponse previous = CopyStation(item);
+        KitchenStationResponse update = CopyStation(item);
+        switch (field)
+        {
+            case nameof(KitchenStationResponse.IsPrimary):
+                update.IsPrimary = selected;
+                update.Priority = selected ? 0 : Math.Max(1, update.Priority);
+                if (selected)
+                {
+                    update.RequiresPrimaryDispatch = false;
+                }
+                break;
+            case nameof(KitchenStationResponse.RequiresPrimaryDispatch):
+                update.RequiresPrimaryDispatch = selected;
+                break;
+            case nameof(KitchenStationResponse.IsActive):
+                update.IsActive = selected;
+                break;
+            default:
+                return;
+        }
+
+        ApplyStation(item, update);
+        busy = true;
+        message = null;
+        ok = false;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            ApplyStation(item, await Api.SetStationFlagAsync(item, field, selected));
+        }
+        catch (Exception error)
+        {
+            ApplyStation(item, previous);
+            message = error.Message;
+        }
+        finally
+        {
+            busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private static KitchenStationResponse CopyStation(KitchenStationResponse source) =>
+        new()
+        {
+            Id = source.Id,
+            RestaurantId = source.RestaurantId,
+            Code = source.Code,
+            Name = source.Name,
+            IsPrimary = source.IsPrimary,
+            RequiresPrimaryDispatch = source.RequiresPrimaryDispatch,
+            Priority = source.Priority,
+            IsActive = source.IsActive,
+            Version = source.Version,
+            UpdatedAtUtc = source.UpdatedAtUtc,
+        };
+
+    private static void ApplyStation(KitchenStationResponse target, KitchenStationResponse source)
+    {
+        target.Name = source.Name;
+        target.IsPrimary = source.IsPrimary;
+        target.RequiresPrimaryDispatch = source.RequiresPrimaryDispatch;
+        target.Priority = source.Priority;
+        target.IsActive = source.IsActive;
+        target.Version = source.Version;
+        target.UpdatedAtUtc = source.UpdatedAtUtc;
     }
 
     private async Task RefreshStations()
     {
         await Task.Delay(600);
         stations = await Api.StationsAsync(restaurantId);
-        menu = await Api.MenuAsync(restaurantId);
     }
 
     internal async Task CreateCategory()
@@ -526,8 +613,13 @@ public partial class Home
         );
     }
 
-    internal async Task SaveCategory(CategoryResponse item)
+    internal async Task<bool> SaveCategory(CategoryResponse item)
     {
+        if (busy)
+        {
+            return false;
+        }
+
         await Run(
             async () =>
             {
@@ -535,10 +627,10 @@ public partial class Home
                 await ConfirmCategoryProjection(accepted);
                 await RefreshCatalogProjection();
                 ok = true;
-                message = "Categoría actualizada y confirmada en la vista de lectura.";
             },
-            false
+            true
         );
+        return ok;
     }
 
     internal async Task CreateProduct()
@@ -567,13 +659,66 @@ public partial class Home
         await Run(
             async () =>
             {
-                await Api.UpdateProductAsync(item);
-                await RefreshCatalogProjection();
+                ProductResponse saved = await Api.SetProductNameAsync(item.Id, item.Name);
+                item.Name = saved.Name;
+                item.Version = saved.Version;
+                item.UpdatedAtUtc = saved.UpdatedAtUtc;
                 ok = true;
                 message = "Producto actualizado.";
             },
             false
         );
+    }
+
+    internal async Task SaveProductCategory(ProductResponse item, ChangeEventArgs args)
+    {
+        if (!Guid.TryParse(args.Value?.ToString(), out Guid categoryId))
+        {
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        Guid previous = item.CategoryId;
+        await Run(async () =>
+        {
+            item.CategoryId = categoryId;
+            await InvokeAsync(StateHasChanged);
+            try
+            {
+                ProductResponse saved = await Api.SetProductCategoryAsync(item.Id, categoryId);
+                item.CategoryId = saved.CategoryId;
+                item.Version = saved.Version;
+                item.UpdatedAtUtc = saved.UpdatedAtUtc;
+            }
+            catch
+            {
+                item.CategoryId = previous;
+                throw;
+            }
+        });
+    }
+
+    internal async Task SaveProductActive(ProductResponse item, ChangeEventArgs args)
+    {
+        bool selected = args.Value is bool value && value;
+        bool previous = item.IsActive;
+        await Run(async () =>
+        {
+            item.IsActive = selected;
+            await InvokeAsync(StateHasChanged);
+            try
+            {
+                ProductResponse saved = await Api.SetProductActiveAsync(item.Id, selected);
+                item.IsActive = saved.IsActive;
+                item.Version = saved.Version;
+                item.UpdatedAtUtc = saved.UpdatedAtUtc;
+            }
+            catch
+            {
+                item.IsActive = previous;
+                throw;
+            }
+        });
     }
 
     private async Task RefreshCatalogProjection()
@@ -658,20 +803,6 @@ public partial class Home
         );
     }
 
-    internal async Task DeleteZone(ZoneResponse zone)
-    {
-        await Run(
-            async () =>
-            {
-                await Api.DeleteZoneAsync(restaurantId, zone.Id);
-                await RefreshZones();
-                ok = true;
-                message = "Zona vacía eliminada.";
-            },
-            false
-        );
-    }
-
     internal async Task CreateTable()
     {
         await Run(
@@ -687,18 +818,41 @@ public partial class Home
         );
     }
 
-    internal async Task SaveTable(TableResponse item)
+    internal Task SaveTableLabel(TableResponse item, string label) =>
+        UpdateTable(item, label, item.ZoneId, item.IsActive);
+
+    internal Task SaveTableZone(TableResponse item, Guid zoneId) =>
+        UpdateTable(item, item.Label, zoneId, item.IsActive);
+
+    internal Task<bool> SetTableActive(TableResponse item, bool isActive) =>
+        UpdateTable(item, item.Label, item.ZoneId, isActive);
+
+    private async Task<bool> UpdateTable(
+        TableResponse item,
+        string label,
+        Guid zoneId,
+        bool isActive
+    )
     {
+        bool saved = false;
         await Run(
             async () =>
             {
-                await Api.UpdateTableAsync(item);
+                await Api.UpdateTableAsync(
+                    new TableResponse
+                    {
+                        Id = item.Id,
+                        Label = label,
+                        ZoneId = zoneId,
+                        IsActive = isActive,
+                    }
+                );
                 tables = await Api.TablesAsync(restaurantId);
-                ok = true;
-                message = "Ubicación actualizada.";
+                saved = true;
             },
-            false
+            true
         );
+        return saved;
     }
 
     internal async Task DeleteTable(TableResponse item)
@@ -709,8 +863,7 @@ public partial class Home
                 await Api.DeleteTableAsync(item.Id);
                 tables = await Api.TablesAsync(restaurantId);
                 ok = true;
-                message =
-                    "Ubicación eliminada. Su historial se conserva y el código queda disponible.";
+                message = "Mesa eliminada.";
             },
             false
         );
@@ -874,39 +1027,6 @@ public partial class Home
         };
     }
 
-    internal static string StatusLabel(string status)
-    {
-        return status == "Occupied" ? "Ocupada" : "Disponible";
-    }
-
-    internal void SelectStation(MenuEditor editor, ChangeEventArgs args)
-    {
-        KitchenStationResponse? station = stations.FirstOrDefault(x =>
-            x.Code == args.Value?.ToString()
-        );
-        if (station is null)
-        {
-            return;
-        }
-
-        editor.PreparationStationCode = station.Code;
-        editor.PreparationStationName = station.Name;
-    }
-
-    internal void SelectCategoryStation(CategoryResponse categoryItem, ChangeEventArgs args)
-    {
-        KitchenStationResponse? station = stations.FirstOrDefault(x =>
-            x.Code == args.Value?.ToString()
-        );
-        if (station is null)
-        {
-            return;
-        }
-
-        categoryItem.DefaultStationCode = station.Code;
-        categoryItem.DefaultStationName = station.Name;
-    }
-
     internal void SelectDraftCategoryStation(ChangeEventArgs args)
     {
         KitchenStationResponse? station = stations.FirstOrDefault(x =>
@@ -919,26 +1039,6 @@ public partial class Home
 
         categoryDraft.DefaultStationCode = station.Code;
         categoryDraft.DefaultStationName = station.Name;
-    }
-
-    private async Task<MenuItemResponse> ConfirmMenuProjection(MenuItemResponse expected)
-    {
-        for (int attempt = 0; attempt < 20; attempt++)
-        {
-            List<MenuItemResponse> projected = await Api.MenuAsync(expected.RestaurantId);
-            MenuItemResponse? current = projected.FirstOrDefault(x =>
-                x.ProductId == expected.ProductId && x.Version >= expected.Version
-            );
-            if (current is not null)
-            {
-                return current;
-            }
-
-            await Task.Delay(300);
-        }
-        throw new InvalidOperationException(
-            "El cambio se guardó, pero la proyección Read del catálogo no lo confirmó. Comprueba Catalog Publisher, Consumer y RabbitMQ."
-        );
     }
 
     private async Task ConfirmCategoryProjection(CategoryResponse expected)

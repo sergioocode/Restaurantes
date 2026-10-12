@@ -1,6 +1,6 @@
 <div class="restaurant-context">
     <label>
-        Local de trabajo
+        <span>Local de trabajo</span>
         <select value="@Host.restaurantId" @onchange="Host.RestaurantChanged" disabled="@(Host.SelectableRestaurants.Count == 0)">
             @foreach (RestaurantResponse restaurant in Host.SelectableRestaurants)
             {

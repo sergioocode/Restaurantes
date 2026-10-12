@@ -1,30 +1,28 @@
-@using Restaurantes.Clients.Backoffice.Pwa.Models
+﻿@using Restaurantes.Clients.Backoffice.Pwa.Models
 @inject Restaurantes.Clients.Backoffice.Pwa.Api.BackofficeApi Api
 
 @if (!Host.HasGlobalPermission("catalog.global.manage")) { <NoAccessPanel /> }
 else
 {
-    <div class="module-toolbar"><button class="secondary" @onclick="Refresh" disabled="@busy">Actualizar alérgenos</button></div>
     @if (!string.IsNullOrWhiteSpace(status)) { <p role="status">@status</p> }
-    @if (snapshot is null) { <p>Cargando alérgenos…</p> }
-    else
+    @if (snapshot is not null)
     {
         <details class="admin-panel" open><summary>Nuevo alérgeno</summary>
-            <div class="maintenance-row">
+            <div class="inline-form allergen-create-form">
                 <input aria-label="Código del nuevo alérgeno" placeholder="Código" @bind="newAllergen.Code" />
                 <input aria-label="Nombre del nuevo alérgeno" placeholder="Alérgeno" @bind="newAllergen.Name" />
                 <textarea aria-label="Descripción del nuevo alérgeno" placeholder="Descripción" @bind="newAllergen.Description"></textarea>
-                <button class="primary" @onclick="() => SaveAllergen(newAllergen, true)" disabled="@busy">Agregar</button>
+                <button class="primary" @onclick="() => SaveAllergen(newAllergen, true)" disabled="@busy">Agregar Alérgeno</button>
             </div>
         </details>
         <div class="maintenance-list">
             @foreach (CatalogAllergenModel allergen in snapshot.Allergens.OrderBy(x => x.Name))
             {
-                <div class="maintenance-row">
+                <div class="maintenance-row @(allergen.IsActive ? "" : "inactive")">
                     <input aria-label="Código de alérgeno" @bind="allergen.Code" />
                     <input aria-label="Nombre de alérgeno" @bind="allergen.Name" />
                     <textarea aria-label="Descripción de alérgeno" @bind="allergen.Description"></textarea>
-                    <label><input type="checkbox" @bind="allergen.IsActive" /> Activo</label>
+                    <label class="availability"><input type="checkbox" @bind="allergen.IsActive" /> Activo</label>
                     <button class="primary" @onclick="() => SaveAllergen(allergen, false)" disabled="@busy">Guardar</button>
                 </div>
             }
@@ -44,7 +42,7 @@ else
         if (Host.HasGlobalPermission("catalog.global.manage")) await Refresh();
     }
 
-    private Task Refresh() => Run(async () => snapshot = await Api.CatalogDesignAsync(), false);
+    internal Task Refresh() => Run(async () => snapshot = await Api.CatalogDesignAsync(), false);
 
     private Task SaveAllergen(CatalogAllergenModel allergen, bool isNew) => Run(async () =>
     {
