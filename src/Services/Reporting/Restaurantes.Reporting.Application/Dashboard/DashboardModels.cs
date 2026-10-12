@@ -27,7 +27,8 @@ public sealed record SalesLine(
     decimal UnitPrice,
     int Quantity,
     string CategoryName,
-    string PreparationStationCode
+    string PreparationStationCode,
+    string Format = ""
 );
 
 public sealed record CompletedSale(

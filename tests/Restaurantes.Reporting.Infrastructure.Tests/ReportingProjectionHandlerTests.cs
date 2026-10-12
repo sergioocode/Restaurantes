@@ -473,7 +473,8 @@ public sealed class ReportingProjectionHandlerTests
                     "Carnes",
                     "CARNES",
                     "Carnes",
-                    KitchenStatus: "Dispatched"
+                    KitchenStatus: "Dispatched",
+                    Format: "RACION"
                 ),
             ],
             []
@@ -542,7 +543,18 @@ public sealed class ReportingProjectionHandlerTests
         Assert.Equal(JsonSerializer.Serialize(new[] { orderId }), projectedSale.OrderIdsJson);
         Assert.Equal(
             JsonSerializer.Serialize(
-                new[] { new SaleLineSnapshot(productId, "Hamburguesa", 10m, 1, "Carnes", "CARNES") }
+                new[]
+                {
+                    new SaleLineSnapshot(
+                        productId,
+                        "Hamburguesa",
+                        10m,
+                        1,
+                        "Carnes",
+                        "CARNES",
+                        "RACION"
+                    ),
+                }
             ),
             projectedSale.LinesJson
         );
