@@ -7,6 +7,4 @@ public sealed class UpdateProductRequest
     [Required, StringLength(160)]
     public string Name { get; init; } = "";
     public Guid CategoryId { get; init; }
-
-    public bool IsActive { get; init; } = true;
 }

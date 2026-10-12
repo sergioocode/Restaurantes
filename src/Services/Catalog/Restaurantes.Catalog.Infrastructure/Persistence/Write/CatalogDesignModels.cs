@@ -74,6 +74,13 @@ public sealed class CatalogMenu
     public bool IsActive { get; set; }
 }
 
+public sealed class RestaurantProductAvailability
+{
+    public Guid RestaurantId { get; set; }
+    public Guid ProductId { get; set; }
+    public bool IsAvailable { get; set; } = true;
+}
+
 public sealed class CatalogMenuEntry
 {
     public Guid Id { get; set; } = Guid.NewGuid();

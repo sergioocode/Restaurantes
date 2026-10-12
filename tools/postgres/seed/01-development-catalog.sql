@@ -97,6 +97,20 @@ ON CONFLICT ("Id") DO UPDATE SET
     "Rate" = EXCLUDED."Rate",
     "IsActive" = true;
 
+INSERT INTO taxes ("Id", "Code", "Name", "Rate", "IsActive")
+VALUES (
+    'd02602b4-1eca-4350-9b65-1fade1330121'::uuid,
+    'IVA-GENERAL-21-D02602B4',
+    'IVA General 21%',
+    21.0000,
+    true
+)
+ON CONFLICT ("Id") DO UPDATE SET
+    "Code" = EXCLUDED."Code",
+    "Name" = EXCLUDED."Name",
+    "Rate" = EXCLUDED."Rate",
+    "IsActive" = true;
+
 -- Keep the seeded product IDs stable so product_photos and their stored blobs remain attached.
 WITH inserted AS (
     INSERT INTO categories (
@@ -112,7 +126,11 @@ WITH inserted AS (
         ('a1000000-0000-4000-8000-000000000005', 'ENSALADAS', 'Ensaladas', 'ENTRANTES', 'Entrantes', true, 1, now(), true, true, true),
         ('a1000000-0000-4000-8000-000000000006', 'EXTRAS', 'Extras', 'ENTRANTES', 'Entrantes', true, 1, now(), true, true, true),
         ('a1000000-0000-4000-8000-000000000007', 'CERVEZAS', 'Cervezas', 'BEBIDAS', 'Bebidas', true, 1, now(), true, true, true),
-        ('a1000000-0000-4000-8000-000000000008', 'VINOS', 'Vinos', 'BEBIDAS', 'Bebidas', true, 1, now(), true, true, true)
+        ('a1000000-0000-4000-8000-000000000008', 'VINOS', 'Vinos', 'BEBIDAS', 'Bebidas', true, 1, now(), true, true, true),
+        ('a1000000-0000-4000-8000-000000000009', 'AGUAS', 'Aguas', 'BEBIDAS', 'Bebidas', true, 1, now(), true, true, true),
+        ('a1000000-0000-4000-8000-000000000010', 'MERCH', 'Merchandising', 'BEBIDAS', 'Bebidas', true, 1, now(), true, true, true),
+        ('a1000000-0000-4000-8000-000000000011', 'PROMO', 'Promo', 'ENTRANTES', 'Entrantes', true, 1, now(), true, true, true),
+        ('a1000000-0000-4000-8000-000000000012', 'COMBO', 'Combo', 'ENTRANTES', 'Entrantes', true, 1, now(), true, true, true)
     ON CONFLICT ("Id") DO UPDATE SET
         "Code" = EXCLUDED."Code",
         "Name" = EXCLUDED."Name",
@@ -143,7 +161,7 @@ WITH inserted AS (
         ('b1000000-0000-4000-8000-000000000001', 'P001', 'Spaghetti carbonara', 'a1000000-0000-4000-8000-000000000001', true, 1, now()),
         ('b1000000-0000-4000-8000-000000000002', 'P002', 'Tagliatelle boloñesa', 'a1000000-0000-4000-8000-000000000001', true, 1, now()),
         ('b1000000-0000-4000-8000-000000000003', 'P003', 'Lasaña de la casa', 'a1000000-0000-4000-8000-000000000001', true, 1, now()),
-        ('b1000000-0000-4000-8000-000000000004', 'B001', 'Agua mineral 50 cl', 'a1000000-0000-4000-8000-000000000002', true, 1, now()),
+        ('b1000000-0000-4000-8000-000000000004', 'B001', 'Agua mineral 50 cl', 'a1000000-0000-4000-8000-000000000009', true, 1, now()),
         ('b1000000-0000-4000-8000-000000000005', 'B002', 'Refresco de cola', 'a1000000-0000-4000-8000-000000000002', true, 1, now()),
         ('b1000000-0000-4000-8000-000000000006', 'B003', 'Cerveza de la casa', 'a1000000-0000-4000-8000-000000000007', true, 1, now()),
         ('b1000000-0000-4000-8000-000000000007', 'C001', 'Entrecot 250 g', 'a1000000-0000-4000-8000-000000000003', true, 1, now()),
@@ -171,17 +189,31 @@ WITH inserted AS (
         ('b1000000-0000-4000-8000-000000000029', 'B005', 'Café con leche', 'a1000000-0000-4000-8000-000000000002', true, 1, now()),
         ('b1000000-0000-4000-8000-000000000030', 'B006', 'Té e infusiones', 'a1000000-0000-4000-8000-000000000002', true, 1, now()),
         ('b1000000-0000-4000-8000-000000000031', 'B007', 'Zumo de naranja natural', 'a1000000-0000-4000-8000-000000000002', true, 1, now()),
-        ('b1000000-0000-4000-8000-000000000032', 'B008', 'Agua con gas 50 cl', 'a1000000-0000-4000-8000-000000000002', true, 1, now()),
+        ('b1000000-0000-4000-8000-000000000032', 'B008', 'Agua con gas 50 cl', 'a1000000-0000-4000-8000-000000000009', true, 1, now()),
         ('b1000000-0000-4000-8000-000000000033', 'B009', 'Cerveza sin alcohol', 'a1000000-0000-4000-8000-000000000007', true, 1, now()),
         ('b1000000-0000-4000-8000-000000000034', 'B010', 'Cerveza tostada', 'a1000000-0000-4000-8000-000000000007', true, 1, now()),
         ('b1000000-0000-4000-8000-000000000035', 'B011', 'Vino tinto por copa', 'a1000000-0000-4000-8000-000000000008', true, 1, now()),
         ('b1000000-0000-4000-8000-000000000036', 'B012', 'Vino blanco por copa', 'a1000000-0000-4000-8000-000000000008', true, 1, now()),
-        ('b1000000-0000-4000-8000-000000000037', 'B013', 'Vino rosado por copa', 'a1000000-0000-4000-8000-000000000008', true, 1, now())
+        ('b1000000-0000-4000-8000-000000000037', 'B013', 'Vino rosado por copa', 'a1000000-0000-4000-8000-000000000008', true, 1, now()),
+        ('b1000000-0000-4000-8000-000000000038', 'AG001', 'Agua mineral 1 l', 'a1000000-0000-4000-8000-000000000009', true, 1, now()),
+        ('b1000000-0000-4000-8000-000000000039', 'AG002', 'Agua con gas 1 l', 'a1000000-0000-4000-8000-000000000009', true, 1, now()),
+        ('b1000000-0000-4000-8000-000000000040', 'AG003', 'Agua con limón 50 cl', 'a1000000-0000-4000-8000-000000000009', true, 1, now()),
+        ('b1000000-0000-4000-8000-000000000041', 'MER001', 'Camiseta del restaurante', 'a1000000-0000-4000-8000-000000000010', true, 1, now()),
+        ('b1000000-0000-4000-8000-000000000042', 'MER002', 'Taza del restaurante', 'a1000000-0000-4000-8000-000000000010', true, 1, now()),
+        ('b1000000-0000-4000-8000-000000000043', 'MER003', 'Bolsa de tela', 'a1000000-0000-4000-8000-000000000010', true, 1, now()),
+        ('b1000000-0000-4000-8000-000000000044', 'PR001', 'Croquetas de la semana', 'a1000000-0000-4000-8000-000000000011', true, 1, now()),
+        ('b1000000-0000-4000-8000-000000000045', 'PR002', 'Pasta del día', 'a1000000-0000-4000-8000-000000000011', true, 1, now()),
+        ('b1000000-0000-4000-8000-000000000046', 'PR003', 'Hamburguesa del día', 'a1000000-0000-4000-8000-000000000011', true, 1, now()),
+        ('b1000000-0000-4000-8000-000000000047', 'CO001', 'Combo hamburguesa y refresco', 'a1000000-0000-4000-8000-000000000012', true, 1, now()),
+        ('b1000000-0000-4000-8000-000000000048', 'CO002', 'Combo pasta y agua', 'a1000000-0000-4000-8000-000000000012', true, 1, now()),
+        ('b1000000-0000-4000-8000-000000000049', 'CO003', 'Combo entrante y cerveza', 'a1000000-0000-4000-8000-000000000012', true, 1, now())
     ON CONFLICT ("Id") DO UPDATE SET
         "Sku" = EXCLUDED."Sku",
         "Name" = EXCLUDED."Name",
         "CategoryId" = EXCLUDED."CategoryId",
-        "TaxId" = 'd02602b4-1eca-4350-9b65-1fade1330108'::uuid,
+        "TaxId" = CASE WHEN EXCLUDED."CategoryId" = 'a1000000-0000-4000-8000-000000000010'::uuid
+            THEN 'd02602b4-1eca-4350-9b65-1fade1330121'::uuid
+            ELSE 'd02602b4-1eca-4350-9b65-1fade1330108'::uuid END,
         "IsActive" = EXCLUDED."IsActive",
         "Version" = products."Version" + 1,
         "UpdatedAtUtc" = EXCLUDED."UpdatedAtUtc"
@@ -198,9 +230,11 @@ SELECT gen_random_uuid(),
 FROM inserted;
 
 UPDATE products
-SET "TaxId" = 'd02602b4-1eca-4350-9b65-1fade1330108'::uuid
+SET "TaxId" = CASE WHEN "CategoryId" = 'a1000000-0000-4000-8000-000000000010'::uuid
+    THEN 'd02602b4-1eca-4350-9b65-1fade1330121'::uuid
+    ELSE 'd02602b4-1eca-4350-9b65-1fade1330108'::uuid END
 WHERE "Id" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
-                 AND 'b1000000-0000-4000-8000-000000000037'::uuid;
+                 AND 'b1000000-0000-4000-8000-000000000049'::uuid;
 
 DO $$
 BEGIN
@@ -208,9 +242,11 @@ BEGIN
         SELECT count(*)
         FROM products
         WHERE "Id" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
-                        AND 'b1000000-0000-4000-8000-000000000037'::uuid
-          AND "TaxId" = 'd02602b4-1eca-4350-9b65-1fade1330108'::uuid
-    ) <> 37 THEN
+                        AND 'b1000000-0000-4000-8000-000000000049'::uuid
+          AND "TaxId" = CASE WHEN "CategoryId" = 'a1000000-0000-4000-8000-000000000010'::uuid
+              THEN 'd02602b4-1eca-4350-9b65-1fade1330121'::uuid
+              ELSE 'd02602b4-1eca-4350-9b65-1fade1330108'::uuid END
+    ) <> 49 THEN
         RAISE EXCEPTION 'No se pudo asociar el impuesto requerido a todos los productos del seed.';
     END IF;
 END $$;
@@ -218,7 +254,7 @@ END $$;
 DELETE FROM product_prices p
 WHERE p."ProductId" IN (
     SELECT "Id" FROM products WHERE "Id" BETWEEN
-        'b1000000-0000-4000-8000-000000000001'::uuid AND 'b1000000-0000-4000-8000-000000000037'::uuid
+        'b1000000-0000-4000-8000-000000000001'::uuid AND 'b1000000-0000-4000-8000-000000000049'::uuid
 );
 
 WITH seed_prices("Sku", "BasePrice", "IsBeverage", "IsExtra") AS (
@@ -296,6 +332,39 @@ CROSS JOIN LATERAL (
 ON CONFLICT ("ProductId", "RestaurantId", "Channel", "Format") DO UPDATE
 SET "Amount" = EXCLUDED."Amount";
 
+WITH seed_prices("Sku", "Format", "Amount") AS (
+    VALUES
+        ('AG001', 'UNIDAD', 3.20::numeric),
+        ('AG002', 'UNIDAD', 3.50::numeric),
+        ('AG003', 'UNIDAD', 2.80::numeric),
+        ('MER001', 'UNIDAD', 18.00::numeric),
+        ('MER002', 'UNIDAD', 9.50::numeric),
+        ('MER003', 'UNIDAD', 6.00::numeric),
+        ('PR001', 'PLATO', 8.50::numeric),
+        ('PR001', 'RACION', 9.00::numeric),
+        ('PR001', 'TAPA', 4.50::numeric),
+        ('PR002', 'PLATO', 10.50::numeric),
+        ('PR002', 'RACION', 11.50::numeric),
+        ('PR003', 'PLATO', 11.00::numeric),
+        ('CO001', 'COMBO', 15.50::numeric),
+        ('CO002', 'COMBO', 14.00::numeric),
+        ('CO003', 'COMBO', 10.50::numeric)
+), channels("Channel", "Multiplier") AS (
+    VALUES
+        ('LOCAL', 1.00::numeric),
+        ('DELIVERY', 1.10::numeric),
+        ('GLOVO', 1.20::numeric),
+        ('UBER', 1.25::numeric)
+)
+INSERT INTO product_prices ("Id", "ProductId", "RestaurantId", "Channel", "Format", "Amount")
+SELECT gen_random_uuid(), product."Id", '00000000-0000-0000-0000-000000000000'::uuid,
+       channel."Channel", price."Format", round(price."Amount" * channel."Multiplier", 2)
+FROM seed_prices price
+JOIN products product ON product."Sku" = price."Sku"
+CROSS JOIN channels channel
+ON CONFLICT ("ProductId", "RestaurantId", "Channel", "Format") DO UPDATE
+SET "Amount" = EXCLUDED."Amount";
+
 DELETE FROM product_options
 WHERE "GroupId" IN (
     SELECT "Id" FROM product_option_groups
@@ -312,6 +381,14 @@ SELECT p."Id", false, false
 FROM products p
 WHERE p."Id" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
                   AND 'b1000000-0000-4000-8000-000000000003'::uuid
+ON CONFLICT ("ProductId") DO UPDATE
+SET "IsCombo" = EXCLUDED."IsCombo", "AllowsExtras" = EXCLUDED."AllowsExtras";
+
+INSERT INTO product_configurations ("ProductId", "IsCombo", "AllowsExtras")
+SELECT p."Id", true, false
+FROM products p
+WHERE p."Id" BETWEEN 'b1000000-0000-4000-8000-000000000047'::uuid
+                  AND 'b1000000-0000-4000-8000-000000000049'::uuid
 ON CONFLICT ("ProductId") DO UPDATE
 SET "IsCombo" = EXCLUDED."IsCombo", "AllowsExtras" = EXCLUDED."AllowsExtras";
 
@@ -344,6 +421,43 @@ WHERE g."Id" IN (
 ON CONFLICT ("GroupId", "ProductId") DO UPDATE
 SET "SortOrder" = EXCLUDED."SortOrder";
 
+-- Cada combo contiene dos componentes fijos, modelados como grupos de elección de una opción.
+WITH combo_groups("Id", "ParentProductId", "Name", "SortOrder") AS (
+    VALUES
+        ('c1000000-0000-4000-8000-000000000004'::uuid, 'b1000000-0000-4000-8000-000000000047'::uuid, 'Principal', 0),
+        ('c1000000-0000-4000-8000-000000000005'::uuid, 'b1000000-0000-4000-8000-000000000047'::uuid, 'Bebida', 1),
+        ('c1000000-0000-4000-8000-000000000006'::uuid, 'b1000000-0000-4000-8000-000000000048'::uuid, 'Principal', 0),
+        ('c1000000-0000-4000-8000-000000000007'::uuid, 'b1000000-0000-4000-8000-000000000048'::uuid, 'Bebida', 1),
+        ('c1000000-0000-4000-8000-000000000008'::uuid, 'b1000000-0000-4000-8000-000000000049'::uuid, 'Entrante', 0),
+        ('c1000000-0000-4000-8000-000000000009'::uuid, 'b1000000-0000-4000-8000-000000000049'::uuid, 'Bebida', 1)
+)
+INSERT INTO product_option_groups (
+    "Id", "ParentProductId", "Name", "Kind", "MinSelections", "MaxSelections", "SortOrder"
+)
+SELECT "Id", "ParentProductId", "Name", 'Choice', 1, 1, "SortOrder"
+FROM combo_groups
+ON CONFLICT ("Id") DO UPDATE SET
+    "ParentProductId" = EXCLUDED."ParentProductId",
+    "Name" = EXCLUDED."Name",
+    "Kind" = EXCLUDED."Kind",
+    "MinSelections" = EXCLUDED."MinSelections",
+    "MaxSelections" = EXCLUDED."MaxSelections",
+    "SortOrder" = EXCLUDED."SortOrder";
+
+WITH combo_options("GroupId", "ProductId") AS (
+    VALUES
+        ('c1000000-0000-4000-8000-000000000004'::uuid, 'b1000000-0000-4000-8000-000000000008'::uuid),
+        ('c1000000-0000-4000-8000-000000000005'::uuid, 'b1000000-0000-4000-8000-000000000005'::uuid),
+        ('c1000000-0000-4000-8000-000000000006'::uuid, 'b1000000-0000-4000-8000-000000000001'::uuid),
+        ('c1000000-0000-4000-8000-000000000007'::uuid, 'b1000000-0000-4000-8000-000000000004'::uuid),
+        ('c1000000-0000-4000-8000-000000000008'::uuid, 'b1000000-0000-4000-8000-000000000015'::uuid),
+        ('c1000000-0000-4000-8000-000000000009'::uuid, 'b1000000-0000-4000-8000-000000000006'::uuid)
+)
+INSERT INTO product_options ("GroupId", "ProductId", "SortOrder")
+SELECT "GroupId", "ProductId", 0 FROM combo_options
+ON CONFLICT ("GroupId", "ProductId") DO UPDATE
+SET "SortOrder" = EXCLUDED."SortOrder";
+
 UPDATE catalog_menus
 SET "IsActive" = false
 WHERE "RestaurantId" = '00000000-0000-0000-0000-000000000000'::uuid
@@ -363,25 +477,27 @@ SET "Name" = EXCLUDED."Name", "IsActive" = EXCLUDED."IsActive";
 DELETE FROM catalog_menu_prices
 WHERE "MenuId" = '11111111-1111-4111-8111-111111111111'::uuid
   AND "ProductId" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
-                       AND 'b1000000-0000-4000-8000-000000000037'::uuid;
+                       AND 'b1000000-0000-4000-8000-000000000049'::uuid;
 
 INSERT INTO catalog_menu_prices ("MenuId", "ProductId", "Channel", "Format", "Amount")
 SELECT '11111111-1111-4111-8111-111111111111'::uuid, p."ProductId", p."Channel", p."Format", p."Amount"
 FROM product_prices p
 WHERE p."RestaurantId" = '00000000-0000-0000-0000-000000000000'::uuid
   AND p."ProductId" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
-                         AND 'b1000000-0000-4000-8000-000000000037'::uuid
+                         AND 'b1000000-0000-4000-8000-000000000049'::uuid
 ON CONFLICT ("MenuId", "ProductId", "Channel", "Format") DO UPDATE
 SET "Amount" = EXCLUDED."Amount";
 
 INSERT INTO catalog_menu_entries ("Id", "MenuId", "ProductId", "IsAvailable", "DefaultFormat", "SortOrder")
 SELECT gen_random_uuid(), '11111111-1111-4111-8111-111111111111'::uuid, p."Id", true,
-       CASE c."Code" WHEN 'BEBIDAS' THEN 'UNIDAD' WHEN 'CERVEZAS' THEN 'UNIDAD' WHEN 'VINOS' THEN 'UNIDAD' WHEN 'EXTRAS' THEN 'RACION' ELSE 'PLATO' END,
+       CASE c."Code" WHEN 'BEBIDAS' THEN 'UNIDAD' WHEN 'CERVEZAS' THEN 'UNIDAD' WHEN 'VINOS' THEN 'UNIDAD'
+           WHEN 'AGUAS' THEN 'UNIDAD' WHEN 'MERCH' THEN 'UNIDAD' WHEN 'COMBO' THEN 'COMBO'
+           WHEN 'EXTRAS' THEN 'RACION' ELSE 'PLATO' END,
        (row_number() OVER (ORDER BY p."Sku") - 1)::integer
 FROM products p
 JOIN categories c ON c."Id" = p."CategoryId"
 WHERE p."Id" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
-                  AND 'b1000000-0000-4000-8000-000000000037'::uuid
+                  AND 'b1000000-0000-4000-8000-000000000049'::uuid
 AND NOT EXISTS (
     SELECT 1 FROM catalog_menu_entries e
     WHERE e."MenuId" = '11111111-1111-4111-8111-111111111111'::uuid
@@ -390,13 +506,42 @@ AND NOT EXISTS (
 
 UPDATE catalog_menu_entries e
 SET "IsAvailable" = true,
-    "DefaultFormat" = CASE c."Code" WHEN 'BEBIDAS' THEN 'UNIDAD' WHEN 'CERVEZAS' THEN 'UNIDAD' WHEN 'VINOS' THEN 'UNIDAD' WHEN 'EXTRAS' THEN 'RACION' ELSE 'PLATO' END
+    "DefaultFormat" = CASE c."Code" WHEN 'BEBIDAS' THEN 'UNIDAD' WHEN 'CERVEZAS' THEN 'UNIDAD' WHEN 'VINOS' THEN 'UNIDAD'
+        WHEN 'AGUAS' THEN 'UNIDAD' WHEN 'MERCH' THEN 'UNIDAD' WHEN 'COMBO' THEN 'COMBO'
+        WHEN 'EXTRAS' THEN 'RACION' ELSE 'PLATO' END
 FROM products p
 JOIN categories c ON c."Id" = p."CategoryId"
 WHERE e."MenuId" = '11111111-1111-4111-8111-111111111111'::uuid
   AND e."ProductId" = p."Id"
   AND p."Id" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
-                  AND 'b1000000-0000-4000-8000-000000000037'::uuid;
+                  AND 'b1000000-0000-4000-8000-000000000049'::uuid;
+
+-- Madrid Centro y Barcelona Centro operan con la carta del local. Los demás
+-- conservan su selección actual; ON CONFLICT respeta los cambios del manager.
+WITH seeded_locales("RestaurantId") AS (
+    VALUES
+        ('11111111-1111-4111-8111-111111111111'::uuid),
+        ('33333333-3333-4333-8333-333333333333'::uuid)
+)
+INSERT INTO restaurant_product_availability ("RestaurantId", "ProductId", "IsAvailable")
+SELECT local."RestaurantId", product."Id", true
+FROM seeded_locales local
+CROSS JOIN products product
+WHERE product."Id" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
+                       AND 'b1000000-0000-4000-8000-000000000049'::uuid
+ON CONFLICT ("RestaurantId", "ProductId") DO NOTHING;
+
+INSERT INTO restaurant_product_availability ("RestaurantId", "ProductId", "IsAvailable")
+SELECT local."RestaurantId", product."Id", true
+FROM (
+    SELECT DISTINCT "RestaurantId"
+    FROM restaurant_product_availability
+    WHERE "IsAvailable" = true
+) local
+CROSS JOIN products product
+WHERE product."Id" BETWEEN 'b1000000-0000-4000-8000-000000000038'::uuid
+                       AND 'b1000000-0000-4000-8000-000000000049'::uuid
+ON CONFLICT ("RestaurantId", "ProductId") DO NOTHING;
 
 DELETE FROM product_allergens
 WHERE "ProductId" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
@@ -420,29 +565,59 @@ WHERE "Rank" <= 3
 ON CONFLICT ("ProductId", "AllergenId") DO UPDATE
 SET "AllergenId" = EXCLUDED."AllergenId";
 
-WITH restaurants("RestaurantId", "Adjustment") AS (
+-- Las promociones heredan los alérgenos del plato anunciado; los combos, de sus componentes.
+DELETE FROM product_allergens
+WHERE "ProductId" BETWEEN 'b1000000-0000-4000-8000-000000000044'::uuid
+                       AND 'b1000000-0000-4000-8000-000000000049'::uuid;
+
+WITH promoted("ProductId", "SourceProductId") AS (
     VALUES
-        ('11111111-1111-4111-8111-111111111111'::uuid, 0.00::numeric),
-        ('22222222-2222-4222-8222-222222222222'::uuid, 0.50::numeric),
-        ('33333333-3333-4333-8333-333333333333'::uuid, 1.00::numeric),
-        ('44444444-4444-4444-8444-444444444444'::uuid, 0.75::numeric),
-        ('55555555-5555-4555-8555-555555555555'::uuid, 0.25::numeric)
+        ('b1000000-0000-4000-8000-000000000044'::uuid, 'b1000000-0000-4000-8000-000000000014'::uuid),
+        ('b1000000-0000-4000-8000-000000000045'::uuid, 'b1000000-0000-4000-8000-000000000001'::uuid),
+        ('b1000000-0000-4000-8000-000000000046'::uuid, 'b1000000-0000-4000-8000-000000000008'::uuid)
+), inherited AS (
+    SELECT promoted."ProductId", allergen."AllergenId"
+    FROM promoted
+    JOIN product_allergens allergen ON allergen."ProductId" = promoted."SourceProductId"
+    UNION
+    SELECT group_item."ParentProductId", allergen."AllergenId"
+    FROM product_option_groups group_item
+    JOIN product_options option_item ON option_item."GroupId" = group_item."Id"
+    JOIN product_allergens allergen ON allergen."ProductId" = option_item."ProductId"
+    WHERE group_item."ParentProductId" BETWEEN 'b1000000-0000-4000-8000-000000000047'::uuid
+                                           AND 'b1000000-0000-4000-8000-000000000049'::uuid
+)
+INSERT INTO product_allergens ("ProductId", "AllergenId")
+SELECT "ProductId", "AllergenId" FROM inherited
+ON CONFLICT ("ProductId", "AllergenId") DO NOTHING;
+
+WITH restaurants("RestaurantId") AS (
+    VALUES
+        ('11111111-1111-4111-8111-111111111111'::uuid),
+        ('22222222-2222-4222-8222-222222222222'::uuid),
+        ('33333333-3333-4333-8333-333333333333'::uuid),
+        ('44444444-4444-4444-8444-444444444444'::uuid),
+        ('55555555-5555-4555-8555-555555555555'::uuid)
 ), inserted AS (
     INSERT INTO restaurant_menu_items (
         "Id", "RestaurantId", "ProductId", "Price", "IsAvailable",
         "PreparationStationCode", "PreparationStationName", "Version", "UpdatedAtUtc"
     )
-    SELECT gen_random_uuid(), r."RestaurantId", p."Id", pp."Amount" + r."Adjustment",
-           true,
+    SELECT gen_random_uuid(), r."RestaurantId", p."Id", pp."Amount",
+           COALESCE(selection."IsAvailable", false),
            c."DefaultStationCode", c."DefaultStationName", 1, now()
     FROM restaurants r CROSS JOIN products p
     JOIN categories c ON c."Id" = p."CategoryId"
+    JOIN catalog_menu_entries entry ON entry."MenuId" = '11111111-1111-4111-8111-111111111111'::uuid
+        AND entry."ProductId" = p."Id"
+    LEFT JOIN restaurant_product_availability selection
+        ON selection."RestaurantId" = r."RestaurantId" AND selection."ProductId" = p."Id"
     JOIN product_prices pp ON pp."ProductId" = p."Id"
         AND pp."RestaurantId" = '00000000-0000-0000-0000-000000000000'::uuid
         AND pp."Channel" = 'LOCAL'
-        AND pp."Format" = CASE c."Code" WHEN 'BEBIDAS' THEN 'UNIDAD' WHEN 'CERVEZAS' THEN 'UNIDAD' WHEN 'VINOS' THEN 'UNIDAD' WHEN 'EXTRAS' THEN 'RACION' ELSE 'PLATO' END
+        AND pp."Format" = entry."DefaultFormat"
     WHERE p."Id" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
-                      AND 'b1000000-0000-4000-8000-000000000037'::uuid
+                      AND 'b1000000-0000-4000-8000-000000000049'::uuid
     ON CONFLICT ("RestaurantId", "ProductId") DO UPDATE SET
         "Price" = EXCLUDED."Price",
         "IsAvailable" = EXCLUDED."IsAvailable",
@@ -461,6 +636,15 @@ SELECT gen_random_uuid(),
            'IsAvailable', i."IsAvailable", 'PreparationStationCode', i."PreparationStationCode",
            'PreparationStationName', i."PreparationStationName", 'Version', i."Version",
            'OccurredAtUtc', to_char(i."UpdatedAtUtc" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+           'DefaultFormat', entry."DefaultFormat",
+           'Formats', COALESCE((
+               SELECT jsonb_agg(jsonb_build_object('Format', menu_price."Format", 'Price', menu_price."Amount")
+                                ORDER BY menu_price."Format")
+               FROM catalog_menu_prices menu_price
+               WHERE menu_price."MenuId" = entry."MenuId"
+                 AND menu_price."ProductId" = i."ProductId"
+                 AND menu_price."Channel" = 'LOCAL'
+           ), '[]'::jsonb),
            'ExtraGroups', COALESCE((
                SELECT jsonb_agg(
                    jsonb_build_object(
@@ -502,7 +686,9 @@ SELECT gen_random_uuid(),
        i."UpdatedAtUtc"
 FROM inserted i
 JOIN products p ON p."Id" = i."ProductId"
-JOIN categories c ON c."Id" = p."CategoryId";
+JOIN categories c ON c."Id" = p."CategoryId"
+JOIN catalog_menu_entries entry ON entry."MenuId" = '11111111-1111-4111-8111-111111111111'::uuid
+    AND entry."ProductId" = i."ProductId";
 
 -- Reemplaza las estaciones de los locales de desarrollo y propaga bajas/altas a la proyección.
 WITH restaurants("RestaurantId") AS (

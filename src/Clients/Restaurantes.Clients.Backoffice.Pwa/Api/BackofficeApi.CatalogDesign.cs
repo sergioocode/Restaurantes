@@ -10,6 +10,16 @@ public sealed partial class BackofficeApi
     public Task<CatalogDesignSnapshot> CatalogDesignAsync() =>
         GetAsync<CatalogDesignSnapshot>("/api/catalog/design");
 
+    public Task SetLocalProductAvailabilityAsync(
+        Guid restaurantId,
+        Guid productId,
+        bool available
+    ) =>
+        SaveDesignAsync(
+            $"/api/catalog/design/restaurants/{restaurantId}/products/{productId}/availability",
+            available
+        );
+
     private async Task SaveDesignAsync(string path, object body)
     {
         using HttpRequestMessage request = Authorized(HttpMethod.Put, path);
@@ -65,31 +75,4 @@ public sealed partial class BackofficeApi
         Guid restaurantId,
         List<PriceDraft> prices
     ) => SaveDesignAsync($"/api/catalog/design/products/{productId}/prices/{restaurantId}", prices);
-
-    public async Task<CatalogMenuModel> SaveCatalogMenuAsync(Guid menuId, CatalogMenuDraft draft)
-    {
-        using HttpRequestMessage request = Authorized(
-            HttpMethod.Put,
-            $"/api/catalog/design/menus/{menuId}"
-        );
-        request.Content = JsonContent.Create(draft);
-        using HttpResponseMessage response = await http.SendAsync(request);
-        return await ReadAsync<CatalogMenuModel>(response);
-    }
-
-    public Task SetCatalogMenuActiveAsync(Guid menuId, bool active) =>
-        SaveDesignAsync(
-            $"/api/catalog/design/menus/{menuId}/{(active ? "active" : "inactive")}",
-            new { }
-        );
-
-    public async Task DeleteLocalCatalogMenuAsync(Guid menuId)
-    {
-        using HttpRequestMessage request = Authorized(
-            HttpMethod.Delete,
-            $"/api/catalog/design/menus/{menuId}"
-        );
-        using HttpResponseMessage response = await http.SendAsync(request);
-        await EnsureSuccessAsync(response);
-    }
 }

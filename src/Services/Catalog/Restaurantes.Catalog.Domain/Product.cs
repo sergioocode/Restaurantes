@@ -32,7 +32,7 @@ public sealed class Product
     public static Product Create(string sku, string name, Guid categoryId, DateTime now) =>
         new(sku, name, categoryId, now);
 
-    public void Update(string name, Guid categoryId, bool isActive, DateTime now)
+    public void Update(string name, Guid categoryId, DateTime now)
     {
         if (categoryId == Guid.Empty)
         {
@@ -41,7 +41,32 @@ public sealed class Product
 
         Name = Category.Required(name, 160);
         CategoryId = categoryId;
-        IsActive = isActive;
+        Version++;
+        UpdatedAtUtc = now;
+    }
+
+    public void SetActive(bool active, DateTime now)
+    {
+        IsActive = active;
+        Version++;
+        UpdatedAtUtc = now;
+    }
+
+    public void SetCategory(Guid categoryId, DateTime now)
+    {
+        if (categoryId == Guid.Empty)
+        {
+            throw new ArgumentException("CategoryId is required.");
+        }
+
+        CategoryId = categoryId;
+        Version++;
+        UpdatedAtUtc = now;
+    }
+
+    public void SetName(string name, DateTime now)
+    {
+        Name = Category.Required(name, 160);
         Version++;
         UpdatedAtUtc = now;
     }

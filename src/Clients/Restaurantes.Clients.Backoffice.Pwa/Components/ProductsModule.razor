@@ -7,7 +7,6 @@
 }
 else
 {
-    <div class="module-toolbar"><button class="secondary" @onclick="Host.RefreshModule" disabled="@Host.busy">Recargar</button></div>
     <details class="admin-panel" open>
         <summary>Nuevo producto</summary>
         <form class="inline-form" @onsubmit="Host.CreateProduct" @onsubmit:preventDefault>
@@ -16,7 +15,7 @@ else
                 <option value="@category.Id">@category.Name</option>
             }
         </select>
-        <button class="primary" disabled="@Host.busy">Agregar</button>
+        <button class="primary" disabled="@Host.busy">Agregar Producto</button>
     </form>
 </details>
 <div class="maintenance-list">
@@ -28,25 +27,32 @@ else
             <h2>@(Host.categories.FirstOrDefault(c => c.Id == group.Key)?.Name ?? "Sin categoría")</h2>
             @foreach (ProductResponse item in group.OrderBy(x => x.Name))
             {
-                <article class="maintenance-row product-maintenance @(item.IsActive ? "" : "inactive")">
+                <article @key="item.Id" class="maintenance-row product-maintenance global-product-maintenance @(item.IsActive ? "" : "inactive")">
                     <div>
                         @if (snapshot?.ProductPhotos.FirstOrDefault(x => x.ProductId == item.Id) is { } photo)
                         {
                             <img class="product-thumb" src="@($"/api/catalog/products/{item.Id}/photos/small?v={photo.Revision}")" alt="" loading="lazy" width="64" height="64" />
                         }
-                        <strong>@item.Sku</strong><small>v@item.Version</small>
+                        <strong>@item.Sku</strong>
                     </div>
-                    <label>Nombre<input @bind="item.Name" /></label>
-                    <label>Categoría<select @bind="item.CategoryId">@foreach (CategoryResponse category in Host.categories) {
+                    <div class="product-name-editor">
+                        <label>Nombre<input @bind="item.Name" /></label>
+                        <button class="primary product-name-save" @onclick="() => Host.SaveProduct(item)" disabled="@Host.busy" aria-label="Guardar nombre" title="Guardar nombre">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                                <path d="M4 3h13l3 3v15H4z" />
+                                <path d="M7 3v6h10V3M7 21v-8h10v8M14 3v4" />
+                            </svg>
+                        </button>
+                    </div>
+                    <label>Categoría<select value="@item.CategoryId" @onchange="args => Host.SaveProductCategory(item, args)" disabled="@Host.busy">@foreach (CategoryResponse category in Host.categories) {
                             <option value="@category.Id">@category.Name</option>
                         }
                     </select></label>
-                    <label class="availability"><input type="checkbox" @bind="item.IsActive" /> Activo</label>
+                    <label class="availability"><input type="checkbox" checked="@item.IsActive" @onchange="args => Host.SaveProductActive(item, args)" disabled="@Host.busy" /> Activo</label>
                     @if (snapshot is not null)
                     {
                         <ProductSettings Product="item" Host="Host" Snapshot="snapshot" OnSaved="RefreshSettings" />
                     }
-                    <button class="primary" @onclick="() => Host.SaveProduct(item)" disabled="@Host.busy">Guardar</button>
                 </article>
             }
         </section>

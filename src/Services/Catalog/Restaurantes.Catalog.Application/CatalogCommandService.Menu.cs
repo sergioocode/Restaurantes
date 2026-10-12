@@ -15,7 +15,7 @@ public sealed partial class CatalogCommandService
     )
     {
         Product? product = await store.FindProductAsync(productId, ct);
-        if (product is null || !product.IsActive)
+        if (product is null)
         {
             return null;
         }

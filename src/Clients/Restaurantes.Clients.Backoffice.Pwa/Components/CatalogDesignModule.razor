@@ -1,417 +1,96 @@
 @using Restaurantes.Clients.Backoffice.Pwa.Models
 @inject Restaurantes.Clients.Backoffice.Pwa.Api.BackofficeApi Api
 
-<RestaurantContextSelector Host="Host" />
-<div class="module-toolbar"><button class="secondary" @onclick="Refresh" disabled="@busy">Actualizar configuración</button></div>
 @if (!string.IsNullOrWhiteSpace(status)) { <p role="status">@status</p> }
-@if (snapshot is null) { <p>Cargando configuración…</p> }
-else
+@if (snapshot is not null)
 {
-    <p class="muted">La carta vigente determina los productos y precios que reciben los clientes del local.</p>
-    <details class="admin-panel"><summary>Grupos de combos</summary>
-        <label>Producto
-            <select value="@selectedProductId" @onchange="SelectProduct">
-                @foreach (ProductResponse product in Host.products.OrderBy(x => x.Name))
-                {
-                    <option value="@product.Id">@product.Name (@product.Sku)</option>
-                }
-            </select>
-        </label>
-        @if (selectedProductId != Guid.Empty)
+    <div class="maintenance-list">
+        @foreach (IGrouping<Guid, ProductResponse> group in DefaultProducts().GroupBy(x => x.CategoryId)
+            .OrderBy(x => Host.categories.FirstOrDefault(c => c.Id == x.Key)?.Name ?? "Sin categoría"))
         {
-            @if (Host.HasGlobalPermission("catalog.global.manage"))
-            {
-                <div class="maintenance-list">
-                    <label><input type="checkbox" @bind="definition.IsCombo" /> Es un combo</label>
-                    @if (definition.IsCombo)
-                    {
-                        <label><input type="checkbox" @bind="definition.AllowsExtras" /> Permite extras</label>
-                    }
-                    <h3>Grupos del combo</h3>
-                    @foreach (OptionGroupDraft group in definition.Groups)
-                    {
-                        <div class="maintenance-row">
-                            <label>Grupo<input @bind="group.Name" /></label>
-                            <label>Tipo<select @bind="group.Kind"><option value="Choice">Elección del combo</option><option value="Extra">Extras</option></select></label>
-                            <label>Mínimo<input type="number" min="0" @bind="group.MinSelections" /></label>
-                            <label>Máximo<input type="number" min="1" @bind="group.MaxSelections" /></label>
-                            <button class="secondary" @onclick="() => definition.Groups.Remove(group)">Quitar grupo</button>
-                            <div class="inline-form">
-                                @foreach (ProductResponse option in Host.products.Where(x => x.Id != selectedProductId && x.IsActive).OrderBy(x => x.Name))
-                                {
-                                    <label><input type="checkbox" checked="@group.ProductIds.Contains(option.Id)" @onchange="args => ToggleOption(group, option.Id, args)" /> @option.Name</label>
-                                }
-                            </div>
+            <section class="product-category-group">
+                <h2>@(Host.categories.FirstOrDefault(c => c.Id == group.Key)?.Name ?? "Sin categoría")</h2>
+                @foreach (ProductResponse item in group.OrderBy(x => x.Name).ThenBy(x => x.Sku))
+                {
+                    <article @key="item.Id" class="maintenance-row product-maintenance local-product-maintenance @(availability.GetValueOrDefault(item.Id) ? "" : "inactive")">
+                        <div>
+                            @if (snapshot.ProductPhotos.FirstOrDefault(x => x.ProductId == item.Id) is { } photo)
+                            {
+                                <img class="product-thumb" src="@($"/api/catalog/products/{item.Id}/photos/small?v={photo.Revision}")" alt="" loading="lazy" width="64" height="64" />
+                            }
+                            <strong>@item.Sku</strong>
                         </div>
-                    }
-                    <button class="secondary" @onclick="AddGroup">Agregar grupo</button>
-                    <button class="primary" @onclick="SaveDefinition" disabled="@busy">Guardar combo y grupos</button>
-                </div>
-            }
-        }
-    </details>
-
-    <details class="admin-panel"><summary>Carta general o por local</summary>
-        <label>Ámbito
-            <select value="@menuScope" @onchange="SelectMenuScope">
-                @if (Host.HasGlobalPermission("catalog.global.manage")) { <option value="@Guid.Empty">Carta general</option> }
-                @if (Host.restaurantId != Guid.Empty) { <option value="@Host.restaurantId">@Host.CurrentRestaurant?.Name</option> }
-            </select>
-        </label>
-        <label>Carta
-            <select value="@selectedMenuId" @onchange="SelectMenu">
-                @foreach (CatalogMenuModel menu in snapshot.Menus.Where(x => x.RestaurantId == menuScope).OrderBy(x => x.Name))
-                {
-                    <option value="@menu.Id">@menu.Name @(menu.IsActive ? "· Vigente" : "")</option>
+                        <label>Nombre<input value="@item.Name" readonly /></label>
+                        <label>Categoría<select value="@item.CategoryId" disabled>
+                            @foreach (CategoryResponse category in Host.categories) { <option value="@category.Id">@category.Name</option> }
+                        </select></label>
+                        <label class="availability"><input type="checkbox" checked="@availability[item.Id]" @onchange="args => Save(item.Id, args)" disabled="@(busy || !item.IsActive)" /> Activo</label>
+                        <ProductSettings Product="item" Host="Host" Snapshot="snapshot" ReadOnly="true" />
+                    </article>
                 }
-            </select>
-        </label>
-        @if (menuScope != Guid.Empty)
-        {
-            <button class="secondary" @onclick="NewMenu">Nueva carta local</button>
-            @if (selectedMenuId == Guid.Empty) { <p>Si no hay carta local vigente, se usa la carta predeterminada.</p> }
+            </section>
         }
-        <label>Nombre<input @bind="menuDraft.Name" /></label>
-        @if (selectedMenuId != Guid.Empty)
-        {
-            <label><input type="checkbox" checked="@snapshot.Menus.Any(x => x.Id == selectedMenuId && x.IsActive)" @onchange="SetMenuActive" /> @(menuScope == Guid.Empty ? "Vigente para todos los locales" : "Vigente en este local")</label>
-        }
-        <div class="maintenance-list">
-            @foreach (CatalogMenuEntryDraft entry in menuDraft.Entries)
-            {
-                ProductResponse? product = Host.products.FirstOrDefault(x => x.Id == entry.ProductId);
-                CatalogMenuChannelDraft glovo = Channel(entry, "GLOVO");
-                CatalogMenuChannelDraft uber = Channel(entry, "UBER");
-                <div class="maintenance-row">
-                    <strong>@product?.Name</strong>
-                    <label>Formato inicial<select @bind="entry.DefaultFormat">@foreach (string format in PriceFormats) { <option value="@format">@format</option> }</select></label>
-                    <label><input type="checkbox" @bind="entry.IsAvailable" /> Disponible</label>
-                    <label><input type="checkbox" @bind="glovo.IsPublished" /> Glovo</label>
-                    <label>ID Glovo<input @bind="glovo.ExternalId" /></label>
-                    <label><input type="checkbox" @bind="uber.IsPublished" /> Uber</label>
-                    <label>ID Uber<input @bind="uber.ExternalId" /></label>
-                    <button class="secondary" @onclick="() => menuDraft.Entries.Remove(entry)">Quitar</button>
-                </div>
-            }
-        </div>
-        <h3>Precios de esta carta</h3>
-        <div class="maintenance-list">
-            @foreach (CatalogMenuPriceDraft price in menuDraft.Prices)
-            {
-                <div class="maintenance-row">
-                    <strong>@Host.products.FirstOrDefault(x => x.Id == price.ProductId)?.Name</strong>
-                    <label>Canal<select @bind="price.Channel">@foreach (string channel in PriceChannels) { <option value="@channel">@channel</option> }</select></label>
-                    <label>Formato<select @bind="price.Format">@foreach (string format in PriceFormats) { <option value="@format">@format</option> }</select></label>
-                    <label>Precio<input type="number" min="0" step="0.01" @bind="price.Amount" /></label>
-                    <button class="secondary" @onclick="() => menuDraft.Prices.Remove(price)">Quitar</button>
-                </div>
-            }
-        </div>
-        <label>Producto para precio
-            <select @bind="priceProductId">
-                <option value="@Guid.Empty">Seleccionar…</option>
-                @foreach (ProductResponse product in Host.products.Where(x => PricableProductIds().Contains(x.Id)).OrderBy(x => x.Name)) { <option value="@product.Id">@product.Name</option> }
-            </select>
-        </label>
-        <button class="secondary" @onclick="AddMenuPrice" disabled="@(priceProductId == Guid.Empty)">Añadir precio</button>
-        <label>Añadir producto
-            <select @bind="productToAdd">
-                <option value="@Guid.Empty">Seleccionar…</option>
-                @foreach (ProductResponse product in Host.products.Where(x => x.IsActive && !menuDraft.Entries.Any(e => e.ProductId == x.Id)).OrderBy(x => x.Name))
-                {
-                    <option value="@product.Id">@product.Name</option>
-                }
-            </select>
-        </label>
-        <button class="secondary" @onclick="AddMenuProduct" disabled="@(productToAdd == Guid.Empty)">Añadir</button>
-        <button class="primary" @onclick="SaveMenu" disabled="@busy">Guardar carta</button>
-        @if (menuScope != Guid.Empty && selectedMenuId != Guid.Empty)
-        {
-            <button class="secondary" @onclick="DeleteLocalMenu" disabled="@busy">Eliminar carta local</button>
-        }
-    </details>
+    </div>
 }
-
 @code {
     [Parameter, EditorRequired] public Home Host { get; set; } = default!;
-    private static readonly string[] PriceChannels = ["LOCAL", "DELIVERY", "GLOVO", "UBER"];
-    private static readonly string[] PriceFormats = ["PLATO", "RACION", "TAPA", "MEDIA_RACION", "UNIDAD", "EXTRA", "COMBO"];
     private CatalogDesignSnapshot? snapshot;
-    private ProductDefinitionDraft definition = new();
-    private CatalogMenuDraft menuDraft = new();
-    private Guid selectedProductId;
-    private Guid menuScope;
-    private Guid selectedMenuId;
-    private Guid priceProductId;
+    private Dictionary<Guid, bool> availability = [];
     private Guid lastRestaurantId;
-    private Guid productToAdd;
     private string? status;
     private bool busy;
 
-    protected override async Task OnInitializedAsync()
-    {
-        lastRestaurantId = Host.restaurantId;
-        menuScope = Host.HasGlobalPermission("catalog.global.manage") ? Guid.Empty : Host.restaurantId;
-        selectedProductId = Host.products.FirstOrDefault()?.Id ?? Guid.Empty;
-        await Refresh();
-    }
+    protected override async Task OnInitializedAsync() => await Refresh();
 
     protected override void OnParametersSet()
     {
-        if (lastRestaurantId == Guid.Empty || Host.restaurantId == lastRestaurantId) return;
-        if (menuScope == lastRestaurantId) menuScope = Host.restaurantId;
+        if (lastRestaurantId == Host.restaurantId) return;
         lastRestaurantId = Host.restaurantId;
-        LoadMenu();
+        LoadAvailability();
     }
 
-    private async Task Refresh()
-    {
-        await Run(async () =>
-        {
-            snapshot = await Api.CatalogDesignAsync();
-            LoadProduct();
-            LoadMenu();
-        });
-    }
-
-    private void LoadProduct()
-    {
-        if (snapshot is null) return;
-        definition = new ProductDefinitionDraft
-        {
-            IsCombo = snapshot.Configurations.Any(x => x.ProductId == selectedProductId && x.IsCombo),
-            AllowsExtras = snapshot.Configurations.Any(x => x.ProductId == selectedProductId && x.AllowsExtras),
-            Groups = snapshot.Groups.Where(x => x.ParentProductId == selectedProductId)
-                .OrderBy(x => x.SortOrder).Select(x => new OptionGroupDraft
-                {
-                    Name = x.Name, Kind = x.Kind,
-                    MinSelections = x.MinSelections, MaxSelections = x.MaxSelections,
-                    ProductIds = snapshot.Options.Where(o => o.GroupId == x.Id)
-                        .OrderBy(o => o.SortOrder).Select(o => o.ProductId).ToList(),
-                }).ToList(),
-        };
-    }
-
-    private void LoadMenu()
-    {
-        if (snapshot is null) return;
-        CatalogMenuModel? menu = snapshot.Menus.FirstOrDefault(x => x.Id == selectedMenuId && x.RestaurantId == menuScope)
-            ?? snapshot.Menus.FirstOrDefault(x => x.RestaurantId == menuScope && x.IsActive)
-            ?? snapshot.Menus.FirstOrDefault(x => x.RestaurantId == menuScope);
-        selectedMenuId = menu?.Id ?? Guid.Empty;
-        CatalogMenuModel? template = menu ?? snapshot.Menus.FirstOrDefault(x => x.RestaurantId == Guid.Empty);
-        menuDraft = new CatalogMenuDraft
-        {
-            RestaurantId = menuScope,
-            Name = menuScope == Guid.Empty ? menu?.Name ?? "Carta predeterminada"
-                : menu?.Name ?? $"Carta - {Host.CurrentRestaurant?.Name}",
-            Entries = template is null ? [] : snapshot.Entries.Where(x => x.MenuId == template.Id)
-                .OrderBy(x => x.SortOrder).Select(x => new CatalogMenuEntryDraft
-                {
-                    ProductId = x.ProductId, IsAvailable = x.IsAvailable,
-                    DefaultFormat = x.DefaultFormat,
-                    Channels = snapshot.MenuChannels.Where(c => c.MenuEntryId == x.Id)
-                        .Select(c => new CatalogMenuChannelDraft
-                        {
-                            Channel = c.Channel, IsPublished = c.IsPublished, ExternalId = c.ExternalId,
-                        }).ToList(),
-                }).ToList(),
-            Prices = template is null ? [] : snapshot.MenuPrices.Where(x => x.MenuId == template.Id)
-                .Select(x => new CatalogMenuPriceDraft
-                {
-                    ProductId = x.ProductId, Channel = x.Channel, Format = x.Format, Amount = x.Amount,
-                }).ToList(),
-        };
-        foreach (CatalogMenuEntryDraft entry in menuDraft.Entries)
-        {
-            Channel(entry, "GLOVO");
-            Channel(entry, "UBER");
-        }
-        EnsureExtraPrices();
-    }
-
-    private static CatalogMenuChannelDraft Channel(CatalogMenuEntryDraft entry, string code)
-    {
-        CatalogMenuChannelDraft? channel = entry.Channels.FirstOrDefault(x => x.Channel == code);
-        if (channel is not null) return channel;
-        channel = new CatalogMenuChannelDraft { Channel = code };
-        entry.Channels.Add(channel);
-        return channel;
-    }
-
-    private void SelectProduct(ChangeEventArgs args)
-    {
-        selectedProductId = Guid.TryParse(args.Value?.ToString(), out Guid id) ? id : Guid.Empty;
-        LoadProduct();
-    }
-
-    private void SelectMenuScope(ChangeEventArgs args)
-    {
-        menuScope = Guid.TryParse(args.Value?.ToString(), out Guid id) ? id : Guid.Empty;
-        selectedMenuId = Guid.Empty;
-        LoadMenu();
-    }
-
-    private void SelectMenu(ChangeEventArgs args)
-    {
-        selectedMenuId = Guid.TryParse(args.Value?.ToString(), out Guid id) ? id : Guid.Empty;
-        LoadMenu();
-    }
-
-    private void NewMenu()
-    {
-        selectedMenuId = Guid.Empty;
-        CatalogMenuModel? template = snapshot?.Menus.FirstOrDefault(x => x.RestaurantId == Guid.Empty);
-        menuDraft = new CatalogMenuDraft
-        {
-            RestaurantId = menuScope,
-            Name = $"Nueva carta - {Host.CurrentRestaurant?.Name}",
-            Entries = template is null ? [] : snapshot!.Entries.Where(x => x.MenuId == template.Id)
-                .OrderBy(x => x.SortOrder).Select(x => new CatalogMenuEntryDraft
-                {
-                    ProductId = x.ProductId, IsAvailable = x.IsAvailable, DefaultFormat = x.DefaultFormat,
-                    Channels = snapshot.MenuChannels.Where(c => c.MenuEntryId == x.Id)
-                        .Select(c => new CatalogMenuChannelDraft
-                        {
-                            Channel = c.Channel, IsPublished = c.IsPublished, ExternalId = c.ExternalId,
-                        }).ToList(),
-                }).ToList(),
-            Prices = template is null ? [] : snapshot!.MenuPrices.Where(x => x.MenuId == template.Id)
-                .Select(x => new CatalogMenuPriceDraft
-                {
-                    ProductId = x.ProductId, Channel = x.Channel, Format = x.Format, Amount = x.Amount,
-                }).ToList(),
-        };
-        EnsureExtraPrices();
-    }
-
-    private void EnsureExtraPrices()
-    {
-        if (snapshot is null) return;
-        foreach (CatalogMenuEntryDraft entry in menuDraft.Entries)
-        foreach (ProductOptionGroupModel group in snapshot.Groups.Where(x =>
-            x.ParentProductId == entry.ProductId && x.Kind == "Extra"))
-        foreach (ProductOptionModel option in snapshot.Options.Where(x => x.GroupId == group.Id))
-        foreach (CatalogPriceModel price in snapshot.Prices.Where(x =>
-            x.ProductId == option.ProductId && x.RestaurantId == Guid.Empty))
-            if (!menuDraft.Prices.Any(x => x.ProductId == option.ProductId
-                && x.Channel == price.Channel && x.Format == price.Format))
-                menuDraft.Prices.Add(new CatalogMenuPriceDraft
-                {
-                    ProductId = option.ProductId, Channel = price.Channel,
-                    Format = price.Format, Amount = price.Amount,
-                });
-    }
-
-    private HashSet<Guid> PricableProductIds()
-    {
-        HashSet<Guid> ids = menuDraft.Entries.Select(x => x.ProductId).ToHashSet();
-        if (snapshot is null) return ids;
-        HashSet<Guid> groupIds = snapshot.Groups.Where(x => x.Kind == "Extra"
-            && ids.Contains(x.ParentProductId)).Select(x => x.Id).ToHashSet();
-        ids.UnionWith(snapshot.Options.Where(x => groupIds.Contains(x.GroupId)).Select(x => x.ProductId));
-        return ids;
-    }
-
-    private static void ToggleOption(OptionGroupDraft group, Guid id, ChangeEventArgs args)
-    {
-        if (args.Value is true && !group.ProductIds.Contains(id)) group.ProductIds.Add(id);
-        else if (args.Value is false) group.ProductIds.Remove(id);
-    }
-
-    private void AddGroup() => definition.Groups.Add(new OptionGroupDraft
-    {
-        Kind = definition.IsCombo ? "Choice" : "Extra", Name = "Nuevo grupo",
-        MinSelections = definition.IsCombo ? 1 : 0,
-    });
-
-    private void AddMenuProduct()
-    {
-        if (productToAdd == Guid.Empty || menuDraft.Entries.Any(x => x.ProductId == productToAdd)) return;
-        List<CatalogPriceModel> defaults = snapshot?.Prices.Where(x => x.ProductId == productToAdd
-            && x.RestaurantId == Guid.Empty).ToList() ?? [];
-        CatalogMenuEntryDraft entry = new()
-        {
-            ProductId = productToAdd,
-            DefaultFormat = defaults.FirstOrDefault(x => x.Channel == "LOCAL" && x.Format == "PLATO")?.Format
-                ?? defaults.FirstOrDefault(x => x.Channel == "LOCAL")?.Format ?? "PLATO",
-        };
-        Channel(entry, "GLOVO");
-        Channel(entry, "UBER");
-        menuDraft.Entries.Add(entry);
-        foreach (CatalogPriceModel price in defaults)
-            if (!menuDraft.Prices.Any(x => x.ProductId == price.ProductId
-                && x.Channel == price.Channel && x.Format == price.Format))
-                menuDraft.Prices.Add(new CatalogMenuPriceDraft
-                {
-                    ProductId = price.ProductId, Channel = price.Channel,
-                    Format = price.Format, Amount = price.Amount,
-                });
-        productToAdd = Guid.Empty;
-        EnsureExtraPrices();
-    }
-
-    private void AddMenuPrice()
-    {
-        if (priceProductId == Guid.Empty) return;
-        CatalogPriceModel? standard = snapshot?.Prices.FirstOrDefault(x =>
-            x.ProductId == priceProductId && x.RestaurantId == Guid.Empty && x.Channel == "LOCAL");
-        menuDraft.Prices.Add(new CatalogMenuPriceDraft
-        {
-            ProductId = priceProductId, Format = standard?.Format ?? "PLATO",
-            Amount = standard?.Amount ?? 0,
-        });
-        priceProductId = Guid.Empty;
-    }
-
-    private Task SetMenuActive(ChangeEventArgs args) => Run(async () =>
-    {
-        if (selectedMenuId == Guid.Empty) return;
-        await Api.SetCatalogMenuActiveAsync(selectedMenuId, args.Value is true);
-        snapshot = await Api.CatalogDesignAsync();
-        LoadMenu();
-    });
-
-
-    private Task SaveDefinition() => Run(async () =>
-    {
-        await Api.SaveProductDefinitionAsync(selectedProductId, definition);
-        snapshot = await Api.CatalogDesignAsync();
-        LoadProduct();
-    });
-
-    private Task SaveMenu() => Run(async () =>
-    {
-        CatalogMenuModel saved = await Api.SaveCatalogMenuAsync(selectedMenuId, menuDraft);
-        selectedMenuId = saved.Id;
-        snapshot = await Api.CatalogDesignAsync();
-        LoadMenu();
-    });
-
-    private Task DeleteLocalMenu() => Run(async () =>
-    {
-        await Api.DeleteLocalCatalogMenuAsync(selectedMenuId);
-        selectedMenuId = Guid.Empty;
-        snapshot = await Api.CatalogDesignAsync();
-        LoadMenu();
-    });
-
-    private async Task Run(Func<Task> action)
+    internal async Task Refresh()
     {
         busy = true;
         status = null;
         try
         {
-            await action();
-            status = "Configuración guardada.";
+            await Host.RefreshModule();
+            snapshot = await Api.CatalogDesignAsync();
+            lastRestaurantId = Host.restaurantId;
+            LoadAvailability();
+        }
+        catch (Exception error) { status = error.Message; }
+        finally { busy = false; }
+    }
+
+    private IEnumerable<ProductResponse> DefaultProducts()
+    {
+        return snapshot?.Products ?? [];
+    }
+
+    private void LoadAvailability() => availability = DefaultProducts().ToDictionary(x => x.Id,
+        x => x.IsActive && (snapshot?.LocalAvailability.FirstOrDefault(a =>
+            a.RestaurantId == Host.restaurantId && a.ProductId == x.Id)?.IsAvailable ?? false));
+
+    private async Task Save(Guid productId, ChangeEventArgs args)
+    {
+        if (busy || !availability.TryGetValue(productId, out bool previous)) return;
+        bool selected = args.Value is bool value && value;
+        busy = true;
+        status = null;
+        availability[productId] = selected;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            await Api.SetLocalProductAvailabilityAsync(Host.restaurantId, productId, selected);
         }
         catch (Exception error)
         {
+            availability[productId] = previous;
             status = error.Message;
         }
-        finally
-        {
-            busy = false;
-        }
+        finally { busy = false; }
     }
+
 }

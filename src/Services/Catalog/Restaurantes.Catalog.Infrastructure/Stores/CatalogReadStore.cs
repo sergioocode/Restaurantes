@@ -32,7 +32,7 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
 
     public async Task<IReadOnlyList<ProductResponse>> ListProductsAsync(CancellationToken ct)
     {
-        return await db
+        return await writeDb
             .Products.AsNoTracking()
             .OrderBy(x => x.Name)
             .Select(x => new ProductResponse(
@@ -52,20 +52,20 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
         CancellationToken ct
     )
     {
-        CatalogMenu? menu =
-            await writeDb
-                .CatalogMenus.AsNoTracking()
-                .Where(x => x.RestaurantId == restaurantId && x.IsActive)
-                .FirstOrDefaultAsync(ct)
-            ?? await writeDb
-                .CatalogMenus.AsNoTracking()
-                .FirstOrDefaultAsync(x => x.RestaurantId == Guid.Empty, ct);
+        CatalogMenu? menu = await writeDb
+            .CatalogMenus.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.RestaurantId == Guid.Empty && x.IsActive, ct);
         if (menu is null)
             return [];
 
+        Guid[] enabledProductIds = await writeDb
+            .RestaurantProductAvailabilities.AsNoTracking()
+            .Where(x => x.RestaurantId == restaurantId && x.IsAvailable)
+            .Select(x => x.ProductId)
+            .ToArrayAsync(ct);
         CatalogMenuEntry[] entries = await writeDb
             .CatalogMenuEntries.AsNoTracking()
-            .Where(x => x.MenuId == menu.Id && x.IsAvailable)
+            .Where(x => x.MenuId == menu.Id && enabledProductIds.Contains(x.ProductId))
             .OrderBy(x => x.SortOrder)
             .ToArrayAsync(ct);
         Guid[] ids = entries.Select(x => x.ProductId).ToArray();
@@ -81,6 +81,7 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
             .Products.AsNoTracking()
             .Where(x =>
                 ids.Contains(x.Id)
+                && x.IsActive
                 && x.TaxId != null
                 && writeDb.Taxes.Any(t => t.Id == x.TaxId && t.IsActive)
             )
@@ -88,7 +89,7 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
             .ToArrayAsync(ct);
         var products = await db
             .Products.AsNoTracking()
-            .Where(x => taxedIds.Contains(x.Id) && x.IsActive)
+            .Where(x => taxedIds.Contains(x.Id))
             .ToDictionaryAsync(x => x.Id, ct);
         Guid[] categoryIds = products.Values.Select(x => x.CategoryId).Distinct().ToArray();
         var categories = await db
@@ -132,32 +133,6 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
                         && extraIds.Contains(x.ProductId)
                     )
                     .ToArrayAsync(ct);
-        Guid globalMenuId =
-            menu.RestaurantId == Guid.Empty
-                ? menu.Id
-                : await writeDb
-                    .CatalogMenus.AsNoTracking()
-                    .Where(x => x.RestaurantId == Guid.Empty && x.IsActive)
-                    .Select(x => x.Id)
-                    .FirstOrDefaultAsync(ct);
-        if (globalMenuId != Guid.Empty && globalMenuId != menu.Id)
-        {
-            extraPrices = extraPrices
-                .Concat(
-                    await writeDb
-                        .CatalogMenuPrices.AsNoTracking()
-                        .Where(x =>
-                            x.MenuId == globalMenuId
-                            && x.Channel == "LOCAL"
-                            && x.Format == "RACION"
-                            && extraIds.Contains(x.ProductId)
-                        )
-                        .ToArrayAsync(ct)
-                )
-                .GroupBy(x => x.ProductId)
-                .Select(x => x.First())
-                .ToArray();
-        }
         var extraPriceByProduct = extraPrices.ToDictionary(x => x.ProductId, x => x.Amount);
         Dictionary<Guid, ProductExtraGroup[]> extraGroupsByParent = groups
             .GroupBy(x => x.ParentProductId)
@@ -232,7 +207,11 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
                     photo is null ? "" : $"{photoRoot}thumbnail{photoVersion}",
                     photo is null ? "" : $"{photoRoot}card{photoVersion}",
                     photo is null ? "" : $"{photoRoot}detail{photoVersion}",
-                    extraGroupsByParent.GetValueOrDefault(product.Id, [])
+                    extraGroupsByParent.GetValueOrDefault(product.Id, []),
+                    prices
+                        .Where(x => x.ProductId == product.Id)
+                        .Select(x => new MenuItemFormatPrice(x.Format, x.Amount))
+                        .ToArray()
                 )
             );
         }

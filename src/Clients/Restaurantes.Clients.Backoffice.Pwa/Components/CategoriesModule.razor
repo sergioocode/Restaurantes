@@ -1,4 +1,4 @@
-@if (!Host.HasGlobalPermission("catalog.global.manage")) { <NoAccessPanel /> }
+﻿@if (!Host.HasGlobalPermission("catalog.global.manage")) { <NoAccessPanel /> }
 else
 {
     <details class="admin-panel" open><summary>Nueva categoría</summary>
@@ -16,16 +16,24 @@ else
                 <label><input type="checkbox" @bind="Host.categoryDraft.ShowInCommander" /> Comandero</label>
                 <label><input type="checkbox" @bind="Host.categoryDraft.ShowInCustomerQr" /> Cliente QR</label>
             </div>
-            <button class="primary" disabled="@Host.busy">Agregar</button>
+            <button class="primary" disabled="@Host.busy">Agregar Categoría</button>
         </form>
     </details>
     <div class="maintenance-list">
         @foreach (CategoryResponse item in Host.categories.OrderBy(x => x.Name))
         {
             <article class="maintenance-row category-row @(item.IsActive ? "" : "inactive")">
-                <div><strong>@item.Code</strong><small>v@item.Version</small></div>
-                <label>Nombre<input @bind="item.Name" /></label>
-                <label>Estación KDS<select value="@item.DefaultStationCode" @onchange="args => Host.SelectCategoryStation(item, args)">
+                <div><strong>@item.Code</strong></div>
+                <div class="category-name-editor">
+                    <label>Nombre<input @bind="nameDrafts[item.Id].Value" disabled="@Host.busy" /></label>
+                    <button class="primary product-name-save" @onclick="() => SaveName(item)" disabled="@Host.busy" aria-label="Guardar nombre de categoría" title="Guardar nombre">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                            <path d="M4 3h13l3 3v15H4z" />
+                            <path d="M7 3v6h10V3M7 21v-8h10v8M14 3v4" />
+                        </svg>
+                    </button>
+                </div>
+                <label>Estación KDS<select value="@item.DefaultStationCode" @onchange="args => SetStation(item, args)" disabled="@Host.busy">
                     @if (!Host.stations.Any(x => x.Code == item.DefaultStationCode))
                     {
                         <option value="@item.DefaultStationCode">@item.DefaultStationName (no disponible en este local)</option>
@@ -35,13 +43,12 @@ else
                         <option value="@station.Code">@station.Name</option>
                     }
                 </select></label>
-                <label class="availability"><input type="checkbox" @bind="item.IsActive" /> Activa</label>
+                <label class="availability"><input type="checkbox" checked="@item.IsActive" @onchange="args => SetFlag(item, args, () => item.IsActive, value => item.IsActive = value)" disabled="@Host.busy" /> Activa</label>
                 <div class="category-visibility">
-                    <label><input type="checkbox" @bind="item.ShowInPos" /> TPV</label>
-                    <label><input type="checkbox" @bind="item.ShowInCommander" /> Comandero</label>
-                    <label><input type="checkbox" @bind="item.ShowInCustomerQr" /> Cliente QR</label>
+                    <label><input type="checkbox" checked="@item.ShowInPos" @onchange="args => SetFlag(item, args, () => item.ShowInPos, value => item.ShowInPos = value)" disabled="@Host.busy" /> TPV</label>
+                    <label><input type="checkbox" checked="@item.ShowInCommander" @onchange="args => SetFlag(item, args, () => item.ShowInCommander, value => item.ShowInCommander = value)" disabled="@Host.busy" /> Comandero</label>
+                    <label><input type="checkbox" checked="@item.ShowInCustomerQr" @onchange="args => SetFlag(item, args, () => item.ShowInCustomerQr, value => item.ShowInCustomerQr = value)" disabled="@Host.busy" /> Cliente QR</label>
                 </div>
-                <button class="primary" @onclick="() => Host.SaveCategory(item)" disabled="@Host.busy">Guardar</button>
             </article>
         }
     </div>
@@ -50,4 +57,98 @@ else
 @code {
     [Parameter, EditorRequired]
     public Home Host { get; set; } = default!;
+
+    private readonly Dictionary<Guid, CategoryNameDraft> nameDrafts = [];
+
+    protected override void OnParametersSet()
+    {
+        foreach (CategoryResponse item in Host.categories)
+        {
+            if (!nameDrafts.TryGetValue(item.Id, out CategoryNameDraft? draft))
+            {
+                nameDrafts[item.Id] = new CategoryNameDraft(item.Name);
+            }
+            else
+            {
+                if (draft.Value == draft.SavedValue)
+                {
+                    draft.Value = item.Name;
+                }
+
+                draft.SavedValue = item.Name;
+            }
+        }
+    }
+
+    private async Task SaveName(CategoryResponse item)
+    {
+        CategoryNameDraft draft = nameDrafts[item.Id];
+        string previous = item.Name;
+        item.Name = draft.Value;
+        if (await Host.SaveCategory(item))
+        {
+            draft.SavedValue = draft.Value;
+        }
+        else
+        {
+            item.Name = previous;
+        }
+    }
+
+    private async Task SetStation(CategoryResponse item, ChangeEventArgs args)
+    {
+        if (Host.busy)
+        {
+            return;
+        }
+
+        string? selectedCode = args.Value?.ToString();
+        KitchenStationResponse? station = Host.stations.FirstOrDefault(x => x.Code == selectedCode);
+        if (station is null || station.Code == item.DefaultStationCode)
+        {
+            return;
+        }
+
+        string previousCode = item.DefaultStationCode;
+        string previousName = item.DefaultStationName;
+        item.DefaultStationCode = station.Code;
+        item.DefaultStationName = station.Name;
+        if (!await Host.SaveCategory(item))
+        {
+            item.DefaultStationCode = previousCode;
+            item.DefaultStationName = previousName;
+        }
+    }
+
+    private async Task SetFlag(
+        CategoryResponse item,
+        ChangeEventArgs args,
+        Func<bool> getValue,
+        Action<bool> setValue
+    )
+    {
+        if (Host.busy)
+        {
+            return;
+        }
+
+        bool previous = getValue();
+        bool selected = args.Value is bool value && value;
+        if (selected == previous)
+        {
+            return;
+        }
+
+        setValue(selected);
+        if (!await Host.SaveCategory(item))
+        {
+            setValue(previous);
+        }
+    }
+
+    private sealed class CategoryNameDraft(string name)
+    {
+        public string Value { get; set; } = name;
+        public string SavedValue { get; set; } = name;
+    }
 }

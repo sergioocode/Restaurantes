@@ -30,14 +30,6 @@ public sealed class CatalogMenuSynchronizer(CatalogWriteDbContext db)
                     .Distinct()
                     .ToArrayAsync(ct)
             );
-            ids.UnionWith(
-                await db
-                    .CatalogMenus.AsNoTracking()
-                    .Where(x => x.RestaurantId != Guid.Empty)
-                    .Select(x => x.RestaurantId)
-                    .Distinct()
-                    .ToArrayAsync(ct)
-            );
         }
         foreach (Guid id in ids.Where(x => x != Guid.Empty))
             await SyncRestaurantMenu(id, ct);
@@ -45,18 +37,19 @@ public sealed class CatalogMenuSynchronizer(CatalogWriteDbContext db)
 
     private async Task SyncRestaurantMenu(Guid restaurantId, CancellationToken ct)
     {
-        CatalogMenu? menu =
-            await db
-                .CatalogMenus.AsNoTracking()
-                .FirstOrDefaultAsync(x => x.RestaurantId == restaurantId && x.IsActive, ct)
-            ?? await db
-                .CatalogMenus.AsNoTracking()
-                .FirstOrDefaultAsync(x => x.RestaurantId == Guid.Empty, ct);
+        CatalogMenu? menu = await db
+            .CatalogMenus.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.RestaurantId == Guid.Empty && x.IsActive, ct);
+        Guid[] enabledProductIds = await db
+            .RestaurantProductAvailabilities.AsNoTracking()
+            .Where(x => x.RestaurantId == restaurantId && x.IsAvailable)
+            .Select(x => x.ProductId)
+            .ToArrayAsync(ct);
         CatalogMenuEntry[] entries = menu is null
             ? []
             : await db
                 .CatalogMenuEntries.AsNoTracking()
-                .Where(x => x.MenuId == menu.Id && x.IsAvailable)
+                .Where(x => x.MenuId == menu.Id && enabledProductIds.Contains(x.ProductId))
                 .ToArrayAsync(ct);
         CatalogMenuPrice[] prices = menu is null
             ? []
@@ -115,30 +108,6 @@ public sealed class CatalogMenuSynchronizer(CatalogWriteDbContext db)
                         && extraProductIds.Contains(x.ProductId)
                     )
                     .ToArrayAsync(ct);
-        Guid globalMenuId =
-            menu is null || menu.RestaurantId == Guid.Empty
-                ? Guid.Empty
-                : await db
-                    .CatalogMenus.AsNoTracking()
-                    .Where(x => x.RestaurantId == Guid.Empty && x.IsActive)
-                    .Select(x => x.Id)
-                    .FirstOrDefaultAsync(ct);
-        if (globalMenuId != Guid.Empty && menu?.Id != globalMenuId && extraProductIds.Length > 0)
-            extraPrices = extraPrices
-                .Concat(
-                    await db
-                        .CatalogMenuPrices.AsNoTracking()
-                        .Where(x =>
-                            x.MenuId == globalMenuId
-                            && x.Channel == "LOCAL"
-                            && x.Format == "RACION"
-                            && extraProductIds.Contains(x.ProductId)
-                        )
-                        .ToArrayAsync(ct)
-                )
-                .GroupBy(x => x.ProductId)
-                .Select(x => x.First())
-                .ToArray();
         Dictionary<Guid, decimal> extraPriceByProduct = extraPrices
             .GroupBy(x => x.ProductId)
             .ToDictionary(x => x.Key, x => x.First().Amount);
@@ -231,7 +200,12 @@ public sealed class CatalogMenuSynchronizer(CatalogWriteDbContext db)
                 item.PreparationStationName,
                 item.Version,
                 now,
-                BuildExtraGroups(product.Id)
+                BuildExtraGroups(product.Id),
+                entry?.DefaultFormat ?? "PLATO",
+                prices
+                    .Where(x => x.ProductId == product.Id)
+                    .Select(x => new MenuItemFormatPrice(x.Format, x.Amount))
+                    .ToArray()
             );
             db.OutboxMessages.Add(
                 new OutboxMessage

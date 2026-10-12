@@ -50,7 +50,94 @@ public sealed partial class CatalogCommandService
         }
 
         DateTime now = timeProvider.GetUtcNow().UtcDateTime;
-        item.Update(request.Name, request.CategoryId, request.IsActive, now);
+        item.Update(request.Name, request.CategoryId, now);
+        ProductChanged message = new(
+            item.Id,
+            item.Sku,
+            item.Name,
+            item.CategoryId,
+            item.IsActive,
+            item.Version,
+            now
+        );
+        await store.SaveWithEventAsync(item, message, ct);
+        return new(item.Id, item.Sku, item.Name, item.CategoryId, item.IsActive, item.Version, now);
+    }
+
+    public async Task<ProductResponse?> SetProductCategoryAsync(
+        Guid id,
+        Guid categoryId,
+        CancellationToken ct
+    )
+    {
+        Product? item = await store.FindProductAsync(id, ct);
+        Category? category = await store.FindCategoryAsync(categoryId, ct);
+        if (item is null || category is null)
+        {
+            return null;
+        }
+
+        DateTime now = timeProvider.GetUtcNow().UtcDateTime;
+        item.SetCategory(categoryId, now);
+        ProductChanged message = new(
+            item.Id,
+            item.Sku,
+            item.Name,
+            item.CategoryId,
+            item.IsActive,
+            item.Version,
+            now
+        );
+        await store.SaveWithEventAsync(item, message, ct);
+        return new(item.Id, item.Sku, item.Name, item.CategoryId, item.IsActive, item.Version, now);
+    }
+
+    public async Task<ProductResponse?> SetProductNameAsync(
+        Guid id,
+        string name,
+        CancellationToken ct
+    )
+    {
+        Product? item = await store.FindProductAsync(id, ct);
+        if (item is null)
+        {
+            return null;
+        }
+
+        DateTime now = timeProvider.GetUtcNow().UtcDateTime;
+        item.SetName(name, now);
+        ProductChanged message = new(
+            item.Id,
+            item.Sku,
+            item.Name,
+            item.CategoryId,
+            item.IsActive,
+            item.Version,
+            now
+        );
+        await store.SaveWithEventAsync(item, message, ct);
+        return new(item.Id, item.Sku, item.Name, item.CategoryId, item.IsActive, item.Version, now);
+    }
+
+    public async Task<ProductResponse?> SetProductActiveAsync(
+        Guid id,
+        bool active,
+        CancellationToken ct
+    )
+    {
+        Product? item = await store.FindProductAsync(id, ct);
+        if (item is null)
+        {
+            return null;
+        }
+
+        DateTime now = timeProvider.GetUtcNow().UtcDateTime;
+        item.SetActive(active, now);
+        if (!active)
+        {
+            await store.DisableLocalProductAvailabilityAsync(id, ct);
+        }
+
         ProductChanged message = new(
             item.Id,
             item.Sku,
