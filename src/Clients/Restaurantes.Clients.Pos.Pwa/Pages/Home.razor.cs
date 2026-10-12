@@ -55,6 +55,13 @@ public partial class Home
     private SessionBillResponse? bill;
     private string? billLoadError;
     private bool billOpen;
+    private bool accountPreviewOpen;
+    private bool salesTicketOpen;
+    private SaleResponse? salesTicket;
+    private DateTime accountPreviewCreatedAt;
+    private decimal BillConsumptionTotal =>
+        bill?.Orders.Where(order => order.OrderStatus != "Cancelled").Sum(order => order.Amount)
+        ?? 0;
     private bool paymentDialogOpen;
     private string keypadTarget = "Charge";
     private string keypadText = string.Empty;
@@ -214,6 +221,8 @@ public partial class Home
     private bool hasSessionOrders;
     private string CurrentLabel =>
         IsTakeaway ? "Pedido para llevar" : selectedTable?.Label ?? "Ubicación";
+    private RestaurantResponse? CurrentRestaurant =>
+        restaurants.FirstOrDefault(restaurant => restaurant.Id == restaurantId);
 
     protected override async Task OnInitializedAsync()
     {
@@ -1166,9 +1175,51 @@ public partial class Home
 
     private void CloseBill()
     {
+        accountPreviewOpen = false;
+        salesTicketOpen = false;
         paymentDialogOpen = false;
         billOpen = false;
     }
+
+    private void OpenAccountPreview()
+    {
+        if (bill is null)
+        {
+            return;
+        }
+
+        accountPreviewCreatedAt = DateTime.Now;
+        accountPreviewOpen = true;
+    }
+
+    private void CloseAccountPreview() => accountPreviewOpen = false;
+
+    private async Task PrintAccountPreview() => await Js.InvokeVoidAsync("window.print");
+
+    private async Task OpenSalesTicket()
+    {
+        if (bill is null || bill.Outstanding > 0 || bill.Total <= 0)
+        {
+            return;
+        }
+
+        await Run(
+            async () =>
+            {
+                salesTicket = await Api.SaleAsync(bill.Id);
+                salesTicketOpen = true;
+            },
+            false
+        );
+    }
+
+    private void CloseSalesTicket()
+    {
+        salesTicketOpen = false;
+        salesTicket = null;
+    }
+
+    private async Task PrintSalesTicket() => await Js.InvokeVoidAsync("window.print");
 
     private void OpenPaymentDialog()
     {

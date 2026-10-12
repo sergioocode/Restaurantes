@@ -42,6 +42,11 @@ public sealed partial class PosApi
         return GetAsync<SessionBillResponse>($"/api/dining/sessions/{sessionId}/bill");
     }
 
+    public Task<SaleResponse> SaleAsync(Guid saleId)
+    {
+        return GetAsync<SaleResponse>($"/api/sales/{saleId}");
+    }
+
     public async Task<DiningSessionResponse> CancelSessionAsync(Guid sessionId)
     {
         using HttpRequestMessage request = Authorized(

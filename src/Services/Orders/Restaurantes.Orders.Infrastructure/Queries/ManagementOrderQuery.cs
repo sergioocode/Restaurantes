@@ -73,9 +73,11 @@ public sealed class ManagementOrderQuery(OrderWriteDbContext db, TimeZoneInfo ti
                         line.ProductName,
                         line.Quantity,
                         line.UnitPrice,
-                        line.Status.ToString()
+                        line.Status.ToString(),
+                        line.Format
                     ))
-                    .ToList()
+                    .ToList(),
+                order.GuestCount
             ))
             .ToList();
     }

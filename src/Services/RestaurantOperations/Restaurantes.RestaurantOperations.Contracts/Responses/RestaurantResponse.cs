@@ -8,5 +8,6 @@ public sealed record RestaurantResponse(
     Guid? CompanyId,
     bool IsActive,
     int Version,
-    DateTime UpdatedAtUtc
+    DateTime UpdatedAtUtc,
+    RestaurantCompanyResponse? Company = null
 );
