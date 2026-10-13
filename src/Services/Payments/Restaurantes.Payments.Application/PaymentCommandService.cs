@@ -7,6 +7,26 @@ namespace Restaurantes.Payments.Application;
 
 public sealed class PaymentCommandService(IPaymentWriteStore store, TimeProvider time)
 {
+    public async Task<bool> AdjustAmountAsync(Guid orderId, decimal amount, CancellationToken ct)
+    {
+        PayableOrder? order = await store.FindAsync(orderId, ct);
+        if (order is null)
+        {
+            return false;
+        }
+        if (amount == order.Amount)
+        {
+            return true;
+        }
+        if (amount <= 0 || order.AmountPaid > 0 || order.Status != PaymentStatus.Open)
+        {
+            throw new InvalidOperationException("Only unpaid open orders can receive a discount.");
+        }
+        order.AdjustAmount(amount);
+        await store.SaveAsync(ct);
+        return true;
+    }
+
     public async Task<PaymentResponse?> CaptureAsync(
         Guid orderId,
         CapturePaymentRequest request,
@@ -79,7 +99,10 @@ public sealed class PaymentCommandService(IPaymentWriteStore store, TimeProvider
             order.TipAmountPaid,
             tenderedAmount,
             tenderedAmount - amountDue,
-            request.SaleGroupId
+            request.SaleGroupId,
+            request.DiscountName,
+            request.DiscountPercentage,
+            request.DiscountAmount
         );
         await store.SaveWithEventAsync(order, capture, e, ct);
         return Map(order, capture);

@@ -14,5 +14,7 @@ public sealed record SessionBillResponse(
     List<SessionBillOrderResponse> Orders,
     bool RequestGuestCount = false,
     int? GuestCount = null,
-    decimal TipTotal = 0
+    decimal TipTotal = 0,
+    decimal DiscountPercentage = 0,
+    decimal DiscountAmount = 0
 );

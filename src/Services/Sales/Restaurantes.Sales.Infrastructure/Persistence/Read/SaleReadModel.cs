@@ -8,6 +8,9 @@ public sealed class SaleReadModel
     public string PaymentMethod { get; set; } = string.Empty;
     public decimal Total { get; set; }
     public decimal TipTotal { get; set; }
+    public string? DiscountName { get; set; }
+    public decimal DiscountPercentage { get; set; }
+    public decimal DiscountAmount { get; set; }
     public string Status { get; set; } = "Completed";
     public int OrderCount { get; set; }
     public DateTime CompletedAtUtc { get; set; }

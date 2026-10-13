@@ -12,6 +12,9 @@ public sealed class Sale
     public DateTime CreatedAtUtc { get; set; }
     public DateTime? CompletedAtUtc { get; set; }
     public DateOnly? BusinessDate { get; set; }
+    public string? DiscountName { get; set; }
+    public decimal DiscountPercentage { get; set; }
+    public decimal DiscountAmount { get; set; }
     public List<SaleOrder> Orders { get; set; } = [];
     public List<SalePayment> Payments { get; set; } = [];
 
@@ -28,6 +31,11 @@ public sealed class Sale
 
         Status = "Completed";
         Total = Orders.Sum(x => x.Amount);
+        DiscountName = Orders.Select(x => x.DiscountName).FirstOrDefault(name => name is not null);
+        DiscountPercentage = Orders
+            .Select(x => x.DiscountPercentage)
+            .FirstOrDefault(rate => rate > 0);
+        DiscountAmount = Orders.Sum(x => x.DiscountAmount);
         CompletedAtUtc = now;
         return true;
     }
@@ -43,6 +51,9 @@ public sealed class SaleOrder
     public DateTime? PaidAtUtc { get; set; }
     public DateTime? DeliveredAtUtc { get; set; }
     public string LinesJson { get; set; } = "[]";
+    public string? DiscountName { get; set; }
+    public decimal DiscountPercentage { get; set; }
+    public decimal DiscountAmount { get; set; }
 }
 
 public sealed class SalePayment

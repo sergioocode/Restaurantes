@@ -19,5 +19,7 @@ public sealed record OrderLineResponse(
     DateTime? PreparationStartedAtUtc = null,
     DateTime? ReadyAtUtc = null,
     DateTime? DispatchedAtUtc = null,
-    string Format = ""
+    string Format = "",
+    decimal? BaseUnitPrice = null,
+    IReadOnlyList<Restaurantes.Orders.Contracts.Events.OrderLineExtraSnapshot>? Extras = null
 );

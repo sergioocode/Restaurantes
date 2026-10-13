@@ -10,6 +10,11 @@ namespace Restaurantes.Payments.Infrastructure.Stores;
 
 public sealed class PaymentWriteStore(PaymentWriteDbContext dbContext) : IPaymentWriteStore
 {
+    public Task SaveAsync(CancellationToken cancellationToken)
+    {
+        return dbContext.SaveChangesAsync(cancellationToken);
+    }
+
     public Task<PayableOrder?> FindAsync(Guid orderId, CancellationToken cancellationToken)
     {
         return dbContext.PayableOrders.SingleOrDefaultAsync(

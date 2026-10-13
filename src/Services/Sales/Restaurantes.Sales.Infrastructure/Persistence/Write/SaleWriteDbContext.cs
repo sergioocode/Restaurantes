@@ -23,6 +23,9 @@ public sealed class SaleWriteDbContext(DbContextOptions<SaleWriteDbContext> opti
         sale.Property(item => item.PaymentMethod).HasMaxLength(30).IsRequired();
         sale.Property(item => item.Status).HasMaxLength(30).IsRequired();
         sale.Property(item => item.Total).HasPrecision(12, 2);
+        sale.Property(item => item.DiscountName).HasMaxLength(100);
+        sale.Property(item => item.DiscountPercentage).HasPrecision(5, 2);
+        sale.Property(item => item.DiscountAmount).HasPrecision(12, 2);
         sale.HasMany(item => item.Orders)
             .WithOne()
             .HasForeignKey(item => item.SaleId)
@@ -37,6 +40,9 @@ public sealed class SaleWriteDbContext(DbContextOptions<SaleWriteDbContext> opti
         order.ToTable("sale_orders");
         order.HasKey(item => new { item.SaleId, item.OrderId });
         order.Property(item => item.Amount).HasPrecision(12, 2);
+        order.Property(item => item.DiscountName).HasMaxLength(100);
+        order.Property(item => item.DiscountPercentage).HasPrecision(5, 2);
+        order.Property(item => item.DiscountAmount).HasPrecision(12, 2);
         order.Property(item => item.LinesJson).HasColumnType("jsonb").IsRequired();
         order.HasIndex(item => item.OrderId).IsUnique();
 

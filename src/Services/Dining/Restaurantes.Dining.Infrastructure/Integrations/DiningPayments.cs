@@ -7,6 +7,30 @@ namespace Restaurantes.Dining.Infrastructure.Integrations;
 
 public sealed class DiningPayments(IHttpClientFactory clients) : IDiningPayments
 {
+    public async Task<DiningPaymentResult> AdjustAmountAsync(
+        Guid orderId,
+        decimal amount,
+        string? authorization,
+        CancellationToken ct
+    )
+    {
+        HttpClient payments = clients.CreateClient("payments");
+        using HttpRequestMessage request = new(
+            HttpMethod.Put,
+            $"/api/payments/orders/{orderId}/amount"
+        );
+        if (
+            AuthenticationHeaderValue.TryParse(authorization, out AuthenticationHeaderValue? header)
+        )
+        {
+            request.Headers.Authorization = header;
+        }
+        request.Content = JsonContent.Create(new { amount });
+        using HttpResponseMessage response = await payments.SendAsync(request, ct);
+        string body = await response.Content.ReadAsStringAsync(ct);
+        return new(response.IsSuccessStatusCode, (int)response.StatusCode, body);
+    }
+
     public async Task<DiningPaymentResult> CaptureAsync(
         Guid orderId,
         DiningPaymentRequest request,

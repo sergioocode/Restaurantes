@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Restaurantes.Orders.Application;
+using Restaurantes.Orders.Contracts.Events;
 using Restaurantes.Orders.Contracts.Responses;
 using Restaurantes.Orders.Domain;
 using Restaurantes.Orders.Infrastructure.Persistence.Write;
@@ -74,7 +75,15 @@ public sealed class ManagementOrderQuery(OrderWriteDbContext db, TimeZoneInfo ti
                         line.Quantity,
                         line.UnitPrice,
                         line.Status.ToString(),
-                        line.Format
+                        line.Format,
+                        line.BaseUnitPrice,
+                        line.Extras.Select(extra => new OrderLineExtraSnapshot(
+                                extra.ProductId,
+                                extra.ProductName,
+                                extra.UnitPrice,
+                                extra.Quantity
+                            ))
+                            .ToList()
                     ))
                     .ToList(),
                 order.GuestCount

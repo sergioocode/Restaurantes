@@ -356,6 +356,11 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
         {
             PaymentCaptured? capture =
                 status == "Paid" ? JsonSerializer.Deserialize<PaymentCaptured>(body.Span) : null;
+            DiningSession? session = await db.FindSessionWithOrdersAsync(
+                order.DiningSessionId,
+                CancellationToken.None
+            );
+            decimal chargeableAmount = session?.ChargeableAmount(order) ?? order.Amount;
             decimal amountPaid =
                 status == "Paid"
                     ? capture?.AmountPaid is > 0
@@ -371,7 +376,7 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
                     : 0;
             order.PaymentStatus =
                 status == "Refunded" ? status
-                : order.AmountPaid >= order.Amount ? "Paid"
+                : order.AmountPaid >= chargeableAmount ? "Paid"
                 : "PartiallyPaid";
             order.UpdatedAtUtc = occurredAtUtc;
             return;

@@ -5,7 +5,9 @@ public sealed record ManagementOrderLineResponse(
     int Quantity,
     decimal UnitPrice,
     string Status,
-    string Format = ""
+    string Format = "",
+    decimal? BaseUnitPrice = null,
+    IReadOnlyList<Restaurantes.Orders.Contracts.Events.OrderLineExtraSnapshot>? Extras = null
 );
 
 public sealed record ManagementOrderResponse(

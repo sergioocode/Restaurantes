@@ -9,6 +9,7 @@ public enum DiningPermission
     OrdersCreate,
     TablesRelease,
     PaymentsCapture,
+    DiscountsApply,
 }
 
 public interface IDiningAuthorization

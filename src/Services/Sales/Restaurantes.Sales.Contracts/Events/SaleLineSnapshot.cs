@@ -7,5 +7,14 @@ public sealed record SaleLineSnapshot(
     int Quantity,
     string CategoryName,
     string PreparationStationCode,
-    string Format = ""
+    string Format = "",
+    decimal? BaseUnitPrice = null,
+    IReadOnlyList<SaleLineExtraSnapshot>? Extras = null
+);
+
+public sealed record SaleLineExtraSnapshot(
+    Guid ProductId,
+    string ProductName,
+    decimal UnitPrice,
+    int Quantity
 );

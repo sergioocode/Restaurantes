@@ -18,5 +18,7 @@ public sealed record OrderLineSnapshot(
     DateTime? PreparationStartedAtUtc = null,
     DateTime? ReadyAtUtc = null,
     DateTime? DispatchedAtUtc = null,
-    string Format = ""
+    string Format = "",
+    decimal? BaseUnitPrice = null,
+    IReadOnlyList<OrderLineExtraSnapshot>? Extras = null
 );

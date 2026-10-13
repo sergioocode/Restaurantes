@@ -95,6 +95,9 @@ public sealed class SalesReadProjectionWorker(
                 view.PaymentMethod = e.PaymentMethod;
                 view.Total = e.Total;
                 view.TipTotal = e.TipTotal;
+                view.DiscountName = e.DiscountName;
+                view.DiscountPercentage = e.DiscountPercentage;
+                view.DiscountAmount = e.DiscountAmount;
                 view.Status = "Completed";
                 view.OrderCount = e.OrderIds.Count;
                 view.CompletedAtUtc = e.CompletedAtUtc;

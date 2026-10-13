@@ -11,7 +11,10 @@ public sealed record SaleCompleted(
     IReadOnlyList<SaleLineSnapshot> Lines,
     DateOnly? BusinessDate = null,
     IReadOnlyList<SalePaymentBreakdown>? PaymentMethods = null,
-    decimal TipTotal = 0
+    decimal TipTotal = 0,
+    string? DiscountName = null,
+    decimal DiscountPercentage = 0,
+    decimal DiscountAmount = 0
 );
 
 public sealed record SalePaymentBreakdown(string Method, int Payments, decimal Amount);

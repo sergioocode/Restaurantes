@@ -84,4 +84,27 @@ public sealed class DiningSessionReleaseTests
 
         Assert.False(session.CanRelease);
     }
+
+    [Fact]
+    public void Discounted_order_can_release_when_the_discounted_amount_is_paid()
+    {
+        DiningSession session = new()
+        {
+            Status = "Open",
+            DiscountPercentage = 10m,
+            Orders =
+            [
+                new DiningSessionOrder
+                {
+                    OrderStatus = "Delivered",
+                    PaymentStatus = "PartiallyPaid",
+                    Amount = 7.50m,
+                    AmountPaid = 6.75m,
+                },
+            ],
+        };
+
+        Assert.Equal(6.75m, session.ChargeableAmount(session.Orders[0]));
+        Assert.True(session.CanRelease);
+    }
 }

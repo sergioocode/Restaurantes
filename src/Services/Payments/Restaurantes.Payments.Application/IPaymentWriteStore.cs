@@ -16,6 +16,7 @@ public interface IPaymentWriteStore
         object integrationEvent,
         CancellationToken cancellationToken
     );
+    Task SaveAsync(CancellationToken cancellationToken);
     Task SaveWithEventAsync(
         PayableOrder order,
         object integrationEvent,

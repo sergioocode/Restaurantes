@@ -1,5 +1,5 @@
--- Carga datos de desarrollo en restaurants_operational y reemplaza las estaciones KDS
--- existentes de los cinco locales de desarrollo por las definidas en este archivo.
+-- Carga los datos de desarrollo en restaurants_operational, reemplaza las estaciones
+-- KDS de los cinco locales y agrega descuentos de ejemplo si todavía no existen.
 -- No limpia pedidos; para eso usa tools/postgres/reset-operational-data.sql.
 --
 -- Antes de empezar:
@@ -860,3 +860,6 @@ ON CONFLICT ("RestaurantId", "Code") WHERE "DeletedAtUtc" IS NULL DO UPDATE SET
     "Label" = EXCLUDED."Label",
     "IsActive" = EXCLUDED."IsActive",
     "ZoneId" = EXCLUDED."ZoneId";
+
+\connect restaurants_operational
+SET search_path TO dining;

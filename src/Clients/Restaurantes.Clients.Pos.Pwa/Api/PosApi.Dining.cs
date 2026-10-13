@@ -5,6 +5,17 @@ namespace Restaurantes.Clients.Pos.Pwa.Api;
 
 public sealed partial class PosApi
 {
+    public async Task<SessionBillResponse> SetDiscountAsync(Guid sessionId, decimal percentage)
+    {
+        using HttpRequestMessage request = Authorized(
+            HttpMethod.Put,
+            $"/api/dining/sessions/{sessionId}/discount"
+        );
+        request.Content = JsonContent.Create(new { percentage });
+        using HttpResponseMessage response = await http.SendAsync(request);
+        return await ReadAsync<SessionBillResponse>(response);
+    }
+
     public async Task<DiningSessionResponse> SetGuestCountAsync(Guid sessionId, int guestCount)
     {
         using HttpRequestMessage request = Authorized(

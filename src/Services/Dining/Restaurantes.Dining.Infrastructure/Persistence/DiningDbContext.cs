@@ -50,6 +50,7 @@ public sealed class DiningDbContext(DbContextOptions<DiningDbContext> options) :
         session.Property(x => x.Source).HasMaxLength(30).IsRequired();
         session.Property(x => x.Status).HasMaxLength(20).IsRequired();
         session.Property(x => x.PaymentMethod).HasMaxLength(30);
+        session.Property(x => x.DiscountPercentage).HasPrecision(5, 2);
         session.Property(x => x.CustomerAccessToken).HasMaxLength(64).IsRequired();
         session.Property(x => x.RequestGuestCount).HasDefaultValue(false);
         session.Property(x => x.Version).IsConcurrencyToken();

@@ -163,6 +163,15 @@ namespace Restaurantes.Orders.Infrastructure.Persistence.Write.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
 
+                    b.Property<decimal>("BaseUnitPrice")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<string>("ExtrasJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValueSql("'[]'::jsonb");
+
                     b.Property<int>("KitchenStatus")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")

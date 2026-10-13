@@ -89,6 +89,9 @@ public sealed class SaleCommandService(ISaleWriteStore store, TimeProvider timeP
                     IsDelivered = delivery is not null,
                     DeliveredAtUtc = delivery?.DeliveredAtUtc,
                     LinesJson = delivery?.LinesJson ?? "[]",
+                    DiscountName = integrationEvent.DiscountName,
+                    DiscountPercentage = integrationEvent.DiscountPercentage,
+                    DiscountAmount = integrationEvent.DiscountAmount,
                 }
             );
         }
@@ -105,6 +108,9 @@ public sealed class SaleCommandService(ISaleWriteStore store, TimeProvider timeP
                 saleOrder.IsPaid = true;
                 saleOrder.PaidAtUtc = integrationEvent.CapturedAtUtc;
             }
+            saleOrder.DiscountName = integrationEvent.DiscountName;
+            saleOrder.DiscountPercentage = integrationEvent.DiscountPercentage;
+            saleOrder.DiscountAmount = integrationEvent.DiscountAmount;
         }
 
         if (sale.Payments.All(item => item.PaymentId != integrationEvent.PaymentId))
@@ -168,7 +174,15 @@ public sealed class SaleCommandService(ISaleWriteStore store, TimeProvider timeP
                     item.Quantity,
                     item.CategoryName,
                     item.PreparationStationCode,
-                    item.Format
+                    item.Format,
+                    item.BaseUnitPrice,
+                    item.Extras?.Select(extra => new SaleLineExtraSnapshot(
+                            extra.ProductId,
+                            extra.ProductName,
+                            extra.UnitPrice,
+                            extra.Quantity
+                        ))
+                        .ToList()
                 ))
         );
         await store.UpsertDeliveredOrderAsync(
@@ -225,7 +239,10 @@ public sealed class SaleCommandService(ISaleWriteStore store, TimeProvider timeP
                             group.Sum(item => item.Amount)
                         ))
                         .ToList(),
-                    sale.Payments.Sum(item => item.TipAmount)
+                    sale.Payments.Sum(item => item.TipAmount),
+                    sale.DiscountName,
+                    sale.DiscountPercentage,
+                    sale.DiscountAmount
                 )
             );
         }

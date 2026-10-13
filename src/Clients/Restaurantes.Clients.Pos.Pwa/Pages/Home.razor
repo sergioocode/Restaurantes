@@ -44,12 +44,7 @@
                 <strong>@login.User.DisplayName</strong>
             </div>
             <div class="top-actions">
-                <select aria-label="Local" value="@restaurantId" @onchange="RestaurantChanged">
-                    @foreach (RestaurantResponse restaurant in restaurants)
-                    {
-                        <option value="@restaurant.Id" title="@restaurant.Code">@restaurant.Name</option>
-                    }
-                </select>
+                <span class="current-restaurant">@CurrentRestaurant?.Name</span>
                 <button class="cash-status @(CashRegisterOpen ? "open" : "closed")" @onclick="OpenCashRegisterPanel">
                     <span>Caja · @(CashRegisterOpen ? "abierta" : "cerrada")</span>
                     @if (CashRegisterOpen && cashRegister is not null)
@@ -311,7 +306,6 @@
                                 </div>
                             </div>
                             <div class="bill-title-actions">
-                                <button class="ghost" @onclick="OpenAccountPreview" disabled="@(bill is null)">Ver cuenta</button>
                                 <button class="ghost" @onclick="CloseBill">Cerrar</button>
                             </div>
                         </div>
@@ -376,12 +370,8 @@
                                     </article>
                                 }
                             </div>
-                            <div class="bill-total"><span>Total consumiciones</span><strong>@bill.Orders.Sum(order => order.Amount).ToString("0.00") €</strong></div>
-                            <div class="bill-total discount"><span>Descuento (s)</span><strong>0,00 €</strong></div>
-                            @if (bill.GuestCount is int diners && diners > 0)
-                            {
-                                <div class="bill-total bill-suggestion"><span>Orientativo por comensal</span><strong>@Math.Round(bill.Orders.Sum(order => order.Amount) / diners, 2, MidpointRounding.AwayFromZero).ToString("0.00") €</strong></div>
-                            }
+                            <div class="bill-total"><span>Total consumiciones</span><strong>@((bill.Orders.Where(order => order.OrderStatus != "Cancelled").Sum(order => order.Amount) + bill.DiscountAmount).ToString("0.00")) €</strong></div>
+                            <div class="bill-total discount"><span>@(bill.DiscountPercentage > 0 ? $"Descuento ({bill.DiscountPercentage.ToString("0.##")} %)" : "Descuento")</span><strong>@(bill.DiscountAmount > 0 ? "-" : "")@bill.DiscountAmount.ToString("0.00") €</strong></div>
                             <div class="bill-total"><span>Pagado</span><strong>@bill.Orders.Sum(order => order.AmountPaid).ToString("0.00") €</strong></div>
                             <div class="bill-total"><span>Propina</span><strong>@bill.TipTotal.ToString("0.00") €</strong></div>
                             @if (lastChangeAmount is decimal lastChange)
@@ -397,11 +387,13 @@
                             {
                                 <p class="warning">@(bill.Total == 0 ? "No hay importe pendiente. Esperando la confirmación de cancelación o el fin de cocina para liberar la mesa." : "Cuenta pagada. La mesa seguirá ocupada hasta que cocina termine y los pedidos se entreguen o cancelen.")</p>
                             }
-                            <div class="bill-actions @(bill.Outstanding == 0 && bill.Total > 0 ? "bill-actions-with-ticket" : "")">
+                            <div class="bill-actions">
                                 <button class="ghost" @onclick="OpenBill" disabled="@busy">Actualizar</button>
+                                <button class="ghost" @onclick="OpenAccountPreview" disabled="@busy">Ver cuenta</button>
+                                <button class="ghost" @onclick="OpenDiscountDialog" disabled="@(busy || bill.Orders.Any(order => order.AmountPaid > 0))">Descuento</button>
                                 @if (bill.Outstanding == 0 && bill.Total > 0)
                                 {
-                                    <button class="secondary account-preview-icon-button" @onclick="OpenSalesTicket" aria-label="Ver ticket de venta" title="Ver ticket de venta">
+                                    <button class="ghost account-preview-icon-button" @onclick="OpenSalesTicket" aria-label="Ver ticket de venta" title="Ver ticket de venta">
                                         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
                                             <path d="M5 2h14v20l-4-2-3 2-3-2-4 2z" />
                                             <path d="M8 7h8M8 11h8M8 15h5" />
@@ -458,13 +450,24 @@
                                     {
                                         <div class="account-preview-line">
                                             <span>@line.Quantity × @line.ProductName@(!string.IsNullOrEmpty(line.Format) ? $" · {FormatLabel(line.Format)}" : "")</span>
-                                            <strong>@line.LineTotal.ToString("0.00") €</strong>
+                                            <strong>@(((line.BaseUnitPrice ?? line.UnitPrice) * line.Quantity).ToString("0.00")) €</strong>
                                         </div>
+                                        @foreach (OrderLineExtraResponse extra in line.Extras ?? [])
+                                        {
+                                            <div class="account-preview-extra"><span>↳ @(line.Quantity * extra.Quantity) × @extra.ProductName</span><strong>@((line.Quantity * extra.Quantity * extra.UnitPrice).ToString("0.00")) €</strong></div>
+                                        }
                                     }
                                 }
                             }
                         </div>
                         <div class="account-preview-total">
+                            @if (bill.DiscountAmount > 0)
+                            {
+                                <div class="account-preview-discount">
+                                    <span>Descuento (@bill.DiscountPercentage.ToString("0.##") %)</span>
+                                    <strong>-@bill.DiscountAmount.ToString("0.00") €</strong>
+                                </div>
+                            }
                             <span>Total (IVA incluido)</span>
                             <strong>@BillConsumptionTotal.ToString("0.00") €</strong>
                         </div>
@@ -538,13 +541,24 @@
                                     {
                                         <div class="account-preview-line">
                                             <span>@line.Quantity × @line.ProductName@(!string.IsNullOrEmpty(line.Format) ? $" · {FormatLabel(line.Format)}" : "")</span>
-                                            <strong>@line.LineTotal.ToString("0.00") €</strong>
+                                            <strong>@(((line.BaseUnitPrice ?? line.UnitPrice) * line.Quantity).ToString("0.00")) €</strong>
                                         </div>
+                                        @foreach (OrderLineExtraResponse extra in line.Extras ?? [])
+                                        {
+                                            <div class="account-preview-extra"><span>↳ @(line.Quantity * extra.Quantity) × @extra.ProductName</span><strong>@((line.Quantity * extra.Quantity * extra.UnitPrice).ToString("0.00")) €</strong></div>
+                                        }
                                     }
                                 }
                             }
                         </div>
                         <div class="account-preview-total">
+                            @if (bill.DiscountAmount > 0)
+                            {
+                                <div class="account-preview-discount">
+                                    <span>Descuento (@bill.DiscountPercentage.ToString("0.##") %)</span>
+                                    <strong>-@bill.DiscountAmount.ToString("0.00") €</strong>
+                                </div>
+                            }
                             <span>Total (IVA incluido)</span>
                             <strong>@BillConsumptionTotal.ToString("0.00") €</strong>
                         </div>
@@ -578,7 +592,15 @@
             {
                 <div class="modal-backdrop payment-backdrop" @onclick="ClosePaymentDialog">
                     <section class="bill-card payment-dialog" role="dialog" aria-modal="true" aria-labelledby="payment-dialog-title" @onclick:stopPropagation>
-                        <div class="bill-title"><div><h2 id="payment-dialog-title">Cobrar · @CurrentLabel</h2>@if (bill.GuestCount is int paymentGuests && paymentGuests > 0) { <span class="bill-guest-count">@(paymentGuests == 1 ? "1 comensal" : $"{paymentGuests} comensales")</span> }</div></div>
+                        <div class="bill-title">
+                            <div>
+                                <h2 id="payment-dialog-title">Cobrar · @CurrentLabel</h2>
+                                @if (bill.GuestCount is int paymentGuests && paymentGuests > 0)
+                                {
+                                    <span class="bill-guest-count">@(paymentGuests == 1 ? "1 comensal" : $"{paymentGuests} comensales") [@Math.Round(BillConsumptionTotal / paymentGuests, 2, MidpointRounding.AwayFromZero).ToString("0.00") €]</span>
+                                }
+                            </div>
+                        </div>
                         <div class="payment-methods" role="group" aria-label="Método de pago">
                             <button class="@(paymentMethod == "Cash" ? "primary" : "ghost")" @onclick='() => SetPaymentMethod("Cash")'>Efectivo</button>
                             <button class="@(paymentMethod == "Card" ? "primary" : "ghost")" @onclick='() => SetPaymentMethod("Card")'>Tarjeta</button>
@@ -788,6 +810,31 @@
                     <div class="guest-count-actions">
                         <button class="primary" @onclick="AcceptGuestCount" disabled="@busy">@(busy ? "Guardando…" : "Aceptar")</button>
                         <button class="ghost" @onclick="CancelGuestCount" disabled="@busy">Cancelar</button>
+                    </div>
+                </section>
+            </div>
+        }
+
+        @if (discountDialogOpen)
+        {
+            <div class="modal-backdrop guest-count-backdrop" @onclick="CloseDiscountDialog">
+                <section class="guest-count-dialog discount-dialog" role="dialog" aria-modal="true" aria-labelledby="discount-dialog-title" @onclick:stopPropagation>
+                    <h2 id="discount-dialog-title">Descuento</h2>
+                    <div class="guest-count-options">
+                        <button class="discount-no-discount @(bill?.DiscountPercentage == 0 ? "selected" : "")" @onclick="() => ApplyDiscountPercentage(0)" disabled="@busy">Sin descuento</button>
+                        @foreach (decimal percentage in new[] { 5m, 10m, 20m, 25m })
+                        {
+                            <button class="@(bill?.DiscountPercentage == percentage ? "selected" : "")" @onclick="() => ApplyDiscountPercentage(percentage)" disabled="@busy">@percentage.ToString("0") %</button>
+                        }
+                    </div>
+                    <label class="discount-manual-entry" for="discount-percentage-input">Otro porcentaje</label>
+                    <div class="discount-manual-row">
+                        <input id="discount-percentage-input" type="number" min="0.01" max="99.99" step="0.01" inputmode="decimal" @bind="discountPercentageInput" disabled="@busy" />
+                        <span>%</span>
+                    </div>
+                    <div class="guest-count-actions">
+                        <button class="primary" @onclick="ApplyManualDiscount" disabled="@busy">Aplicar</button>
+                        <button class="ghost" @onclick="CloseDiscountDialog" disabled="@busy">Cancelar</button>
                     </div>
                 </section>
             </div>

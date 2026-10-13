@@ -19,6 +19,7 @@ public sealed class DiningAuthorization : IDiningAuthorization
             DiningPermission.OrdersCreate => RestaurantPermissions.OrdersCreate,
             DiningPermission.TablesRelease => RestaurantPermissions.TablesRelease,
             DiningPermission.PaymentsCapture => RestaurantPermissions.PaymentsCapture,
+            DiningPermission.DiscountsApply => RestaurantPermissions.DiscountsApply,
             _ => throw new ArgumentOutOfRangeException(nameof(permission)),
         };
         return principal.CanAccessRestaurant(restaurantId, requiredPermission);

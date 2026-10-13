@@ -15,6 +15,7 @@ public sealed class DiningSession
     public DateTime? ClosedAtUtc { get; set; }
     public Guid? CheckoutIdempotencyKey { get; set; }
     public string PaymentMethod { get; set; } = string.Empty;
+    public decimal DiscountPercentage { get; set; }
     public string CustomerAccessToken { get; set; } = string.Empty;
     public DateTime? PaidAtUtc { get; set; }
     public DateTime? CancelledAtUtc { get; set; }
@@ -23,14 +24,23 @@ public sealed class DiningSession
 
     public bool CanCheckout =>
         Status == "Open"
-        && Orders.Any(order => order.AmountPaid < order.Amount && order.OrderStatus != "Cancelled");
+        && Orders.Any(order =>
+            order.AmountPaid < ChargeableAmount(order) && order.OrderStatus != "Cancelled"
+        );
 
     public bool CanRelease =>
         Status == "Open"
         && Orders.Count > 0
         && Orders.All(order => order.OrderStatus is "Delivered" or "Cancelled")
         && Orders.All(order =>
-            order.AmountPaid >= order.Amount || order.OrderStatus == "Cancelled"
+            order.AmountPaid >= ChargeableAmount(order) || order.OrderStatus == "Cancelled"
+        );
+
+    public decimal ChargeableAmount(DiningSessionOrder order) =>
+        Math.Round(
+            order.Amount * (1m - DiscountPercentage / 100m),
+            2,
+            MidpointRounding.AwayFromZero
         );
 
     public void RecordPayment(Guid idempotencyKey, string method, DateTime now)
@@ -60,6 +70,12 @@ public sealed class DiningSession
     public void RegisterGuests(int guestCount)
     {
         GuestCount = guestCount;
+        Version++;
+    }
+
+    public void ApplyDiscount(decimal percentage)
+    {
+        DiscountPercentage = percentage;
         Version++;
     }
 }
