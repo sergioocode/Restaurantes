@@ -3,8 +3,15 @@ else
 {
     <details class="admin-panel" open>
         <summary>Autorizar cuenta · @Host.CurrentRestaurant?.Name</summary>
+        @if (Host.UserEmailAlreadyAuthorized)
+        {
+            <p class="error user-email-error" role="alert">
+                Este correo ya está autorizado en un local y no puede asignarse a otro.
+            </p>
+        }
         <form class="inline-form user-create-form" @onsubmit="Host.CreateUser" @onsubmit:preventDefault>
-            <input type="email" autocomplete="off" placeholder="Correo corporativo" @bind="Host.userDraft.Email" />
+            <input type="email" autocomplete="off" placeholder="Correo corporativo"
+                   @bind="Host.userDraft.Email" @bind:event="oninput" />
             <input placeholder="Nombre visible" @bind="Host.userDraft.DisplayName" />
             <select @bind="Host.userDraft.Role">
                 @foreach (string role in Host.AssignableRoles)
@@ -12,7 +19,10 @@ else
                     <option value="@role">@Home.RoleLabel(role)</option>
                 }
             </select>
-            <button class="primary" disabled="@(Host.busy || Host.restaurantId == Guid.Empty)">Autorizar</button>
+            <button class="primary"
+                    disabled="@(Host.busy || Host.restaurantId == Guid.Empty || Host.UserEmailAlreadyAuthorized)">
+                Autorizar
+            </button>
         </form>
     </details>
     <div class="user-list">

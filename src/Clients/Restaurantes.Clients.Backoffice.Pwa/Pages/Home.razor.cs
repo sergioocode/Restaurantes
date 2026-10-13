@@ -34,11 +34,11 @@ public partial class Home
     internal List<SaleResponse> historySales = [];
     internal DateOnly historyDate = DateOnly.FromDateTime(DateTime.Today);
     internal SaleResponse? selectedSale;
-    internal ManagementOrderResponse? selectedSaleOrder;
     internal List<RestaurantResponse> restaurants = [];
     internal List<CompanyResponse> companies = [];
     internal List<TableResponse> tables = [];
     internal List<StaffUserResponse> users = [];
+    private List<StaffUserResponse> authorizedUsers = [];
     internal bool sidebarOpen = true;
     internal CategoryDraft categoryDraft = new();
     internal ProductDraft productDraft = new();
@@ -49,6 +49,15 @@ public partial class Home
     internal ZoneResponse zoneDraft = new();
     internal KitchenStationDraft stationDraft = new();
     internal StaffUserDraft userDraft = new();
+    internal bool UserEmailAlreadyAuthorized =>
+        !string.IsNullOrWhiteSpace(userDraft.Email)
+        && authorizedUsers.Any(user =>
+            string.Equals(
+                user.Email.Trim(),
+                userDraft.Email.Trim(),
+                StringComparison.OrdinalIgnoreCase
+            )
+        );
     internal ProviderSettingsResponse? providerSettings;
     internal bool CanViewCompanySettings =>
         IsAdmin
@@ -241,9 +250,13 @@ public partial class Home
             _ => "Backoffice",
         };
 
+    private bool HasMultiRestaurantReportAccess =>
+        login?.AllRestaurantsRoles?.Any(role =>
+            role is "Admin" or "Gerente" or "Contabilidad" or "Marketing"
+        ) == true;
     private bool ShowRestaurantContextSelector =>
-        (IsAdmin && (module is "users" or "categories" or "tables" or "zones"))
-        || (module == "daily-orders-report" && ReportRestaurants.Count > 0);
+        (module == "daily-orders-report" && HasMultiRestaurantReportAccess)
+        || (IsAdmin && module is ("users" or "categories" or "tables" or "zones"));
 
     private string? RefreshLabel =>
         module switch
@@ -537,22 +550,17 @@ public partial class Home
         });
     }
 
-    internal SaleResponse? SaleForOrder(Guid orderId) =>
-        historySales.FirstOrDefault(sale => sale.OrderIds.Contains(orderId));
-
-    internal bool IsFirstOrderInSale(SaleResponse sale, Guid orderId) =>
+    internal ManagementOrderResponse? SaleOrderContext(SaleResponse sale) =>
         historyOrders
             .Where(order => sale.OrderIds.Contains(order.Id))
             .OrderBy(order => order.CreatedAtUtc)
-            .Select(order => order.Id)
-            .FirstOrDefault() == orderId;
+            .FirstOrDefault();
 
-    internal Task ShowSaleTicket(SaleResponse sale, ManagementOrderResponse order)
+    internal Task ShowSaleTicket(SaleResponse sale)
     {
         return InvokeAsync(() =>
         {
             selectedSale = sale;
-            selectedSaleOrder = order;
             StateHasChanged();
         });
     }
@@ -560,7 +568,6 @@ public partial class Home
     internal void CloseSaleTicket()
     {
         selectedSale = null;
-        selectedSaleOrder = null;
     }
 
     internal Task PrintSaleTicket()
@@ -1215,6 +1222,7 @@ public partial class Home
     private async Task LoadUsersCore()
     {
         List<StaffUserResponse> authorizedUsers = await Api.UsersAsync();
+        this.authorizedUsers = authorizedUsers;
         users = authorizedUsers.Where(user => user.RestaurantId == restaurantId).ToList();
     }
 
@@ -1226,6 +1234,13 @@ public partial class Home
                 if (restaurantId == Guid.Empty)
                 {
                     throw new InvalidOperationException("Selecciona un local.");
+                }
+
+                if (UserEmailAlreadyAuthorized)
+                {
+                    throw new InvalidOperationException(
+                        "Este correo ya está autorizado en un local y no puede asignarse a otro."
+                    );
                 }
 
                 userDraft.RestaurantId = restaurantId;

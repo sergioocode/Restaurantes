@@ -23,6 +23,10 @@
         "Action": "Start"
       },
       {
+        "Path": "src\\Services\\Sales\\Restaurantes.Sales.Api\\Restaurantes.Sales.Api.csproj",
+        "Action": "Start"
+      },
+      {
         "Path": "src\\ApiGateways\\Restaurantes.Gateway.Private\\Restaurantes.Gateway.Private.csproj",
         "Action": "Start"
       },
@@ -54,6 +58,10 @@
       },
       {
         "Path": "src\\Services\\Orders\\Restaurantes.Orders.Api\\Restaurantes.Orders.Api.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\Sales\\Restaurantes.Sales.Api\\Restaurantes.Sales.Api.csproj",
         "Action": "Start"
       },
       {
@@ -132,6 +140,10 @@
         "Action": "Start"
       },
       {
+        "Path": "src\\Services\\Sales\\Restaurantes.Sales.Api\\Restaurantes.Sales.Api.csproj",
+        "Action": "Start"
+      },
+      {
         "Path": "src\\Services\\CashRegister\\Restaurantes.CashRegister.Api\\Restaurantes.CashRegister.Api.csproj",
         "Action": "Start"
       },
@@ -171,6 +183,10 @@
       },
       {
         "Path": "src\\Services\\Payments\\Restaurantes.Payments.Api\\Restaurantes.Payments.Api.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Services\\Sales\\Restaurantes.Sales.Api\\Restaurantes.Sales.Api.csproj",
         "Action": "Start"
       },
       {
