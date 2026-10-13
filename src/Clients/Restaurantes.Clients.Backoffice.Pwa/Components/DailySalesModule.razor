@@ -1,0 +1,38 @@
+@using Restaurantes.Clients.Backoffice.Pwa.Models
+
+<div class="order-filters">
+    <label>Fecha
+        <input type="date" @bind="Host.historyDate" />
+    </label>
+</div>
+<div class="order-list">
+    @foreach (SaleResponse sale in Host.historySales.OrderByDescending(sale => sale.CompletedAtUtc))
+    {
+        ManagementOrderResponse? context = Host.SaleOrderContext(sale);
+        <article class="order-row">
+            <div>
+                <strong>Ticket @sale.Id.ToString("N")[..8] · @Host.RestaurantName(sale.RestaurantId)</strong>
+                <small>@sale.CompletedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @(context is null ? $"{sale.OrderCount} comandas" : string.IsNullOrEmpty(context.TableLabel) ? context.CustomerName : context.TableLabel)</small>
+            </div>
+            <span>@sale.Source · @sale.Status</span>
+            <strong>@sale.Total.ToString("0.00") €</strong>
+            <div class="order-ticket-actions">
+                <button class="secondary report-icon-button" @onclick="() => Host.ShowSaleTicket(sale)" aria-label="Ver ticket de venta" title="Ver ticket de venta">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <path d="M5 2h14v20l-4-2-3 2-3-2-4 2z" />
+                        <path d="M8 7h8M8 11h8M8 15h5" />
+                    </svg>
+                </button>
+            </div>
+        </article>
+    }
+    @if (Host.historySales.Count == 0 && !Host.busy)
+    {
+        <p class="muted">No hay ventas para esta fecha.</p>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public Restaurantes.Clients.Backoffice.Pwa.Pages.Home Host { get; set; } = default!;
+}

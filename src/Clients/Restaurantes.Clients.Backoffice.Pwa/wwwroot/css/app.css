@@ -105,6 +105,8 @@ input[type="checkbox"] { width: 18px; height: 18px; min-height: 18px; padding: 0
 
 .restaurant-context { display: flex; justify-content: flex-end; margin: 22px 0 12px; }
 .restaurant-context label { display: grid; gap: 7px; width: min(420px, 100%); font-size: 12px; font-weight: 850; }
+.context-header-actions .restaurant-context-value { display: flex; align-items: center; width: min(320px, 34vw); min-height: 44px; padding: 10px 12px; overflow: hidden; border: 1px solid #cbd2cc; border-radius: 11px; background: #fff; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 700px) { .context-header-actions .restaurant-context-value { width: 100%; } }
 .restaurant-list { display: grid; gap: 12px; margin-top: 24px; }
 .restaurant-settings { margin-top: 0; }
 .restaurant-identity { display: grid; gap: 4px; min-width: 0; align-content: center; }
@@ -147,8 +149,11 @@ input[type="checkbox"] { width: 18px; height: 18px; min-height: 18px; padding: 0
 .sales-receipt .account-preview-header .eyebrow { margin: 14px 0 0; color: #bf5427; font-family: inherit; font-size: 11px; font-weight: 950; letter-spacing: .14em; }
 .sales-receipt .account-preview-lines { display: grid; gap: 8px; padding: 14px 0; border-top: 1px dashed #414943; border-bottom: 1px dashed #414943; }
 .sales-receipt .account-preview-line, .sales-receipt .account-preview-total, .sales-receipt .account-preview-tips > div { display: flex; justify-content: space-between; gap: 12px; }
+.sales-receipt .account-preview-extra { display: flex; justify-content: space-between; gap: 12px; margin: -4px 0 0 1.25rem; color: #626c65; font-size: .9em; }
+.sales-receipt .account-preview-extra strong { white-space: nowrap; }
 .sales-receipt .account-preview-line strong, .sales-receipt .account-preview-total strong, .sales-receipt .account-preview-tips strong { white-space: nowrap; }
-.sales-receipt .account-preview-total { align-items: baseline; margin-top: 14px; font-size: 16px; }
+.sales-receipt .account-preview-total { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; margin-top: 14px; font-size: 16px; }
+.sales-receipt .account-preview-discount { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 1rem; color: var(--accent, #c94e22); }
 .sales-receipt .account-preview-tips { margin-top: 18px; padding-top: 12px; border-top: 1px dashed #9aa19b; }
 .sales-receipt .account-preview-tips > div { padding: 3px 0; }
 .sales-receipt .account-preview-per-person, .sales-receipt .account-preview-footer { text-align: center; }

@@ -173,7 +173,10 @@ public sealed class IdentityService(
         string email = request.Email.Trim().ToLowerInvariant();
         if (await store.FindByEmailAsync(activeProvider, email, ct) is not null)
         {
-            return new(IdentityOutcome.Conflict, new { detail = "La cuenta ya está autorizada." });
+            return new(
+                IdentityOutcome.Conflict,
+                new { detail = "El correo ya está autorizado en un local." }
+            );
         }
 
         ApplicationUser user = new()

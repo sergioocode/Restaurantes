@@ -80,6 +80,15 @@ else
                             {
                                 <RestaurantContextSelector Host="this" />
                             }
+                            @if (module == "daily-orders-report" && !ShowRestaurantContextSelector)
+                            {
+                                <div class="restaurant-context">
+                                    <label>
+                                        <span>Local de trabajo</span>
+                                        <span class="restaurant-context-value">@RestaurantName(restaurantId)</span>
+                                    </label>
+                                </div>
+                            }
                             @if (RefreshLabel is { } refreshLabel)
                             {
                                 <button class="secondary" @onclick="RefreshCurrentModule" disabled="@busy">@refreshLabel</button>
@@ -116,7 +125,7 @@ else
                 {
                     @if (ReportRestaurants.Count > 0)
                     {
-                        <OrdersModule Host="this" />
+                        <DailySalesModule Host="this" />
                     }
                     else
                     {
@@ -179,8 +188,9 @@ else
         <div class="toast @(ok ? "ok" : "error")">@message</div>
     }
 }
-@if (selectedSale is SaleResponse sale && selectedSaleOrder is ManagementOrderResponse saleOrder)
+@if (selectedSale is SaleResponse sale)
 {
+    ManagementOrderResponse? saleOrder = SaleOrderContext(sale);
     <div class="order-details-overlay">
         <article class="order-details sales-receipt">
             <div class="order-details-actions">
@@ -219,10 +229,13 @@ else
                 }
                 <p>Ticket: @sale.Id.ToString("N").ToUpperInvariant()</p>
                 <p>Fecha: @sale.CompletedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</p>
-                <p>@(string.IsNullOrEmpty(saleOrder.TableLabel) ? saleOrder.CustomerName : saleOrder.TableLabel)</p>
-                @if (saleOrder.GuestCount is int guests && guests > 0)
+                @if (saleOrder is not null)
                 {
-                    <p>Comensales: @guests</p>
+                    <p>@(string.IsNullOrEmpty(saleOrder.TableLabel) ? saleOrder.CustomerName : saleOrder.TableLabel)</p>
+                    @if (saleOrder.GuestCount is int guests && guests > 0)
+                    {
+                        <p>Comensales: @guests</p>
+                    }
                 }
             </header>
             <div class="account-preview-lines">
@@ -232,8 +245,12 @@ else
                 {
                     <div class="account-preview-line">
                         <span>@line.Quantity × @line.ProductName@(!string.IsNullOrWhiteSpace(line.Format) ? $" · {TicketFormatLabel(line.Format)}" : "")</span>
-                        <strong>@((line.Quantity * line.UnitPrice).ToString("0.00")) €</strong>
+                        <strong>@((line.Quantity * (line.BaseUnitPrice ?? line.UnitPrice)).ToString("0.00")) €</strong>
                     </div>
+                    @foreach (SaleLineExtraSnapshot extra in line.Extras ?? [])
+                    {
+                        <div class="account-preview-extra"><span>↳ @(line.Quantity * extra.Quantity) × @extra.ProductName</span><strong>@((line.Quantity * extra.Quantity * extra.UnitPrice).ToString("0.00")) €</strong></div>
+                    }
                 }
             }
             else
@@ -244,14 +261,24 @@ else
                     {
                         <div class="account-preview-line">
                             <span>@line.Quantity × @line.ProductName@(!string.IsNullOrWhiteSpace(line.Format) ? $" · {TicketFormatLabel(line.Format)}" : "")</span>
-                            <strong>@((line.Quantity * line.UnitPrice).ToString("0.00")) €</strong>
+                            <strong>@((line.Quantity * (line.BaseUnitPrice ?? line.UnitPrice)).ToString("0.00")) €</strong>
                         </div>
+                        @foreach (ManagementOrderExtraResponse extra in line.Extras ?? [])
+                        {
+                            <div class="account-preview-extra"><span>↳ @(line.Quantity * extra.Quantity) × @extra.ProductName</span><strong>@((line.Quantity * extra.Quantity * extra.UnitPrice).ToString("0.00")) €</strong></div>
+                        }
                     }
                 }
             }
             </div>
-            <div class="account-preview-total"><span>Total (IVA incluido)</span><strong>@sale.Total.ToString("0.00") €</strong></div>
-            @if (saleOrder.GuestCount is int diners && diners > 0)
+            <div class="account-preview-total">
+                @if (sale.DiscountAmount > 0)
+                {
+                    <div class="account-preview-discount"><span>Descuento (@sale.DiscountPercentage.ToString("0.##") %)</span><strong>-@sale.DiscountAmount.ToString("0.00") €</strong></div>
+                }
+                <span>Total (IVA incluido)</span><strong>@sale.Total.ToString("0.00") €</strong>
+            </div>
+            @if (saleOrder?.GuestCount is int diners && diners > 0)
             {
                 <p class="account-preview-per-person">Total por comensal (@diners): @Math.Round(sale.Total / diners, 2, MidpointRounding.AwayFromZero).ToString("0.00") €</p>
             }
