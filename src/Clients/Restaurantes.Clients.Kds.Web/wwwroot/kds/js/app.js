@@ -3,7 +3,6 @@ import { orderDestinationLabel, OrderRenderer, productFormatLabel } from './orde
 import { KdsRealtimeClient } from './realtime-client.js';
 
 const sessionKey = 'restaurantes.kds.login';
-const restaurantKey = 'restaurantes.kds.restaurant';
 const apiBaseUrl = window.location.origin;
 const authLoading = document.querySelector('#authLoading');
 const loginPanel = document.querySelector('#loginPanel');
@@ -15,10 +14,10 @@ const historyButton = document.querySelector('#historyButton');
 const historyPanel = document.querySelector('#historyPanel');
 const historyList = document.querySelector('#historyList');
 const logoutButton = document.querySelector('#logout');
-const restaurantSelect = document.querySelector('#restaurantId');
 const stationSelect = document.querySelector('#stationCode');
 const status = document.querySelector('#connectionStatus');
-const identityStatus = document.querySelector('#identityStatus');
+const assignedRestaurantName = document.querySelector('#assignedRestaurantName');
+const assignedUserName = document.querySelector('#assignedUserName');
 const eventText = document.querySelector('#event');
 const ordersElement = document.querySelector('#orders');
 const orderPollingIntervalMilliseconds = 30_000;
@@ -26,6 +25,7 @@ let historyOpen = false;
 
 const api = new KdsApiClient(apiBaseUrl);
 let login;
+let selectedRestaurantId = '';
 let restaurantAccesses = [];
 let primaryStationCode = '';
 const pendingOrders = new Map();
@@ -60,8 +60,8 @@ function setStatus(connected, text) {
 }
 
 async function loadOrders() {
-  if (!login || !restaurantSelect.value || !stationSelect.value) return;
-  const restaurantId = restaurantSelect.value;
+  if (!login || !selectedRestaurantId || !stationSelect.value) return;
+  const restaurantId = selectedRestaurantId;
   const stationCode = stationSelect.value;
   const view = restaurantId + '/' + stationCode;
   if (renderedView !== view) {
@@ -71,7 +71,7 @@ async function loadOrders() {
   const requestNumber = ++ordersRequestNumber;
   const response = await api.getOrders(restaurantId, stationCode);
   if (!login || requestNumber < lastAppliedRequestNumber
-    || restaurantId !== restaurantSelect.value || stationCode !== stationSelect.value) return;
+    || restaurantId !== selectedRestaurantId || stationCode !== stationSelect.value) return;
   lastAppliedRequestNumber = requestNumber;
 
   const previousOrders = new Map(renderedOrders.map(order => [order.id, order]));
@@ -114,7 +114,7 @@ function clearOrdersView(message) {
 }
 
 async function refreshMonitor() {
-  if (!login || !restaurantSelect.value || !stationSelect.value) return;
+  if (!login || !selectedRestaurantId || !stationSelect.value) return;
   refreshButton.disabled = true;
   eventText.textContent = 'Actualizando monitor…';
   try {
@@ -129,7 +129,7 @@ async function refreshMonitor() {
 
 function canConfirmDelivery(order) {
   if (order.serviceMode !== 'Takeaway' || order.status !== 'Ready') return false;
-  const access = restaurantAccesses.find(item => item.restaurantId === restaurantSelect.value);
+  const access = restaurantAccesses.find(item => item.restaurantId === selectedRestaurantId);
   return Boolean(access?.permissions?.includes('orders.recover'));
 }
 
@@ -168,11 +168,11 @@ async function recoverDelivery(order, button) {
 }
 
 function connect() {
-  if (!login || !restaurantSelect.value || !stationSelect.value) return;
+  if (!login || !selectedRestaurantId || !stationSelect.value) return;
   const selectedStation = stationSelect.options[stationSelect.selectedIndex];
   realtime.connect({
     accessToken: login.accessToken,
-    restaurantId: restaurantSelect.value,
+    restaurantId: selectedRestaurantId,
     stationCode: stationSelect.value,
     stationName: selectedStation.dataset.statusText
   });
@@ -187,19 +187,17 @@ function addOption(select, value, text, statusText = text) {
 }
 
 function updateRestaurantIdentity() {
-  const access = restaurantAccesses.find(item => item.restaurantId === restaurantSelect.value);
-  identityStatus.textContent = access?.name
-    ? 'Local: ' + access.name
-    : 'Local: ' + (access?.restaurantId || '');
+  const access = restaurantAccesses.find(item => item.restaurantId === selectedRestaurantId);
+  assignedRestaurantName.textContent = access?.name || access?.restaurantId || '';
+  assignedUserName.textContent = login?.user?.displayName || login?.user?.username || '';
 }
 
 async function loadStationsAndConnect() {
-  const restaurantId = restaurantSelect.value;
+  const restaurantId = selectedRestaurantId;
   if (!restaurantId) return;
   realtime.disconnect();
   closeHistory();
   clearOrdersView('Cargando pedidos…');
-  localStorage.setItem(restaurantKey, restaurantId);
   updateRestaurantIdentity();
   stationSelect.disabled = true;
   stationSelect.replaceChildren();
@@ -268,26 +266,17 @@ async function activateLogin(loginResponse) {
   if (restaurantAccesses.length === 0) {
     throw new Error('El usuario no tiene acceso KDS en ningún local.');
   }
-  restaurantSelect.replaceChildren();
-  for (const access of restaurantAccesses) {
-    const label = access.name
-      ? access.name + (access.code ? ' · ' + access.code : '')
-      : access.restaurantId + ' · ' + access.role;
-    addOption(restaurantSelect, access.restaurantId, label);
-  }
-  const remembered = localStorage.getItem(restaurantKey);
-  if (restaurantAccesses.some(access => access.restaurantId === remembered)) {
-    restaurantSelect.value = remembered;
-  }
+  selectedRestaurantId = restaurantAccesses[0].restaurantId;
+  updateRestaurantIdentity();
   await loadStationsAndConnect();
 }
 
 async function openHistory() {
-  if (!login || !restaurantSelect.value || !stationSelect.value) return;
+  if (!login || !selectedRestaurantId || !stationSelect.value) return;
   historyButton.disabled = true;
   historyList.replaceChildren();
   try {
-    const orders = await api.getHistory(restaurantSelect.value, stationSelect.value);
+    const orders = await api.getHistory(selectedRestaurantId, stationSelect.value);
     for (const order of orders) {
       const card = document.createElement('article');
       card.className = 'history-order';
@@ -337,6 +326,7 @@ async function loadProvider() {
 
 function logout() {
   login = null;
+  selectedRestaurantId = '';
   restaurantAccesses = [];
   pendingOrders.clear();
   api.setAccessToken('');
@@ -346,7 +336,8 @@ function logout() {
   loginPanel.classList.remove('hidden');
   monitorPanel.classList.add('hidden');
   refreshButton.disabled = true;
-  identityStatus.textContent = '';
+  assignedRestaurantName.textContent = '';
+  assignedUserName.textContent = '';
   eventText.textContent = '';
   clearOrdersView('Accede para cargar el monitor.');
   historyButton.classList.add('hidden');
@@ -385,10 +376,9 @@ historyButton.addEventListener('click', () => {
   else openHistory();
 });
 logoutButton.addEventListener('click', logout);
-restaurantSelect.addEventListener('change', loadStationsAndConnect);
 stationSelect.addEventListener('change', () => {
   closeHistory();
-  localStorage.setItem('restaurantes.kds.station.' + restaurantSelect.value, stationSelect.value);
+  localStorage.setItem('restaurantes.kds.station.' + selectedRestaurantId, stationSelect.value);
   eventText.textContent = '';
   clearOrdersView('Cargando pedidos…');
   updateHistoryVisibility();
@@ -427,7 +417,7 @@ async function initialize() {
 }
 initialize();
 window.setInterval(async () => {
-  if (!login || !restaurantSelect.value || !stationSelect.value) return;
+  if (!login || !selectedRestaurantId || !stationSelect.value) return;
   try {
     await loadOrders();
   } catch {

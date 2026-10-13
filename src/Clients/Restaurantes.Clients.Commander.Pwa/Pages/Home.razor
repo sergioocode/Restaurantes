@@ -40,20 +40,11 @@
     {
         <header class="topbar">
             <div><p class="eyebrow">COMANDERO</p><strong>@login.User.DisplayName</strong></div>
-            <button class="ghost" @onclick="Logout">Salir</button>
+            <div class="topbar-actions">
+                <button class="ghost" @onclick="LoadTables" disabled="@busy">Actualizar mesas</button>
+                <button class="ghost" @onclick="Logout">Salir</button>
+            </div>
         </header>
-
-        <section class="local-bar">
-            <label>Local
-                <select value="@restaurantId" @onchange="RestaurantChanged">
-                    @foreach (RestaurantResponse restaurant in restaurants)
-                    {
-                        <option value="@restaurant.Id">@restaurant.Name · @restaurant.Code</option>
-                    }
-                </select>
-            </label>
-            <button class="ghost" @onclick="LoadTables" disabled="@busy">Actualizar mesas</button>
-        </section>
 
         @if (selectedTable is null)
         {
