@@ -10,5 +10,7 @@ public sealed record TableResponse(
     Guid? ActiveSessionId,
     Guid ZoneId,
     string ZoneName,
-    int ZoneSortOrder
+    int ZoneSortOrder,
+    Guid? ActiveSessionOpenedByUserId = null,
+    string? ActiveSessionSource = null
 );

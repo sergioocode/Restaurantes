@@ -35,9 +35,28 @@ public sealed class PaymentsWriteController(
         {
             return NotFound();
         }
+        bool canApplyDiscount = User.CanAccessRestaurant(
+            payable.RestaurantId,
+            RestaurantPermissions.DiscountsApply
+        );
+        bool canApplySessionDiscountForCard =
+            payable.DiningSessionId is Guid sessionId
+            && request.DiningSessionId == sessionId
+            && User.CanAccessRestaurant(
+                payable.RestaurantId,
+                RestaurantPermissions.PaymentsCaptureCard
+            )
+            && await dining.IsChargeAmountValidAsync(
+                sessionId,
+                orderId,
+                payable.RestaurantId,
+                request.Amount,
+                Request.Headers.Authorization.ToString(),
+                ct
+            );
         if (
             payable.DiningSessionId is null
-            || !User.CanAccessRestaurant(payable.RestaurantId, RestaurantPermissions.DiscountsApply)
+            || (!canApplyDiscount && !canApplySessionDiscountForCard)
         )
         {
             return Forbid();
@@ -192,7 +211,17 @@ public sealed class PaymentsWriteController(
             return NotFound();
         }
 
-        if (!User.CanAccessRestaurant(payable.RestaurantId, RestaurantPermissions.PaymentsCapture))
+        bool canCaptureAnyPayment = User.CanAccessRestaurant(
+            payable.RestaurantId,
+            RestaurantPermissions.PaymentsCapture
+        );
+        bool canCaptureCardPayment =
+            request.Method == "Card"
+            && User.CanAccessRestaurant(
+                payable.RestaurantId,
+                RestaurantPermissions.PaymentsCaptureCard
+            );
+        if (!canCaptureAnyPayment && !canCaptureCardPayment)
         {
             return Forbid();
         }

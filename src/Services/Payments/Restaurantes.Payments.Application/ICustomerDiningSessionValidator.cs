@@ -10,4 +10,13 @@ public interface ICustomerDiningSessionValidator
         string customerAccessToken,
         CancellationToken cancellationToken
     );
+
+    Task<bool> IsChargeAmountValidAsync(
+        Guid sessionId,
+        Guid orderId,
+        Guid restaurantId,
+        decimal amount,
+        string? authorization,
+        CancellationToken cancellationToken
+    );
 }

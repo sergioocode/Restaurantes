@@ -23,6 +23,8 @@ public sealed partial class DiningService
             table.IsActive,
             status = session is null ? "Available" : "Occupied",
             activeSessionId = session?.Id,
+            activeSessionOpenedByUserId = session?.OpenedByUserId,
+            activeSessionSource = session?.Source,
             guestCount = session?.GuestCount,
         };
     }

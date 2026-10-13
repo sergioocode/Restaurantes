@@ -61,4 +61,35 @@ public sealed partial class CommanderApi
     {
         return GetAsync<SessionBillResponse>($"/api/dining/sessions/{sessionId}/bill");
     }
+
+    public async Task<SessionBillResponse> CheckoutAsync(
+        Guid sessionId,
+        Guid idempotencyKey,
+        string method,
+        string externalReference,
+        decimal tipAmount,
+        decimal amountReceived,
+        IReadOnlyList<CheckoutOrderAllocation> allocations
+    )
+    {
+        using HttpRequestMessage request = Authorized(
+            HttpMethod.Post,
+            $"/api/dining/sessions/{sessionId}/checkout"
+        );
+        request.Content = JsonContent.Create(
+            new
+            {
+                idempotencyKey,
+                method,
+                externalReference,
+                tipAmount,
+                amountReceived,
+                allocations,
+            }
+        );
+        using HttpResponseMessage response = await http.SendAsync(request);
+        return await ReadAsync<SessionBillResponse>(response);
+    }
+
+    public sealed record CheckoutOrderAllocation(Guid OrderId, decimal Amount);
 }

@@ -67,6 +67,7 @@ public sealed class DiningDbContext(DbContextOptions<DiningDbContext> options) :
         EntityTypeBuilder<DiningSessionOrder> order = modelBuilder.Entity<DiningSessionOrder>();
         order.ToTable("dining_session_orders");
         order.HasKey(x => x.OrderId);
+        order.Property(x => x.Source).HasMaxLength(30).IsRequired();
         order.Property(x => x.PaymentStatus).HasMaxLength(20).IsRequired();
         order.Property(x => x.OrderStatus).HasMaxLength(30).IsRequired();
         order.Property(x => x.Amount).HasPrecision(12, 2);

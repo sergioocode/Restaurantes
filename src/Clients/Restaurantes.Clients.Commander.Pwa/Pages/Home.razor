@@ -82,7 +82,7 @@
                     <div class="table-grid">
                         @foreach (TableResponse table in TablesInSelectedZone)
                         {
-                            <button class="table-card @(table.Status == "Occupied" ? "occupied" : "available")"
+                            <button class="table-card @(table.Status == "Occupied" ? (IsCurrentCommanderTable(table) ? "occupied" : "occupied-other") : "available")"
                                     @onclick="() => SelectTable(table)" disabled="@busy">
                                 <strong>@table.Label</strong><span>@table.Code</span>
                                 @if (table.Status == "Occupied")
@@ -99,30 +99,31 @@
         }
         else
         {
-                @if (diningSession?.GuestCount is int savedGuestCount)
-                {
-                    <p class="guest-count">Comensales: @savedGuestCount</p>
-                }
             <section class="order-head">
-                <button class="back" @onclick="BackToTables">← Mesas</button>
-                <div><p class="eyebrow">PEDIDO EN CURSO</p><h2>@selectedTable.Label</h2></div>
-                @if (CanShowCancelOwnSession)
-                {
-                    <button class="danger cancel-opening" disabled="@(busy || HasSessionOrders)" @onclick="CancelSession">Cancelar apertura</button>
-                }
+                <button class="back" @onclick="LeaveTable" disabled="@busy">← Mesas</button>
+                <div class="order-table-heading">
+                    <p class="eyebrow">PEDIDO EN CURSO</p>
+                    <div class="table-name-row">
+                        <h2>@selectedTable.Label</h2>
+                        <span class="session-status">@SessionOrderSummary(sessionId)</span>
+                    </div>
+                </div>
                 <button class="ghost" @onclick="OpenBill">Ver consumo</button>
             </section>
 
-            <div class="session-progress">
-                <strong>Estado de comandas</strong>
-                <span>@SessionOrderSummary(sessionId)</span>
-            </div>
-
             <nav class="category-tabs" aria-label="Categorías del menú">
-                <button class="@CategoryClass(null)" @onclick="() => category = null">Todo</button>
+                <button class="@CategoryClass(null)" @onclick="() => SelectCategory(null)">Todo</button>
                 @foreach (string itemCategory in Categories)
                 {
-                    <button class="@CategoryClass(itemCategory)" @onclick="() => category = itemCategory">@itemCategory</button>
+                    <button class="@CategoryClass(itemCategory)" @onclick="() => SelectCategory(itemCategory)">@itemCategory</button>
+                }
+            </nav>
+
+            <nav class="category-tabs format-tabs" aria-label="Formatos del menú">
+                <button class="@FormatClass(null)" @onclick="() => selectedFormat = null">@(category is null ? "Carta" : FormatLabel(DefaultFormatForCategory(category)))</button>
+                @foreach (string format in AvailableFormats)
+                {
+                    <button class="@FormatClass(format)" @onclick="() => selectedFormat = format">@FormatLabel(format)</button>
                 }
             </nav>
 
@@ -130,7 +131,7 @@
                 @foreach (MenuItemResponse item in VisibleMenu)
                 {
                     <article class="product-card">
-                        <div><span class="category">@item.CategoryName</span>@if (item.ExtraGroups is { Count: > 0 }) { <span class="extra-marker">Con extras</span> }<h3>@item.ProductName</h3><strong>@item.Price.ToString("0.00") €</strong></div>
+                        <div><span class="category">@item.CategoryName</span>@if (item.ExtraGroups is { Count: > 0 }) { <span class="extra-marker">Con extras</span> }<h3>@item.ProductName</h3><strong>@FormatLabel(FormatFor(item)) · @DisplayPrice(item).ToString("0.00") €</strong></div>
                         <div class="stepper">
                             <button @onclick="() => ChangeQuantity(item.ProductId, -1)">−</button>
                             <span>@ProductQuantity(item.ProductId)</span>
@@ -165,7 +166,7 @@
                 <div class="modal-backdrop" @onclick="CloseExtras">
                     <section class="bill-card extras-card" role="dialog" aria-modal="true" aria-labelledby="extras-title" @onclick:stopPropagation>
                         <div class="bill-title">
-                            <div><p class="eyebrow">EXTRAS</p><h2 id="extras-title">@extraDialogProduct.ProductName</h2></div>
+                            <div><p class="eyebrow">EXTRAS</p><h2 id="extras-title">@extraDialogProduct.ProductName · @FormatLabel(extraDialogFormat)</h2></div>
                             <button class="ghost" @onclick="CloseExtras">Cancelar</button>
                         </div>
                         @foreach (ProductExtraGroup group in extraDialogProduct.ExtraGroups ?? [])
@@ -191,7 +192,16 @@
                 <div class="modal-backdrop" @onclick="CloseBill">
                     <section class="bill-card" @onclick:stopPropagation>
                         <div class="bill-title">
-                            <div><p class="eyebrow">CONSUMO DE LA MESA</p><h2>@selectedTable.Label</h2></div>
+                            <div>
+                                <p class="eyebrow">CONSUMO DE LA MESA</p>
+                                <div class="bill-heading-row">
+                                    <h2>@selectedTable.Label</h2>
+                                    @if ((bill?.GuestCount ?? guestCount) is int billGuests && billGuests > 0)
+                                    {
+                                        <span class="bill-guest-count">@(billGuests == 1 ? "1 comensal" : $"{billGuests} comensales")</span>
+                                    }
+                                </div>
+                            </div>
                             <button class="ghost" @onclick="CloseBill">Cerrar</button>
                         </div>
                         @if (bill is null)
@@ -204,19 +214,30 @@
                                 @foreach (SessionBillOrderResponse order in bill.Orders)
                                 {
                                     <article>
-                                        <div><strong>Comanda @order.OrderId.ToString()[..8]</strong><small>@order.AddedAtUtc.ToLocalTime().ToString("HH:mm")</small></div>
-                                        <div><span>@order.OrderStatus</span><span>@order.PaymentStatus</span><strong>@order.Amount.ToString("0.00") €</strong></div>
+                                        <div class="bill-order-heading">
+                                            <strong>Comanda @order.OrderId.ToString()[..8]</strong>
+                                            <small>@order.AddedAtUtc.ToLocalTime().ToString("HH:mm")</small>
+                                        </div>
+                                        <div class="bill-order-meta">
+                                            <div class="bill-order-statuses">
+                                                <span>@order.OrderStatus</span>
+                                                <span>@order.PaymentStatus</span>
+                                            </div>
+                                            <strong>@order.Amount.ToString("0.00") €</strong>
+                                        </div>
                                         @if (billOrders.TryGetValue(order.OrderId, out OrderDetailResponse? detail))
                                         {
                                             <div class="bill-lines">
                                                 @foreach (OrderLineDetailResponse line in detail.Lines)
                                                 {
                                                     <div class="bill-line @(line.Status == "Cancelled" ? "cancelled" : "")">
-                                                        <span>@line.Quantity × @line.ProductName · @line.PreparationStationName</span>
-                                                        @if (line.Status != "Cancelled")
-                                                        {
-                                                            <small class="line-kitchen @KitchenLineStatusClass(line.KitchenStatus)">@KitchenLineStatusLabel(line.KitchenStatus)</small>
-                                                        }
+                                                        <div class="bill-line-product">
+                                                            <span>@line.Quantity × @line.ProductName@(!string.IsNullOrEmpty(line.Format) ? $" · {FormatLabel(line.Format)}" : "") · @line.PreparationStationName</span>
+                                                            @if (line.Status != "Cancelled")
+                                                            {
+                                                                <small class="line-kitchen @KitchenLineStatusClass(line.KitchenStatus)" title="@KitchenLineStatusLabel(line.KitchenStatus)" aria-label="@KitchenLineStatusLabel(line.KitchenStatus)">@KitchenLineStatusIcon(line.KitchenStatus)</small>
+                                                            }
+                                                        </div>
                                                         @if (CanCancelLine(order, detail, line))
                                                         {
                                                             <button class="danger" disabled="@busy" @onclick="() => CancelLine(order, line)">Cancelar</button>
@@ -226,6 +247,13 @@
                                                             <small>Cancelado · @line.CancellationReason</small>
                                                         }
                                                     </div>
+                                                    @if (line.Status != "Cancelled")
+                                                    {
+                                                        @foreach (OrderLineExtraResponse extra in line.Extras ?? [])
+                                                        {
+                                                            <div class="bill-line-extra"><span>↳ @(line.Quantity * extra.Quantity) × @extra.ProductName</span><strong>@((line.Quantity * extra.Quantity * extra.UnitPrice).ToString("0.00")) €</strong></div>
+                                                        }
+                                                    }
                                                 }
                                             </div>
                                         }
@@ -234,15 +262,171 @@
                             </div>
                             <div class="bill-total"><span>Total de la sesión</span><strong>@bill.Total.ToString("0.00") €</strong></div>
                             <div class="bill-total outstanding"><span>Pendiente</span><strong>@bill.Outstanding.ToString("0.00") €</strong></div>
-                            <p class="muted">El cobro se realiza exclusivamente desde el TPV. Si tú abriste la mesa, puedes liberarla aquí cuando todas las comandas estén canceladas y el saldo sea cero.</p>
+                            <div class="bill-total"><span>Pendiente de tus comandas</span><strong>@CommanderOutstanding.ToString("0.00") €</strong></div>
+                            @if (CommanderOutstanding > 0)
+                            {
+                                <p class="muted">Desde Comandero solo puedes cobrar con tarjeta tus propias comandas. Para efectivo o transferencia, realiza el cobro desde el TPV.</p>
+                            }
+                            else if (bill.Outstanding > 0)
+                            {
+                                <p class="muted">El pendiente corresponde a comandas de otro perfil o anteriores. Solo puede cobrarse desde el perfil que las creó o desde el TPV.</p>
+                            }
                             <div class="bill-actions">
                                 <button class="ghost" @onclick="OpenBill" disabled="@busy">Actualizar</button>
-                                @if (CanReleaseCancelledSession)
+                                @if (bill.Outstanding == 0 && BillConsumptionTotal > 0)
                                 {
-                                    <button class="danger" @onclick="ReleaseCancelledSession" disabled="@busy">Liberar mesa</button>
+                                    <button class="ghost account-preview-icon-button" @onclick="OpenSalesTicket" disabled="@busy" aria-label="Ver ticket de venta" title="Ver ticket de venta">
+                                        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                                            <path d="M5 2h14v20l-4-2-3 2-3-2-4 2z" />
+                                            <path d="M8 7h8M8 11h8M8 15h5" />
+                                        </svg>
+                                    </button>
+                                }
+                                @if (CommanderOutstanding > 0)
+                                {
+                                    <button class="primary" @onclick="OpenPaymentDialog" disabled="@(busy || !CanChargeOwnCommanderOrders)">Cobrar</button>
+                                }
+                                @if (CanReleasePaidSession)
+                                {
+                                    <button class="danger" @onclick="ReleasePaidSession" disabled="@busy">Liberar mesa</button>
                                 }
                             </div>
                         }
+                    </section>
+                </div>
+            }
+            @if (salesTicketOpen && bill is not null)
+            {
+                <div class="modal-backdrop sales-ticket-backdrop" @onclick="CloseSalesTicket">
+                    <section class="account-preview sales-ticket" role="dialog" aria-modal="true" aria-labelledby="sales-ticket-title" @onclick:stopPropagation>
+                        <div class="account-preview-actions no-print">
+                            <button class="primary account-preview-icon-button" @onclick="PrintSalesTicket" aria-label="Imprimir ticket de venta" title="Imprimir con Chrome">
+                                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                                    <path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                                    <path d="M6 14h12v7H6zM18 12h.01" />
+                                </svg>
+                            </button>
+                            <button class="ghost account-preview-icon-button" @onclick="CloseSalesTicket" aria-label="Cerrar ticket de venta" title="Cerrar">
+                                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                                    <path d="m18 6-12 12M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <header class="account-preview-header">
+                            <p class="eyebrow">TICKET DE VENTA</p>
+                            <h2 id="sales-ticket-title">@CurrentRestaurant?.Name</h2>
+                            @if (CurrentRestaurant?.Company is RestaurantCompanyResponse company)
+                            {
+                                <p>@company.LegalName</p>
+                                <p>@company.FiscalAddress</p>
+                                <p>CIF: @company.TaxId</p>
+                                @if (!string.IsNullOrWhiteSpace(company.Phone)) { <p>Tlf.: @company.Phone</p> }
+                                @if (!string.IsNullOrWhiteSpace(company.Email)) { <p>Email: @company.Email</p> }
+                            }
+                            else if (!string.IsNullOrWhiteSpace(CurrentRestaurant?.Address))
+                            {
+                                <p>@CurrentRestaurant.Address</p>
+                            }
+                            <p>Ticket: @bill.Id.ToString("N").ToUpperInvariant()</p>
+                            <p>Fecha: @(salesTicket?.CompletedAtUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? bill.PaidAtUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? DateTime.Now.ToString("dd/MM/yyyy HH:mm"))</p>
+                            <p>@CurrentLabel</p>
+                            @if (bill.GuestCount is int saleGuests && saleGuests > 0) { <p>Comensales: @saleGuests</p> }
+                        </header>
+                        <div class="account-preview-lines">
+                            @foreach (SessionBillOrderResponse order in bill.Orders.Where(order => order.OrderStatus != "Cancelled"))
+                            {
+                                if (billOrders.TryGetValue(order.OrderId, out OrderDetailResponse? detail))
+                                {
+                                    @foreach (OrderLineDetailResponse line in detail.Lines.Where(line => line.Status != "Cancelled"))
+                                    {
+                                        <div class="account-preview-line">
+                                            <span>@line.Quantity × @line.ProductName@(!string.IsNullOrEmpty(line.Format) ? $" · {FormatLabel(line.Format)}" : "")</span>
+                                            <strong>@(((line.BaseUnitPrice ?? line.UnitPrice) * line.Quantity).ToString("0.00")) €</strong>
+                                        </div>
+                                        @foreach (OrderLineExtraResponse extra in line.Extras ?? [])
+                                        {
+                                            <div class="account-preview-extra"><span>↳ @(line.Quantity * extra.Quantity) × @extra.ProductName</span><strong>@((line.Quantity * extra.Quantity * extra.UnitPrice).ToString("0.00")) €</strong></div>
+                                        }
+                                    }
+                                }
+                            }
+                        </div>
+                        <div class="account-preview-total">
+                            @if ((salesTicket?.DiscountAmount ?? bill.DiscountAmount) > 0)
+                            {
+                                <div class="account-preview-discount">
+                                    <span>Descuento (@((salesTicket?.DiscountPercentage ?? bill.DiscountPercentage).ToString("0.##")) %)</span>
+                                    <strong>-@((salesTicket?.DiscountAmount ?? bill.DiscountAmount).ToString("0.00")) €</strong>
+                                </div>
+                            }
+                            <span>Total (IVA incluido)</span>
+                            <strong>@BillConsumptionTotal.ToString("0.00") €</strong>
+                        </div>
+                        @if (bill.GuestCount is int diners && diners > 0)
+                        {
+                            <p class="account-preview-per-person">Total por comensal (@diners): @Math.Round(BillConsumptionTotal / diners, 2, MidpointRounding.AwayFromZero).ToString("0.00") €</p>
+                        }
+                        <section class="account-preview-tips" aria-label="Detalle del pago">
+                            @if (salesTicket?.PaymentMethods is { Count: > 0 })
+                            {
+                                @foreach (SalePaymentBreakdown payment in salesTicket.PaymentMethods)
+                                {
+                                    <div><span>Medio de pago · @PaymentLabel(payment.Method)</span><strong>@payment.Amount.ToString("0.00") €</strong></div>
+                                }
+                            }
+                            else
+                            {
+                                <div><span>Medio de pago</span><strong>@PaymentLabel(salesTicket?.PaymentMethod ?? bill.PaymentMethod)</strong></div>
+                            }
+                            @if (bill.TipTotal > 0) { <div><span>Propina</span><strong>@bill.TipTotal.ToString("0.00") €</strong></div> }
+                            <div><span>Total cobrado</span><strong>@((BillConsumptionTotal + bill.TipTotal).ToString("0.00")) €</strong></div>
+                        </section>
+                        <p class="account-preview-footer">Gracias por su visita.</p>
+                    </section>
+                </div>
+            }
+            @if (paymentDialogOpen && bill is not null)
+            {
+                <div class="modal-backdrop payment-backdrop" @onclick="ClosePaymentDialog">
+                    <section class="bill-card payment-dialog" role="dialog" aria-modal="true" aria-labelledby="payment-dialog-title" @onclick:stopPropagation>
+                        <div class="bill-title">
+                            <div>
+                                <h2 id="payment-dialog-title">Cobrar · @CurrentLabel</h2>
+                                @if (bill.GuestCount is int paymentGuests && paymentGuests > 0)
+                                {
+                                    <span class="bill-guest-count">@(paymentGuests == 1 ? "1 comensal" : $"{paymentGuests} comensales") [@Math.Round(BillConsumptionTotal / paymentGuests, 2, MidpointRounding.AwayFromZero).ToString("0.00") €]</span>
+                                }
+                            </div>
+                        </div>
+                        <div class="payment-methods" role="group" aria-label="Método de pago">
+                            <button class="ghost" disabled>Efectivo</button>
+                            <button class="primary" @onclick='() => SetPaymentMethod("Card")' disabled="@busy" aria-pressed="@(paymentMethod == "Card")">Tarjeta</button>
+                            <button class="ghost" disabled>Transferencia</button>
+                        </div>
+                        <div class="payment-dialog-body">
+                            <div class="payment-keypad" role="group" aria-label="Teclado numérico">
+                                <button class="payment-exact" type="button" @onclick="SetExactPaymentAmount" disabled="@busy">Cobro exacto</button>
+                                @foreach (string key in new[] { "1", "2", "3", "4", "5", "6", "7", "8", "9", "Borrar", "0", "," })
+                                {
+                                    <button type="button" class="@(key == "Borrar" ? "payment-clear" : "")" @onclick="() => PressPaymentKey(key)" disabled="@busy" aria-label="@(key == "Borrar" ? "Poner a cero el importe seleccionado" : key)">@(key == "Borrar" ? "Borrar todo" : key)</button>
+                                }
+                            </div>
+                            <div class="payment-details">
+                                <div class="bill-total"><span>Pendiente de tus comandas</span><strong>@CommanderOutstanding.ToString("0.00") €</strong></div>
+                                <button class="payment-value @(paymentKeypadTarget == "Charge" ? "active" : "")" @onclick='() => SelectPaymentKeypadTarget("Charge")'><span>Importe a pagar con tarjeta</span><strong>@currentChargeAmount.ToString("0.00") €</strong></button>
+                                <div class="tip-options" role="group" aria-label="Propina">
+                                    @foreach (int percentage in new[] { 0, 5, 10, 15, 20 })
+                                    {
+                                        <button class="@(tipPercentage == percentage && !tipAmountManuallyEdited ? "selected" : "")" @onclick="() => SelectTip(percentage)">@(percentage == 0 ? "Sin propina" : $"{percentage}%")</button>
+                                    }
+                                </div>
+                                <button class="payment-value @(paymentKeypadTarget == "Tip" ? "active" : "")" @onclick='() => SelectPaymentKeypadTarget("Tip")'><span>Propina personalizada</span><strong>@CurrentTipAmount.ToString("0.00") €</strong></button>
+                                <div class="bill-total"><span>Total tarjeta (con propina)</span><strong>@AmountReceived.ToString("0.00") €</strong></div>
+                                <div class="bill-total"><span>Pendiente tras este cobro</span><strong>@RemainingAfterPayment.ToString("0.00") €</strong></div>
+                            </div>
+                        </div>
+                        <label>Referencia (opcional)<input @bind="paymentReference" placeholder="Referencia del datáfono" /></label>
+                        <div class="bill-actions"><button class="ghost" @onclick="ClosePaymentDialog" disabled="@busy">Cancelar</button><button class="primary" @onclick="CheckoutSession" disabled="@(busy || !CanChargeOwnCommanderOrders || !IsChargeAmountValid)">@(busy ? "Cobrando…" : "Confirmar cobro")</button></div>
                     </section>
                 </div>
             }

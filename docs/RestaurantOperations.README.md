@@ -510,7 +510,7 @@ GET /api/restaurant-operations/restaurants/accessible/pos
 GET /api/restaurant-operations/restaurants/accessible/kds
 ```
 
-Estas rutas requieren autenticación y devuelven únicamente locales activos para los que el usuario tiene, respectivamente, `commander.use`, `pos.use` o `kds.use`. Una cuenta con alcance `Todos los Locales` obtiene todos los locales activos permitidos por su rol; una cuenta limitada obtiene como máximo su único local.
+Estas rutas requieren autenticación y devuelven únicamente locales activos para los que el usuario tiene, respectivamente, `commander.use`, `pos.use` o `kds.use`. Una cuenta con alcance `Todos los Locales` obtiene todos los locales activos permitidos por su rol; una cuenta limitada obtiene como máximo su único local. TPV, Comandero y KDS usan el local asignado sin mostrar un selector de locales.
 
 ## Gateways
 
@@ -563,7 +563,7 @@ Issuer   = Restaurantes.Identity
 Audience = Restaurantes
 ```
 
-El modelo separa rol y alcance. Cada cuenta aplica su rol a `Todos los Locales` o a exactamente un local; nunca a un subconjunto de varios locales. Los permisos de alcance único se emiten como claims con formato `restaurantId:permission`, mientras que el alcance total se representa mediante la claim de rol y se evalúa con la misma matriz de permisos.
+El modelo separa rol y alcance. Las cuentas administrativas pueden tener alcance a `Todos los Locales`; los perfiles operativos `Manager`, `Camarero` y `Kds` se asignan a un único local. No se admite un subconjunto arbitrario de varios locales. Los permisos de alcance único se emiten como claims con formato `restaurantId:permission`, mientras que el alcance total se representa mediante la claim de rol y se evalúa con la misma matriz de permisos.
 
 La API Read permite consultar públicamente la lista y el detalle de restaurantes, pero exige autenticación en las rutas `accessible/commander`, `accessible/pos` y `accessible/kds`. La clave compartida se proporciona mediante `Security__SigningKey`, según [Configuración JWT compartida](../README.md#configuración-jwt-compartida).
 

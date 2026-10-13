@@ -52,6 +52,7 @@ public sealed partial class CommanderApi
                 .Select(line => new
                 {
                     productId = line.ProductId,
+                    format = line.Format,
                     quantity = line.Quantity,
                     notes = notes.GetValueOrDefault(line.ProductId) ?? string.Empty,
                     selectedExtras = line

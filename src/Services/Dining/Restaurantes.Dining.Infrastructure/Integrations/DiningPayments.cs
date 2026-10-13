@@ -9,6 +9,7 @@ public sealed class DiningPayments(IHttpClientFactory clients) : IDiningPayments
 {
     public async Task<DiningPaymentResult> AdjustAmountAsync(
         Guid orderId,
+        Guid diningSessionId,
         decimal amount,
         string? authorization,
         CancellationToken ct
@@ -25,7 +26,7 @@ public sealed class DiningPayments(IHttpClientFactory clients) : IDiningPayments
         {
             request.Headers.Authorization = header;
         }
-        request.Content = JsonContent.Create(new { amount });
+        request.Content = JsonContent.Create(new { amount, diningSessionId });
         using HttpResponseMessage response = await payments.SendAsync(request, ct);
         string body = await response.Content.ReadAsStringAsync(ct);
         return new(response.IsSuccessStatusCode, (int)response.StatusCode, body);

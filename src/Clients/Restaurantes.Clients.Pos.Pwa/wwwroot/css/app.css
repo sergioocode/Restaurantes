@@ -870,6 +870,20 @@ input, select {
             margin-left: auto;
         }
 
+    .bill-orders .bill-order-meta {
+        justify-content: space-between;
+    }
+
+    .bill-order-statuses {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .bill-order-meta > strong {
+        white-space: nowrap;
+    }
+
     .bill-orders article {
         display: grid;
         gap: 8px;
@@ -897,10 +911,23 @@ input, select {
 
 .bill-line {
     display: flex;
-    align-items: stretch;
+    align-items: center;
     justify-content: space-between;
     gap: 10px;
 }
+
+.bill-line-extra {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-left: 1.25rem;
+    color: #626c65;
+    font-size: .9em;
+}
+
+    .bill-line-extra strong {
+        white-space: nowrap;
+    }
 
     .bill-line > span {
         display: flex;

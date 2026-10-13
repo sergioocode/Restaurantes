@@ -44,13 +44,19 @@ public sealed partial class DiningService
 
         await db.LoadOrdersAsync(session, ct);
 
-        if (
-            !access.CanAccessRestaurant(
+        bool canCaptureAnyPayment = access.CanAccessRestaurant(
+            principal,
+            session.RestaurantId,
+            DiningPermission.PaymentsCapture
+        );
+        bool canCaptureCardPayment =
+            request.Method == "Card"
+            && access.CanAccessRestaurant(
                 principal,
                 session.RestaurantId,
-                DiningPermission.PaymentsCapture
-            )
-        )
+                DiningPermission.PaymentsCaptureCard
+            );
+        if (!canCaptureAnyPayment && !canCaptureCardPayment)
         {
             return DiningResults.Forbid();
         }
@@ -78,14 +84,29 @@ public sealed partial class DiningService
                 x.AmountPaid < chargeableAmounts[x.OrderId] && x.OrderStatus != "Cancelled"
             )
             .ToList();
-        if (unpaidOrders.Count == 0)
+        Guid? currentUserId = Guid.TryParse(
+            principal.FindFirst(ClaimTypes.NameIdentifier)?.Value,
+            out Guid parsedUserId
+        )
+            ? parsedUserId
+            : null;
+        List<DiningSessionOrder> payableOrders =
+            canCaptureAnyPayment ? unpaidOrders
+            : canCaptureCardPayment && currentUserId is Guid userId
+                ? unpaidOrders
+                    .Where(order => order.Source == "Comandero" && order.CreatedByUserId == userId)
+                    .ToList()
+            : [];
+        if (payableOrders.Count == 0)
         {
-            return DiningResults.Conflict(new { detail = "There are no unpaid session orders." });
+            return canCaptureAnyPayment
+                ? DiningResults.Conflict(new { detail = "There are no unpaid session orders." })
+                : DiningResults.Forbid();
         }
 
         List<CheckoutOrderAllocation> allocations =
             request.Allocations.Count == 0
-                ? unpaidOrders
+                ? payableOrders
                     .Select(order => new CheckoutOrderAllocation(
                         order.OrderId,
                         chargeableAmounts[order.OrderId] - order.AmountPaid
@@ -97,7 +118,7 @@ public sealed partial class DiningService
             || allocations.Select(allocation => allocation.OrderId).Distinct().Count()
                 != allocations.Count
             || allocations.Any(allocation =>
-                !unpaidOrders.Any(order =>
+                !payableOrders.Any(order =>
                     order.OrderId == allocation.OrderId
                     && allocation.Amount <= chargeableAmounts[order.OrderId] - order.AmountPaid
                 )
@@ -128,20 +149,25 @@ public sealed partial class DiningService
         string? authorization = httpContext.Authorization;
         foreach (DiningSessionOrder order in unpaidOrders)
         {
-            DiningPaymentResult adjusted = await payments.AdjustAmountAsync(
-                order.OrderId,
-                chargeableAmounts[order.OrderId],
-                authorization,
-                ct
-            );
-            if (!adjusted.Succeeded)
+            decimal chargeableAmount = chargeableAmounts[order.OrderId];
+            if (chargeableAmount != order.Amount)
             {
-                return DiningResults.Conflict(
-                    new
-                    {
-                        detail = $"No se pudo actualizar el importe del pedido '{order.OrderId}' para aplicar el descuento.",
-                    }
+                DiningPaymentResult adjusted = await payments.AdjustAmountAsync(
+                    order.OrderId,
+                    session.Id,
+                    chargeableAmount,
+                    authorization,
+                    ct
                 );
+                if (!adjusted.Succeeded)
+                {
+                    return DiningResults.Conflict(
+                        new
+                        {
+                            detail = $"No se pudo actualizar el importe del pedido '{order.OrderId}' para aplicar el descuento.",
+                        }
+                    );
+                }
             }
         }
         decimal allocatedTip = 0;
@@ -249,6 +275,8 @@ public sealed partial class DiningService
                 .Select(x => new
                 {
                     x.OrderId,
+                    x.Source,
+                    x.CreatedByUserId,
                     x.OrderStatus,
                     x.PaymentStatus,
                     amount = chargeableAmounts[x.OrderId],

@@ -32,12 +32,14 @@ public static class RestaurantPermissions
     public const string TablesRead = "tables.read";
     public const string TablesManage = "tables.manage";
     public const string TablesRelease = "tables.release";
+    public const string TablesReleasePaid = "tables.release.paid";
     public const string OrdersCreate = "orders.create";
     public const string OrdersRead = "orders.read";
     public const string OrdersReportRead = "orders.report.read";
     public const string OrdersManage = "orders.manage";
     public const string OrdersRecover = "orders.recover";
     public const string PaymentsCapture = "payments.capture";
+    public const string PaymentsCaptureCard = "payments.capture.card";
     public const string PaymentsRefund = "payments.refund";
     public const string CashRegisterManage = "cash-register.manage";
     public const string CatalogManage = "catalog.manage";
@@ -127,7 +129,15 @@ public static class RestaurantPermissions
                 KitchenReportsRead,
                 DiscountsApply,
             ],
-            "Camarero" => [CommanderUse, TablesRead, OrdersCreate, OrdersManage],
+            "Camarero" =>
+            [
+                CommanderUse,
+                TablesRead,
+                TablesReleasePaid,
+                OrdersCreate,
+                OrdersManage,
+                PaymentsCaptureCard,
+            ],
             "Kds" => [KdsUse],
             _ => [],
         };

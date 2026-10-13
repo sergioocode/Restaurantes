@@ -290,8 +290,13 @@ Cada `SaleLineSnapshot` conserva:
 - `Quantity`;
 - `CategoryName`;
 - `PreparationStationCode`.
+- `BaseUnitPrice` y los extras seleccionados, cada uno con nombre, cantidad y precio unitario.
 
 Estas líneas se serializan como JSONB en el modelo transaccional y posteriormente pueden formar parte de `SaleCompleted`.
+
+`UnitPrice` mantiene el precio total de la línea, incluidos los extras; `BaseUnitPrice` permite mostrar el precio del plato por separado de cada extra.
+
+La venta conserva también el porcentaje y el importe del descuento aplicado a la sesión, además del desglose de los cobros por método de pago. El listado que consume Backoffice devuelve una fila por venta completada (ticket), aunque la venta agrupe varios pedidos.
 
 El objetivo es que una venta histórica no dependa de consultar nuevamente Catalog para conocer el nombre o precio que tenía un producto en el momento de la operación.
 

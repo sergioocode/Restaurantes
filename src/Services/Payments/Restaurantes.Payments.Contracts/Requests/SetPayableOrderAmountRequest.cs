@@ -5,6 +5,7 @@ namespace Restaurantes.Payments.Contracts.Requests;
 public sealed class SetPayableOrderAmountRequest : IValidatableObject
 {
     public decimal Amount { get; init; }
+    public Guid? DiningSessionId { get; init; }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {

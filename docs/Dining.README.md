@@ -157,6 +157,7 @@ Campos relevantes:
 - `ClosedAtUtc`;
 - `CheckoutIdempotencyKey`;
 - `PaymentMethod`;
+- `DiscountPercentage`;
 - `PaidAtUtc`;
 - `CustomerAccessToken`;
 - datos de cancelación;
@@ -170,7 +171,7 @@ Existe como máximo una sesión `Open` por ubicación mediante un índice único
 flowchart LR
     S((Inicio)) --> A[Open]
 
-    A -->|checkout o close| B[Closed]
+    A -->|close tras pago y entrega| B[Closed]
     A -->|cancel sin pedidos| C[Cancelled]
 
     B --> F((Fin))
@@ -384,20 +385,23 @@ La respuesta incluye, entre otros datos:
 
 ```text
 total
+DiscountPercentage
+discountAmount
 outstanding
 canCheckout
 orders[]
 ```
 
-`total` corresponde a la suma de los importes proyectados.
+`total` suma los importes de los pedidos después del descuento y las propinas registradas. `discountAmount` informa la diferencia entre los importes originales de los pedidos y los importes con descuento.
+
+El TPV puede aplicar a la sesión un porcentaje predefinido (5 %, 10 %, 20 % o 25 %), uno manual o cero. El porcentaje queda guardado en la sesión; el importe descontado se calcula desde los pedidos y ambos valores se conservan en la venta. No existe un catálogo de descuentos administrable. Se puede cambiar o quitar el descuento antes del primer cobro. Una vez iniciado el cobro, la API rechaza cambios al descuento.
 
 `outstanding` corresponde a los importes cuyo `PaymentStatus` todavía no es `Paid`.
 
 `canCheckout` exige:
 
 - sesión `Open`;
-- al menos un pedido;
-- y, salvo que la política lo permita expresamente, todos los pedidos en `Ready`, `Delivered` o `Cancelled`.
+- al menos un pedido no cancelado con importe pendiente.
 
 ## Checkout multipedido
 
@@ -410,8 +414,11 @@ POST /api/dining/sessions/{sessionId}/checkout
 El contrato exige:
 
 - `IdempotencyKey` distinto de `Guid.Empty`;
-- método `Card` o `Cash`;
+- método `Card`, `Cash` o `Transfer`;
+- asignaciones opcionales del cobro a pedidos concretos;
 - referencia externa opcional.
+
+Se permiten pagos parciales y varios cobros para una misma sesión. Si no se envían asignaciones, el checkout cobra el saldo completo de todos los pedidos pendientes. Para cobrar solo una parte, se envían asignaciones a pedidos concretos; cada importe debe ser positivo y no superar el saldo de ese pedido. `TipAmount` y `AmountReceived` son opcionales.
 
 ```mermaid
 sequenceDiagram
@@ -429,11 +436,11 @@ sequenceDiagram
         Payments-->>Dining: pago aceptado
     end
 
-    Dining->>DB: Session = Closed + Version++
-    Dining-->>Client: cuenta cerrada
+    Dining->>DB: registrar cobros y estados de pago
+    Dining-->>Client: cuenta actualizada
 ```
 
-Dining utiliza la **misma `IdempotencyKey`** para todas las capturas de una misma operación y envía `TransactionOrderCount` con la cantidad de pedidos que deben cobrarse.
+Dining utiliza la **misma `IdempotencyKey`** para todas las capturas de una misma operación y envía `TransactionOrderCount` con la cantidad de pedidos no cancelados de la sesión.
 
 Si no se proporciona `ExternalReference`, se utiliza:
 
@@ -441,14 +448,7 @@ Si no se proporciona `ExternalReference`, se utiliza:
 DINING-{sessionId}
 ```
 
-Cuando todos los cobros necesarios han sido aceptados:
-
-- la sesión pasa a `Closed`;
-- se registra `CheckoutIdempotencyKey`;
-- se registra el método de pago;
-- se establece `PaidAtUtc` y `ClosedAtUtc`;
-- se incrementa `Version`;
-- la ubicación se notifica como `Available`.
+Cada cobro aceptado actualiza el importe pagado del pedido y los datos del pago en la sesión. El checkout no cierra la sesión ni libera la ubicación. Para liberar la mesa se usa `POST /api/dining/sessions/{sessionId}/close`, que exige que todos los pedidos estén pagados y entregados o cancelados; entonces la sesión pasa a `Closed` y la ubicación queda disponible.
 
 ### Idempotencia del checkout
 

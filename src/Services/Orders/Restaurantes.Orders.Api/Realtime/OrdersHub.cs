@@ -27,6 +27,26 @@ public sealed class OrdersHub : Hub<IKdsClient>
         return Groups.RemoveFromGroupAsync(Context.ConnectionId, PosGroup(restaurantId));
     }
 
+    public Task NotifyDiningTableUpdated(Guid restaurantId)
+    {
+        if (
+            restaurantId == Guid.Empty
+            || Context.User is not { } user
+            || (
+                !user.CanAccessRestaurant(restaurantId, RestaurantPermissions.CommanderUse)
+                && !user.CanAccessRestaurant(restaurantId, RestaurantPermissions.PosUse)
+            )
+        )
+        {
+            throw new HubException("The user cannot notify dining table changes.");
+        }
+
+        return Task.WhenAll(
+            Clients.Group(CommanderGroup(restaurantId)).DiningTableUpdated(restaurantId),
+            Clients.Group(PosGroup(restaurantId)).DiningTableUpdated(restaurantId)
+        );
+    }
+
     private Task Join(Guid restaurantId, string permission, string group)
     {
         return restaurantId == Guid.Empty ? throw new HubException("RestaurantId is required.")

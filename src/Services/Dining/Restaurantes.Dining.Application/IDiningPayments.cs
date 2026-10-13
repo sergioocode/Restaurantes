@@ -26,6 +26,7 @@ public interface IDiningPayments
 {
     Task<DiningPaymentResult> AdjustAmountAsync(
         Guid orderId,
+        Guid diningSessionId,
         decimal amount,
         string? authorization,
         CancellationToken ct

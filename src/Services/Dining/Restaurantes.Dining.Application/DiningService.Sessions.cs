@@ -179,21 +179,22 @@ public sealed partial class DiningService
             session.RestaurantId,
             DiningPermission.TablesRelease
         );
-        bool canReleaseOwnCancelledSession =
+        bool hasCurrentUserCommanderOrder =
             Guid.TryParse(principal.FindFirst(ClaimTypes.NameIdentifier)?.Value, out Guid userId)
-            && session.OpenedByUserId == userId
+            && session.Orders.Any(order =>
+                order.Source == "Comandero"
+                && order.CreatedByUserId == userId
+                && order.OrderStatus != "Cancelled"
+            );
+        bool canReleasePaidSession =
+            session.CanRelease
+            && hasCurrentUserCommanderOrder
             && access.CanAccessRestaurant(
                 principal,
                 session.RestaurantId,
-                DiningPermission.OrdersCreate
-            )
-            && session.Orders.Count > 0
-            && session.Orders.All(order =>
-                order.OrderStatus == "Cancelled"
-                && order.PaymentStatus != "Paid"
-                && order.Amount == 0
+                DiningPermission.TablesReleasePaid
             );
-        if (!canReleaseAnySession && !canReleaseOwnCancelledSession)
+        if (!canReleaseAnySession && !canReleasePaidSession)
         {
             return DiningResults.Forbid();
         }
@@ -206,6 +207,13 @@ public sealed partial class DiningService
         if (session.Orders.Count == 0)
         {
             return DiningResults.Conflict(new { detail = "The dining session has no orders." });
+        }
+
+        if (!session.Orders.Any(order => order.OrderStatus != "Cancelled" && order.AmountPaid > 0))
+        {
+            return DiningResults.Conflict(
+                new { detail = "The table can only be released after a payment has been recorded." }
+            );
         }
 
         Guid[] unfinished = session

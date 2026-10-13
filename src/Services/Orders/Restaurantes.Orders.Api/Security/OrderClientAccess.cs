@@ -22,4 +22,21 @@ public static class OrderClientAccess
             && user.CanAccessRestaurant(restaurantId, RestaurantPermissions.OrdersManage)
             && user.CanAccessRestaurant(restaurantId, clientPermission);
     }
+
+    public static bool CanReadDiningSessionOrder(
+        this ClaimsPrincipal user,
+        Guid restaurantId,
+        string source,
+        Guid? diningSessionId
+    )
+    {
+        return diningSessionId.HasValue
+            && source is "Pos" or "Comandero"
+            && user.CanAccessRestaurant(restaurantId, RestaurantPermissions.TablesRead)
+            && user.CanAccessRestaurant(restaurantId, RestaurantPermissions.OrdersManage)
+            && (
+                user.CanAccessRestaurant(restaurantId, RestaurantPermissions.PosUse)
+                || user.CanAccessRestaurant(restaurantId, RestaurantPermissions.CommanderUse)
+            );
+    }
 }
