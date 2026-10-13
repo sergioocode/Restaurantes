@@ -169,18 +169,6 @@ public partial class Home
         message = null;
     }
 
-    private async Task RestaurantChanged(ChangeEventArgs args)
-    {
-        if (Guid.TryParse(args.Value?.ToString(), out Guid value))
-        {
-            restaurantId = value;
-            selectedZoneId = null;
-            BackToTables();
-            await LoadTables();
-            await ConnectRealtimeAsync();
-        }
-    }
-
     private async Task LoadTables()
     {
         await Run(LoadOperationalData);

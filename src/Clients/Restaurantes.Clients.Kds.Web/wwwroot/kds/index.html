@@ -35,11 +35,11 @@
         </form>
 
         <section id="monitorPanel" class="controls hidden">
-            <label class="field">
-                <span>Local autorizado</span>
-                <select id="restaurantId" aria-label="Local autorizado"></select>
-            </label>
-            <label class="field">
+            <div class="assigned-context" aria-label="Local y usuario asignados">
+                <strong id="assignedRestaurantName" aria-label="Local asignado"></strong>
+                <strong id="assignedUserName" aria-label="Usuario"></strong>
+            </div>
+            <label class="field station-field">
                 <span>Estación KDS</span>
                 <select id="stationCode" aria-label="Estación KDS" disabled></select>
             </label>
@@ -48,7 +48,6 @@
                     <span class="dot"></span>
                     <span>Sin autenticar</span>
                 </div>
-                <p id="identityStatus" class="identity"></p>
             </div>
             <div class="toolbar">
                 <button id="refresh" type="button" disabled>Actualizar</button>
