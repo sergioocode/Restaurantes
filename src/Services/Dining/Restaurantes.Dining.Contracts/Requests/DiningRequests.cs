@@ -62,3 +62,5 @@ public sealed class SaveZoneRequest
 }
 
 public sealed record SetGuestCountRequest(int GuestCount);
+
+public sealed record SetSessionDiscountRequest(decimal Percentage);

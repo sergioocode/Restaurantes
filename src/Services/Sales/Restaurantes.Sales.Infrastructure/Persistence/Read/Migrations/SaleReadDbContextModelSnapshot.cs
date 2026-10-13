@@ -31,6 +31,10 @@ namespace Restaurantes.Sales.Infrastructure.Persistence.Read.Migrations
                     b.Property<DateTime>("CompletedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("DiscountName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<DateOnly?>("BusinessDate")
                         .HasColumnType("date");
 
@@ -72,6 +76,14 @@ namespace Restaurantes.Sales.Infrastructure.Persistence.Read.Migrations
                         .HasColumnType("numeric(12,2)");
 
                     b.Property<decimal>("TipTotal")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<decimal>("DiscountPercentage")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<decimal>("DiscountAmount")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
 

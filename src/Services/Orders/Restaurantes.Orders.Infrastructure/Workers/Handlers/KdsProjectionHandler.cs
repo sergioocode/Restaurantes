@@ -423,7 +423,9 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
                 line.PreparationStartedAtUtc,
                 line.ReadyAtUtc,
                 line.DispatchedAtUtc,
-                line.Format
+                line.Format,
+                line.BaseUnitPrice,
+                line.Extras
             ))
             .ToList();
     }

@@ -8,7 +8,10 @@ public sealed record DiningPaymentRequest(
     string Method,
     string ExternalReference,
     decimal? TenderedAmount = null,
-    Guid? SaleGroupId = null
+    Guid? SaleGroupId = null,
+    string? DiscountName = null,
+    decimal DiscountPercentage = 0,
+    decimal DiscountAmount = 0
 );
 
 public sealed record DiningPaymentResult(
@@ -21,6 +24,13 @@ public sealed record DiningPaymentResult(
 
 public interface IDiningPayments
 {
+    Task<DiningPaymentResult> AdjustAmountAsync(
+        Guid orderId,
+        decimal amount,
+        string? authorization,
+        CancellationToken ct
+    );
+
     Task<DiningPaymentResult> CaptureAsync(
         Guid orderId,
         DiningPaymentRequest request,

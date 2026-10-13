@@ -91,6 +91,7 @@ public sealed partial class OrderCommandService
                     );
                 CreateOrderExtraRequest[] requestedExtras = line.SelectedExtras?.ToArray() ?? [];
                 List<string> selectedExtraNames = [];
+                List<OrderLineExtra> selectedExtraDetails = [];
                 decimal extrasPrice = 0;
                 IReadOnlyList<OrderExtraGroup> extraGroups = p.ExtraGroups;
                 foreach (var group in extraGroups)
@@ -116,6 +117,14 @@ public sealed partial class OrderCommandService
                             );
                         extrasPrice += option.Price * selection.Quantity;
                         selectedExtraNames.Add($"{option.ProductName} × {selection.Quantity}");
+                        selectedExtraDetails.Add(
+                            new OrderLineExtra(
+                                option.ProductId,
+                                option.ProductName,
+                                option.Price,
+                                selection.Quantity
+                            )
+                        );
                     }
                 }
                 if (
@@ -136,12 +145,19 @@ public sealed partial class OrderCommandService
                     throw new ArgumentException(
                         $"Las notas y extras de {p.ProductName} superan el límite permitido."
                     );
+                decimal unitPrice =
+                    source == OrderSource.Pos && line.ExpectedUnitPrice is decimal expectedUnitPrice
+                        ? expectedUnitPrice
+                        : formatPrice.Price + extrasPrice;
+                decimal baseUnitPrice = unitPrice - extrasPrice;
+                if (baseUnitPrice < 0)
+                    throw new ArgumentException(
+                        $"El precio base de {p.ProductName} no puede ser inferior al precio de sus extras."
+                    );
                 return new OrderLineDraft(
                     p.ProductId,
                     p.ProductName,
-                    source == OrderSource.Pos && line.ExpectedUnitPrice is decimal unitPrice
-                        ? unitPrice
-                        : formatPrice.Price + extrasPrice,
+                    unitPrice,
                     line.Quantity,
                     notes,
                     p.CategoryId,
@@ -150,7 +166,9 @@ public sealed partial class OrderCommandService
                     p.StationName,
                     p.RequiresPrimaryDispatch,
                     p.Priority,
-                    format
+                    format,
+                    baseUnitPrice,
+                    selectedExtraDetails
                 );
             }),
             now,

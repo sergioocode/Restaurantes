@@ -59,6 +59,11 @@ public sealed class OrderWriteDbContext(DbContextOptions<OrderWriteDbContext> op
         line.Property(item => item.ProductName).HasMaxLength(160).IsRequired();
         line.Property(item => item.Format).HasMaxLength(40).IsRequired();
         line.Property(item => item.UnitPrice).HasPrecision(12, 2);
+        line.Property(item => item.BaseUnitPrice).HasPrecision(12, 2);
+        line.Property(item => item.ExtrasJson)
+            .HasColumnType("jsonb")
+            .IsRequired()
+            .HasDefaultValueSql("'[]'::jsonb");
         line.Property(item => item.Notes).HasMaxLength(500);
         line.Property(item => item.CategoryName)
             .HasMaxLength(120)

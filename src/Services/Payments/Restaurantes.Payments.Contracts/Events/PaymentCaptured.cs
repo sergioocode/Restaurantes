@@ -20,5 +20,8 @@ public sealed record PaymentCaptured(
     decimal TipAmountPaid = 0,
     decimal TenderedAmount = 0,
     decimal ChangeAmount = 0,
-    Guid? SaleGroupId = null
+    Guid? SaleGroupId = null,
+    string? DiscountName = null,
+    decimal DiscountPercentage = 0,
+    decimal DiscountAmount = 0
 );

@@ -15,5 +15,7 @@ public sealed record OrderLineDetailResponse(
     DateTime? PreparationStartedAtUtc = null,
     DateTime? ReadyAtUtc = null,
     DateTime? DispatchedAtUtc = null,
-    string Format = ""
+    string Format = "",
+    decimal? BaseUnitPrice = null,
+    IReadOnlyList<OrderLineExtraResponse>? Extras = null
 );

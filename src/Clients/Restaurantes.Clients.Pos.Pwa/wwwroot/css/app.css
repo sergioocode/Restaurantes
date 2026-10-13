@@ -211,17 +211,7 @@ input, select {
     gap: 10px;
 }
 
-    .top-actions select {
-        min-width: 380px;
-        border-color: #ffffff30;
-        color: #fff;
-        background: #ffffff15;
-    }
-
-        .top-actions select option {
-            color: #17201c;
-            background: #fff;
-        }
+.current-restaurant { max-width: min(380px, 30vw); overflow: hidden; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
 
     .top-actions .ghost {
         color: #fff;
@@ -785,10 +775,33 @@ input, select {
     white-space: nowrap;
 }
 
+.account-preview-extra {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin: -4px 0 0 1.25rem;
+    color: #626c65;
+    font-size: 0.9em;
+}
+
+.account-preview-extra strong {
+    white-space: nowrap;
+}
+
 .account-preview-total {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: baseline;
     margin-top: 14px;
     font-size: 16px;
+}
+
+.account-preview-discount {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    color: var(--accent, #c94e22);
 }
 
 .account-preview-per-person, .account-preview-footer {
@@ -944,17 +957,6 @@ input, select {
     font-weight: 400;
 }
 
-.bill-total.bill-suggestion {
-    margin-top: 5px;
-    padding-top: 0;
-    border: 0;
-    color: #59635d;
-}
-
-    .bill-total.bill-suggestion strong {
-        font-size: 16px;
-    }
-
     .bill-total.discount strong {
         font-weight: 400;
     }
@@ -981,24 +983,6 @@ input, select {
 
 .bill-actions {
     margin-top: 16px;
-}
-
-.bill-actions-with-ticket {
-    display: grid;
-    grid-template-columns: max-content minmax(0, 1fr) max-content;
-    align-items: center;
-}
-
-.bill-actions-with-ticket > button:first-child {
-    justify-self: start;
-}
-
-.bill-actions-with-ticket > button:nth-child(2) {
-    justify-self: center;
-}
-
-.bill-actions-with-ticket > button:last-child {
-    justify-self: end;
 }
 
 .payment-methods, .tip-options {
@@ -1399,9 +1383,6 @@ input, select {
         border: 0;
     }
 
-    .top-actions select {
-        min-width: 220px;
-    }
 }
 
 @media (max-width: 650px) {
@@ -1414,10 +1395,6 @@ input, select {
         align-items: stretch;
         flex-wrap: wrap;
     }
-
-        .top-actions select {
-            min-width: 0;
-        }
 
     .tables-view, .catalog-panel {
         padding: 15px;
@@ -1685,13 +1662,7 @@ input, select {
         gap: 5px;
     }
 
-        .locations-shell .top-actions select {
-            width: clamp(170px, 32vw, 250px);
-            min-width: 0;
-            min-height: 38px;
-            padding: 6px 9px;
-            font-size: 11px;
-        }
+        .locations-shell .top-actions .current-restaurant { max-width: clamp(100px, 30vw, 220px); font-size: 11px; }
 
         .locations-shell .top-actions .cash-status {
             flex-basis: 196px;
@@ -1827,6 +1798,46 @@ input, select {
     grid-template-columns: repeat(4, 56px);
     justify-content: center;
     gap: 10px;
+}
+
+.discount-dialog .guest-count-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 22px;
+}
+
+.discount-dialog .guest-count-options button {
+    min-width: 96px;
+}
+
+.discount-dialog .guest-count-options .discount-no-discount {
+    grid-column: 1 / -1;
+}
+
+.discount-manual-entry {
+    display: block;
+    margin-top: 22px;
+    font-weight: 700;
+}
+
+.discount-manual-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.discount-manual-row input {
+    width: 100%;
+    min-height: 48px;
+    padding: 10px 12px;
+    border: 1px solid var(--modal-key-border);
+    border-radius: 10px;
+    background: #fff;
+    font: inherit;
+}
+
+.discount-dialog .guest-count-actions {
+    flex-wrap: wrap;
 }
 
     .guest-count-options button.selected {

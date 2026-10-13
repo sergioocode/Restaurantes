@@ -23,6 +23,47 @@ public sealed class PaymentsWriteController(
 {
     private const int TooEarlyStatusCode = 425;
 
+    [HttpPut("amount")]
+    public async Task<IActionResult> AdjustAmount(
+        Guid orderId,
+        SetPayableOrderAmountRequest request,
+        CancellationToken ct
+    )
+    {
+        PayableOrder? payable = await store.FindAsync(orderId, ct);
+        if (payable is null)
+        {
+            return NotFound();
+        }
+        if (
+            payable.DiningSessionId is null
+            || !User.CanAccessRestaurant(payable.RestaurantId, RestaurantPermissions.DiscountsApply)
+        )
+        {
+            return Forbid();
+        }
+        try
+        {
+            await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(
+                ct
+            );
+            await db.Entry(payable).ReloadAsync(ct);
+            bool updated = await service.AdjustAmountAsync(orderId, request.Amount, ct);
+            await transaction.CommitAsync(ct);
+            return updated ? NoContent() : NotFound();
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Conflict(
+                new ProblemDetails
+                {
+                    Title = exception.Message,
+                    Status = StatusCodes.Status409Conflict,
+                }
+            );
+        }
+    }
+
     [AllowAnonymous]
     [HttpPost("capture-customer-qr")]
     public async Task<ActionResult<PaymentResponse>> CaptureCustomerQr(

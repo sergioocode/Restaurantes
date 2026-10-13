@@ -27,7 +27,15 @@ public sealed partial class OrderCommandService
                 x.PreparationStartedAtUtc,
                 x.ReadyAtUtc,
                 x.DispatchedAtUtc,
-                x.Format
+                x.Format,
+                x.BaseUnitPrice,
+                x.Extras.Select(extra => new OrderLineExtraSnapshot(
+                        extra.ProductId,
+                        extra.ProductName,
+                        extra.UnitPrice,
+                        extra.Quantity
+                    ))
+                    .ToList()
             ))
             .ToList();
     }
@@ -136,7 +144,15 @@ public sealed partial class OrderCommandService
                     x.PreparationStartedAtUtc,
                     x.ReadyAtUtc,
                     x.DispatchedAtUtc,
-                    x.Format
+                    x.Format,
+                    x.BaseUnitPrice,
+                    x.Extras.Select(extra => new OrderLineExtraSnapshot(
+                            extra.ProductId,
+                            extra.ProductName,
+                            extra.UnitPrice,
+                            extra.Quantity
+                        ))
+                        .ToList()
                 ))
                 .ToList(),
             o.Stations.OrderBy(x => x.Code)

@@ -213,7 +213,9 @@ public sealed partial class DiningService
             .Select(x => x.OrderId)
             .ToArray();
         Guid[] unpaid = session
-            .Orders.Where(x => x.PaymentStatus != "Paid" && x.OrderStatus != "Cancelled")
+            .Orders.Where(x =>
+                x.OrderStatus != "Cancelled" && x.AmountPaid < session.ChargeableAmount(x)
+            )
             .Select(x => x.OrderId)
             .ToArray();
         if (unpaid.Length > 0)

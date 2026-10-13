@@ -10,6 +10,12 @@ public sealed class OrderLine
     public string ProductName { get; private set; } = string.Empty;
     public string Format { get; private set; } = string.Empty;
     public decimal UnitPrice { get; private set; }
+    public decimal BaseUnitPrice { get; private set; }
+    public string ExtrasJson { get; private set; } = "[]";
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public IReadOnlyList<OrderLineExtra> Extras =>
+        System.Text.Json.JsonSerializer.Deserialize<List<OrderLineExtra>>(ExtrasJson) ?? [];
     public int Quantity { get; private set; }
     public string Notes { get; private set; } = string.Empty;
     public Guid? CategoryId { get; private set; }
@@ -29,6 +35,23 @@ public sealed class OrderLine
         if (draft.ProductId == Guid.Empty)
         {
             throw new ArgumentException("ProductId is required.");
+        }
+
+        OrderLineExtra[] extras = draft.Extras?.ToArray() ?? [];
+        decimal extrasUnitPrice = extras.Sum(extra => extra.UnitPrice * extra.Quantity);
+        decimal baseUnitPrice = draft.BaseUnitPrice ?? draft.UnitPrice - extrasUnitPrice;
+        if (
+            baseUnitPrice < 0
+            || baseUnitPrice + extrasUnitPrice != draft.UnitPrice
+            || extras.Any(extra =>
+                extra.ProductId == Guid.Empty
+                || string.IsNullOrWhiteSpace(extra.ProductName)
+                || extra.UnitPrice < 0
+                || extra.Quantity is < 1 or > 99
+            )
+        )
+        {
+            throw new ArgumentException("Order line extra prices are invalid.");
         }
 
         string productName = draft.ProductName.Trim();
@@ -54,6 +77,8 @@ public sealed class OrderLine
                 ProductName = productName,
                 Format = draft.Format,
                 UnitPrice = draft.UnitPrice,
+                BaseUnitPrice = baseUnitPrice,
+                ExtrasJson = System.Text.Json.JsonSerializer.Serialize(extras),
                 Quantity = draft.Quantity,
                 Notes = draft.Notes.Trim(),
                 CategoryId = draft.CategoryId,

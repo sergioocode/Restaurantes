@@ -67,6 +67,10 @@ namespace Restaurantes.Dining.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("ClosedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<decimal>("DiscountPercentage")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
                     b.Property<string>("CustomerAccessToken")
                         .IsRequired()
                         .HasMaxLength(64)

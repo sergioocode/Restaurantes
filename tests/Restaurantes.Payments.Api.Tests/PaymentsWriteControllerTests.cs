@@ -1,4 +1,6 @@
-﻿using System.Net;
+﻿using System.ComponentModel.DataAnnotations;
+using System.Globalization;
+using System.Net;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
@@ -12,6 +14,36 @@ namespace Restaurantes.Payments.Api.Tests;
 
 public sealed class PaymentsWriteControllerTests
 {
+    [Fact]
+    public void Adjust_amount_request_accepts_decimal_amount_with_spanish_culture()
+    {
+        CultureInfo originalCulture = CultureInfo.CurrentCulture;
+        CultureInfo originalUiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo spanishCulture = CultureInfo.GetCultureInfo("es-ES");
+            CultureInfo.CurrentCulture = spanishCulture;
+            CultureInfo.CurrentUICulture = spanishCulture;
+
+            SetPayableOrderAmountRequest request = new() { Amount = 7.13m };
+            List<ValidationResult> validationResults = [];
+            bool isValid = Validator.TryValidateObject(
+                request,
+                new ValidationContext(request),
+                validationResults,
+                validateAllProperties: true
+            );
+
+            Assert.True(isValid);
+            Assert.Empty(validationResults);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
     [Theory]
     [InlineData("customer-session", "customer-session")]
     [InlineData(null, "")]
@@ -90,6 +122,8 @@ public sealed class PaymentsWriteControllerTests
         {
             return Task.FromResult<PayableOrderCapture?>(null);
         }
+
+        public Task SaveAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
         public Task SaveWithEventAsync(
             PayableOrder order,

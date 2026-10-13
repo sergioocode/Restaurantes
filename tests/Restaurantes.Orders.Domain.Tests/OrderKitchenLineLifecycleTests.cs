@@ -47,6 +47,47 @@ public sealed class OrderKitchenLineLifecycleTests
         Assert.Equal(OrderStatus.InPreparation, order.Status);
     }
 
+    [Fact]
+    public void Order_line_preserves_extra_prices_separately_from_its_total_price()
+    {
+        OrderLineDraft draft = new(
+            Guid.NewGuid(),
+            "Tagliatelle boloñesa",
+            18m,
+            1,
+            string.Empty,
+            null,
+            "Pastas",
+            "PASTAS",
+            "Pastas",
+            false,
+            1,
+            "PLATO",
+            14m,
+            [new OrderLineExtra(Guid.NewGuid(), "Alcaparras", 4m, 1)]
+        );
+
+        Order order = Order.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            2,
+            Guid.NewGuid(),
+            "Mesa 01",
+            string.Empty,
+            ServiceMode.DineIn,
+            OrderSource.Pos,
+            PaymentTiming.OnAccount,
+            [draft],
+            DateTime.Parse("2026-10-13T10:00:00Z")
+        );
+
+        OrderLine line = Assert.Single(order.Lines);
+        Assert.Equal(18m, line.UnitPrice);
+        Assert.Equal(14m, line.BaseUnitPrice);
+        Assert.Equal("Alcaparras", Assert.Single(line.Extras).ProductName);
+        Assert.Equal(4m, Assert.Single(line.Extras).UnitPrice);
+    }
+
     private static Order CreateOrder(bool requiresPrimaryDispatch, int lineCount, DateTime now)
     {
         List<OrderLineDraft> lines = Enumerable

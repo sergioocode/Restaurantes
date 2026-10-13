@@ -47,6 +47,7 @@ public static class RestaurantPermissions
     public const string FinancialReportsRead = "reports.financial.read";
     public const string MarketingReportsRead = "reports.marketing.read";
     public const string KitchenReportsRead = "reports.kitchen.read";
+    public const string DiscountsApply = "discounts.apply";
 
     public static IReadOnlyCollection<string> ForRole(string role)
     {
@@ -76,6 +77,7 @@ public static class RestaurantPermissions
                 FinancialReportsRead,
                 MarketingReportsRead,
                 KitchenReportsRead,
+                DiscountsApply,
             ],
             "Gerente" =>
             [
@@ -123,6 +125,7 @@ public static class RestaurantPermissions
                 CatalogManage,
                 DashboardRead,
                 KitchenReportsRead,
+                DiscountsApply,
             ],
             "Camarero" => [CommanderUse, TablesRead, OrdersCreate, OrdersManage],
             "Kds" => [KdsUse],

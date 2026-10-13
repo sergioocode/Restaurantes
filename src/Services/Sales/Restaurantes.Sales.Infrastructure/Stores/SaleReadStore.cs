@@ -74,7 +74,10 @@ public sealed class SaleReadStore(SaleReadDbContext dbContext, TimeZoneInfo time
             JsonSerializer.Deserialize<List<Guid>>(sale.OrderIdsJson) ?? [],
             JsonSerializer.Deserialize<List<SaleLineSnapshot>>(sale.LinesJson) ?? [],
             sale.TipTotal,
-            JsonSerializer.Deserialize<List<SalePaymentBreakdown>>(sale.PaymentMethodsJson) ?? []
+            JsonSerializer.Deserialize<List<SalePaymentBreakdown>>(sale.PaymentMethodsJson) ?? [],
+            sale.DiscountName,
+            sale.DiscountPercentage,
+            sale.DiscountAmount
         );
     }
 }

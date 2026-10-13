@@ -72,8 +72,11 @@ public sealed partial class DiningService
             );
         }
 
+        Dictionary<Guid, decimal> chargeableAmounts = ChargeableAmounts(session);
         List<DiningSessionOrder> unpaidOrders = session
-            .Orders.Where(x => x.AmountPaid < x.Amount && x.OrderStatus != "Cancelled")
+            .Orders.Where(x =>
+                x.AmountPaid < chargeableAmounts[x.OrderId] && x.OrderStatus != "Cancelled"
+            )
             .ToList();
         if (unpaidOrders.Count == 0)
         {
@@ -85,7 +88,7 @@ public sealed partial class DiningService
                 ? unpaidOrders
                     .Select(order => new CheckoutOrderAllocation(
                         order.OrderId,
-                        order.Amount - order.AmountPaid
+                        chargeableAmounts[order.OrderId] - order.AmountPaid
                     ))
                     .ToList()
                 : request.Allocations;
@@ -96,7 +99,7 @@ public sealed partial class DiningService
             || allocations.Any(allocation =>
                 !unpaidOrders.Any(order =>
                     order.OrderId == allocation.OrderId
-                    && allocation.Amount <= order.Amount - order.AmountPaid
+                    && allocation.Amount <= chargeableAmounts[order.OrderId] - order.AmountPaid
                 )
             )
         )
@@ -123,6 +126,24 @@ public sealed partial class DiningService
         decimal changeAmount = amountReceived - amountDue;
 
         string? authorization = httpContext.Authorization;
+        foreach (DiningSessionOrder order in unpaidOrders)
+        {
+            DiningPaymentResult adjusted = await payments.AdjustAmountAsync(
+                order.OrderId,
+                chargeableAmounts[order.OrderId],
+                authorization,
+                ct
+            );
+            if (!adjusted.Succeeded)
+            {
+                return DiningResults.Conflict(
+                    new
+                    {
+                        detail = $"No se pudo actualizar el importe del pedido '{order.OrderId}' para aplicar el descuento.",
+                    }
+                );
+            }
+        }
         decimal allocatedTip = 0;
         for (int index = 0; index < allocations.Count; index++)
         {
@@ -153,7 +174,10 @@ public sealed partial class DiningService
                         ? $"DINING-{session.Id:N}"
                         : request.ExternalReference.Trim(),
                     allocation.Amount + tip + (index == 0 ? changeAmount : 0),
-                    session.Id
+                    session.Id,
+                    session.DiscountPercentage > 0 ? "Descuento" : null,
+                    session.DiscountPercentage,
+                    order.Amount - chargeableAmounts[order.OrderId]
                 ),
                 authorization,
                 ct
@@ -170,7 +194,8 @@ public sealed partial class DiningService
             }
             order.AmountPaid = response.AmountPaid;
             order.TipPaid = response.TipAmountPaid;
-            order.PaymentStatus = order.AmountPaid >= order.Amount ? "Paid" : "PartiallyPaid";
+            order.PaymentStatus =
+                order.AmountPaid >= chargeableAmounts[order.OrderId] ? "Paid" : "PartiallyPaid";
             order.UpdatedAtUtc = time.GetUtcNow().UtcDateTime;
         }
 
@@ -183,6 +208,13 @@ public sealed partial class DiningService
 
     private static object BillResponse(DiningSession session)
     {
+        Dictionary<Guid, decimal> chargeableAmounts = ChargeableAmounts(session);
+        decimal consumption = session
+            .Orders.Where(x => x.OrderStatus != "Cancelled")
+            .Sum(x => chargeableAmounts[x.OrderId]);
+        decimal discountAmount =
+            session.Orders.Where(x => x.OrderStatus != "Cancelled").Sum(x => x.Amount)
+            - consumption;
         return new
         {
             session.Id,
@@ -193,13 +225,25 @@ public sealed partial class DiningService
             session.Status,
             session.PaymentMethod,
             session.PaidAtUtc,
-            total = session.Orders.Sum(x => x.Amount + x.TipPaid),
+            total = consumption + session.Orders.Sum(x => x.TipPaid),
+            session.DiscountPercentage,
+            discountAmount = Math.Max(0, discountAmount),
             tipTotal = session.Orders.Sum(x => x.TipPaid),
             outstanding = session
                 .Orders.Where(x => x.OrderStatus != "Cancelled")
-                .Sum(x => Math.Max(0, x.Amount - x.AmountPaid)),
-            canCheckout = session.CanCheckout,
-            canRelease = session.CanRelease,
+                .Sum(x => Math.Max(0, chargeableAmounts[x.OrderId] - x.AmountPaid)),
+            canCheckout = session.Status == "Open"
+                && session.Orders.Any(order =>
+                    order.OrderStatus != "Cancelled"
+                    && order.AmountPaid < chargeableAmounts[order.OrderId]
+                ),
+            canRelease = session.Status == "Open"
+                && session.Orders.Count > 0
+                && session.Orders.All(order => order.OrderStatus is "Delivered" or "Cancelled")
+                && session.Orders.All(order =>
+                    order.AmountPaid >= chargeableAmounts[order.OrderId]
+                    || order.OrderStatus == "Cancelled"
+                ),
             orders = session
                 .Orders.OrderBy(x => x.AddedAtUtc)
                 .Select(x => new
@@ -207,11 +251,20 @@ public sealed partial class DiningService
                     x.OrderId,
                     x.OrderStatus,
                     x.PaymentStatus,
-                    x.Amount,
+                    amount = chargeableAmounts[x.OrderId],
                     x.AmountPaid,
                     x.TipPaid,
                     x.AddedAtUtc,
                 }),
         };
+    }
+
+    private static Dictionary<Guid, decimal> ChargeableAmounts(DiningSession session)
+    {
+        decimal factor = 1m - session.DiscountPercentage / 100m;
+        return session.Orders.ToDictionary(
+            order => order.OrderId,
+            order => Math.Round(order.Amount * factor, 2, MidpointRounding.AwayFromZero)
+        );
     }
 }

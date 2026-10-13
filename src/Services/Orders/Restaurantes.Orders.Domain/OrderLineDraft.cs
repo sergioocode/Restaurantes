@@ -12,5 +12,7 @@ public sealed record OrderLineDraft(
     string PreparationStationName,
     bool RequiresPrimaryDispatch,
     int Priority,
-    string Format = ""
+    string Format = "",
+    decimal? BaseUnitPrice = null,
+    IReadOnlyList<OrderLineExtra>? Extras = null
 );

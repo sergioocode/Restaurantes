@@ -53,6 +53,8 @@ public partial class Home
     private string extraDialogFormat = "PLATO";
     private decimal extraDialogPrice;
     private SessionBillResponse? bill;
+    private bool discountDialogOpen;
+    private string discountPercentageInput = string.Empty;
     private string? billLoadError;
     private bool billOpen;
     private bool accountPreviewOpen;
@@ -339,21 +341,6 @@ public partial class Home
         pickupView = false;
         BackToTables();
         message = null;
-    }
-
-    private async Task RestaurantChanged(ChangeEventArgs args)
-    {
-        if (!Guid.TryParse(args.Value?.ToString(), out Guid value))
-        {
-            return;
-        }
-
-        restaurantId = value;
-        selectedZoneId = null;
-        pickupView = false;
-        BackToTables();
-        await LoadTables();
-        await ConnectRealtimeAsync();
     }
 
     private async Task LoadTables()
@@ -1143,6 +1130,80 @@ public partial class Home
             billLoadError = exception.Message;
             throw;
         }
+    }
+
+    private void OpenDiscountDialog()
+    {
+        if (bill is null || busy || bill.Orders.Any(order => order.AmountPaid > 0))
+            return;
+        discountPercentageInput =
+            bill.DiscountPercentage > 0
+                ? bill.DiscountPercentage.ToString(
+                    "0.##",
+                    System.Globalization.CultureInfo.InvariantCulture
+                )
+                : string.Empty;
+        discountDialogOpen = true;
+    }
+
+    private void CloseDiscountDialog() => discountDialogOpen = false;
+
+    private async Task ApplyDiscountPercentage(decimal percentage)
+    {
+        if (bill is null || session is null || busy || percentage is < 0 or > 99.99m)
+            return;
+        if (percentage == 0 && bill.DiscountPercentage == 0)
+        {
+            discountDialogOpen = false;
+            success = true;
+            message = "No hay ningún descuento aplicado.";
+            return;
+        }
+        await Run(
+            async () =>
+            {
+                bill = await Api.SetDiscountAsync(session.Id, percentage);
+                currentChargeAmount = bill.Outstanding;
+                SyncPaymentAmounts();
+                success = true;
+                message =
+                    percentage == 0
+                        ? "Descuento quitado de la cuenta."
+                        : "Descuento aplicado a la cuenta.";
+                discountDialogOpen = false;
+            },
+            false
+        );
+    }
+
+    private async Task ApplyManualDiscount()
+    {
+        if (
+            !decimal.TryParse(
+                discountPercentageInput,
+                System.Globalization.NumberStyles.Number,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out decimal percentage
+            )
+            && !decimal.TryParse(
+                discountPercentageInput,
+                System.Globalization.NumberStyles.Number,
+                System.Globalization.CultureInfo.CurrentCulture,
+                out percentage
+            )
+        )
+        {
+            message = "Indica un porcentaje válido.";
+            success = false;
+            return;
+        }
+        if (percentage is <= 0 or > 99.99m)
+        {
+            message = "El porcentaje debe ser mayor que 0 y no superar el 99,99 %.";
+            success = false;
+            return;
+        }
+        await ApplyDiscountPercentage(percentage);
     }
 
     private static bool CanCancelLine(

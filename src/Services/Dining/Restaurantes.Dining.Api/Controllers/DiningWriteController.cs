@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Restaurantes.Dining.Application;
+using Restaurantes.Dining.Contracts.Requests;
 using Restaurantes.Security;
 
 namespace Restaurantes.Dining.Api.Controllers;
@@ -105,6 +106,16 @@ public sealed class DiningWriteController(DiningService service, IConfiguration 
                 ct
             )
         );
+    }
+
+    [HttpPut("sessions/{sessionId:guid}/discount")]
+    public Task<IActionResult> SetSessionDiscount(
+        Guid sessionId,
+        SetSessionDiscountRequest request,
+        CancellationToken ct
+    )
+    {
+        return Execute(() => service.SetSessionDiscount(sessionId, request, User, ct));
     }
 
     [HttpPost("sessions/{sessionId:guid}/close")]
