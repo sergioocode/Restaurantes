@@ -729,8 +729,8 @@ WITH restaurants("RestaurantId") AS (
         ('CHEF', 'Vista completa', true, false, 0),
         ('ENTRANTES', 'Entrantes', false, true, 1),
         ('BEBIDAS', 'Bebidas', false, false, 1),
-        ('PASTAS', 'Pastas', false, false, 2),
-        ('CARNES', 'Carnes', false, false, 2),
+        ('PASTAS', 'Pastas', false, true, 2),
+        ('CARNES', 'Carnes', false, true, 2),
         ('POSTRES', 'Postres', false, false, 3)
 ), inserted AS (
     INSERT INTO restaurant_kitchen_stations (
