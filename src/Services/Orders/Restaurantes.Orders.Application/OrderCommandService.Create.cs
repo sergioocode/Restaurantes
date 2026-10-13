@@ -11,7 +11,8 @@ public sealed partial class OrderCommandService
         CreateOrderRequest request,
         string customerAccessToken,
         OrderCashRegisterSession cashSession,
-        CancellationToken ct
+        CancellationToken ct,
+        Guid? createdByUserId = null
     )
     {
         if (
@@ -191,7 +192,8 @@ public sealed partial class OrderCommandService
                 order.Version,
                 now,
                 Lines(order),
-                Stations(order)
+                Stations(order),
+                createdByUserId
             ),
             ct
         );

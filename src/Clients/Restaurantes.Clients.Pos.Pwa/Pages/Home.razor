@@ -332,9 +332,13 @@
                                     <article>
                                         <div class="bill-order-heading">
                                             <strong>Comanda @order.OrderId.ToString()[..8]</strong>
-                                            <span>@order.OrderStatus</span>
-                                            <span>@order.PaymentStatus</span>
                                             <small>@order.AddedAtUtc.ToLocalTime().ToString("HH:mm")</small>
+                                        </div>
+                                        <div class="bill-order-meta">
+                                            <div class="bill-order-statuses">
+                                                <span>@order.OrderStatus</span>
+                                                <span>@order.PaymentStatus</span>
+                                            </div>
                                             <strong>@((order.Amount + order.TipPaid).ToString("0.00")) €</strong>
                                         </div>
                                         @if (order.TipPaid > 0)
@@ -349,7 +353,8 @@
                                                     <div class="bill-line @(line.Status == "Cancelled" ? "cancelled" : "")">
                                                         @if (line.Status != "Cancelled")
                                                         {
-                                                            <span>@line.Quantity × @line.ProductName@(!string.IsNullOrEmpty(line.Format) ? $" · {FormatLabel(line.Format)}" : "") · @line.PreparationStationName <small class="line-kitchen @KitchenLineStatusClass(line.KitchenStatus)" title="@KitchenLineStatusLabel(line.KitchenStatus)" aria-label="@KitchenLineStatusLabel(line.KitchenStatus)">@KitchenLineStatusIcon(line.KitchenStatus)</small></span>
+                                                            <span>@line.Quantity × @line.ProductName@(!string.IsNullOrEmpty(line.Format) ? $" · {FormatLabel(line.Format)}" : "") · @line.PreparationStationName</span>
+                                                            <small class="line-kitchen @KitchenLineStatusClass(line.KitchenStatus)" title="@KitchenLineStatusLabel(line.KitchenStatus)" aria-label="@KitchenLineStatusLabel(line.KitchenStatus)">@KitchenLineStatusIcon(line.KitchenStatus)</small>
                                                         }
                                                         else
                                                         {
@@ -364,6 +369,13 @@
                                                             <small>Cancelado · @line.CancellationReason</small>
                                                         }
                                                     </div>
+                                                    @if (line.Status != "Cancelled")
+                                                    {
+                                                        @foreach (OrderLineExtraResponse extra in line.Extras ?? [])
+                                                        {
+                                                            <div class="bill-line-extra"><span>↳ @(line.Quantity * extra.Quantity) × @extra.ProductName</span><strong>@((line.Quantity * extra.Quantity * extra.UnitPrice).ToString("0.00")) €</strong></div>
+                                                        }
+                                                    }
                                                 }
                                             </div>
                                         }

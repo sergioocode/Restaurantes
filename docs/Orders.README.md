@@ -228,7 +228,7 @@ El consumer mantiene dentro de `orders_write` una proyección local de:
 
 Esta decisión reduce el acoplamiento temporal entre Orders y Catalog durante la creación del pedido. Catalog sigue siendo el propietario del dato; Orders conserva únicamente la información necesaria para ejecutar su propio dominio.
 
-Los precios y nombres que se incorporan a las líneas quedan almacenados como **snapshot del momento del pedido**, por lo que un cambio posterior en Catalog no modifica retroactivamente pedidos existentes.
+Los precios y nombres que se incorporan a las líneas quedan almacenados como **snapshot del momento del pedido**, por lo que un cambio posterior en Catalog no modifica retroactivamente pedidos existentes. Cada extra seleccionado conserva su nombre, cantidad y precio unitario en una instantánea independiente. Su importe se añade al total del pedido y se muestra separado del precio del plato, en una fila bajo este, en los tickets de venta.
 
 ## Cocina multiestación
 

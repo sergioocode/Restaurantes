@@ -179,6 +179,11 @@ public sealed class OrdersReadController(
         bool canManageOrder =
             User.Identity?.IsAuthenticated == true
             && User.CanManageOrder(order.RestaurantId, order.Source);
+        bool canReadDiningSessionOrder = User.CanReadDiningSessionOrder(
+            order.RestaurantId,
+            order.Source,
+            order.DiningSessionId
+        );
         if (order.Source == "CustomerQr" && !canManageOrder)
         {
             ObjectResult? denied = QrNetworkAccess.DeniedResult(HttpContext, configuration);
@@ -201,7 +206,7 @@ public sealed class OrdersReadController(
                 cancellationToken
             );
         }
-        else if (!canManageOrder)
+        else if (!canManageOrder && !canReadDiningSessionOrder)
         {
             return Forbid();
         }

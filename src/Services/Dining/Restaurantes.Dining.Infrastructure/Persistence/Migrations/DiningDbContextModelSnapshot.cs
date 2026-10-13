@@ -150,6 +150,14 @@ namespace Restaurantes.Dining.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("DiningSessionId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
                     b.Property<string>("OrderStatus")
                         .IsRequired()
                         .HasMaxLength(30)

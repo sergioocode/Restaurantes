@@ -14,5 +14,15 @@ public sealed record OrderLineDetailResponse(
     string KitchenStatus = "Pending",
     DateTime? PreparationStartedAtUtc = null,
     DateTime? ReadyAtUtc = null,
-    DateTime? DispatchedAtUtc = null
+    DateTime? DispatchedAtUtc = null,
+    string Format = "",
+    decimal? BaseUnitPrice = null,
+    IReadOnlyList<OrderLineExtraResponse>? Extras = null
+);
+
+public sealed record OrderLineExtraResponse(
+    Guid ProductId,
+    string ProductName,
+    decimal UnitPrice,
+    int Quantity
 );

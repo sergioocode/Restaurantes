@@ -110,6 +110,8 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
         {
             OrderId = e.OrderId,
             DiningSessionId = e.DiningSessionId.Value,
+            Source = e.Source,
+            CreatedByUserId = e.CreatedByUserId,
             PaymentStatus =
                 pending is null || pending.AmountPaid <= 0 ? "Unpaid"
                 : pending.AmountPaid >= e.Lines.Sum(x => x.UnitPrice * x.Quantity) ? "Paid"

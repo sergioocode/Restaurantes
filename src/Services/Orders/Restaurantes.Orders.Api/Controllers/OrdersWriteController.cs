@@ -63,6 +63,17 @@ public sealed class OrdersWriteController(
         }
         try
         {
+            Guid? createdByUserId = Guid.TryParse(
+                User.FindFirst(ClaimTypes.NameIdentifier)?.Value,
+                out Guid userId
+            )
+                ? userId
+                : null;
+            if (request.Source == nameof(OrderSource.Comandero) && createdByUserId is null)
+            {
+                return Forbid();
+            }
+
             await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(
                 cancellationToken
             );
@@ -74,7 +85,8 @@ public sealed class OrdersWriteController(
                 request,
                 customerAccessToken ?? string.Empty,
                 cashSession,
-                cancellationToken
+                cancellationToken,
+                createdByUserId
             );
             await transaction.CommitAsync(cancellationToken);
             return Accepted($"/api/orders/{order.Id}", order);

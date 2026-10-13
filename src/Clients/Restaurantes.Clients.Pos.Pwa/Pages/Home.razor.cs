@@ -229,6 +229,7 @@ public partial class Home
     protected override async Task OnInitializedAsync()
     {
         Realtime.OrderUpdated += HandleOrderUpdated;
+        Realtime.DiningTableUpdated += HandleDiningTableUpdated;
         CatalogRealtime.MenuChanged += HandleMenuChanged;
         try
         {
@@ -550,6 +551,10 @@ public partial class Home
             session = table.ActiveSessionId.HasValue
                 ? await Api.ActiveSessionAsync(table.Id)
                 : await Api.OpenSessionAsync(table.Id);
+            if (guestCountSessionOpenedHere)
+            {
+                await Realtime.NotifyDiningTableUpdatedAsync();
+            }
             guestCount = session.GuestCount;
             guestCountDraft = guestCount ?? 2;
             guestCountDialogOpen = session.RequestGuestCount && session.GuestCount is null;
@@ -573,6 +578,7 @@ public partial class Home
         await Run(async () =>
         {
             session = await Api.SetGuestCountAsync(session.Id, guestCountDraft);
+            await Realtime.NotifyDiningTableUpdatedAsync();
             guestCount = session.GuestCount;
             menu = await Api.MenuAsync(restaurantId);
             menuRefreshVersion++;
@@ -589,6 +595,7 @@ public partial class Home
             await Run(async () =>
             {
                 await Api.CancelSessionAsync(session.Id);
+                await Realtime.NotifyDiningTableUpdatedAsync();
                 BackToTables();
                 await LoadOperationalData();
             });
@@ -1063,6 +1070,7 @@ public partial class Home
             async () =>
             {
                 await Api.CancelSessionAsync(session.Id);
+                await Realtime.NotifyDiningTableUpdatedAsync();
                 success = true;
                 message = "Apertura cancelada y ubicación liberada.";
                 BackToTables();
@@ -1074,7 +1082,7 @@ public partial class Home
 
     private async Task BackFromTableOrder()
     {
-        if (HasLocation && !hasSessionOrders)
+        if (HasLocation && guestCountSessionOpenedHere && !hasSessionOrders)
         {
             await CancelSession();
             return;
@@ -1521,6 +1529,7 @@ public partial class Home
             async () =>
             {
                 await Api.ReleaseSessionAsync(session.Id);
+                await Realtime.NotifyDiningTableUpdatedAsync();
                 success = true;
                 message = "Mesa liberada desde TPV.";
                 BackToTables();
@@ -1838,6 +1847,11 @@ public partial class Home
         return ScheduleRealtimeRefresh(notification.RestaurantId);
     }
 
+    private Task HandleDiningTableUpdated(Guid changedRestaurantId)
+    {
+        return ScheduleRealtimeRefresh(changedRestaurantId);
+    }
+
     private async Task HandleMenuChanged(Guid changedRestaurantId)
     {
         if (
@@ -2003,6 +2017,7 @@ public partial class Home
     public async ValueTask DisposeAsync()
     {
         Realtime.OrderUpdated -= HandleOrderUpdated;
+        Realtime.DiningTableUpdated -= HandleDiningTableUpdated;
         CatalogRealtime.MenuChanged -= HandleMenuChanged;
         if (realtimeRefresh is not null)
         {
