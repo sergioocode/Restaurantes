@@ -21,8 +21,7 @@ public sealed class AddDiningOrderOwnership : Migration
             table: "dining_session_orders",
             type: "character varying(30)",
             maxLength: 30,
-            nullable: false,
-            defaultValue: "Legacy"
+            nullable: false
         );
     }
 
