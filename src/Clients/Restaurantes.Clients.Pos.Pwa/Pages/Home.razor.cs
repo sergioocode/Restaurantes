@@ -451,6 +451,26 @@ public partial class Home
         }
     }
 
+    private async Task RestaurantChanged(ChangeEventArgs args)
+    {
+        if (
+            !Guid.TryParse(args.Value?.ToString(), out Guid value)
+            || value == restaurantId
+            || restaurants.All(restaurant => restaurant.Id != value)
+        )
+        {
+            return;
+        }
+
+        restaurantId = value;
+        selectedZoneId = null;
+        pickupView = false;
+        selectedPickup = null;
+        pickupDetail = null;
+        await Run(LoadOperationalData);
+        await ConnectRealtimeAsync();
+    }
+
     private async Task LoadOperationalData()
     {
         SetTables(await Api.TablesAsync(restaurantId));

@@ -3,6 +3,7 @@ import { orderDestinationLabel, OrderRenderer, productFormatLabel } from './orde
 import { KdsRealtimeClient } from './realtime-client.js';
 
 const sessionKey = 'restaurantes.kds.login';
+const restaurantKey = 'restaurantes.kds.restaurant';
 const apiBaseUrl = window.location.origin;
 const authLoading = document.querySelector('#authLoading');
 const loginPanel = document.querySelector('#loginPanel');
@@ -14,9 +15,9 @@ const historyButton = document.querySelector('#historyButton');
 const historyPanel = document.querySelector('#historyPanel');
 const historyList = document.querySelector('#historyList');
 const logoutButton = document.querySelector('#logout');
+const restaurantSelect = document.querySelector('#restaurantId');
 const stationSelect = document.querySelector('#stationCode');
 const status = document.querySelector('#connectionStatus');
-const assignedRestaurantName = document.querySelector('#assignedRestaurantName');
 const assignedUserName = document.querySelector('#assignedUserName');
 const eventText = document.querySelector('#event');
 const ordersElement = document.querySelector('#orders');
@@ -187,8 +188,6 @@ function addOption(select, value, text, statusText = text) {
 }
 
 function updateRestaurantIdentity() {
-  const access = restaurantAccesses.find(item => item.restaurantId === selectedRestaurantId);
-  assignedRestaurantName.textContent = access?.name || access?.restaurantId || '';
   assignedUserName.textContent = login?.user?.displayName || login?.user?.username || '';
 }
 
@@ -204,6 +203,7 @@ async function loadStationsAndConnect() {
   setStatus(false, 'Cargando estaciones…');
   try {
     const stations = await api.getStations(restaurantId);
+    if (restaurantId !== selectedRestaurantId) return;
     const activeStations = stations
       .filter(item => item.isActive)
       .sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name));
@@ -232,6 +232,7 @@ async function loadStationsAndConnect() {
     eventText.textContent = '';
     connect();
   } catch (error) {
+    if (restaurantId !== selectedRestaurantId) return;
     eventText.textContent = error.message;
     setStatus(false, 'No se pudieron cargar las estaciones');
   }
@@ -266,7 +267,19 @@ async function activateLogin(loginResponse) {
   if (restaurantAccesses.length === 0) {
     throw new Error('El usuario no tiene acceso KDS en ningún local.');
   }
-  selectedRestaurantId = restaurantAccesses[0].restaurantId;
+  restaurantSelect.replaceChildren();
+  for (const access of restaurantAccesses) {
+    const label = access.name
+      ? access.name + (access.code ? ' · ' + access.code : '')
+      : access.restaurantId + ' · ' + access.role;
+    addOption(restaurantSelect, access.restaurantId, label);
+  }
+  const remembered = localStorage.getItem(restaurantKey);
+  selectedRestaurantId = restaurantAccesses.some(access => access.restaurantId === remembered)
+    ? remembered
+    : restaurantAccesses[0].restaurantId;
+  restaurantSelect.value = selectedRestaurantId;
+  restaurantSelect.disabled = restaurantAccesses.length <= 1;
   updateRestaurantIdentity();
   await loadStationsAndConnect();
 }
@@ -336,7 +349,8 @@ function logout() {
   loginPanel.classList.remove('hidden');
   monitorPanel.classList.add('hidden');
   refreshButton.disabled = true;
-  assignedRestaurantName.textContent = '';
+  restaurantSelect.replaceChildren();
+  restaurantSelect.disabled = true;
   assignedUserName.textContent = '';
   eventText.textContent = '';
   clearOrdersView('Accede para cargar el monitor.');
@@ -376,6 +390,14 @@ historyButton.addEventListener('click', () => {
   else openHistory();
 });
 logoutButton.addEventListener('click', logout);
+restaurantSelect.addEventListener('change', () => {
+  const restaurantId = restaurantSelect.value;
+  if (!restaurantAccesses.some(access => access.restaurantId === restaurantId)) return;
+  selectedRestaurantId = restaurantId;
+  localStorage.setItem(restaurantKey, restaurantId);
+  pendingOrders.clear();
+  loadStationsAndConnect();
+});
 stationSelect.addEventListener('change', () => {
   closeHistory();
   localStorage.setItem('restaurantes.kds.station.' + selectedRestaurantId, stationSelect.value);

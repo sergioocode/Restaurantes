@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Restaurantes.Clients.Commander.Pwa.Api;
 using Restaurantes.Clients.Commander.Pwa.Models;
@@ -74,7 +75,10 @@ public partial class Home
         get
         {
             if (bill is null)
+            {
                 return [];
+            }
+
             SortedDictionary<decimal, decimal> grossByRate = [];
             bool hasUnratedLines = false;
             foreach (
@@ -99,12 +103,14 @@ public partial class Home
                         (line.BaseUnitPrice ?? line.UnitPrice) * line.Quantity
                     );
                     foreach (OrderLineExtraResponse extra in line.Extras ?? [])
+                    {
                         AddTaxableAmount(
                             grossByRate,
                             ref hasUnratedLines,
                             extra.TaxRate,
                             line.Quantity * extra.Quantity * extra.UnitPrice
                         );
+                    }
                 }
             }
             return BuildTaxBreakdown(
@@ -137,8 +143,11 @@ public partial class Home
     )
     {
         if (hasUnratedLines || grossByRate.Count == 0)
+        {
             return [];
-        decimal factor = 1m - discountPercentage / 100m;
+        }
+
+        decimal factor = 1m - (discountPercentage / 100m);
         return grossByRate
             .Select(pair =>
             {
@@ -298,8 +307,10 @@ public partial class Home
             )
         );
 
-    private bool IsOwnCommanderOrder(SessionBillOrderResponse order) =>
-        order.Source == "Comandero" && order.CreatedByUserId == login?.User.Id;
+    private bool IsOwnCommanderOrder(SessionBillOrderResponse order)
+    {
+        return order.Source == "Comandero" && order.CreatedByUserId == login?.User.Id;
+    }
 
     private bool HasSessionOrders
     {
@@ -423,6 +434,24 @@ public partial class Home
         {
             restaurantId = restaurants[0].Id;
         }
+    }
+
+    private async Task RestaurantChanged(ChangeEventArgs args)
+    {
+        if (
+            !Guid.TryParse(args.Value?.ToString(), out Guid value)
+            || value == restaurantId
+            || restaurants.All(restaurant => restaurant.Id != value)
+        )
+        {
+            return;
+        }
+
+        restaurantId = value;
+        selectedZoneId = null;
+        BackToTables();
+        await LoadTables();
+        await ConnectRealtimeAsync();
     }
 
     private async Task LoadOperationalData()
@@ -890,25 +919,15 @@ public partial class Home
     private void PressPaymentKey(string key)
     {
         string next = paymentKeypadText;
-        if (key == "Borrar")
-        {
-            next = "0";
-        }
-        else
-        {
-            next =
-                key == ","
-                    ? paymentKeypadStartNew
-                        ? "0,"
-                        : next.Contains(',')
-                            ? next
-                            : next + ","
-                    : paymentKeypadStartNew
-                        ? key
-                        : next == "0"
-                            ? key
-                            : next + key;
-        }
+        next =
+            key == "Borrar" ? "0"
+            : key == ","
+                ? paymentKeypadStartNew ? "0,"
+                    : next.Contains(',') ? next
+                    : next + ","
+            : paymentKeypadStartNew ? key
+            : next == "0" ? key
+            : next + key;
 
         if (
             next.Length > 10
@@ -1081,7 +1100,10 @@ public partial class Home
             && line.KitchenStatus == "Pending";
     }
 
-    private static bool IsPosOrder(SessionBillOrderResponse billOrder) => billOrder.Source == "Pos";
+    private static bool IsPosOrder(SessionBillOrderResponse billOrder)
+    {
+        return billOrder.Source == "Pos";
+    }
 
     private static string KitchenLineStatusLabel(string status)
     {

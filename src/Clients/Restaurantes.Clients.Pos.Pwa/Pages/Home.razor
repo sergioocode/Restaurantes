@@ -44,7 +44,15 @@
                 <strong>@login.User.DisplayName</strong>
             </div>
             <div class="top-actions">
-                <span class="current-restaurant">@CurrentRestaurant?.Name</span>
+                <label class="restaurant-picker">
+                    <span>Local</span>
+                    <select value="@restaurantId" @onchange="RestaurantChanged" disabled="@(busy || restaurants.Count <= 1 || selectedTable is not null || takeawayOpen || pickupBillOpen || billOpen || paymentDialogOpen || accountPreviewOpen || salesTicketOpen)">
+                        @foreach (RestaurantResponse restaurant in restaurants)
+                        {
+                            <option value="@restaurant.Id">@restaurant.Name</option>
+                        }
+                    </select>
+                </label>
                 <button class="cash-status @(CashRegisterOpen ? "open" : "closed")" @onclick="OpenCashRegisterPanel">
                     <span>Caja · @(CashRegisterOpen ? "abierta" : "cerrada")</span>
                     @if (CashRegisterOpen && cashRegister is not null)
