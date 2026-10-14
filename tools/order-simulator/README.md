@@ -1,26 +1,24 @@
 # Simulador de pedidos
 
-Herramienta local para generar pedidos en dos restaurantes a través del Gateway privado. Crea pedidos POS en mesas libres, avanza cada línea por las operaciones normales del KDS, entrega la comanda, registra el cobro y libera la mesa. No accede directamente a la base de datos ni publica eventos por su cuenta.
+Herramienta local para generar pedidos en todos los restaurantes configurados a través del Gateway privado. Crea pedidos POS en mesas libres, avanza cada línea por las operaciones normales del KDS, entrega la comanda, registra el cobro y libera la mesa. No accede directamente a la base de datos ni publica eventos por su cuenta.
 
 ## Preparar la configuración
 
 1. Copia `simulator.sample.json` como `simulator.local.json`.
-2. Sustituye los dos `RestaurantId` por los IDs de BCN y del otro local.
+2. Incluye todos los locales de desarrollo que quieras simular. El seed actual configura Madrid Centro, Madrid Norte, Barcelona Centro, Valencia Centro y Sevilla Centro.
 3. Ajusta los productos máximos, los métodos de pago y las propinas.
 4. Configura `OpeningFloat` si quieres un fondo inicial distinto de cero.
-5. Pega los tokens locales de TPV y KDS en `PosAccessToken` y `KdsAccessToken` para cada restaurante. El token de TPV necesita permisos para gestionar caja y catálogo, crear pedidos, gestionar/entregar pedidos, consultar mesas, cobrar y liberar mesas; el de KDS necesita permiso para usar KDS.
+5. Pega un token de una cuenta Admin con alcance `Todos los Locales` en `AccessToken`. Admin tiene permisos para usar TPV, KDS, caja, pedidos, cobros y liberación de mesas en todos los locales.
 
-`simulator.sample.json` contiene los campos de token vacíos. La herramienta lee los cuatro tokens desde `simulator.local.json`, que está excluido de Git; no los solicita por consola ni los escribe en logs. Si falta un campo, informa su nombre y se detiene. Si la URL de la API no es local, el programa también se detiene por seguridad; para otra URL hay que cambiar explícitamente `AllowNonLocalApi` en la configuración.
+`simulator.sample.json` contiene el token vacío. La herramienta lee el token desde `simulator.local.json`, que está excluido de Git; no lo solicita por consola ni lo escribe en logs. Si falta, informa el nombre del campo y se detiene. Si la URL de la API no es local, el programa también se detiene por seguridad; para otra URL hay que cambiar explícitamente `AllowNonLocalApi` en la configuración.
 
-Para obtenerlos en el equipo de desarrollo, inicia sesión en TPV o KDS, abre las herramientas del navegador (F12 → Consola) y ejecuta el comando correspondiente. Pega el valor en el campo correspondiente de `simulator.local.json`.
+Para obtenerlo en el equipo de desarrollo, inicia sesión como Admin en TPV, abre las herramientas del navegador (F12 → Consola) y ejecuta:
 
 ```javascript
-// TPV
 copy(JSON.parse(sessionStorage.getItem('restaurantes.pos.login')).accessToken)
-
-// KDS
-copy(JSON.parse(sessionStorage.getItem('restaurantes.kds.login')).accessToken)
 ```
+
+Pega el valor en `AccessToken`. El mismo token se usa para los flujos de TPV y KDS y para cada restaurante configurado; no necesitas un usuario separado por local.
 
 ## Ejecutar
 
@@ -30,11 +28,11 @@ Desde la raíz del repositorio:
 dotnet run --project tools/order-simulator/Restaurantes.OrderSimulator -- --config tools/order-simulator/simulator.local.json
 ```
 
-El `ApiBaseUrl` de ejemplo apunta al Gateway privado de desarrollo (`http://localhost:5001`). Abre los KDS en ambos locales para observar los cambios. `Ctrl+C` detiene la creación de pedidos nuevos y deja terminar los pedidos que ya están en curso.
+El `ApiBaseUrl` de ejemplo apunta al Gateway privado de desarrollo (`http://localhost:5001`). Abre los KDS de los locales configurados para observar los cambios. `Ctrl+C` detiene la creación de pedidos nuevos y deja terminar los pedidos que ya están en curso.
 
-Antes de generar pedidos, valida el acceso de TPV y KDS de ambos locales, además de sus menús, mesas y cajas. Si un local no supera la validación, no inicia pedidos en ninguno. Después abre automáticamente la caja de cada local con su `OpeningFloat`; si ya está abierta, la reutiliza. La deja abierta al finalizar.
+Antes de generar pedidos, valida el acceso de TPV y KDS de todos los locales configurados, además de sus menús, mesas y cajas. Si un local no supera la validación, no inicia pedidos en ninguno. Después abre automáticamente la caja de cada local con su `OpeningFloat`; si ya está abierta, la reutiliza. La deja abierta al finalizar.
 
-Durante `RunDurationMinutes` (10 minutos de forma predeterminada), cada local consulta cada segundo las mesas disponibles y lanza pedidos hasta cubrir `OrdersPerBatch` flujos simultáneos (20 por local de forma predeterminada). Al pagar y liberar una mesa, vuelve a entrar en la rotación. Cuando acaba el tiempo o se pulsa `Ctrl+C`, no inicia más pedidos y espera a que terminen los que siguen activos. No hay límite total de pedidos ni espera de tres minutos entre tandas; el total depende del ritmo al que se completen y liberen mesas. Todos los mensajes de consola incluyen fecha, hora local, milisegundos y zona horaria.
+Durante `RunDurationMinutes` (10 minutos de forma predeterminada), cada local consulta cada segundo las mesas disponibles y lanza pedidos hasta cubrir `OrdersPerBatch` flujos simultáneos (20 por local de forma predeterminada). `MaxConcurrentOrders` limita cuántos pedidos de todos los locales avanzan a la vez (10 de forma predeterminada); entre los locales con pedidos esperando, el simulador elige aleatoriamente cuál avanza, dejando margen para las conexiones de los servicios y otras herramientas locales. Al pagar y liberar una mesa, vuelve a entrar en la rotación. Cuando acaba el tiempo o se pulsa `Ctrl+C`, no inicia más pedidos y espera a que terminen los que siguen activos. No hay límite total de pedidos ni espera de tres minutos entre tandas; el total depende del ritmo al que se completen y liberen mesas. Todos los mensajes de consola incluyen fecha, hora local, milisegundos y zona horaria.
 
 ## Comportamiento aleatorio
 
@@ -43,7 +41,7 @@ Durante `RunDurationMinutes` (10 minutos de forma predeterminada), cada local co
 - Avanza cada línea por los estados visibles del KDS: en preparación y lista. Espera `KitchenStepDelaySeconds` (2 segundos de forma predeterminada) antes de marcarla lista, deja ese mismo intervalo para ver todos los platos listos y espera entre los pases despachados por el KDS principal. Las estaciones con `RequiresPrimaryDispatch` solo se despachan cuando están en `Ready`, en orden de prioridad; las demás se despachan al marcarlas listas. Comprueba que cada plato activo termine `Dispatched` y que el pedido esté `Ready` antes de entregarlo, cobrarlo y liberar la mesa.
 - Con `SplitProbability` puede dividir la cuenta entre comensales y pagarla usando `Card`, `Cash` y `Transfer`; los pedidos divididos combinan los tres medios. `Methods.Weight` controla la frecuencia en el resto de pagos.
 - Elige una propina positiva de `TipPercentages` en todos los pedidos, la reparte entre los pagos y puede registrar cambio cuando el medio es efectivo. Transferencia siempre se paga exacta, según las reglas de TPV.
-- `OrdersPerBatch` controla cuántos pedidos mantiene simultáneamente por local; con el valor predeterminado de 20 puede haber hasta 40 entre ambos. `RunDurationMinutes` determina durante cuánto tiempo acepta pedidos nuevos. Un pedido se paga solo después de confirmar el despacho KDS y el estado `Ready`; al completar el pago se cierra la sesión y la mesa vuelve a estar disponible para la siguiente ronda.
+- `OrdersPerBatch` controla cuántos pedidos mantiene en rotación cada local. `MaxConcurrentOrders` fija el máximo global de pedidos que ejecutan su ciclo a la vez y selecciona aleatoriamente entre los locales que tienen pedidos esperando. `RunDurationMinutes` determina durante cuánto tiempo acepta pedidos nuevos. Un pedido se paga solo después de confirmar el despacho KDS y el estado `Ready`; al completar el pago se cierra la sesión y la mesa vuelve a estar disponible para la siguiente ronda.
 - `KitchenStepDelaySeconds` controla cuánto se muestran los pasos de preparación KDS; admite valores de 1 a 30 segundos.
 - `RandomSeed` ayuda a repetir selecciones y repartos durante la depuración; la concurrencia puede cambiar el orden exacto de las operaciones.
 
