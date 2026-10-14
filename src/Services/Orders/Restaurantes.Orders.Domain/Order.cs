@@ -135,9 +135,9 @@ public sealed class Order
             order._lines.Add(OrderLine.Create(orderId, draft));
         }
         foreach (
-            IGrouping<string, OrderLine> stationLines in order._lines.GroupBy(line =>
-                line.PreparationStationCode
-            )
+            IGrouping<string, OrderLine> stationLines in order
+                ._lines.Where(line => !string.IsNullOrWhiteSpace(line.PreparationStationCode))
+                .GroupBy(line => line.PreparationStationCode)
         )
         {
             OrderLine firstLine = stationLines.First();
@@ -178,8 +178,27 @@ public sealed class Order
             throw new InvalidOperationException("Only draft orders can be submitted.");
         }
 
-        Status = OrderStatus.Submitted;
-        SubmittedAtUtc = DateTime.SpecifyKind(occurredAtUtc, DateTimeKind.Utc);
+        DateTime submittedAtUtc = DateTime.SpecifyKind(occurredAtUtc, DateTimeKind.Utc);
+        SubmittedAtUtc = submittedAtUtc;
+        foreach (
+            OrderLine line in _lines.Where(item =>
+                item.Status == OrderLineStatus.Active
+                && string.IsNullOrWhiteSpace(item.PreparationStationCode)
+            )
+        )
+        {
+            line.MarkDirectlyReadyAndDispatched(submittedAtUtc);
+        }
+        if (_stations.Count == 0)
+        {
+            ReadyAtUtc = submittedAtUtc;
+            DeliveredAtUtc = submittedAtUtc;
+            Status = OrderStatus.Delivered;
+        }
+        else
+        {
+            Status = OrderStatus.Submitted;
+        }
         Version++;
     }
 

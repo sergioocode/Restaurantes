@@ -88,6 +88,105 @@ public sealed class OrderKitchenLineLifecycleTests
         Assert.Equal(4m, Assert.Single(line.Extras).UnitPrice);
     }
 
+    [Fact]
+    public void Order_without_kds_lines_is_ready_and_dispatched_when_submitted()
+    {
+        DateTime submittedAt = DateTime.Parse("2026-10-14T10:00:00Z");
+        OrderLineDraft directLine = new(
+            Guid.NewGuid(),
+            "Camiseta",
+            18m,
+            1,
+            string.Empty,
+            null,
+            "Merchandising",
+            "BEBIDAS",
+            "Bebidas",
+            false,
+            1,
+            RequiresKds: false
+        );
+
+        Order order = Order.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            null,
+            Guid.NewGuid(),
+            "Mesa 01",
+            string.Empty,
+            ServiceMode.DineIn,
+            OrderSource.Pos,
+            PaymentTiming.OnAccount,
+            [directLine],
+            submittedAt
+        );
+        OrderLine line = Assert.Single(order.Lines);
+
+        order.Submit(submittedAt);
+
+        Assert.Empty(order.Stations);
+        Assert.Equal(string.Empty, line.PreparationStationCode);
+        Assert.Equal(KitchenLineStatus.Dispatched, line.KitchenStatus);
+        Assert.Equal(submittedAt, line.ReadyAtUtc);
+        Assert.Equal(submittedAt, line.DispatchedAtUtc);
+        Assert.Equal(OrderStatus.Delivered, order.Status);
+        Assert.Equal(submittedAt, order.ReadyAtUtc);
+        Assert.Equal(submittedAt, order.DeliveredAtUtc);
+    }
+
+    [Fact]
+    public void Direct_lines_are_dispatched_without_skipping_kds_for_other_lines()
+    {
+        DateTime submittedAt = DateTime.Parse("2026-10-14T10:00:00Z");
+        OrderLineDraft kdsLine = new(
+            Guid.NewGuid(),
+            "Hamburguesa",
+            13.5m,
+            1,
+            string.Empty,
+            null,
+            "Carnes",
+            "CARNES",
+            "Carnes",
+            false,
+            1
+        );
+        OrderLineDraft directLine = new(
+            Guid.NewGuid(),
+            "Camiseta",
+            18m,
+            1,
+            string.Empty,
+            null,
+            "Merchandising",
+            "BEBIDAS",
+            "Bebidas",
+            false,
+            1,
+            RequiresKds: false
+        );
+        Order order = Order.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            null,
+            Guid.NewGuid(),
+            "Mesa 01",
+            string.Empty,
+            ServiceMode.DineIn,
+            OrderSource.Pos,
+            PaymentTiming.OnAccount,
+            [kdsLine, directLine],
+            submittedAt
+        );
+
+        order.Submit(submittedAt);
+
+        Assert.Single(order.Stations);
+        Assert.Equal(OrderStatus.Submitted, order.Status);
+        Assert.Equal(KitchenLineStatus.Pending, order.Lines.First().KitchenStatus);
+        Assert.Equal(KitchenLineStatus.Dispatched, order.Lines.Last().KitchenStatus);
+    }
+
     private static Order CreateOrder(bool requiresPrimaryDispatch, int lineCount, DateTime now)
     {
         List<OrderLineDraft> lines = Enumerable

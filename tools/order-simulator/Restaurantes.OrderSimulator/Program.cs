@@ -78,6 +78,7 @@ internal static class Program
                         tokens[$"{restaurant.RestaurantId}:Pos"],
                         tokens[$"{restaurant.RestaurantId}:Kds"],
                         options.OrdersPerBatch,
+                        TimeSpan.FromSeconds(options.KitchenStepDelaySeconds),
                         TimeSpan.FromMinutes(options.RunDurationMinutes),
                         sharedRandom,
                         randomLock,
@@ -167,6 +168,7 @@ internal static class Program
         string posToken,
         string kdsToken,
         int ordersPerBatch,
+        TimeSpan kitchenStepDelay,
         TimeSpan runDuration,
         Random random,
         SemaphoreSlim randomLock,
@@ -181,6 +183,7 @@ internal static class Program
                 posToken,
                 kdsToken,
                 ordersPerBatch,
+                kitchenStepDelay,
                 runDuration,
                 random,
                 randomLock,
@@ -263,6 +266,12 @@ internal static class Program
         if (options.RunDurationMinutes < 1)
         {
             throw new InvalidDataException("RunDurationMinutes debe ser al menos 1.");
+        }
+        if (options.KitchenStepDelaySeconds is < 1 or > 30)
+        {
+            throw new InvalidDataException(
+                "KitchenStepDelaySeconds debe estar entre 1 y 30 para que los estados KDS sean observables."
+            );
         }
 
         foreach (RestaurantOptions restaurant in options.Restaurants)
@@ -385,6 +394,7 @@ internal static class Program
         string posToken,
         string kdsToken,
         int ordersPerBatch,
+        TimeSpan kitchenStepDelay,
         TimeSpan runDuration,
         Random random,
         SemaphoreSlim randomLock,
@@ -514,6 +524,7 @@ internal static class Program
                             menu,
                             availableProductIds,
                             table,
+                            kitchenStepDelay,
                             random,
                             randomLock
                         )
@@ -644,6 +655,7 @@ internal static class Program
         IReadOnlyList<MenuItemResponse> menu,
         IReadOnlySet<Guid> availableProductIds,
         TableInfo table,
+        TimeSpan kitchenStepDelay,
         Random random,
         SemaphoreSlim randomLock
     )
@@ -707,8 +719,9 @@ internal static class Program
             WriteLog(
                 $"{restaurant.Name} · {table.Label} · pedido {order.Id.ToString("N")[..8]} · {lines.Count} platos · {order.Total:0.00} €"
             );
+            await Task.Delay(kitchenStepDelay);
 
-            order = await SimulateKitchenAsync(client, kdsToken, order);
+            order = await SimulateKitchenAsync(client, kdsToken, order, kitchenStepDelay);
             OrderResponse deliveredOrder = await PostAsync<OrderResponse>(
                 client,
                 $"api/orders/{order.Id}/deliver",
@@ -865,7 +878,8 @@ internal static class Program
     private static async Task<OrderResponse> SimulateKitchenAsync(
         HttpClient client,
         string token,
-        OrderResponse order
+        OrderResponse order,
+        TimeSpan kitchenStepDelay
     )
     {
         foreach (OrderLineResponse line in order.Lines.Where(line => line.Status != "Cancelled"))
@@ -877,6 +891,10 @@ internal static class Program
                 token,
                 CancellationToken.None
             );
+            WriteLog(
+                $"{order.TableLabel} · {line.ProductName} · {line.PreparationStationName} en preparación."
+            );
+            await Task.Delay(kitchenStepDelay);
             order = await PostAsync<OrderResponse>(
                 client,
                 $"api/orders/{order.Id}/lines/{line.Id}/ready",
@@ -884,14 +902,43 @@ internal static class Program
                 token,
                 CancellationToken.None
             );
+            OrderLineResponse updatedLine = order.Lines.Single(item => item.Id == line.Id);
+            string readyMessage = updatedLine.KitchenStatus.Equals(
+                "Dispatched",
+                StringComparison.OrdinalIgnoreCase
+            )
+                ? "listo y despachado automáticamente"
+                : "listo; espera el despacho del KDS principal";
+            WriteLog(
+                $"{order.TableLabel} · {line.ProductName} · {readyMessage} ({line.PreparationStationName})."
+            );
         }
 
-        foreach (
-            OrderKitchenStationResponse station in order
-                .Stations.Where(station => station.RequiresPrimaryDispatch)
-                .OrderBy(station => station.Priority)
-        )
+        OrderKitchenStationResponse[] primaryDispatchStations = order
+            .Stations.Where(station => station.RequiresPrimaryDispatch)
+            .OrderBy(station => station.Priority)
+            .ToArray();
+        if (primaryDispatchStations.Length > 0)
         {
+            WriteLog(
+                $"{order.TableLabel} · todos los platos están listos; el KDS principal comenzará los pases."
+            );
+            await Task.Delay(kitchenStepDelay);
+        }
+
+        foreach (OrderKitchenStationResponse station in primaryDispatchStations)
+        {
+            if (!station.Status.Equals("Ready", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException(
+                    $"El KDS principal no puede despachar el pase {station.Name} hasta que su estación marque listo (estado actual: {station.Status})."
+                );
+            }
+        }
+
+        foreach (OrderKitchenStationResponse station in primaryDispatchStations)
+        {
+            await Task.Delay(kitchenStepDelay);
             Guid[] lineIds = order
                 .Lines.Where(line =>
                     line.Status != "Cancelled"
@@ -932,6 +979,19 @@ internal static class Program
         {
             throw new InvalidDataException(
                 $"El pedido {order.Id.ToString("N")[..8]} terminó el flujo KDS en estado {order.Status}, no Ready."
+            );
+        }
+        OrderLineResponse[] undispatchedLines = order
+            .Lines.Where(line =>
+                line.Status != "Cancelled"
+                && !line.KitchenStatus.Equals("Dispatched", StringComparison.OrdinalIgnoreCase)
+            )
+            .ToArray();
+        if (undispatchedLines.Length > 0)
+        {
+            string lines = string.Join(", ", undispatchedLines.Select(line => line.ProductName));
+            throw new InvalidDataException(
+                $"El pedido {order.Id.ToString("N")[..8]} no despachó todos los platos: {lines}."
             );
         }
         return order;
@@ -1318,6 +1378,7 @@ internal sealed class SimulatorOptions
     public bool AllowNonLocalApi { get; init; }
     public int? RandomSeed { get; init; }
     public int OrdersPerBatch { get; init; } = 20;
+    public int KitchenStepDelaySeconds { get; init; } = 2;
     public int RunDurationMinutes { get; init; } = 10;
     public List<RestaurantOptions> Restaurants { get; init; } = [];
 }
