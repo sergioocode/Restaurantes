@@ -701,6 +701,10 @@ input, select {
     box-shadow: 0 20px 70px #0005;
 }
 
+.bill-card.session-bill-card {
+    padding-top: 0;
+}
+
 .modal-backdrop input:focus,
 .modal-backdrop select:focus {
     border-color: var(--modal-border);
@@ -709,6 +713,15 @@ input, select {
 
 .bill-title {
     margin-bottom: 18px;
+}
+
+.session-bill-card > .bill-title {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    margin-bottom: 12px;
+    padding: 8px 0 12px;
+    background: var(--modal-surface);
 }
 
 .bill-title-actions, .account-preview-actions {
@@ -803,6 +816,7 @@ input, select {
     gap: 1rem;
     color: var(--accent, #c94e22);
 }
+.account-preview-tax { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 1rem; color: #626c65; font-size: .9em; }
 
 .account-preview-per-person, .account-preview-footer {
     text-align: center;
@@ -859,6 +873,7 @@ input, select {
 
     .bill-orders .bill-order-heading {
         justify-content: flex-start;
+        flex-wrap: wrap;
         gap: 8px;
     }
 
@@ -867,11 +882,17 @@ input, select {
         }
 
         .bill-orders .bill-order-heading > small {
-            margin-left: auto;
+            margin-left: 0;
+            white-space: nowrap;
         }
 
+    .bill-order-amount {
+        margin-left: auto;
+        white-space: nowrap;
+    }
+
     .bill-orders .bill-order-meta {
-        justify-content: space-between;
+        justify-content: flex-end;
     }
 
     .bill-order-statuses {
@@ -909,14 +930,47 @@ input, select {
     gap: 7px;
 }
 
-.bill-line {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
+.session-bill-card .bill-lines {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    min-width: 0;
+    align-items: stretch;
+    justify-content: normal;
+    justify-self: stretch;
 }
 
-.bill-line-extra {
+.session-bill-card .bill-line {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+}
+
+.session-bill-card .bill-line-product {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    align-items: center;
+    gap: 4px;
+}
+
+    .session-bill-card .bill-line-product > span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+.session-bill-card .bill-line-price {
+    flex: 0 0 6em;
+    margin-left: auto;
+    text-align: right;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.session-bill-card .bill-line-extra {
     display: flex;
     justify-content: space-between;
     gap: 10px;
@@ -935,7 +989,7 @@ input, select {
         gap: 4px;
     }
 
-    .bill-line .danger {
+    .session-bill-card .bill-line .danger {
         display: flex;
         min-height: 0;
         align-items: center;
@@ -989,9 +1043,10 @@ input, select {
     }
 
     .bill-total strong {
-        flex: 0 0 84px;
+        flex: 0 0 auto;
         font-size: 22px;
         text-align: right;
+        white-space: nowrap;
     }
 
     .bill-total.outstanding {
@@ -1606,6 +1661,16 @@ input, select {
         font-weight: 800;
     }
 
+    .table-card.dining-location .table-session-source {
+        padding: 4px 6px;
+        border-radius: 7px;
+        background: #ecefeb;
+        color: #245c41;
+        font-size: 9px;
+        font-weight: 800;
+        line-height: 1.2;
+    }
+
     .table-card.dining-location .table-guest-icon {
         font-size: 18px;
         line-height: 1;
@@ -1644,8 +1709,13 @@ input, select {
         }
 
     .table-card.dining-location.occupied .table-guest-count,
-    .table-card.dining-location.occupied .table-kitchen-time {
+    .table-card.dining-location.occupied .table-kitchen-time,
+    .table-card.dining-location.occupied .table-session-source {
         color: #fff;
+    }
+
+    .table-card.dining-location.occupied .table-session-source {
+        background: #40594e;
     }
 
         .table-card.dining-location.occupied .table-order-state > span {

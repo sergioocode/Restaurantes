@@ -52,7 +52,7 @@
             {
                 <section>
                     <div class="section-title location-title">
-                        <div><p class="eyebrow">SALÓN</p><h2>Seleccionar ubicación</h2></div>
+                        <div><p class="eyebrow">ZONAS</p><h2>Seleccionar ubicación</h2></div>
                     </div>
                     <div class="location-grid">
                         @foreach (var location in FilteredTables
@@ -103,10 +103,15 @@
                 <button class="back" @onclick="LeaveTable" disabled="@busy">← Mesas</button>
                 <div class="order-table-heading">
                     <p class="eyebrow">PEDIDO EN CURSO</p>
-                    <div class="table-name-row">
-                        <h2>@selectedTable.Label</h2>
-                        <span class="session-status">@SessionOrderSummary(sessionId)</span>
-                    </div>
+                    <h2>@selectedTable.Label</h2>
+                </div>
+                <div class="session-progress-details">
+                    @if (guestCount is int savedGuestCount)
+                    {
+                        <span class="session-guest-count">@savedGuestCount comensales</span>
+                    }
+                    <strong>Estado de comandas:</strong>
+                    <span class="session-status">@SessionOrderSummary(sessionId)</span>
                 </div>
                 <button class="ghost" @onclick="OpenBill">Ver consumo</button>
             </section>
@@ -190,7 +195,7 @@
             @if (billOpen)
             {
                 <div class="modal-backdrop" @onclick="CloseBill">
-                    <section class="bill-card" @onclick:stopPropagation>
+                    <section class="bill-card session-bill-card" @onclick:stopPropagation>
                         <div class="bill-title">
                             <div>
                                 <p class="eyebrow">CONSUMO DE LA MESA</p>
@@ -217,13 +222,11 @@
                                         <div class="bill-order-heading">
                                             <strong>Comanda @order.OrderId.ToString()[..8]</strong>
                                             <small>@order.AddedAtUtc.ToLocalTime().ToString("HH:mm")</small>
-                                        </div>
-                                        <div class="bill-order-meta">
                                             <div class="bill-order-statuses">
                                                 <span>@order.OrderStatus</span>
                                                 <span>@order.PaymentStatus</span>
                                             </div>
-                                            <strong>@order.Amount.ToString("0.00") €</strong>
+                                            <strong class="bill-order-amount">@order.Amount.ToString("0.00") €</strong>
                                         </div>
                                         @if (billOrders.TryGetValue(order.OrderId, out OrderDetailResponse? detail))
                                         {
@@ -232,7 +235,7 @@
                                                 {
                                                     <div class="bill-line @(line.Status == "Cancelled" ? "cancelled" : "")">
                                                         <div class="bill-line-product">
-                                                            <span>@line.Quantity × @line.ProductName@(!string.IsNullOrEmpty(line.Format) ? $" · {FormatLabel(line.Format)}" : "") · @line.PreparationStationName</span>
+                                                            <span>@line.Quantity × @line.ProductName@(!string.IsNullOrEmpty(line.Format) ? $" · {FormatLabel(line.Format)}" : "")@(!string.IsNullOrWhiteSpace(line.PreparationStationName) ? $" · {line.PreparationStationName}" : "")</span>
                                                             @if (line.Status != "Cancelled")
                                                             {
                                                                 <small class="line-kitchen @KitchenLineStatusClass(line.KitchenStatus)" title="@KitchenLineStatusLabel(line.KitchenStatus)" aria-label="@KitchenLineStatusLabel(line.KitchenStatus)">@KitchenLineStatusIcon(line.KitchenStatus)</small>
@@ -240,11 +243,15 @@
                                                         </div>
                                                         @if (CanCancelLine(order, detail, line))
                                                         {
-                                                            <button class="danger" disabled="@busy" @onclick="() => CancelLine(order, line)">Cancelar</button>
+                                                            <button class="danger" disabled="@(busy || IsPosOrder(order))" title="@(IsPosOrder(order) ? "Los pedidos del TPV no se cancelan desde Comandero." : null)" @onclick="() => CancelLine(order, line)">Cancelar</button>
                                                         }
                                                         else if (line.Status == "Cancelled")
                                                         {
                                                             <small>Cancelado · @line.CancellationReason</small>
+                                                        }
+                                                        @if (line.Status != "Cancelled")
+                                                        {
+                                                            <strong class="bill-line-price">@(((line.BaseUnitPrice ?? line.UnitPrice) * line.Quantity).ToString("0.00")) €</strong>
                                                         }
                                                     </div>
                                                     @if (line.Status != "Cancelled")
@@ -358,6 +365,11 @@
                                     <span>Descuento (@((salesTicket?.DiscountPercentage ?? bill.DiscountPercentage).ToString("0.##")) %)</span>
                                     <strong>-@((salesTicket?.DiscountAmount ?? bill.DiscountAmount).ToString("0.00")) €</strong>
                                 </div>
+                            }
+                            @foreach (TaxBreakdownLine tax in BillTaxBreakdown)
+                            {
+                                <div class="account-preview-tax"><span>Base imponible (@tax.Rate.ToString("0.##") %)</span><strong>@tax.TaxableBase.ToString("0.00") €</strong></div>
+                                <div class="account-preview-tax"><span>IVA (@tax.Rate.ToString("0.##") %)</span><strong>@tax.TaxAmount.ToString("0.00") €</strong></div>
                             }
                             <span>Total (IVA incluido)</span>
                             <strong>@BillConsumptionTotal.ToString("0.00") €</strong>

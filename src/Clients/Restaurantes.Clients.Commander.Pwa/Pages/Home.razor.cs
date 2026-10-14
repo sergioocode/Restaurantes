@@ -69,6 +69,92 @@ public partial class Home
     private decimal BillConsumptionTotal =>
         bill?.Orders.Where(order => order.OrderStatus != "Cancelled").Sum(order => order.Amount)
         ?? 0;
+    private IReadOnlyList<TaxBreakdownLine> BillTaxBreakdown
+    {
+        get
+        {
+            if (bill is null)
+                return [];
+            SortedDictionary<decimal, decimal> grossByRate = [];
+            bool hasUnratedLines = false;
+            foreach (
+                SessionBillOrderResponse order in bill.Orders.Where(x =>
+                    x.OrderStatus != "Cancelled"
+                )
+            )
+            {
+                if (!billOrders.TryGetValue(order.OrderId, out OrderDetailResponse? detail))
+                {
+                    hasUnratedLines = true;
+                    continue;
+                }
+                foreach (
+                    OrderLineDetailResponse line in detail.Lines.Where(x => x.Status != "Cancelled")
+                )
+                {
+                    AddTaxableAmount(
+                        grossByRate,
+                        ref hasUnratedLines,
+                        line.TaxRate,
+                        (line.BaseUnitPrice ?? line.UnitPrice) * line.Quantity
+                    );
+                    foreach (OrderLineExtraResponse extra in line.Extras ?? [])
+                        AddTaxableAmount(
+                            grossByRate,
+                            ref hasUnratedLines,
+                            extra.TaxRate,
+                            line.Quantity * extra.Quantity * extra.UnitPrice
+                        );
+                }
+            }
+            return BuildTaxBreakdown(
+                grossByRate,
+                hasUnratedLines,
+                salesTicket?.DiscountPercentage ?? bill.DiscountPercentage
+            );
+        }
+    }
+
+    private static void AddTaxableAmount(
+        SortedDictionary<decimal, decimal> grossByRate,
+        ref bool hasUnratedLines,
+        decimal? taxRate,
+        decimal amount
+    )
+    {
+        if (taxRate is not decimal rate)
+        {
+            hasUnratedLines = true;
+            return;
+        }
+        grossByRate[rate] = grossByRate.GetValueOrDefault(rate) + amount;
+    }
+
+    private static IReadOnlyList<TaxBreakdownLine> BuildTaxBreakdown(
+        SortedDictionary<decimal, decimal> grossByRate,
+        bool hasUnratedLines,
+        decimal discountPercentage
+    )
+    {
+        if (hasUnratedLines || grossByRate.Count == 0)
+            return [];
+        decimal factor = 1m - discountPercentage / 100m;
+        return grossByRate
+            .Select(pair =>
+            {
+                decimal gross = Math.Round(pair.Value * factor, 2, MidpointRounding.AwayFromZero);
+                decimal tax = Math.Round(
+                    gross * pair.Key / (100m + pair.Key),
+                    2,
+                    MidpointRounding.AwayFromZero
+                );
+                return new TaxBreakdownLine(pair.Key, gross - tax, tax);
+            })
+            .ToArray();
+    }
+
+    private sealed record TaxBreakdownLine(decimal Rate, decimal TaxableBase, decimal TaxAmount);
+
     private decimal CommanderOutstanding =>
         bill?.Orders.Where(order => IsOwnCommanderOrder(order) && order.OrderStatus != "Cancelled")
             .Sum(order => Math.Max(0, order.Amount - order.AmountPaid))
@@ -995,6 +1081,8 @@ public partial class Home
             && line.KitchenStatus == "Pending";
     }
 
+    private static bool IsPosOrder(SessionBillOrderResponse billOrder) => billOrder.Source == "Pos";
+
     private static string KitchenLineStatusLabel(string status)
     {
         return status switch
@@ -1116,9 +1204,9 @@ public partial class Home
         if (clearMessage)
         {
             message = null;
+            success = false;
         }
 
-        success = false;
         busy = true;
         try
         {
@@ -1126,6 +1214,7 @@ public partial class Home
         }
         catch (Exception ex)
         {
+            success = false;
             message = ex.Message;
         }
         finally
@@ -1142,6 +1231,7 @@ public partial class Home
         }
         catch (Exception exception)
         {
+            success = false;
             message = $"Datos cargados, pero sin actualización en tiempo real: {exception.Message}";
         }
     }
@@ -1207,6 +1297,7 @@ public partial class Home
         {
             await InvokeAsync(() =>
             {
+                success = false;
                 message = $"No se pudo actualizar el comandero en tiempo real: {exception.Message}";
                 StateHasChanged();
             });
