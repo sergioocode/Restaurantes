@@ -21,17 +21,61 @@
 SET search_path TO restaurant_operations;
 
 WITH inserted AS (
-    INSERT INTO restaurants ("Id", "Code", "Name", "Address", "IsActive", "Version", "UpdatedAtUtc")
+    INSERT INTO companies (
+        "Id", "LegalName", "TaxId", "FiscalAddress", "Phone", "Email", "Version", "UpdatedAtUtc"
+    )
+    VALUES (
+        '99999999-9999-4999-8999-999999999999',
+        'Restaurantes Españita S.L.',
+        'A12345678',
+        'Cruz del Carnero 6',
+        NULL,
+        NULL,
+        1,
+        now()
+    )
+    ON CONFLICT ("TaxId") DO UPDATE SET
+        "LegalName" = EXCLUDED."LegalName",
+        "FiscalAddress" = EXCLUDED."FiscalAddress",
+        "Version" = companies."Version" + 1,
+        "UpdatedAtUtc" = EXCLUDED."UpdatedAtUtc"
+    RETURNING *
+)
+INSERT INTO outbox_messages ("Id", "Type", "Payload", "OccurredAtUtc")
+SELECT gen_random_uuid(),
+       'Restaurantes.RestaurantOperations.Contracts.Events.CompanyChanged',
+       jsonb_build_object(
+           'CompanyId', "Id", 'LegalName', "LegalName", 'TaxId', "TaxId",
+           'FiscalAddress', "FiscalAddress", 'Phone', "Phone", 'Email', "Email",
+           'Version', "Version", 'OccurredAtUtc', to_char("UpdatedAtUtc" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
+       ),
+       "UpdatedAtUtc"
+FROM inserted;
+
+WITH company AS (
+    SELECT "Id" AS "CompanyId"
+    FROM companies
+    WHERE "TaxId" = 'A12345678'
+), seed("Id", "Code", "Name", "Address", "IsActive", "Version", "UpdatedAtUtc") AS (
     VALUES
-        ('11111111-1111-4111-8111-111111111111', 'MAD-CENTRO', 'Restaurante Madrid Centro', 'Calle Mayor 10, Madrid', true, 1, now()),
-        ('22222222-2222-4222-8222-222222222222', 'MAD-NORTE', 'Restaurante Madrid Norte', 'Paseo de la Castellana 200, Madrid', true, 1, now()),
-        ('33333333-3333-4333-8333-333333333333', 'BCN-CENTRO', 'Restaurante Barcelona Centro', 'Carrer de Mallorca 100, Barcelona', true, 1, now()),
-        ('44444444-4444-4444-8444-444444444444', 'VAL-CENTRO', 'Restaurante Valencia Centro', 'Carrer de Colón 50, Valencia', true, 1, now()),
-        ('55555555-5555-4555-8555-555555555555', 'SEV-CENTRO', 'Restaurante Sevilla Centro', 'Calle Sierpes 25, Sevilla', true, 1, now())
+        ('11111111-1111-4111-8111-111111111111'::uuid, 'MAD-CENTRO', 'Local Madrid Centro', 'Calle Mayor 10, Madrid', true, 1, now()),
+        ('22222222-2222-4222-8222-222222222222'::uuid, 'MAD-NORTE', 'Local Madrid Norte', 'Paseo de la Castellana 200, Madrid', true, 1, now()),
+        ('33333333-3333-4333-8333-333333333333'::uuid, 'BCN-CENTRO', 'Local Barcelona Centro', 'Carrer de Mallorca 100, Barcelona', true, 1, now()),
+        ('44444444-4444-4444-8444-444444444444'::uuid, 'VAL-CENTRO', 'Local Valencia Centro', 'Carrer de Colón 50, Valencia', true, 1, now()),
+        ('55555555-5555-4555-8555-555555555555'::uuid, 'SEV-CENTRO', 'Local Sevilla Centro', 'Calle Sierpes 25, Sevilla', true, 1, now())
+), inserted AS (
+    INSERT INTO restaurants (
+        "Id", "Code", "Name", "Address", "IsActive", "Version", "UpdatedAtUtc", "CompanyId"
+    )
+    SELECT seed."Id", seed."Code", seed."Name", seed."Address", seed."IsActive",
+           seed."Version", seed."UpdatedAtUtc", company."CompanyId"
+    FROM seed CROSS JOIN company
+    WHERE true
     ON CONFLICT ("Code") DO UPDATE SET
         "Name" = EXCLUDED."Name",
         "Address" = EXCLUDED."Address",
         "IsActive" = EXCLUDED."IsActive",
+        "CompanyId" = EXCLUDED."CompanyId",
         "Version" = restaurants."Version" + 1,
         "UpdatedAtUtc" = EXCLUDED."UpdatedAtUtc"
     RETURNING *
@@ -40,7 +84,7 @@ INSERT INTO outbox_messages ("Id", "Type", "Payload", "OccurredAtUtc")
 SELECT gen_random_uuid(),
        'Restaurantes.RestaurantOperations.Contracts.Events.RestaurantChanged',
        jsonb_build_object(
-           'RestaurantId', "Id", 'Code', "Code", 'Name', "Name", 'Address', "Address",
+           'RestaurantId', "Id", 'Code', "Code", 'Name', "Name", 'Address', "Address", 'CompanyId', "CompanyId",
            'IsActive', "IsActive", 'Version', "Version", 'OccurredAtUtc', to_char("UpdatedAtUtc" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
        ),
        "UpdatedAtUtc"
@@ -586,12 +630,14 @@ BEGIN
     END IF;
 END $$;
 
--- Madrid Centro y Barcelona Centro operan con la carta del local. Los demás
--- conservan su selección actual; ON CONFLICT respeta los cambios del manager.
+-- Los cinco locales de desarrollo operan con los productos de la carta general.
 WITH seeded_locales("RestaurantId") AS (
     VALUES
         ('11111111-1111-4111-8111-111111111111'::uuid),
-        ('33333333-3333-4333-8333-333333333333'::uuid)
+        ('22222222-2222-4222-8222-222222222222'::uuid),
+        ('33333333-3333-4333-8333-333333333333'::uuid),
+        ('44444444-4444-4444-8444-444444444444'::uuid),
+        ('55555555-5555-4555-8555-555555555555'::uuid)
 )
 INSERT INTO restaurant_product_availability ("RestaurantId", "ProductId", "IsAvailable")
 SELECT local."RestaurantId", product."Id", true
@@ -599,7 +645,8 @@ FROM seeded_locales local
 CROSS JOIN products product
 WHERE product."Id" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
                        AND 'b1000000-0000-4000-8000-000000000049'::uuid
-ON CONFLICT ("RestaurantId", "ProductId") DO NOTHING;
+ON CONFLICT ("RestaurantId", "ProductId") DO UPDATE
+SET "IsAvailable" = EXCLUDED."IsAvailable";
 
 INSERT INTO restaurant_product_availability ("RestaurantId", "ProductId", "IsAvailable")
 SELECT local."RestaurantId", product."Id", true
