@@ -293,7 +293,7 @@ public sealed class QrOrderTests : BunitContext
     }
 
     [Fact]
-    public async Task Commander_cancelled_line_refreshes_bill_without_success_notice()
+    public async Task Commander_cancelled_line_refreshes_bill_and_shows_success_notice()
     {
         Guid sessionId = Guid.NewGuid();
         Guid orderId = Guid.NewGuid();
@@ -335,7 +335,7 @@ public sealed class QrOrderTests : BunitContext
         SetField(cut.Instance, "sessionId", sessionId);
         using CancellationTokenSource refresh = new();
         SetField(cut.Instance, "realtimeRefresh", refresh);
-        CommanderBillOrder order = new(orderId, "Submitted", "Unpaid", 12m, DateTime.UtcNow);
+        CommanderBillOrder order = new(orderId, "Submitted", "Unpaid", 12m, 0m, DateTime.UtcNow);
         CommanderOrderLine line = new(
             lineId,
             "Producto",
@@ -357,7 +357,8 @@ public sealed class QrOrderTests : BunitContext
 
         Assert.Contains($"/api/orders/{orderId}/lines/{lineId}/cancel", requests);
         Assert.Contains($"/api/dining/sessions/{sessionId}/bill", requests);
-        Assert.Null(GetField(cut.Instance, "message"));
+        Assert.Equal("Producto cancelado antes de preparación.", GetField(cut.Instance, "message"));
+        Assert.True((bool)GetField(cut.Instance, "success")!);
     }
 
     [Fact]

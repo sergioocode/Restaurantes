@@ -551,7 +551,7 @@ public partial class Home
                     DiningSessionResponse activeSession = await Api.ActiveSessionAsync(table.Id);
                     if (activeSession.Id != table.ActiveSessionId)
                     {
-                        return (table.Id, null);
+                        return (table.Id, (TableSessionOrderSnapshot?)null);
                     }
 
                     return (
