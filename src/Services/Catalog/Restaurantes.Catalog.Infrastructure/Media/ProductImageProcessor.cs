@@ -5,7 +5,6 @@ namespace Restaurantes.Catalog.Infrastructure.Media;
 public sealed class ProductImageValidationException(string message) : Exception(message);
 
 public sealed record ProcessedProductImage(
-    string OriginalExtension,
     string OriginalContentType,
     IReadOnlyList<ProductImageVariant> Variants
 );
@@ -28,7 +27,7 @@ public static class ProductImageProcessor
                 "La imagen debe ocupar entre 1 byte y 10 MB."
             );
 
-        (string extension, string contentType) = DetectFormat(original);
+        string contentType = DetectFormat(original);
         using SKBitmap? source = SKBitmap.Decode(original);
         if (source is null || source.Width < 1 || source.Height < 1)
             throw new ProductImageValidationException("El archivo no contiene una imagen válida.");
@@ -65,21 +64,21 @@ public static class ProductImageProcessor
             variants.Add(new ProductImageVariant(name, encoded.ToArray(), "image/webp"));
         }
 
-        return new ProcessedProductImage(extension, contentType, variants);
+        return new ProcessedProductImage(contentType, variants);
     }
 
-    private static (string Extension, string ContentType) DetectFormat(byte[] bytes)
+    private static string DetectFormat(byte[] bytes)
     {
         if (bytes.Length >= 3 && bytes[0] == 0xff && bytes[1] == 0xd8 && bytes[2] == 0xff)
-            return ("jpg", "image/jpeg");
+            return "image/jpeg";
         if (StartsWith(bytes, [137, 80, 78, 71, 13, 10, 26, 10]))
-            return ("png", "image/png");
+            return "image/png";
         if (
             bytes.Length >= 12
             && StartsWith(bytes, "RIFF"u8.ToArray())
             && StartsWith(bytes[8..], "WEBP"u8.ToArray())
         )
-            return ("webp", "image/webp");
+            return "image/webp";
         throw new ProductImageValidationException("Solo se admiten imágenes JPEG, PNG o WebP.");
     }
 

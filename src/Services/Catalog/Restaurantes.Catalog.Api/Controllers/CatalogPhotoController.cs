@@ -39,15 +39,7 @@ public sealed class CatalogPhotoController(CatalogWriteDbContext db, IProductIma
         Guid revision = Guid.NewGuid();
         try
         {
-            await storage.StoreAsync(
-                productId,
-                revision,
-                processed.OriginalExtension,
-                processed.OriginalContentType,
-                originalBytes,
-                processed.Variants,
-                ct
-            );
+            await storage.StoreAsync(productId, revision, processed.Variants, ct);
             ProductPhoto? photo = await db.ProductPhotos.FindAsync([productId], ct);
             Guid oldRevision = photo?.Revision ?? Guid.Empty;
             if (photo is null)

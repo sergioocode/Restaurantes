@@ -16,9 +16,6 @@ public interface IProductImageStorage
     Task StoreAsync(
         Guid productId,
         Guid revision,
-        string originalExtension,
-        string originalContentType,
-        byte[] original,
         IReadOnlyList<ProductImageVariant> variants,
         CancellationToken ct
     );
@@ -52,9 +49,6 @@ public sealed class FileSystemProductImageStorage(
     public async Task StoreAsync(
         Guid productId,
         Guid revision,
-        string originalExtension,
-        string originalContentType,
-        byte[] original,
         IReadOnlyList<ProductImageVariant> variants,
         CancellationToken ct
     )
@@ -66,11 +60,6 @@ public sealed class FileSystemProductImageStorage(
             );
         string directory = DirectoryFor(root, productId, revision);
         Directory.CreateDirectory(directory);
-        await File.WriteAllBytesAsync(
-            Path.Combine(directory, $"original.{originalExtension}"),
-            original,
-            ct
-        );
         foreach (ProductImageVariant variant in variants)
             await File.WriteAllBytesAsync(
                 Path.Combine(directory, variant.Name),
@@ -124,22 +113,12 @@ public sealed class AzureBlobProductImageStorage(IConfiguration configuration)
     public async Task StoreAsync(
         Guid productId,
         Guid revision,
-        string originalExtension,
-        string originalContentType,
-        byte[] original,
         IReadOnlyList<ProductImageVariant> variants,
         CancellationToken ct
     )
     {
         BlobContainerClient container = Container;
         await container.CreateIfNotExistsAsync(cancellationToken: ct);
-        await UploadAsync(
-            container,
-            PathFor(productId, revision, $"original.{originalExtension}"),
-            original,
-            originalContentType,
-            ct
-        );
         foreach (ProductImageVariant variant in variants)
             await UploadAsync(
                 container,
