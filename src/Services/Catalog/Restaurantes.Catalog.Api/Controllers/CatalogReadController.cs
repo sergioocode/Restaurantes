@@ -26,10 +26,15 @@ public sealed class CatalogReadController(ICatalogReadStore store) : ControllerB
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<ActionResult<IReadOnlyList<MenuItemResponse>>> Menu(
         Guid restaurantId,
-        CancellationToken ct
+        CancellationToken ct,
+        CatalogClientChannel channel = CatalogClientChannel.Pos
     )
     {
-        return Ok(await store.ListMenuAsync(restaurantId, ct));
+        if (!Enum.IsDefined(channel))
+        {
+            return BadRequest();
+        }
+        return Ok(await store.ListMenuAsync(restaurantId, channel, ct));
     }
 
     [HttpGet("restaurants/{restaurantId:guid}/menu/configuration")]

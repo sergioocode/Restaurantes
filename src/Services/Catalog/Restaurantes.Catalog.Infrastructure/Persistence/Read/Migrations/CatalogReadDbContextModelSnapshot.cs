@@ -51,6 +51,11 @@ namespace Restaurantes.Catalog.Infrastructure.Persistence.Read.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
+                    b.Property<bool>("RequiresKds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<bool>("ShowInCommander")
                         .HasColumnType("boolean");
 
@@ -185,6 +190,11 @@ namespace Restaurantes.Catalog.Infrastructure.Persistence.Read.Migrations
                         .IsRequired()
                         .HasMaxLength(160)
                         .HasColumnType("character varying(160)");
+
+                    b.Property<bool>("RequiresKds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
 
                     b.Property<Guid>("RestaurantId")
                         .HasColumnType("uuid");

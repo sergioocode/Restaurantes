@@ -27,7 +27,8 @@ public sealed partial class CatalogCommandService
             now,
             request.ShowInPos,
             request.ShowInCommander,
-            request.ShowInCustomerQr
+            request.ShowInCustomerQr,
+            request.RequiresKds
         );
         CategoryChanged message = new(
             item.Id,
@@ -40,7 +41,8 @@ public sealed partial class CatalogCommandService
             now,
             item.ShowInPos,
             item.ShowInCommander,
-            item.ShowInCustomerQr
+            item.ShowInCustomerQr,
+            item.RequiresKds
         );
         await store.SaveWithEventAsync(item, message, ct);
         return new(
@@ -54,7 +56,8 @@ public sealed partial class CatalogCommandService
             now,
             item.ShowInPos,
             item.ShowInCommander,
-            item.ShowInCustomerQr
+            item.ShowInCustomerQr,
+            item.RequiresKds
         );
     }
 
@@ -79,7 +82,8 @@ public sealed partial class CatalogCommandService
             now,
             request.ShowInPos ?? item.ShowInPos,
             request.ShowInCommander ?? item.ShowInCommander,
-            request.ShowInCustomerQr ?? item.ShowInCustomerQr
+            request.ShowInCustomerQr ?? item.ShowInCustomerQr,
+            request.RequiresKds ?? item.RequiresKds
         );
         CategoryChanged message = new(
             item.Id,
@@ -92,7 +96,8 @@ public sealed partial class CatalogCommandService
             now,
             item.ShowInPos,
             item.ShowInCommander,
-            item.ShowInCustomerQr
+            item.ShowInCustomerQr,
+            item.RequiresKds
         );
         await store.SaveWithEventAsync(item, message, ct);
         return new(
@@ -106,7 +111,8 @@ public sealed partial class CatalogCommandService
             now,
             item.ShowInPos,
             item.ShowInCommander,
-            item.ShowInCustomerQr
+            item.ShowInCustomerQr,
+            item.RequiresKds
         );
     }
 }

@@ -167,6 +167,10 @@ namespace Restaurantes.Orders.Infrastructure.Persistence.Write.Migrations
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
 
+                    b.Property<decimal?>("TaxRate")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
                     b.Property<string>("ExtrasJson")
                         .IsRequired()
                         .HasColumnType("jsonb")
@@ -306,8 +310,17 @@ namespace Restaurantes.Orders.Infrastructure.Persistence.Write.Migrations
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
 
+                    b.Property<decimal?>("TaxRate")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
                     b.Property<Guid>("ProductId")
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("RequiresKds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
 
                     b.Property<string>("ProductName")
                         .IsRequired()

@@ -163,6 +163,15 @@ public sealed class PaymentsWriteControllerTests
             ReceivedToken = customerAccessToken;
             return Task.FromResult(false);
         }
+
+        public Task<bool> IsChargeAmountValidAsync(
+            Guid sessionId,
+            Guid orderId,
+            Guid restaurantId,
+            decimal amount,
+            string? authorization,
+            CancellationToken cancellationToken
+        ) => Task.FromResult(false);
     }
 
     private sealed class OpenCashRegister : IPaymentCashRegister

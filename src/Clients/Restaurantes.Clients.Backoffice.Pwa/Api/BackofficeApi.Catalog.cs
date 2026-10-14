@@ -114,6 +114,7 @@ public sealed partial class BackofficeApi
                 item.Name,
                 item.DefaultStationCode,
                 item.DefaultStationName,
+                item.RequiresKds,
                 item.IsActive,
                 item.ShowInPos,
                 item.ShowInCommander,

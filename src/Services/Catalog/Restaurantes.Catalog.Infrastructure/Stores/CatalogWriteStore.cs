@@ -30,6 +30,16 @@ public sealed class CatalogWriteStore(CatalogWriteDbContext db) : ICatalogWriteS
         return db.Products.SingleOrDefaultAsync(x => x.Id == id, ct);
     }
 
+    public Task<decimal?> FindActiveTaxRateAsync(Guid? taxId, CancellationToken ct)
+    {
+        return taxId is Guid id
+            ? db
+                .Taxes.Where(x => x.Id == id && x.IsActive)
+                .Select(x => (decimal?)x.Rate)
+                .SingleOrDefaultAsync(ct)
+            : Task.FromResult<decimal?>(null);
+    }
+
     public async Task DisableLocalProductAvailabilityAsync(Guid productId, CancellationToken ct)
     {
         RestaurantProductAvailability[] selections = await db

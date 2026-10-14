@@ -14,6 +14,7 @@ public sealed class MenuItemReadModel
     public bool IsAvailable { get; set; }
     public string PreparationStationCode { get; set; } = "";
     public string PreparationStationName { get; set; } = "";
+    public bool RequiresKds { get; set; } = true;
     public int Version { get; set; }
     public DateTime UpdatedAtUtc { get; set; }
 }

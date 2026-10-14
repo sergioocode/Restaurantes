@@ -19,5 +19,7 @@ public sealed record MenuItemResponse(
     string PhotoMediumUrl = "",
     string PhotoLargeUrl = "",
     IReadOnlyList<ProductExtraGroup>? ExtraGroups = null,
-    IReadOnlyList<MenuItemFormatPrice>? Formats = null
+    IReadOnlyList<MenuItemFormatPrice>? Formats = null,
+    bool RequiresKds = true,
+    decimal? TaxRate = null
 );

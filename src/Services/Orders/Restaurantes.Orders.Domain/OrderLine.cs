@@ -11,6 +11,7 @@ public sealed class OrderLine
     public string Format { get; private set; } = string.Empty;
     public decimal UnitPrice { get; private set; }
     public decimal BaseUnitPrice { get; private set; }
+    public decimal? TaxRate { get; private set; }
     public string ExtrasJson { get; private set; } = "[]";
 
     [System.ComponentModel.DataAnnotations.Schema.NotMapped]
@@ -48,6 +49,7 @@ public sealed class OrderLine
                 || string.IsNullOrWhiteSpace(extra.ProductName)
                 || extra.UnitPrice < 0
                 || extra.Quantity is < 1 or > 99
+                || extra.TaxRate is < 0 or > 100
             )
         )
         {
@@ -64,6 +66,8 @@ public sealed class OrderLine
                     nameof(draft),
                     "UnitPrice cannot be negative."
                 )
+            : draft.TaxRate is < 0 or > 100
+                ? throw new ArgumentOutOfRangeException(nameof(draft), "TaxRate is invalid.")
             : draft.Quantity is < 1 or > 100
                 ? throw new ArgumentOutOfRangeException(
                     nameof(draft),
@@ -78,22 +82,38 @@ public sealed class OrderLine
                 Format = draft.Format,
                 UnitPrice = draft.UnitPrice,
                 BaseUnitPrice = baseUnitPrice,
+                TaxRate = draft.TaxRate,
                 ExtrasJson = System.Text.Json.JsonSerializer.Serialize(extras),
                 Quantity = draft.Quantity,
                 Notes = draft.Notes.Trim(),
                 CategoryId = draft.CategoryId,
                 CategoryName = NormalizeLabel(draft.CategoryName, "CategoryName", 120),
-                PreparationStationCode = OrderKitchenStation.NormalizeCode(
-                    draft.PreparationStationCode
-                ),
-                PreparationStationName = NormalizeLabel(
-                    draft.PreparationStationName,
-                    "PreparationStationName",
-                    80
-                ),
+                PreparationStationCode = draft.RequiresKds
+                    ? OrderKitchenStation.NormalizeCode(draft.PreparationStationCode)
+                    : "",
+                PreparationStationName = draft.RequiresKds
+                    ? NormalizeLabel(draft.PreparationStationName, "PreparationStationName", 80)
+                    : "",
                 Status = OrderLineStatus.Active,
                 KitchenStatus = KitchenLineStatus.Pending,
             };
+    }
+
+    internal void MarkDirectlyReadyAndDispatched(DateTime occurredAtUtc)
+    {
+        if (!string.IsNullOrWhiteSpace(PreparationStationCode))
+        {
+            throw new InvalidOperationException("KDS lines cannot use direct fulfillment.");
+        }
+        if (KitchenStatus != KitchenLineStatus.Pending)
+        {
+            throw new InvalidOperationException("Only pending direct lines can be fulfilled.");
+        }
+
+        DateTime utc = DateTime.SpecifyKind(occurredAtUtc, DateTimeKind.Utc);
+        KitchenStatus = KitchenLineStatus.Dispatched;
+        ReadyAtUtc = utc;
+        DispatchedAtUtc = utc;
     }
 
     internal void StartPreparation(DateTime occurredAtUtc)

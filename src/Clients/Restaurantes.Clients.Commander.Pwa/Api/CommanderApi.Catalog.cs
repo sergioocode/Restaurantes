@@ -6,6 +6,8 @@ public sealed partial class CommanderApi
 {
     public Task<List<MenuItemResponse>> MenuAsync(Guid restaurantId)
     {
-        return GetAsync<List<MenuItemResponse>>($"/api/catalog/restaurants/{restaurantId}/menu");
+        return GetAsync<List<MenuItemResponse>>(
+            $"/api/catalog/restaurants/{restaurantId}/menu?channel=Commander"
+        );
     }
 }

@@ -20,5 +20,6 @@ public sealed record OrderLineSnapshot(
     DateTime? DispatchedAtUtc = null,
     string Format = "",
     decimal? BaseUnitPrice = null,
-    IReadOnlyList<OrderLineExtraSnapshot>? Extras = null
+    IReadOnlyList<OrderLineExtraSnapshot>? Extras = null,
+    decimal? TaxRate = null
 );

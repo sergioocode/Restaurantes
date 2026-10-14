@@ -10,11 +10,12 @@ public sealed class CreateCategoryRequest
     [Required, StringLength(120)]
     public string Name { get; init; } = "";
 
-    [Required, StringLength(40), RegularExpression("^[A-Za-z0-9_-]+$")]
+    [StringLength(40), RegularExpression("^[A-Za-z0-9_-]*$")]
     public string DefaultStationCode { get; init; } = "GENERAL";
 
-    [Required, StringLength(80)]
+    [StringLength(80)]
     public string DefaultStationName { get; init; } = "General";
+    public bool RequiresKds { get; init; } = true;
     public bool ShowInPos { get; init; } = true;
     public bool ShowInCommander { get; init; } = true;
     public bool ShowInCustomerQr { get; init; } = true;

@@ -14,5 +14,7 @@ public sealed record OrderLineDraft(
     int Priority,
     string Format = "",
     decimal? BaseUnitPrice = null,
-    IReadOnlyList<OrderLineExtra>? Extras = null
+    IReadOnlyList<OrderLineExtra>? Extras = null,
+    bool RequiresKds = true,
+    decimal? TaxRate = null
 );

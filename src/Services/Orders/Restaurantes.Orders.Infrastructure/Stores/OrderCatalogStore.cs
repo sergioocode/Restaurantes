@@ -45,7 +45,9 @@ public sealed class OrderCatalogStore(OrderWriteDbContext dbContext) : IOrderCat
                     item.IsAvailable,
                     MapExtraGroups(item.ExtraGroupsJson),
                     item.DefaultFormat,
-                    MapFormats(item.FormatsJson, item.DefaultFormat, item.Price)
+                    MapFormats(item.FormatsJson, item.DefaultFormat, item.Price),
+                    item.RequiresKds,
+                    item.TaxRate
                 );
             }
         );
@@ -64,7 +66,8 @@ public sealed class OrderCatalogStore(OrderWriteDbContext dbContext) : IOrderCat
                     .Options.Select(option => new OrderExtraOption(
                         option.ProductId,
                         option.ProductName,
-                        option.Price
+                        option.Price,
+                        option.TaxRate
                     ))
                     .ToArray()
             ))

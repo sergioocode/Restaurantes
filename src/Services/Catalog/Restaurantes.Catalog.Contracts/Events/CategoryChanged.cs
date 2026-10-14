@@ -11,5 +11,6 @@ public sealed record CategoryChanged(
     DateTime OccurredAtUtc,
     bool ShowInPos = true,
     bool ShowInCommander = true,
-    bool ShowInCustomerQr = true
+    bool ShowInCustomerQr = true,
+    bool RequiresKds = true
 );

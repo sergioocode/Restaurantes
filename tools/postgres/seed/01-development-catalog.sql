@@ -3,7 +3,7 @@
 -- No limpia pedidos; para eso usa tools/postgres/reset-operational-data.sql.
 --
 -- Antes de empezar:
---   1. Asegúrate de que las migraciones de Identity, RestaurantOperations, Catalog y Dining
+--   1. Asegúrate de que las migraciones de Identity, RestaurantOperations, Catalog, Orders y Dining
 --      estén aplicadas en restaurants_operational.
 --   2. Detén todos los servicios y workers de la aplicación.
 --   3. Desde PowerShell en la raíz del repositorio, copia el archivo al contenedor:
@@ -115,22 +115,22 @@ ON CONFLICT ("Id") DO UPDATE SET
 WITH inserted AS (
     INSERT INTO categories (
         "Id", "Code", "Name", "DefaultStationCode", "DefaultStationName",
-        "IsActive", "Version", "UpdatedAtUtc", "ShowInPos", "ShowInCommander", "ShowInCustomerQr"
+        "IsActive", "Version", "UpdatedAtUtc", "ShowInPos", "ShowInCommander", "ShowInCustomerQr", "RequiresKds"
     )
     VALUES
-        ('a1000000-0000-4000-8000-000000000001', 'PASTAS', 'Pastas', 'PASTAS', 'Pastas', true, 1, now(), true, true, true),
-        ('a1000000-0000-4000-8000-000000000002', 'BEBIDAS', 'Bebidas', 'BEBIDAS', 'Bebidas', true, 1, now(), true, true, true),
-        ('a1000000-0000-4000-8000-000000000003', 'CARNES', 'Carnes', 'CARNES', 'Carnes', true, 1, now(), true, true, true),
-        ('a1000000-0000-4000-8000-000000000004', 'POSTRES', 'Postres', 'POSTRES', 'Postres', true, 1, now(), true, true, true),
-        ('10000000-0000-4000-8000-000000000001', 'ENTRANTES', 'Entrantes', 'ENTRANTES', 'Entrantes', true, 1, now(), true, true, true),
-        ('a1000000-0000-4000-8000-000000000005', 'ENSALADAS', 'Ensaladas', 'ENTRANTES', 'Entrantes', true, 1, now(), true, true, true),
-        ('a1000000-0000-4000-8000-000000000006', 'EXTRAS', 'Extras', 'ENTRANTES', 'Entrantes', true, 1, now(), true, true, true),
-        ('a1000000-0000-4000-8000-000000000007', 'CERVEZAS', 'Cervezas', 'BEBIDAS', 'Bebidas', true, 1, now(), true, true, true),
-        ('a1000000-0000-4000-8000-000000000008', 'VINOS', 'Vinos', 'BEBIDAS', 'Bebidas', true, 1, now(), true, true, true),
-        ('a1000000-0000-4000-8000-000000000009', 'AGUAS', 'Aguas', 'BEBIDAS', 'Bebidas', true, 1, now(), true, true, true),
-        ('a1000000-0000-4000-8000-000000000010', 'MERCH', 'Merchandising', 'BEBIDAS', 'Bebidas', true, 1, now(), true, true, true),
-        ('a1000000-0000-4000-8000-000000000011', 'PROMO', 'Promo', 'ENTRANTES', 'Entrantes', true, 1, now(), true, true, true),
-        ('a1000000-0000-4000-8000-000000000012', 'COMBO', 'Combo', 'ENTRANTES', 'Entrantes', true, 1, now(), true, true, true)
+        ('a1000000-0000-4000-8000-000000000001', 'PASTAS', 'Pastas', 'PASTAS', 'Pastas', true, 1, now(), true, true, true, true),
+        ('a1000000-0000-4000-8000-000000000002', 'BEBIDAS', 'Bebidas', 'BEBIDAS', 'Bebidas', true, 1, now(), true, true, true, true),
+        ('a1000000-0000-4000-8000-000000000003', 'CARNES', 'Carnes', 'CARNES', 'Carnes', true, 1, now(), true, true, true, true),
+        ('a1000000-0000-4000-8000-000000000004', 'POSTRES', 'Postres', 'POSTRES', 'Postres', true, 1, now(), true, true, true, true),
+        ('10000000-0000-4000-8000-000000000001', 'ENTRANTES', 'Entrantes', 'ENTRANTES', 'Entrantes', true, 1, now(), true, true, true, true),
+        ('a1000000-0000-4000-8000-000000000005', 'ENSALADAS', 'Ensaladas', 'ENTRANTES', 'Entrantes', true, 1, now(), true, true, true, true),
+        ('a1000000-0000-4000-8000-000000000006', 'EXTRAS', 'Extras', 'ENTRANTES', 'Entrantes', true, 1, now(), true, true, true, true),
+        ('a1000000-0000-4000-8000-000000000007', 'CERVEZAS', 'Cervezas', 'BEBIDAS', 'Bebidas', true, 1, now(), true, true, true, true),
+        ('a1000000-0000-4000-8000-000000000008', 'VINOS', 'Vinos', 'BEBIDAS', 'Bebidas', true, 1, now(), true, true, true, true),
+        ('a1000000-0000-4000-8000-000000000009', 'AGUAS', 'Aguas', 'BEBIDAS', 'Bebidas', true, 1, now(), true, true, true, true),
+        ('a1000000-0000-4000-8000-000000000010', 'MERCH', 'Merch', '', '', true, 1, now(), true, false, true, false),
+        ('a1000000-0000-4000-8000-000000000011', 'PROMO', 'Promo', 'ENTRANTES', 'Entrantes', true, 1, now(), true, true, true, true),
+        ('a1000000-0000-4000-8000-000000000012', 'COMBO', 'Combo', 'ENTRANTES', 'Entrantes', true, 1, now(), true, true, true, true)
     ON CONFLICT ("Id") DO UPDATE SET
         "Code" = EXCLUDED."Code",
         "Name" = EXCLUDED."Name",
@@ -140,6 +140,7 @@ WITH inserted AS (
         "ShowInPos" = EXCLUDED."ShowInPos",
         "ShowInCommander" = EXCLUDED."ShowInCommander",
         "ShowInCustomerQr" = EXCLUDED."ShowInCustomerQr",
+        "RequiresKds" = EXCLUDED."RequiresKds",
         "Version" = categories."Version" + 1,
         "UpdatedAtUtc" = EXCLUDED."UpdatedAtUtc"
     RETURNING *
@@ -150,7 +151,9 @@ SELECT gen_random_uuid(),
        jsonb_build_object(
            'CategoryId', "Id", 'Code', "Code", 'Name', "Name",
            'DefaultStationCode', "DefaultStationCode", 'DefaultStationName', "DefaultStationName",
-           'IsActive', "IsActive", 'Version', "Version", 'OccurredAtUtc', to_char("UpdatedAtUtc" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
+           'IsActive', "IsActive", 'Version', "Version", 'OccurredAtUtc', to_char("UpdatedAtUtc" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+           'ShowInPos', "ShowInPos", 'ShowInCommander', "ShowInCommander", 'ShowInCustomerQr', "ShowInCustomerQr",
+           'RequiresKds', "RequiresKds"
        ),
        "UpdatedAtUtc"
 FROM inserted;
@@ -251,104 +254,88 @@ BEGIN
     END IF;
 END $$;
 
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM products product
+        LEFT JOIN taxes tax ON tax."Id" = product."TaxId"
+        WHERE product."CategoryId" = 'a1000000-0000-4000-8000-000000000010'::uuid
+          AND (tax."Id" IS NULL OR tax."Rate" <> 21.0000 OR tax."IsActive" = false)
+    ) THEN
+        RAISE EXCEPTION 'Los productos de Merch deben tener asociado el IVA general activo del 21%%.';
+    END IF;
+END $$;
+
 DELETE FROM product_prices p
 WHERE p."ProductId" IN (
     SELECT "Id" FROM products WHERE "Id" BETWEEN
         'b1000000-0000-4000-8000-000000000001'::uuid AND 'b1000000-0000-4000-8000-000000000049'::uuid
 );
 
-WITH seed_prices("Sku", "BasePrice", "IsBeverage", "IsExtra") AS (
+WITH seed_prices("Sku", "BasePrice", "Format", "FormatMultiplier") AS (
     VALUES
-        ('P001', 12.50::numeric, false, false),
-        ('P002', 13.00::numeric, false, false),
-        ('P003', 14.00::numeric, false, false),
-        ('B001', 2.20::numeric, true, false),
-        ('B002', 3.25::numeric, true, false),
-        ('B003', 3.50::numeric, true, false),
-        ('B004', 1.50::numeric, true, false),
-        ('B005', 1.80::numeric, true, false),
-        ('B006', 1.60::numeric, true, false),
-        ('B007', 3.50::numeric, true, false),
-        ('B008', 2.50::numeric, true, false),
-        ('B009', 3.00::numeric, true, false),
-        ('B010', 3.50::numeric, true, false),
-        ('B011', 4.00::numeric, true, false),
-        ('B012', 4.00::numeric, true, false),
-        ('B013', 4.00::numeric, true, false),
-        ('C001', 21.50::numeric, false, false),
-        ('C002', 13.50::numeric, false, false),
-        ('C003', 15.00::numeric, false, false),
-        ('D001', 6.50::numeric, false, false),
-        ('D002', 6.80::numeric, false, false),
-        ('D003', 5.50::numeric, false, false),
-        ('E001', 9.50::numeric, false, false),
-        ('A001', 10.00::numeric, false, false),
-        ('A002', 7.50::numeric, false, false),
-        ('X001', 1.00::numeric, false, true),
-        ('X002', 1.50::numeric, false, true),
-        ('X003', 2.50::numeric, false, true),
-        ('X004', 1.00::numeric, false, true),
-        ('X005', 2.50::numeric, false, true),
-        ('X006', 3.00::numeric, false, true),
-        ('X007', 1.50::numeric, false, true),
-        ('X008', 3.00::numeric, false, true),
-        ('X009', 1.00::numeric, false, true),
-        ('X010', 1.00::numeric, false, true),
-        ('X011', 2.50::numeric, false, true),
-        ('X012', 1.50::numeric, false, true)
-), price_variants("Channel", "Format", "Multiplier") AS (
-    VALUES
-        ('LOCAL', 'PLATO', 1.00::numeric),
-        ('LOCAL', 'RACION', 1.10::numeric),
-        ('LOCAL', 'TAPA', 0.65::numeric),
-        ('LOCAL', 'MEDIA_RACION', 0.80::numeric),
-        ('DELIVERY', 'PLATO', 1.10::numeric),
-        ('DELIVERY', 'RACION', 1.20::numeric),
-        ('DELIVERY', 'TAPA', 0.75::numeric),
-        ('DELIVERY', 'MEDIA_RACION', 0.90::numeric),
-        ('GLOVO', 'PLATO', 1.20::numeric),
-        ('GLOVO', 'RACION', 1.30::numeric),
-        ('GLOVO', 'TAPA', 0.85::numeric),
-        ('GLOVO', 'MEDIA_RACION', 1.00::numeric),
-        ('UBER', 'PLATO', 1.25::numeric),
-        ('UBER', 'RACION', 1.35::numeric),
-        ('UBER', 'TAPA', 0.90::numeric),
-        ('UBER', 'MEDIA_RACION', 1.05::numeric)
-)
-INSERT INTO product_prices ("Id", "ProductId", "RestaurantId", "Channel", "Format", "Amount")
-SELECT gen_random_uuid(), p."Id", '00000000-0000-0000-0000-000000000000'::uuid,
-       v."Channel",
-       CASE WHEN s."IsExtra" THEN 'RACION' WHEN s."IsBeverage" THEN 'UNIDAD' ELSE v."Format" END,
-       round(s."BasePrice" * CASE WHEN s."IsExtra" AND v."Channel" = 'LOCAL' THEN 1.00 ELSE v."Multiplier" END, 2)
-FROM products p
-JOIN seed_prices s ON s."Sku" = p."Sku"
-CROSS JOIN LATERAL (
-    SELECT pv."Channel", pv."Format", pv."Multiplier"
-    FROM price_variants pv
-    WHERE (s."IsExtra" AND pv."Format" = 'RACION')
-       OR (s."IsBeverage" AND pv."Format" = 'PLATO')
-       OR (NOT s."IsExtra" AND NOT s."IsBeverage")
-) v
-ON CONFLICT ("ProductId", "RestaurantId", "Channel", "Format") DO UPDATE
-SET "Amount" = EXCLUDED."Amount";
-
-WITH seed_prices("Sku", "Format", "Amount") AS (
-    VALUES
-        ('AG001', 'UNIDAD', 3.20::numeric),
-        ('AG002', 'UNIDAD', 3.50::numeric),
-        ('AG003', 'UNIDAD', 2.80::numeric),
-        ('MER001', 'UNIDAD', 18.00::numeric),
-        ('MER002', 'UNIDAD', 9.50::numeric),
-        ('MER003', 'UNIDAD', 6.00::numeric),
-        ('PR001', 'PLATO', 8.50::numeric),
-        ('PR001', 'RACION', 9.00::numeric),
-        ('PR001', 'TAPA', 4.50::numeric),
-        ('PR002', 'PLATO', 10.50::numeric),
-        ('PR002', 'RACION', 11.50::numeric),
-        ('PR003', 'PLATO', 11.00::numeric),
-        ('CO001', 'COMBO', 15.50::numeric),
-        ('CO002', 'COMBO', 14.00::numeric),
-        ('CO003', 'COMBO', 10.50::numeric)
+        ('P001', 12.50::numeric, 'PLATO', 1.00::numeric),
+        ('P001', 12.50::numeric, 'RACION', 1.10::numeric),
+        ('P001', 12.50::numeric, 'MEDIA_RACION', 0.80::numeric),
+        ('P002', 13.00::numeric, 'PLATO', 1.00::numeric),
+        ('P002', 13.00::numeric, 'MEDIA_RACION', 0.80::numeric),
+        ('P003', 14.00::numeric, 'PLATO', 1.00::numeric),
+        ('P003', 14.00::numeric, 'RACION', 1.10::numeric),
+        ('B001', 2.20::numeric, 'UNIDAD', 1.00::numeric),
+        ('B002', 3.25::numeric, 'UNIDAD', 1.00::numeric),
+        ('B003', 3.50::numeric, 'UNIDAD', 1.00::numeric),
+        ('B004', 1.50::numeric, 'UNIDAD', 1.00::numeric),
+        ('B005', 1.80::numeric, 'UNIDAD', 1.00::numeric),
+        ('B006', 1.60::numeric, 'UNIDAD', 1.00::numeric),
+        ('B007', 3.50::numeric, 'UNIDAD', 1.00::numeric),
+        ('B008', 2.50::numeric, 'UNIDAD', 1.00::numeric),
+        ('B009', 3.00::numeric, 'UNIDAD', 1.00::numeric),
+        ('B010', 3.50::numeric, 'UNIDAD', 1.00::numeric),
+        ('B011', 4.00::numeric, 'COPA', 1.00::numeric),
+        ('B012', 4.00::numeric, 'COPA', 1.00::numeric),
+        ('B013', 4.00::numeric, 'COPA', 1.00::numeric),
+        ('C001', 21.50::numeric, 'PLATO', 1.00::numeric),
+        ('C001', 21.50::numeric, 'RACION', 1.10::numeric),
+        ('C002', 13.50::numeric, 'PLATO', 1.00::numeric),
+        ('C003', 15.00::numeric, 'PLATO', 1.00::numeric),
+        ('D001', 6.50::numeric, 'PLATO', 1.00::numeric),
+        ('D002', 6.80::numeric, 'PLATO', 1.00::numeric),
+        ('D003', 5.50::numeric, 'PLATO', 1.00::numeric),
+        ('E001', 9.50::numeric, 'PLATO', 1.00::numeric),
+        ('E001', 9.50::numeric, 'MEDIA_RACION', 0.80::numeric),
+        ('E001', 9.50::numeric, 'TAPA', 0.65::numeric),
+        ('A001', 10.00::numeric, 'RACION', 1.00::numeric),
+        ('A001', 10.00::numeric, 'MEDIA_RACION', 0.80::numeric),
+        ('A001', 10.00::numeric, 'TAPA', 0.65::numeric),
+        ('A002', 7.50::numeric, 'RACION', 1.00::numeric),
+        ('A002', 7.50::numeric, 'TAPA', 0.65::numeric),
+        ('X001', 1.00::numeric, 'RACION', 1.00::numeric),
+        ('X002', 1.50::numeric, 'RACION', 1.00::numeric),
+        ('X003', 2.50::numeric, 'RACION', 1.00::numeric),
+        ('X004', 1.00::numeric, 'RACION', 1.00::numeric),
+        ('X005', 2.50::numeric, 'RACION', 1.00::numeric),
+        ('X006', 3.00::numeric, 'RACION', 1.00::numeric),
+        ('X007', 1.50::numeric, 'RACION', 1.00::numeric),
+        ('X008', 3.00::numeric, 'RACION', 1.00::numeric),
+        ('X009', 1.00::numeric, 'RACION', 1.00::numeric),
+        ('X010', 1.00::numeric, 'RACION', 1.00::numeric),
+        ('X011', 2.50::numeric, 'RACION', 1.00::numeric),
+        ('X012', 1.50::numeric, 'RACION', 1.00::numeric),
+        ('AG001', 3.20::numeric, 'UNIDAD', 1.00::numeric),
+        ('AG002', 3.50::numeric, 'UNIDAD', 1.00::numeric),
+        ('AG003', 2.80::numeric, 'UNIDAD', 1.00::numeric),
+        ('MER001', 18.00::numeric, 'UNIDAD', 1.00::numeric),
+        ('MER002', 9.50::numeric, 'UNIDAD', 1.00::numeric),
+        ('MER003', 6.00::numeric, 'UNIDAD', 1.00::numeric),
+        ('PR001', 8.50::numeric, 'PLATO', 1.00::numeric),
+        ('PR001', 8.50::numeric, 'TAPA', 0.65::numeric),
+        ('PR002', 10.50::numeric, 'PLATO', 1.00::numeric),
+        ('PR002', 10.50::numeric, 'MEDIA_RACION', 0.80::numeric),
+        ('PR003', 11.00::numeric, 'PLATO', 1.00::numeric),
+        ('CO001', 15.50::numeric, 'COMBO', 1.00::numeric),
+        ('CO002', 14.00::numeric, 'COMBO', 1.00::numeric),
+        ('CO003', 10.50::numeric, 'COMBO', 1.00::numeric)
 ), channels("Channel", "Multiplier") AS (
     VALUES
         ('LOCAL', 1.00::numeric),
@@ -358,9 +345,10 @@ WITH seed_prices("Sku", "Format", "Amount") AS (
 )
 INSERT INTO product_prices ("Id", "ProductId", "RestaurantId", "Channel", "Format", "Amount")
 SELECT gen_random_uuid(), product."Id", '00000000-0000-0000-0000-000000000000'::uuid,
-       channel."Channel", price."Format", round(price."Amount" * channel."Multiplier", 2)
-FROM seed_prices price
-JOIN products product ON product."Sku" = price."Sku"
+       channel."Channel", seed."Format",
+       round(seed."BasePrice" * seed."FormatMultiplier" * channel."Multiplier", 2)
+FROM products product
+JOIN seed_prices seed ON seed."Sku" = product."Sku"
 CROSS JOIN channels channel
 ON CONFLICT ("ProductId", "RestaurantId", "Channel", "Format") DO UPDATE
 SET "Amount" = EXCLUDED."Amount";
@@ -396,9 +384,9 @@ INSERT INTO product_option_groups (
     "Id", "ParentProductId", "Name", "Kind", "MinSelections", "MaxSelections", "SortOrder"
 )
 VALUES
-    ('c1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001', 'Extras', 'Extra', 0, 12, 0),
-    ('c1000000-0000-4000-8000-000000000002', 'b1000000-0000-4000-8000-000000000002', 'Extras', 'Extra', 0, 12, 0),
-    ('c1000000-0000-4000-8000-000000000003', 'b1000000-0000-4000-8000-000000000003', 'Extras', 'Extra', 0, 12, 0)
+    ('c1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001', 'Extras', 'Extra', 0, 6, 0),
+    ('c1000000-0000-4000-8000-000000000002', 'b1000000-0000-4000-8000-000000000002', 'Extras', 'Extra', 0, 6, 0),
+    ('c1000000-0000-4000-8000-000000000003', 'b1000000-0000-4000-8000-000000000003', 'Extras', 'Extra', 0, 6, 0)
 ON CONFLICT ("Id") DO UPDATE SET
     "ParentProductId" = EXCLUDED."ParentProductId",
     "Name" = EXCLUDED."Name",
@@ -407,19 +395,50 @@ ON CONFLICT ("Id") DO UPDATE SET
     "MaxSelections" = EXCLUDED."MaxSelections",
     "SortOrder" = EXCLUDED."SortOrder";
 
-INSERT INTO product_options ("GroupId", "ProductId", "SortOrder")
-SELECT g."Id", extra."Id", (row_number() OVER (PARTITION BY g."Id" ORDER BY extra."Sku") - 1)::integer
-FROM product_option_groups g
-CROSS JOIN products extra
-WHERE g."Id" IN (
-    'c1000000-0000-4000-8000-000000000001'::uuid,
-    'c1000000-0000-4000-8000-000000000002'::uuid,
-    'c1000000-0000-4000-8000-000000000003'::uuid
+WITH extra_choices("GroupId", "ProductSku", "ExtraSku", "SortOrder") AS (
+    VALUES
+        ('c1000000-0000-4000-8000-000000000001'::uuid, 'P001', 'X001', 0),
+        ('c1000000-0000-4000-8000-000000000001'::uuid, 'P001', 'X003', 1),
+        ('c1000000-0000-4000-8000-000000000001'::uuid, 'P001', 'X004', 2),
+        ('c1000000-0000-4000-8000-000000000001'::uuid, 'P001', 'X005', 3),
+        ('c1000000-0000-4000-8000-000000000001'::uuid, 'P001', 'X006', 4),
+        ('c1000000-0000-4000-8000-000000000001'::uuid, 'P001', 'X012', 5),
+        ('c1000000-0000-4000-8000-000000000002'::uuid, 'P002', 'X001', 0),
+        ('c1000000-0000-4000-8000-000000000002'::uuid, 'P002', 'X004', 1),
+        ('c1000000-0000-4000-8000-000000000002'::uuid, 'P002', 'X005', 2),
+        ('c1000000-0000-4000-8000-000000000002'::uuid, 'P002', 'X006', 3),
+        ('c1000000-0000-4000-8000-000000000002'::uuid, 'P002', 'X008', 4),
+        ('c1000000-0000-4000-8000-000000000002'::uuid, 'P002', 'X012', 5),
+        ('c1000000-0000-4000-8000-000000000003'::uuid, 'P003', 'X001', 0),
+        ('c1000000-0000-4000-8000-000000000003'::uuid, 'P003', 'X003', 1),
+        ('c1000000-0000-4000-8000-000000000003'::uuid, 'P003', 'X004', 2),
+        ('c1000000-0000-4000-8000-000000000003'::uuid, 'P003', 'X006', 3),
+        ('c1000000-0000-4000-8000-000000000003'::uuid, 'P003', 'X011', 4),
+        ('c1000000-0000-4000-8000-000000000003'::uuid, 'P003', 'X012', 5)
 )
-  AND extra."Id" BETWEEN 'b1000000-0000-4000-8000-000000000016'::uuid
-                      AND 'b1000000-0000-4000-8000-000000000027'::uuid
+INSERT INTO product_options ("GroupId", "ProductId", "SortOrder")
+SELECT choices."GroupId", extra."Id", choices."SortOrder"
+FROM extra_choices choices
+JOIN products parent ON parent."Sku" = choices."ProductSku"
+JOIN products extra ON extra."Sku" = choices."ExtraSku"
 ON CONFLICT ("GroupId", "ProductId") DO UPDATE
 SET "SortOrder" = EXCLUDED."SortOrder";
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM product_option_groups group_item
+        LEFT JOIN product_options option_item ON option_item."GroupId" = group_item."Id"
+        WHERE group_item."ParentProductId" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
+                                                  AND 'b1000000-0000-4000-8000-000000000049'::uuid
+          AND group_item."Kind" = 'Extra'
+        GROUP BY group_item."ParentProductId", group_item."Id", group_item."MaxSelections"
+        HAVING count(option_item."ProductId") > 6 OR group_item."MaxSelections" > 6
+    ) THEN
+        RAISE EXCEPTION 'Un producto del seed tiene más de seis extras configurados.';
+    END IF;
+END $$;
 
 -- Cada combo contiene dos componentes fijos, modelados como grupos de elección de una opción.
 WITH combo_groups("Id", "ParentProductId", "Name", "SortOrder") AS (
@@ -490,12 +509,21 @@ SET "Amount" = EXCLUDED."Amount";
 
 INSERT INTO catalog_menu_entries ("Id", "MenuId", "ProductId", "IsAvailable", "DefaultFormat", "SortOrder")
 SELECT gen_random_uuid(), '11111111-1111-4111-8111-111111111111'::uuid, p."Id", true,
-       CASE c."Code" WHEN 'BEBIDAS' THEN 'UNIDAD' WHEN 'CERVEZAS' THEN 'UNIDAD' WHEN 'VINOS' THEN 'UNIDAD'
-           WHEN 'AGUAS' THEN 'UNIDAD' WHEN 'MERCH' THEN 'UNIDAD' WHEN 'COMBO' THEN 'COMBO'
-           WHEN 'EXTRAS' THEN 'RACION' ELSE 'PLATO' END,
+       default_price."Format",
        (row_number() OVER (ORDER BY p."Sku") - 1)::integer
 FROM products p
-JOIN categories c ON c."Id" = p."CategoryId"
+CROSS JOIN LATERAL (
+    SELECT price."Format"
+    FROM product_prices price
+    WHERE price."ProductId" = p."Id"
+      AND price."RestaurantId" = '00000000-0000-0000-0000-000000000000'::uuid
+      AND price."Channel" = 'LOCAL'
+    ORDER BY CASE price."Format"
+        WHEN 'PLATO' THEN 0 WHEN 'UNIDAD' THEN 0 WHEN 'COMBO' THEN 0
+        WHEN 'COPA' THEN 0 WHEN 'RACION' THEN 0 ELSE 1 END,
+        price."Format"
+    LIMIT 1
+) default_price
 WHERE p."Id" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
                   AND 'b1000000-0000-4000-8000-000000000049'::uuid
 AND NOT EXISTS (
@@ -506,15 +534,57 @@ AND NOT EXISTS (
 
 UPDATE catalog_menu_entries e
 SET "IsAvailable" = true,
-    "DefaultFormat" = CASE c."Code" WHEN 'BEBIDAS' THEN 'UNIDAD' WHEN 'CERVEZAS' THEN 'UNIDAD' WHEN 'VINOS' THEN 'UNIDAD'
-        WHEN 'AGUAS' THEN 'UNIDAD' WHEN 'MERCH' THEN 'UNIDAD' WHEN 'COMBO' THEN 'COMBO'
-        WHEN 'EXTRAS' THEN 'RACION' ELSE 'PLATO' END
+    "DefaultFormat" = default_price."Format"
 FROM products p
-JOIN categories c ON c."Id" = p."CategoryId"
+CROSS JOIN LATERAL (
+    SELECT price."Format"
+    FROM product_prices price
+    WHERE price."ProductId" = p."Id"
+      AND price."RestaurantId" = '00000000-0000-0000-0000-000000000000'::uuid
+      AND price."Channel" = 'LOCAL'
+    ORDER BY CASE price."Format"
+        WHEN 'PLATO' THEN 0 WHEN 'UNIDAD' THEN 0 WHEN 'COMBO' THEN 0
+        WHEN 'COPA' THEN 0 WHEN 'RACION' THEN 0 ELSE 1 END,
+        price."Format"
+    LIMIT 1
+) default_price
 WHERE e."MenuId" = '11111111-1111-4111-8111-111111111111'::uuid
   AND e."ProductId" = p."Id"
   AND p."Id" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
                   AND 'b1000000-0000-4000-8000-000000000049'::uuid;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT price."ProductId", price."Channel"
+        FROM product_prices price
+        WHERE price."RestaurantId" = '00000000-0000-0000-0000-000000000000'::uuid
+          AND price."ProductId" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
+                                     AND 'b1000000-0000-4000-8000-000000000049'::uuid
+        GROUP BY price."ProductId", price."Channel"
+        HAVING count(DISTINCT price."Format") > 3
+    ) THEN
+        RAISE EXCEPTION 'Un producto del seed tiene más de tres formatos de precio.';
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM catalog_menu_entries entry
+        WHERE entry."MenuId" = '11111111-1111-4111-8111-111111111111'::uuid
+          AND entry."ProductId" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
+                                     AND 'b1000000-0000-4000-8000-000000000049'::uuid
+          AND NOT EXISTS (
+              SELECT 1
+              FROM catalog_menu_prices price
+              WHERE price."MenuId" = entry."MenuId"
+                AND price."ProductId" = entry."ProductId"
+                AND price."Channel" = 'LOCAL'
+                AND price."Format" = entry."DefaultFormat"
+          )
+    ) THEN
+        RAISE EXCEPTION 'Un producto del seed no tiene precio para su formato predeterminado.';
+    END IF;
+END $$;
 
 -- Madrid Centro y Barcelona Centro operan con la carta del local. Los demás
 -- conservan su selección actual; ON CONFLICT respeta los cambios del manager.
@@ -634,7 +704,8 @@ SELECT gen_random_uuid(),
            'RestaurantId', i."RestaurantId", 'ProductId', i."ProductId", 'Sku', p."Sku", 'ProductName', p."Name",
            'CategoryId', c."Id", 'CategoryCode', c."Code", 'CategoryName', c."Name", 'Price', i."Price",
            'IsAvailable', i."IsAvailable", 'PreparationStationCode', i."PreparationStationCode",
-           'PreparationStationName', i."PreparationStationName", 'Version', i."Version",
+           'PreparationStationName', i."PreparationStationName", 'RequiresKds', c."RequiresKds",
+           'TaxRate', (SELECT tax."Rate" FROM taxes tax WHERE tax."Id" = p."TaxId"), 'Version', i."Version",
            'OccurredAtUtc', to_char(i."UpdatedAtUtc" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
            'DefaultFormat', entry."DefaultFormat",
            'Formats', COALESCE((
@@ -658,7 +729,8 @@ SELECT gen_random_uuid(),
                                    'ProductId', extra."Id",
                                    'Sku', extra."Sku",
                                    'ProductName', extra."Name",
-                                   'Price', extra_price."Amount"
+                                   'Price', extra_price."Amount",
+                                   'TaxRate', (SELECT tax."Rate" FROM taxes tax WHERE tax."Id" = extra."TaxId")
                                ) ORDER BY po."SortOrder"
                            )
                            FROM product_options po

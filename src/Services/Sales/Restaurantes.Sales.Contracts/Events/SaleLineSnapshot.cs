@@ -9,12 +9,14 @@ public sealed record SaleLineSnapshot(
     string PreparationStationCode,
     string Format = "",
     decimal? BaseUnitPrice = null,
-    IReadOnlyList<SaleLineExtraSnapshot>? Extras = null
+    IReadOnlyList<SaleLineExtraSnapshot>? Extras = null,
+    decimal? TaxRate = null
 );
 
 public sealed record SaleLineExtraSnapshot(
     Guid ProductId,
     string ProductName,
     decimal UnitPrice,
-    int Quantity
+    int Quantity,
+    decimal? TaxRate = null
 );

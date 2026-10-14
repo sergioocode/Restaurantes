@@ -1,6 +1,11 @@
 namespace Restaurantes.Orders.Application;
 
-public sealed record OrderExtraOption(Guid ProductId, string ProductName, decimal Price);
+public sealed record OrderExtraOption(
+    Guid ProductId,
+    string ProductName,
+    decimal Price,
+    decimal? TaxRate = null
+);
 
 public sealed record OrderCatalogFormat(string Format, decimal Price);
 
@@ -26,5 +31,7 @@ public sealed record OrderCatalogProduct(
     bool IsAvailable,
     IReadOnlyList<OrderExtraGroup> ExtraGroups,
     string DefaultFormat,
-    IReadOnlyList<OrderCatalogFormat> Formats
+    IReadOnlyList<OrderCatalogFormat> Formats,
+    bool RequiresKds = true,
+    decimal? TaxRate = null
 );

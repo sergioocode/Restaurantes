@@ -81,7 +81,8 @@ public sealed class ManagementOrderQuery(OrderWriteDbContext db, TimeZoneInfo ti
                                 extra.ProductId,
                                 extra.ProductName,
                                 extra.UnitPrice,
-                                extra.Quantity
+                                extra.Quantity,
+                                extra.TaxRate
                             ))
                             .ToList()
                     ))

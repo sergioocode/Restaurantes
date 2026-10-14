@@ -15,5 +15,8 @@ public sealed record OrderSubmitted(
     DateTime CreatedAtUtc,
     DateTime SubmittedAtUtc,
     IReadOnlyList<OrderLineSnapshot> Lines,
-    IReadOnlyList<OrderKitchenStationSnapshot> Stations
+    IReadOnlyList<OrderKitchenStationSnapshot> Stations,
+    string Status = "Submitted",
+    DateTime? ReadyAtUtc = null,
+    DateTime? DeliveredAtUtc = null
 );
