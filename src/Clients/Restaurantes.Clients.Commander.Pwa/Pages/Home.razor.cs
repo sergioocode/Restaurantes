@@ -203,7 +203,14 @@ public partial class Home
         diningSession is not null && diningSession.OpenedByUserId == login?.User.Id;
     private bool CanReleasePaidSession =>
         bill is { Status: "Open", CanRelease: true }
-        && bill.Orders.Any(order => IsOwnCommanderOrder(order) && order.OrderStatus != "Cancelled");
+        && (
+            bill.Orders.Any(order => IsOwnCommanderOrder(order) && order.OrderStatus != "Cancelled")
+            || (
+                bill.Orders.Count > 0
+                && bill.Orders.All(order => order.OrderStatus == "Cancelled")
+                && bill.Orders.Any(IsOwnCommanderOrder)
+            )
+        );
 
     private bool IsOwnCommanderOrder(SessionBillOrderResponse order) =>
         order.Source == "Comandero" && order.CreatedByUserId == login?.User.Id;
