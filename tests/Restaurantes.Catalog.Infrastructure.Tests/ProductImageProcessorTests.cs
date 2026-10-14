@@ -14,7 +14,7 @@ public sealed class ProductImageProcessorTests
 
         ProcessedProductImage result = ProductImageProcessor.Process(encoded.ToArray());
 
-        Assert.Equal("png", result.OriginalExtension);
+        Assert.Equal("image/png", result.OriginalContentType);
         Assert.Equal(
             ["thumbnail.webp", "card.webp", "detail.webp"],
             result.Variants.Select(x => x.Name)
