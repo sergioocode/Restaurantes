@@ -33,9 +33,11 @@ public sealed partial class OrderCommandService
                         extra.ProductId,
                         extra.ProductName,
                         extra.UnitPrice,
-                        extra.Quantity
+                        extra.Quantity,
+                        extra.TaxRate
                     ))
-                    .ToList()
+                    .ToList(),
+                x.TaxRate
             ))
             .ToList();
     }
@@ -150,9 +152,11 @@ public sealed partial class OrderCommandService
                             extra.ProductId,
                             extra.ProductName,
                             extra.UnitPrice,
-                            extra.Quantity
+                            extra.Quantity,
+                            extra.TaxRate
                         ))
-                        .ToList()
+                        .ToList(),
+                    x.TaxRate
                 ))
                 .ToList(),
             o.Stations.OrderBy(x => x.Code)

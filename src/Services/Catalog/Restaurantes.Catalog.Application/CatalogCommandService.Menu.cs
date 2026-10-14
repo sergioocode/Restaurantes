@@ -25,6 +25,7 @@ public sealed partial class CatalogCommandService
         {
             return null;
         }
+        decimal? taxRate = await store.FindActiveTaxRateAsync(product.TaxId, ct);
 
         string stationCode = string.IsNullOrWhiteSpace(request.PreparationStationCode)
             ? category.DefaultStationCode
@@ -32,17 +33,25 @@ public sealed partial class CatalogCommandService
         string stationName = string.IsNullOrWhiteSpace(request.PreparationStationName)
             ? category.DefaultStationName
             : request.PreparationStationName;
-        RestaurantKitchenStation? station = await store.FindStationByCodeAsync(
-            restaurantId,
-            stationCode.Trim().ToUpperInvariant(),
-            ct
-        );
-        if (station is null || !station.IsActive)
+        if (category.RequiresKds)
         {
-            return null;
+            RestaurantKitchenStation? station = await store.FindStationByCodeAsync(
+                restaurantId,
+                stationCode.Trim().ToUpperInvariant(),
+                ct
+            );
+            if (station is null || !station.IsActive)
+            {
+                return null;
+            }
+            stationCode = station.Code;
+            stationName = station.Name;
         }
-        stationCode = station.Code;
-        stationName = station.Name;
+        else
+        {
+            stationCode = category.DefaultStationCode;
+            stationName = category.DefaultStationName;
+        }
         DateTime now = timeProvider.GetUtcNow().UtcDateTime;
         RestaurantMenuItem? item = await store.FindMenuItemAsync(restaurantId, productId, ct);
         if (item is null)
@@ -75,7 +84,9 @@ public sealed partial class CatalogCommandService
             item.PreparationStationCode,
             item.PreparationStationName,
             item.Version,
-            now
+            now,
+            RequiresKds: category.RequiresKds,
+            TaxRate: taxRate
         );
         await store.SaveWithEventAsync(item, message, ct);
         return new(
@@ -88,10 +99,12 @@ public sealed partial class CatalogCommandService
             category.Name,
             item.Price,
             item.IsAvailable,
-            item.PreparationStationCode,
-            item.PreparationStationName,
+            category.RequiresKds ? item.PreparationStationCode : "",
+            category.RequiresKds ? item.PreparationStationName : "",
             item.Version,
-            now
+            now,
+            RequiresKds: category.RequiresKds,
+            TaxRate: taxRate
         );
     }
 }

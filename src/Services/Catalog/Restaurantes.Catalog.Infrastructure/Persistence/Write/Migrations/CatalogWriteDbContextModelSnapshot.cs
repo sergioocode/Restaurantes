@@ -51,6 +51,11 @@ namespace Restaurantes.Catalog.Infrastructure.Persistence.Write.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
+                    b.Property<bool>("RequiresKds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<bool>("ShowInCommander")
                         .HasColumnType("boolean");
 

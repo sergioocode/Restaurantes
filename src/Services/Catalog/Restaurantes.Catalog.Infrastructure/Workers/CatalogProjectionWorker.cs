@@ -100,6 +100,7 @@ public sealed class CatalogProjectionWorker(
                                 Name = e.Name,
                                 DefaultStationCode = e.DefaultStationCode,
                                 DefaultStationName = e.DefaultStationName,
+                                RequiresKds = e.RequiresKds,
                                 IsActive = e.IsActive,
                                 ShowInPos = e.ShowInPos,
                                 ShowInCommander = e.ShowInCommander,
@@ -115,6 +116,7 @@ public sealed class CatalogProjectionWorker(
                         x.Name = e.Name;
                         x.DefaultStationCode = e.DefaultStationCode;
                         x.DefaultStationName = e.DefaultStationName;
+                        x.RequiresKds = e.RequiresKds;
                         x.IsActive = e.IsActive;
                         x.ShowInPos = e.ShowInPos;
                         x.ShowInCommander = e.ShowInCommander;
@@ -131,6 +133,7 @@ public sealed class CatalogProjectionWorker(
                         {
                             menuItem.CategoryCode = e.Code;
                             menuItem.CategoryName = e.Name;
+                            menuItem.RequiresKds = e.RequiresKds;
                             menuItem.UpdatedAtUtc = e.OccurredAtUtc;
                         }
                     }
@@ -210,6 +213,7 @@ public sealed class CatalogProjectionWorker(
                                 IsAvailable = e.IsAvailable,
                                 PreparationStationCode = e.PreparationStationCode,
                                 PreparationStationName = e.PreparationStationName,
+                                RequiresKds = e.RequiresKds,
                                 Version = e.Version,
                                 UpdatedAtUtc = e.OccurredAtUtc,
                             }
@@ -226,6 +230,7 @@ public sealed class CatalogProjectionWorker(
                         x.IsAvailable = e.IsAvailable;
                         x.PreparationStationCode = e.PreparationStationCode;
                         x.PreparationStationName = e.PreparationStationName;
+                        x.RequiresKds = e.RequiresKds;
                         x.Version = e.Version;
                         x.UpdatedAtUtc = e.OccurredAtUtc;
                     }

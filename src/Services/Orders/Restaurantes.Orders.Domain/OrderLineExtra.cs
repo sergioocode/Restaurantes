@@ -4,5 +4,6 @@ public sealed record OrderLineExtra(
     Guid ProductId,
     string ProductName,
     decimal UnitPrice,
-    int Quantity
+    int Quantity,
+    decimal? TaxRate = null
 );

@@ -79,7 +79,25 @@ public sealed class CatalogProjectionWorker(
         {
             await using AsyncServiceScope s = scopes.CreateAsyncScope();
             OrderWriteDbContext db = s.ServiceProvider.GetRequiredService<OrderWriteDbContext>();
-            if (ea.BasicProperties.Type == typeof(CatalogItemChanged).FullName)
+            if (ea.BasicProperties.Type == typeof(CategoryChanged).FullName)
+            {
+                CategoryChanged e =
+                    JsonSerializer.Deserialize<CategoryChanged>(ea.Body.Span)
+                    ?? throw new JsonException("Empty category");
+                List<OrderCatalogItem> products = await db
+                    .CatalogItems.Where(item => item.CategoryId == e.CategoryId)
+                    .ToListAsync();
+                foreach (OrderCatalogItem product in products)
+                {
+                    product.RequiresKds = e.RequiresKds;
+                    if (e.RequiresKds && string.IsNullOrWhiteSpace(product.StationCode))
+                    {
+                        product.StationCode = e.DefaultStationCode;
+                        product.StationName = e.DefaultStationName;
+                    }
+                }
+            }
+            else if (ea.BasicProperties.Type == typeof(CatalogItemChanged).FullName)
             {
                 CatalogItemChanged e =
                     JsonSerializer.Deserialize<CatalogItemChanged>(ea.Body.Span)
@@ -98,12 +116,14 @@ public sealed class CatalogProjectionWorker(
                             ProductId = e.ProductId,
                             ProductName = e.ProductName,
                             Price = e.Price,
+                            TaxRate = e.TaxRate,
                             DefaultFormat = e.DefaultFormat,
                             FormatsJson = JsonSerializer.Serialize(e.Formats ?? []),
                             CategoryId = e.CategoryId,
                             CategoryName = e.CategoryName,
                             StationCode = e.PreparationStationCode,
                             StationName = e.PreparationStationName,
+                            RequiresKds = e.RequiresKds,
                             IsAvailable = e.IsAvailable,
                             ExtraGroupsJson = JsonSerializer.Serialize(e.ExtraGroups ?? []),
                             Version = e.Version,
@@ -115,12 +135,14 @@ public sealed class CatalogProjectionWorker(
                 {
                     x.ProductName = e.ProductName;
                     x.Price = e.Price;
+                    x.TaxRate = e.TaxRate;
                     x.DefaultFormat = e.DefaultFormat;
                     x.FormatsJson = JsonSerializer.Serialize(e.Formats ?? []);
                     x.CategoryId = e.CategoryId;
                     x.CategoryName = e.CategoryName;
                     x.StationCode = e.PreparationStationCode;
                     x.StationName = e.PreparationStationName;
+                    x.RequiresKds = e.RequiresKds;
                     x.IsAvailable = e.IsAvailable;
                     x.ExtraGroupsJson = JsonSerializer.Serialize(e.ExtraGroups ?? []);
                     x.Version = e.Version;

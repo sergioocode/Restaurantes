@@ -25,7 +25,8 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
                 x.UpdatedAtUtc,
                 x.ShowInPos,
                 x.ShowInCommander,
-                x.ShowInCustomerQr
+                x.ShowInCustomerQr,
+                x.RequiresKds
             ))
             .ToListAsync(ct);
     }
@@ -49,6 +50,7 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
 
     public async Task<IReadOnlyList<MenuItemResponse>> ListMenuAsync(
         Guid restaurantId,
+        CatalogClientChannel channel,
         CancellationToken ct
     )
     {
@@ -92,10 +94,17 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
             .Where(x => taxedIds.Contains(x.Id))
             .ToDictionaryAsync(x => x.Id, ct);
         Guid[] categoryIds = products.Values.Select(x => x.CategoryId).Distinct().ToArray();
-        var categories = await db
+        IQueryable<CategoryReadModel> categoryQuery = db
             .Categories.AsNoTracking()
-            .Where(x => categoryIds.Contains(x.Id) && x.IsActive)
-            .ToDictionaryAsync(x => x.Id, ct);
+            .Where(x => categoryIds.Contains(x.Id) && x.IsActive);
+        categoryQuery = channel switch
+        {
+            CatalogClientChannel.Pos => categoryQuery.Where(x => x.ShowInPos),
+            CatalogClientChannel.Commander => categoryQuery.Where(x => x.ShowInCommander),
+            CatalogClientChannel.CustomerQr => categoryQuery.Where(x => x.ShowInCustomerQr),
+            _ => categoryQuery.Where(x => false),
+        };
+        var categories = await categoryQuery.ToDictionaryAsync(x => x.Id, ct);
         var stations = await db
             .MenuItems.AsNoTracking()
             .Where(x => x.RestaurantId == restaurantId && ids.Contains(x.ProductId))
@@ -199,8 +208,12 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
                     category.Name,
                     price.Amount,
                     true,
-                    station?.PreparationStationCode ?? category.DefaultStationCode,
-                    station?.PreparationStationName ?? category.DefaultStationName,
+                    category.RequiresKds
+                        ? station?.PreparationStationCode ?? category.DefaultStationCode
+                        : "",
+                    category.RequiresKds
+                        ? station?.PreparationStationName ?? category.DefaultStationName
+                        : "",
                     product.Version,
                     product.UpdatedAtUtc,
                     entry.DefaultFormat,
@@ -211,7 +224,8 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
                     prices
                         .Where(x => x.ProductId == product.Id)
                         .Select(x => new MenuItemFormatPrice(x.Format, x.Amount))
-                        .ToArray()
+                        .ToArray(),
+                    category.RequiresKds
                 )
             );
         }
@@ -238,10 +252,17 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
                 x.CategoryName,
                 x.Price,
                 x.IsAvailable,
-                x.PreparationStationCode,
-                x.PreparationStationName,
+                x.RequiresKds ? x.PreparationStationCode : "",
+                x.RequiresKds ? x.PreparationStationName : "",
                 x.Version,
-                x.UpdatedAtUtc
+                x.UpdatedAtUtc,
+                "PLATO",
+                "",
+                "",
+                "",
+                null,
+                null,
+                x.RequiresKds
             ))
             .ToListAsync(ct);
     }

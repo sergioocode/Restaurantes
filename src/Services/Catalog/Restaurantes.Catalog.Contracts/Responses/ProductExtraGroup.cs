@@ -4,7 +4,8 @@ public sealed record ProductExtraOption(
     Guid ProductId,
     string Sku,
     string ProductName,
-    decimal Price
+    decimal Price,
+    decimal? TaxRate = null
 );
 
 public sealed record ProductExtraGroup(

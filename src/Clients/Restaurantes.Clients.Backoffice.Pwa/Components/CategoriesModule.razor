@@ -4,13 +4,19 @@ else
     <details class="admin-panel" open><summary>Nueva categoría</summary>
         <form class="inline-form category-create-form" @onsubmit="Host.CreateCategory" @onsubmit:preventDefault>
             <input placeholder="Código" @bind="Host.categoryDraft.Code" /><input placeholder="Nombre" @bind="Host.categoryDraft.Name" />
-            <select value="@Host.categoryDraft.DefaultStationCode" @onchange="Host.SelectDraftCategoryStation" disabled="@(Host.stations.Count(x => x.IsActive) == 0)">
-                <option value="">Estación KDS</option>
-                @foreach (KitchenStationResponse station in Host.stations.Where(x => x.IsActive && !x.IsPrimary).OrderBy(x => x.Name))
+            <div class="category-kds-config">
+                <label class="availability"><input type="checkbox" @bind="Host.categoryDraft.RequiresKds" /> Requiere KDS</label>
+                @if (Host.categoryDraft.RequiresKds)
                 {
-                    <option value="@station.Code">@station.Name</option>
+                    <select aria-label="Estación KDS" value="@Host.categoryDraft.DefaultStationCode" @onchange="Host.SelectDraftCategoryStation" disabled="@(Host.stations.Count(x => x.IsActive) == 0)">
+                        <option value="">Estación KDS</option>
+                        @foreach (KitchenStationResponse station in Host.stations.Where(x => x.IsActive && !x.IsPrimary).OrderBy(x => x.Name))
+                        {
+                            <option value="@station.Code">@station.Name</option>
+                        }
+                    </select>
                 }
-            </select>
+            </div>
             <div class="category-visibility">
                 <label><input type="checkbox" @bind="Host.categoryDraft.ShowInPos" /> TPV</label>
                 <label><input type="checkbox" @bind="Host.categoryDraft.ShowInCommander" /> Comandero</label>
@@ -33,7 +39,10 @@ else
                         </svg>
                     </button>
                 </div>
-                <label>Estación KDS<select value="@item.DefaultStationCode" @onchange="args => SetStation(item, args)" disabled="@Host.busy">
+                <label class="availability"><input type="checkbox" checked="@item.RequiresKds" @onchange="args => SetRequiresKds(item, args)" disabled="@Host.busy" /> Requiere KDS</label>
+                @if (item.RequiresKds)
+                {
+                    <label>Estación KDS<select value="@item.DefaultStationCode" @onchange="args => SetStation(item, args)" disabled="@Host.busy">
                     @if (!Host.stations.Any(x => x.Code == item.DefaultStationCode))
                     {
                         <option value="@item.DefaultStationCode">@item.DefaultStationName (no disponible en este local)</option>
@@ -42,7 +51,12 @@ else
                     {
                         <option value="@station.Code">@station.Name</option>
                     }
-                </select></label>
+                    </select></label>
+                }
+                else
+                {
+                    <span class="muted">Sin preparación KDS</span>
+                }
                 <label class="availability"><input type="checkbox" checked="@item.IsActive" @onchange="args => SetFlag(item, args, () => item.IsActive, value => item.IsActive = value)" disabled="@Host.busy" /> Activa</label>
                 <div class="category-visibility">
                     <label><input type="checkbox" checked="@item.ShowInPos" @onchange="args => SetFlag(item, args, () => item.ShowInPos, value => item.ShowInPos = value)" disabled="@Host.busy" /> TPV</label>
@@ -118,6 +132,25 @@ else
             item.DefaultStationCode = previousCode;
             item.DefaultStationName = previousName;
         }
+    }
+
+    private async Task SetRequiresKds(CategoryResponse item, ChangeEventArgs args)
+    {
+        bool selected = args.Value is bool value && value;
+        if (selected && string.IsNullOrWhiteSpace(item.DefaultStationCode))
+        {
+            KitchenStationResponse? station = Host.stations.FirstOrDefault(x =>
+                x.IsActive && !x.IsPrimary
+            );
+            if (station is null)
+            {
+                return;
+            }
+            item.DefaultStationCode = station.Code;
+            item.DefaultStationName = station.Name;
+        }
+
+        await SetFlag(item, args, () => item.RequiresKds, value => item.RequiresKds = value);
     }
 
     private async Task SetFlag(

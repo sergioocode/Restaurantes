@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Restaurantes.Catalog.Application;
 using Restaurantes.Catalog.Domain;
 using Restaurantes.Catalog.Infrastructure.Persistence.Read;
 using Restaurantes.Catalog.Infrastructure.Persistence.Write;
@@ -120,6 +121,7 @@ public sealed class CatalogMenuSelectionTests
                 DefaultStationCode = category.DefaultStationCode,
                 DefaultStationName = category.DefaultStationName,
                 IsActive = true,
+                ShowInCommander = false,
             }
         );
         read.Products.Add(
@@ -146,7 +148,7 @@ public sealed class CatalogMenuSelectionTests
         await read.SaveChangesAsync(ct);
 
         CatalogReadStore store = new(read, write);
-        Assert.Empty(await store.ListMenuAsync(restaurantId, ct));
+        Assert.Empty(await store.ListMenuAsync(restaurantId, CatalogClientChannel.Pos, ct));
 
         write.RestaurantProductAvailabilities.Add(
             new RestaurantProductAvailability
@@ -157,7 +159,10 @@ public sealed class CatalogMenuSelectionTests
             }
         );
         await write.SaveChangesAsync(ct);
-        var selected = Assert.Single(await store.ListMenuAsync(restaurantId, ct));
+        var selected = Assert.Single(
+            await store.ListMenuAsync(restaurantId, CatalogClientChannel.Pos, ct)
+        );
+        Assert.Empty(await store.ListMenuAsync(restaurantId, CatalogClientChannel.Commander, ct));
         Assert.Equal(10, selected.Price);
         Assert.Equal("PLATO", selected.DefaultFormat);
         Assert.Contains(selected.Formats!, x => x.Format == "PLATO" && x.Price == 10);
@@ -166,21 +171,21 @@ public sealed class CatalogMenuSelectionTests
 
         product.SetActive(false, DateTime.UtcNow);
         await write.SaveChangesAsync(ct);
-        Assert.Empty(await store.ListMenuAsync(restaurantId, ct));
+        Assert.Empty(await store.ListMenuAsync(restaurantId, CatalogClientChannel.Pos, ct));
 
         product.SetActive(true, DateTime.UtcNow);
         await write.SaveChangesAsync(ct);
-        Assert.Single(await store.ListMenuAsync(restaurantId, ct));
+        Assert.Single(await store.ListMenuAsync(restaurantId, CatalogClientChannel.Pos, ct));
 
         write.RestaurantProductAvailabilities.Single(x => x.ProductId == product.Id).IsAvailable =
             false;
         await write.SaveChangesAsync(ct);
-        Assert.Empty(await store.ListMenuAsync(restaurantId, ct));
+        Assert.Empty(await store.ListMenuAsync(restaurantId, CatalogClientChannel.Pos, ct));
 
         write.RestaurantProductAvailabilities.Single(x => x.ProductId == product.Id).IsAvailable =
             true;
         product.AssignTax(null);
         await write.SaveChangesAsync(ct);
-        Assert.Empty(await store.ListMenuAsync(restaurantId, ct));
+        Assert.Empty(await store.ListMenuAsync(restaurantId, CatalogClientChannel.Pos, ct));
     }
 }

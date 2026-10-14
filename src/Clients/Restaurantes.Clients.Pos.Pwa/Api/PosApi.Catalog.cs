@@ -6,6 +6,8 @@ public sealed partial class PosApi
 {
     public Task<List<MenuItemResponse>> MenuAsync(Guid restaurantId)
     {
-        return GetAsync<List<MenuItemResponse>>($"/api/catalog/restaurants/{restaurantId}/menu");
+        return GetAsync<List<MenuItemResponse>>(
+            $"/api/catalog/restaurants/{restaurantId}/menu?channel=Pos"
+        );
     }
 }

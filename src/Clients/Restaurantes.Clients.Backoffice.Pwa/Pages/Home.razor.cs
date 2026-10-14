@@ -822,11 +822,20 @@ public partial class Home
         await Run(
             async () =>
             {
-                if (!stations.Any(x => x.IsActive && x.Code == categoryDraft.DefaultStationCode))
+                if (
+                    categoryDraft.RequiresKds
+                    && !stations.Any(x => x.IsActive && x.Code == categoryDraft.DefaultStationCode)
+                )
                 {
                     throw new InvalidOperationException(
                         "Selecciona una estación KDS activa del local."
                     );
+                }
+
+                if (!categoryDraft.RequiresKds)
+                {
+                    categoryDraft.DefaultStationCode = "";
+                    categoryDraft.DefaultStationName = "";
                 }
 
                 await Api.CreateCategoryAsync(categoryDraft);

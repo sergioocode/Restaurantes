@@ -37,6 +37,7 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
         c.Property(x => x.Name).HasMaxLength(120).IsRequired();
         c.Property(x => x.DefaultStationCode).HasMaxLength(40).IsRequired();
         c.Property(x => x.DefaultStationName).HasMaxLength(80).IsRequired();
+        c.Property(x => x.RequiresKds).HasDefaultValue(true);
         c.Property(x => x.Version).IsConcurrencyToken();
         EntityTypeBuilder<Product> p = b.Entity<Product>();
         p.ToTable("products");

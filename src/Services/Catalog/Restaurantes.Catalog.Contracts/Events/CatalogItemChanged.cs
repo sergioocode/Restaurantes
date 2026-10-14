@@ -18,5 +18,7 @@ public sealed record CatalogItemChanged(
     DateTime OccurredAtUtc,
     IReadOnlyList<ProductExtraGroup>? ExtraGroups = null,
     string DefaultFormat = "PLATO",
-    IReadOnlyList<MenuItemFormatPrice>? Formats = null
+    IReadOnlyList<MenuItemFormatPrice>? Formats = null,
+    bool RequiresKds = true,
+    decimal? TaxRate = null
 );

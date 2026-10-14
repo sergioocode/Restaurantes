@@ -21,5 +21,6 @@ public sealed record OrderLineResponse(
     DateTime? DispatchedAtUtc = null,
     string Format = "",
     decimal? BaseUnitPrice = null,
-    IReadOnlyList<Restaurantes.Orders.Contracts.Events.OrderLineExtraSnapshot>? Extras = null
+    IReadOnlyList<Restaurantes.Orders.Contracts.Events.OrderLineExtraSnapshot>? Extras = null,
+    decimal? TaxRate = null
 );

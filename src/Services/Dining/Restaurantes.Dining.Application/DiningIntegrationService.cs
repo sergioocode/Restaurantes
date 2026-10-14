@@ -187,11 +187,11 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
         DiningSessionOrder order =
             await db.FindOrderAsync(e.OrderId)
             ?? throw new JsonException($"Dining order ''{e.OrderId}'' does not exist.");
-        order.OrderStatus = "Submitted";
+        order.OrderStatus = AllKitchenStationsDispatched(e.Stations) ? "Delivered" : e.Status;
         order.Amount = e
             .Lines.Where(x => x.Status != "Cancelled")
             .Sum(x => x.UnitPrice * x.Quantity);
-        order.UpdatedAtUtc = e.SubmittedAtUtc;
+        order.UpdatedAtUtc = e.DeliveredAtUtc ?? e.SubmittedAtUtc;
         return e.DiningSessionId;
     }
 

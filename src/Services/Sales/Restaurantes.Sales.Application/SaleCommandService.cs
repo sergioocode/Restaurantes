@@ -180,9 +180,11 @@ public sealed class SaleCommandService(ISaleWriteStore store, TimeProvider timeP
                             extra.ProductId,
                             extra.ProductName,
                             extra.UnitPrice,
-                            extra.Quantity
+                            extra.Quantity,
+                            extra.TaxRate
                         ))
-                        .ToList()
+                        .ToList(),
+                    item.TaxRate
                 ))
         );
         await store.UpsertDeliveredOrderAsync(

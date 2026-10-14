@@ -289,11 +289,11 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
                 e.ServiceMode,
                 e.Source,
                 e.PaymentTiming,
-                "Submitted",
+                e.Status,
                 e.Version,
                 e.CreatedAtUtc,
                 e.SubmittedAtUtc,
-                null,
+                e.DeliveredAtUtc,
                 e.Lines,
                 e.Stations
             );

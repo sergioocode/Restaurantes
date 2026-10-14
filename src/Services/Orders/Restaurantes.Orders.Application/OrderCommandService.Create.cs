@@ -123,7 +123,8 @@ public sealed partial class OrderCommandService
                                 option.ProductId,
                                 option.ProductName,
                                 option.Price,
-                                selection.Quantity
+                                selection.Quantity,
+                                option.TaxRate
                             )
                         );
                     }
@@ -169,7 +170,9 @@ public sealed partial class OrderCommandService
                     p.Priority,
                     format,
                     baseUnitPrice,
-                    selectedExtraDetails
+                    selectedExtraDetails,
+                    p.RequiresKds,
+                    p.TaxRate
                 );
             }),
             now,
