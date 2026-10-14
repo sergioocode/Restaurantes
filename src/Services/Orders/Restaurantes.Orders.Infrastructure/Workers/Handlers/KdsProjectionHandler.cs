@@ -129,13 +129,13 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
                 value.ServiceMode,
                 value.Source,
                 value.PaymentTiming,
-                "Submitted",
+                value.Status,
                 value.Version,
                 value.CreatedAtUtc,
                 value.SubmittedAtUtc,
                 null,
-                null,
-                null,
+                value.ReadyAtUtc,
+                value.DeliveredAtUtc,
                 value.Lines,
                 value.Stations,
                 value.Stations.Select(station => station.Code).ToList()
@@ -425,7 +425,8 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
                 line.DispatchedAtUtc,
                 line.Format,
                 line.BaseUnitPrice,
-                line.Extras
+                line.Extras,
+                line.TaxRate
             ))
             .ToList();
     }

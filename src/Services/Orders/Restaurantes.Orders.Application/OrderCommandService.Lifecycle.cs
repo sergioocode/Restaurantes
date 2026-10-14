@@ -40,7 +40,10 @@ public sealed partial class OrderCommandService
                 o.CreatedAtUtc,
                 now,
                 Lines(o),
-                Stations(o)
+                Stations(o),
+                o.Status.ToString(),
+                o.ReadyAtUtc,
+                o.DeliveredAtUtc
             ),
             ct
         );

@@ -3,6 +3,7 @@
   "AllowNonLocalApi": false,
   "RandomSeed": null,
   "OrdersPerBatch": 20,
+  "KitchenStepDelaySeconds": 2,
   "RunDurationMinutes": 10,
   "Restaurants": [
     {
