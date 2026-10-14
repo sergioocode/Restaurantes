@@ -26,7 +26,7 @@ internal static class Program
             string configPath = ReadConfigPath(args);
             SimulatorOptions options = await LoadOptions(configPath);
             Validate(options);
-            Dictionary<string, string> tokens = ReadTokens(options.Restaurants);
+            string accessToken = options.AccessToken.Trim();
 
             using CancellationTokenSource stopCreating = new();
             Console.CancelKeyPress += (_, eventArgs) =>
@@ -44,14 +44,13 @@ internal static class Program
 
             Random sharedRandom = options.RandomSeed is int seed ? new Random(seed) : Random.Shared;
             SemaphoreSlim randomLock = new(1, 1);
+            RandomOrderScheduler orderScheduler = new(
+                options.MaxConcurrentOrders,
+                options.Restaurants.Select(restaurant => restaurant.RestaurantId)
+            );
             Task<Exception?>[] preflights = options
                 .Restaurants.Select(restaurant =>
-                    PreflightRestaurantAsync(
-                        client,
-                        restaurant,
-                        tokens[$"{restaurant.RestaurantId}:Pos"],
-                        tokens[$"{restaurant.RestaurantId}:Kds"]
-                    )
+                    PreflightRestaurantAsync(client, restaurant, accessToken, accessToken)
                 )
                 .ToArray();
             Exception?[] preflightErrors = await Task.WhenAll(preflights);
@@ -68,16 +67,17 @@ internal static class Program
             }
 
             WriteLog(
-                $"{string.Join(" y ", options.Restaurants.Select(restaurant => restaurant.Name))} superaron la validación; los dos locales arrancan en paralelo."
+                $"{string.Join(", ", options.Restaurants.Select(restaurant => restaurant.Name))} superaron la validación; los locales arrancan en paralelo."
             );
             List<Task<RestaurantRunResult>> simulations = options
                 .Restaurants.Select(restaurant =>
                     RunRestaurantSafelyAsync(
                         client,
                         restaurant,
-                        tokens[$"{restaurant.RestaurantId}:Pos"],
-                        tokens[$"{restaurant.RestaurantId}:Kds"],
+                        accessToken,
+                        accessToken,
                         options.OrdersPerBatch,
+                        orderScheduler,
                         TimeSpan.FromSeconds(options.KitchenStepDelaySeconds),
                         TimeSpan.FromMinutes(options.RunDurationMinutes),
                         sharedRandom,
@@ -116,19 +116,19 @@ internal static class Program
         string step = "menú TPV";
         try
         {
-            _ = await GetAsync<List<MenuItemResponse>>(
+            List<MenuItemResponse> menu = await GetAsync<List<MenuItemResponse>>(
                 client,
                 $"api/catalog/restaurants/{restaurant.RestaurantId}/menu",
                 posToken,
                 CancellationToken.None
             );
-            step = "disponibilidad del menú TPV";
-            _ = await GetAsync<List<MenuItemResponse>>(
-                client,
-                $"api/catalog/restaurants/{restaurant.RestaurantId}/menu/configuration",
-                posToken,
-                CancellationToken.None
-            );
+            step = "productos disponibles del menú TPV";
+            if (FilterUsableMenu(menu).Count == 0)
+            {
+                throw new InvalidOperationException(
+                    "la carta no tiene productos disponibles para este local. Revisa la carta general y la disponibilidad de productos del local."
+                );
+            }
             step = "mesas TPV";
             _ = await GetAsync<List<TableInfo>>(
                 client,
@@ -162,12 +162,30 @@ internal static class Program
         }
     }
 
+    private static List<MenuItemResponse> FilterUsableMenu(IReadOnlyList<MenuItemResponse> menu)
+    {
+        HashSet<Guid> availableProductIds = menu.Where(item => item.IsAvailable)
+            .Select(item => item.ProductId)
+            .ToHashSet();
+        return menu.Where(item =>
+                item.IsAvailable
+                && availableProductIds.Contains(item.ProductId)
+                && !item.CategoryName.Equals("Extras", StringComparison.OrdinalIgnoreCase)
+                && (item.ExtraGroups ?? []).All(group =>
+                    group.Options.Count(option => availableProductIds.Contains(option.ProductId))
+                    >= group.MinSelections
+                )
+            )
+            .ToList();
+    }
+
     private static async Task<RestaurantRunResult> RunRestaurantSafelyAsync(
         HttpClient client,
         RestaurantOptions restaurant,
         string posToken,
         string kdsToken,
         int ordersPerBatch,
+        RandomOrderScheduler orderScheduler,
         TimeSpan kitchenStepDelay,
         TimeSpan runDuration,
         Random random,
@@ -183,6 +201,7 @@ internal static class Program
                 posToken,
                 kdsToken,
                 ordersPerBatch,
+                orderScheduler,
                 kitchenStepDelay,
                 runDuration,
                 random,
@@ -192,6 +211,7 @@ internal static class Program
         }
         catch (Exception exception)
         {
+            orderScheduler.MarkReady(restaurant.RestaurantId);
             WriteError(
                 $"{restaurant.Name}: la ejecución se detuvo por un error: {exception.Message}"
             );
@@ -249,19 +269,30 @@ internal static class Program
                 "ApiBaseUrl no es local. Cambia AllowNonLocalApi a true solo si has verificado el entorno destino."
             );
         }
-        if (options.Restaurants.Count != 2)
+        if (options.Restaurants.Count == 0)
+        {
+            throw new InvalidDataException("Configura al menos un local para esta simulación.");
+        }
+        if (
+            options.Restaurants.Select(item => item.RestaurantId).Distinct().Count()
+            != options.Restaurants.Count
+        )
+        {
+            throw new InvalidDataException("Cada local debe tener un RestaurantId distinto.");
+        }
+        if (string.IsNullOrWhiteSpace(options.AccessToken))
         {
             throw new InvalidDataException(
-                "Configura exactamente dos locales para esta simulación."
+                "Configura AccessToken con el token de una cuenta Admin con alcance a todos los locales."
             );
-        }
-        if (options.Restaurants.Select(item => item.RestaurantId).Distinct().Count() != 2)
-        {
-            throw new InvalidDataException("Los dos locales deben tener RestaurantId distintos.");
         }
         if (options.OrdersPerBatch < 1)
         {
             throw new InvalidDataException("OrdersPerBatch debe ser al menos 1.");
+        }
+        if (options.MaxConcurrentOrders < 1)
+        {
+            throw new InvalidDataException("MaxConcurrentOrders debe ser al menos 1.");
         }
         if (options.RunDurationMinutes < 1)
         {
@@ -284,15 +315,6 @@ internal static class Program
             {
                 throw new InvalidDataException(
                     $"{restaurant.Name}: OpeningFloat debe estar entre 0 y 100.000 €."
-                );
-            }
-            if (
-                string.IsNullOrWhiteSpace(restaurant.PosAccessToken)
-                || string.IsNullOrWhiteSpace(restaurant.KdsAccessToken)
-            )
-            {
-                throw new InvalidDataException(
-                    $"{restaurant.Name}: configura PosAccessToken y KdsAccessToken en el JSON."
                 );
             }
             ValidateRange(restaurant.GuestCount, $"{restaurant.Name}.GuestCount", 2, 10);
@@ -349,51 +371,13 @@ internal static class Program
         }
     }
 
-    private static Dictionary<string, string> ReadTokens(
-        IReadOnlyList<RestaurantOptions> restaurants
-    )
-    {
-        Dictionary<string, string> tokens = new(StringComparer.OrdinalIgnoreCase);
-        foreach (RestaurantOptions restaurant in restaurants)
-        {
-            AddConfiguredToken(
-                tokens,
-                $"{restaurant.RestaurantId}:Pos",
-                restaurant.PosAccessToken,
-                $"{restaurant.Name}.PosAccessToken"
-            );
-            AddConfiguredToken(
-                tokens,
-                $"{restaurant.RestaurantId}:Kds",
-                restaurant.KdsAccessToken,
-                $"{restaurant.Name}.KdsAccessToken"
-            );
-        }
-        return tokens;
-    }
-
-    private static void AddConfiguredToken(
-        Dictionary<string, string> tokens,
-        string key,
-        string configuredToken,
-        string settingName
-    )
-    {
-        if (string.IsNullOrWhiteSpace(configuredToken))
-        {
-            throw new InvalidDataException(
-                $"Falta {settingName} en el archivo JSON de configuración."
-            );
-        }
-        tokens[key] = configuredToken.Trim();
-    }
-
     private static async Task<RestaurantRunResult> RunRestaurantAsync(
         HttpClient client,
         RestaurantOptions restaurant,
         string posToken,
         string kdsToken,
         int ordersPerBatch,
+        RandomOrderScheduler orderScheduler,
         TimeSpan kitchenStepDelay,
         TimeSpan runDuration,
         Random random,
@@ -407,26 +391,10 @@ internal static class Program
             posToken,
             stopCreating
         );
-        List<MenuItemResponse> configuredMenu = await GetAsync<List<MenuItemResponse>>(
-            client,
-            $"api/catalog/restaurants/{restaurant.RestaurantId}/menu/configuration",
-            posToken,
-            stopCreating
-        );
-        HashSet<Guid> availableProductIds = configuredMenu
-            .Where(item => item.IsAvailable)
+        menu = FilterUsableMenu(menu);
+        HashSet<Guid> availableProductIds = menu.Where(item => item.IsAvailable)
             .Select(item => item.ProductId)
             .ToHashSet();
-        menu = menu.Where(item =>
-                item.IsAvailable
-                && availableProductIds.Contains(item.ProductId)
-                && !item.CategoryName.Equals("Extras", StringComparison.OrdinalIgnoreCase)
-                && (item.ExtraGroups ?? []).All(group =>
-                    group.Options.Count(option => availableProductIds.Contains(option.ProductId))
-                    >= group.MinSelections
-                )
-            )
-            .ToList();
 
         if (menu.Count == 0)
         {
@@ -436,9 +404,10 @@ internal static class Program
         }
 
         await EnsureCashRegisterOpenAsync(client, restaurant, posToken, stopCreating);
+        orderScheduler.MarkReady(restaurant.RestaurantId);
 
         WriteLog(
-            $"{restaurant.Name}: menú {menu.Count} productos; carga durante {runDuration.TotalMinutes:0} minutos; hasta {ordersPerBatch} pedidos simultáneos."
+            $"{restaurant.Name}: menú {menu.Count} productos; carga durante {runDuration.TotalMinutes:0} minutos; hasta {ordersPerBatch} pedidos en rotación, sujetos a la selección aleatoria global."
         );
         int failedOrders = 0;
         int completedOrders = 0;
@@ -516,17 +485,21 @@ internal static class Program
 
                     activeOrders.Add(
                         table.Id,
-                        ProcessOrderAsync(
-                            client,
-                            restaurant,
-                            posToken,
-                            kdsToken,
-                            menu,
-                            availableProductIds,
-                            table,
-                            kitchenStepDelay,
-                            random,
-                            randomLock
+                        orderScheduler.RunAsync(
+                            restaurant.RestaurantId,
+                            () =>
+                                ProcessOrderAsync(
+                                    client,
+                                    restaurant,
+                                    posToken,
+                                    kdsToken,
+                                    menu,
+                                    availableProductIds,
+                                    table,
+                                    kitchenStepDelay,
+                                    random,
+                                    randomLock
+                                )
                         )
                     );
                     startedOrders++;
@@ -722,13 +695,18 @@ internal static class Program
             await Task.Delay(kitchenStepDelay);
 
             order = await SimulateKitchenAsync(client, kdsToken, order, kitchenStepDelay);
-            OrderResponse deliveredOrder = await PostAsync<OrderResponse>(
-                client,
-                $"api/orders/{order.Id}/deliver",
-                null,
-                posToken,
-                CancellationToken.None
-            );
+            OrderResponse deliveredOrder = order.Status.Equals(
+                "Delivered",
+                StringComparison.OrdinalIgnoreCase
+            )
+                ? order
+                : await PostAsync<OrderResponse>(
+                    client,
+                    $"api/orders/{order.Id}/deliver",
+                    null,
+                    posToken,
+                    CancellationToken.None
+                );
             if (deliveredOrder.Status != "Delivered")
             {
                 throw new InvalidDataException(
@@ -882,27 +860,44 @@ internal static class Program
         TimeSpan kitchenStepDelay
     )
     {
-        foreach (OrderLineResponse line in order.Lines.Where(line => line.Status != "Cancelled"))
+        foreach (
+            OrderLineResponse submittedLine in order.Lines.Where(line =>
+                line.Status != "Cancelled"
+                && !string.IsNullOrWhiteSpace(line.PreparationStationCode)
+            )
+        )
         {
-            order = await PostAsync<OrderResponse>(
-                client,
-                $"api/orders/{order.Id}/lines/{line.Id}/start-preparation",
-                null,
-                token,
-                CancellationToken.None
-            );
-            WriteLog(
-                $"{order.TableLabel} · {line.ProductName} · {line.PreparationStationName} en preparación."
-            );
-            await Task.Delay(kitchenStepDelay);
-            order = await PostAsync<OrderResponse>(
-                client,
-                $"api/orders/{order.Id}/lines/{line.Id}/ready",
-                null,
-                token,
-                CancellationToken.None
-            );
-            OrderLineResponse updatedLine = order.Lines.Single(item => item.Id == line.Id);
+            OrderLineResponse line = order.Lines.Single(item => item.Id == submittedLine.Id);
+            if (line.KitchenStatus.Equals("Dispatched", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            if (line.KitchenStatus.Equals("Pending", StringComparison.OrdinalIgnoreCase))
+            {
+                order = await PostAsync<OrderResponse>(
+                    client,
+                    $"api/orders/{order.Id}/lines/{line.Id}/start-preparation",
+                    null,
+                    token,
+                    CancellationToken.None
+                );
+                line = order.Lines.Single(item => item.Id == submittedLine.Id);
+            }
+            if (line.KitchenStatus.Equals("InPreparation", StringComparison.OrdinalIgnoreCase))
+            {
+                WriteLog(
+                    $"{order.TableLabel} · {line.ProductName} · {line.PreparationStationName} en preparación."
+                );
+                await Task.Delay(kitchenStepDelay);
+                order = await PostAsync<OrderResponse>(
+                    client,
+                    $"api/orders/{order.Id}/lines/{line.Id}/ready",
+                    null,
+                    token,
+                    CancellationToken.None
+                );
+            }
+            OrderLineResponse updatedLine = order.Lines.Single(item => item.Id == submittedLine.Id);
             string readyMessage = updatedLine.KitchenStatus.Equals(
                 "Dispatched",
                 StringComparison.OrdinalIgnoreCase
@@ -910,7 +905,7 @@ internal static class Program
                 ? "listo y despachado automáticamente"
                 : "listo; espera el despacho del KDS principal";
             WriteLog(
-                $"{order.TableLabel} · {line.ProductName} · {readyMessage} ({line.PreparationStationName})."
+                $"{order.TableLabel} · {updatedLine.ProductName} · {readyMessage} ({updatedLine.PreparationStationName})."
             );
         }
 
@@ -975,10 +970,10 @@ internal static class Program
             WriteLog($"{order.TableLabel} · pase {station.Name} despachado por KDS principal.");
         }
 
-        if (order.Status != "Ready")
+        if (order.Status is not ("Ready" or "Delivered"))
         {
             throw new InvalidDataException(
-                $"El pedido {order.Id.ToString("N")[..8]} terminó el flujo KDS en estado {order.Status}, no Ready."
+                $"El pedido {order.Id.ToString("N")[..8]} terminó el flujo KDS en estado {order.Status}, no Ready ni Delivered."
             );
         }
         OrderLineResponse[] undispatchedLines = order
@@ -1370,14 +1365,110 @@ internal static class Program
 
     private static decimal RoundMoney(decimal value) =>
         decimal.Round(value, 2, MidpointRounding.AwayFromZero);
+
+    private sealed class RandomOrderScheduler(
+        int maxConcurrentOrders,
+        IEnumerable<Guid> restaurantIds
+    )
+    {
+        private readonly object gate = new();
+        private readonly Dictionary<Guid, Queue<PendingOrder>> waitingOrders = [];
+        private readonly HashSet<Guid> restaurantsNotReady = restaurantIds.ToHashSet();
+        private int activeOrders;
+
+        public void MarkReady(Guid restaurantId)
+        {
+            lock (gate)
+            {
+                restaurantsNotReady.Remove(restaurantId);
+                StartAvailableOrders();
+            }
+        }
+
+        public Task<bool> RunAsync(Guid restaurantId, Func<Task<bool>> processOrder)
+        {
+            TaskCompletionSource<bool> completion = new(
+                TaskCreationOptions.RunContinuationsAsynchronously
+            );
+            lock (gate)
+            {
+                if (!waitingOrders.TryGetValue(restaurantId, out Queue<PendingOrder>? queue))
+                {
+                    queue = new Queue<PendingOrder>();
+                    waitingOrders.Add(restaurantId, queue);
+                }
+                queue.Enqueue(new PendingOrder(processOrder, completion));
+                StartAvailableOrders();
+            }
+            return completion.Task;
+        }
+
+        private void StartAvailableOrders()
+        {
+            while (
+                restaurantsNotReady.Count == 0
+                && activeOrders < maxConcurrentOrders
+                && waitingOrders.Count > 0
+            )
+            {
+                KeyValuePair<Guid, Queue<PendingOrder>>[] eligibleRestaurants = waitingOrders
+                    .Where(item => item.Value.Count > 0)
+                    .ToArray();
+                if (eligibleRestaurants.Length == 0)
+                {
+                    return;
+                }
+
+                int selectedIndex = Random.Shared.Next(eligibleRestaurants.Length);
+                KeyValuePair<Guid, Queue<PendingOrder>> selected = eligibleRestaurants[
+                    selectedIndex
+                ];
+                PendingOrder order = selected.Value.Dequeue();
+                if (selected.Value.Count == 0)
+                {
+                    waitingOrders.Remove(selected.Key);
+                }
+
+                activeOrders++;
+                _ = ExecuteOrderAsync(order);
+            }
+        }
+
+        private async Task ExecuteOrderAsync(PendingOrder order)
+        {
+            try
+            {
+                order.Completion.TrySetResult(await order.ProcessOrder());
+            }
+            catch (Exception exception)
+            {
+                order.Completion.TrySetException(exception);
+            }
+            finally
+            {
+                lock (gate)
+                {
+                    activeOrders--;
+                    StartAvailableOrders();
+                }
+            }
+        }
+
+        private sealed record PendingOrder(
+            Func<Task<bool>> ProcessOrder,
+            TaskCompletionSource<bool> Completion
+        );
+    }
 }
 
 internal sealed class SimulatorOptions
 {
     public string ApiBaseUrl { get; init; } = "http://localhost:5001";
+    public string AccessToken { get; init; } = "";
     public bool AllowNonLocalApi { get; init; }
     public int? RandomSeed { get; init; }
     public int OrdersPerBatch { get; init; } = 20;
+    public int MaxConcurrentOrders { get; init; } = 10;
     public int KitchenStepDelaySeconds { get; init; } = 2;
     public int RunDurationMinutes { get; init; } = 10;
     public List<RestaurantOptions> Restaurants { get; init; } = [];
@@ -1388,8 +1479,6 @@ internal sealed class RestaurantOptions
     public string Name { get; init; } = "";
     public Guid RestaurantId { get; init; }
     public decimal OpeningFloat { get; init; }
-    public string PosAccessToken { get; init; } = "";
-    public string KdsAccessToken { get; init; } = "";
     public IntRange GuestCount { get; init; } = new(2, 10);
     public int MaxProductsPerOrder { get; init; } = 4;
     public PaymentOptions Payment { get; init; } = new();
