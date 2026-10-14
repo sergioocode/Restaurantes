@@ -6,8 +6,10 @@ const $ = id => document.getElementById(id),
     }),
     gatewayOrigin = location.origin,
     sessionKey = 'restaurantes.dashboard.login';
-let timer, access, socket, realtimeGeneration = 0, deadLetterRefreshAt = 0, deadLetterRequestGeneration = 0, dashboardRequestGeneration = 0;
+let timer, healthTimer, realtimeRefreshTimer, access, socket, realtimeGeneration = 0, deadLetterRefreshAt = 0, deadLetterRequestGeneration = 0;
+let dashboardLoadPromise = null, dashboardRefreshPending = false;
 let restaurantNames = new Map();
+let dashboardRestaurantIds = [];
 const today = new Date();
 $('date').value = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
 
@@ -42,23 +44,16 @@ async function loadProvider() {
     $('loginGoogle').disabled = settings.activeProvider !== 'Google' || !settings.googleConfigured;
 }
 
-async function load({ includeHealth = true, forceDeadLetters = false } = {}) {
-    const requestGeneration = ++dashboardRequestGeneration;
+async function loadOnce() {
     const requestedDate = $('date').value;
-    const requestedRestaurant = $('restaurant').value;
     const requestedOrderLimit = $('orderLimit').value;
     try {
         const params = new URLSearchParams();
         if (requestedDate) params.set('date', requestedDate);
-        if (requestedRestaurant) params.set('restaurantId', requestedRestaurant);
         params.set('orderLimit', requestedOrderLimit);
-        const requests = [authorizedFetch('/api/reporting/dashboard/daily?' + params).then(r => r.json())];
-        if (includeHealth) requests.push(loadHealth(), loadDeadLetters(forceDeadLetters));
-        const [d] = await Promise.all(requests);
+        const d = await authorizedFetch('/api/reporting/dashboard/daily?' + params).then(r => r.json());
         if (
-            requestGeneration !== dashboardRequestGeneration
-            || requestedDate !== $('date').value
-            || requestedRestaurant !== $('restaurant').value
+            requestedDate !== $('date').value
             || requestedOrderLimit !== $('orderLimit').value
         ) return;
         $('sales').textContent = money.format(d.totalSales);
@@ -71,8 +66,26 @@ async function load({ includeHealth = true, forceDeadLetters = false } = {}) {
         renderOperations(d.operationalOrders);
         $('state').textContent = 'Actualizado ' + new Date().toLocaleTimeString();
     } catch (e) {
-        if (requestGeneration === dashboardRequestGeneration) $('state').textContent = 'Error: ' + e.message
+        if (access) $('state').textContent = 'Error: ' + e.message
     }
+}
+
+function load() {
+    if (!access) return Promise.resolve();
+    dashboardRefreshPending = true;
+    if (dashboardLoadPromise) return dashboardLoadPromise;
+
+    const drain = async () => {
+        while (dashboardRefreshPending && access) {
+            dashboardRefreshPending = false;
+            await loadOnce();
+        }
+    };
+    dashboardLoadPromise = drain().finally(() => {
+        dashboardLoadPromise = null;
+        if (dashboardRefreshPending && access) void load();
+    });
+    return dashboardLoadPromise;
 }
 
 async function loadHealth() {
@@ -84,7 +97,7 @@ async function loadHealth() {
     }
 }
 
-async function loadDeadLetters(force = false) {
+async function loadDeadLetters() {
     const alert = $('deadLetterAlert');
     if (!(access?.allRestaurantsRoles || []).includes('Admin')) {
         alert.hidden = true;
@@ -92,7 +105,7 @@ async function loadDeadLetters(force = false) {
     }
 
     const now = Date.now();
-    if (!force && now < deadLetterRefreshAt) return;
+    if (now < deadLetterRefreshAt) return;
     deadLetterRefreshAt = now + 30000;
     const requestGeneration = ++deadLetterRequestGeneration;
 
@@ -212,31 +225,18 @@ function schedule() {
     };
     timer = setTimeout(refreshAfterCurrentLoad, ms);
 }
-$('interval').onchange = schedule;
-$('date').onchange = load;
-$('restaurant').onchange = async () => { await load(); realtime() };
-$('orderLimit').onchange = () => { void load({ includeHealth: false }) };
-
-$('refresh').title = 'Actualizar datos, salud de servicios y colas DLQ ahora';
-$('refresh').onclick = async () => {
-    const button = $('refresh');
-    button.disabled = true;
-    button.textContent = 'Actualizando…';
-    button.setAttribute('aria-busy', 'true');
-    try {
-        await load({ forceDeadLetters: true });
-    } finally {
-        button.disabled = false;
-        button.textContent = 'Refrescar';
-        button.removeAttribute('aria-busy');
-    }
-};
+$('interval').onchange = () => { schedule(); void load() };
+$('date').onchange = () => { void load() };
+$('orderLimit').onchange = () => { void load() };
 
 $('logout').onclick = logout;
 
 async function openDashboard(session) {
-    const hasAllRestaurants = (session.allRestaurantsPermissions || []).includes('dashboard.read');
-    const allowed = new Set((session.restaurants || []).filter(x => (x.permissions || []).includes('dashboard.read')).map(x => x.restaurantId.toLowerCase()));
+    const dashboardRoles = new Set(['Admin', 'Gerente', 'Contabilidad', 'Marketing']);
+    const hasAllRestaurants = (session.allRestaurantsRoles || []).some(role => dashboardRoles.has(role))
+        && (session.allRestaurantsPermissions || []).includes('dashboard.read');
+    const allowed = new Set((session.restaurants || []).filter(x => dashboardRoles.has(x.role)
+        && (x.permissions || []).includes('dashboard.read')).map(x => x.restaurantId.toLowerCase()));
     if (!hasAllRestaurants && allowed.size === 0) throw new Error('Este perfil no tiene acceso al Dashboard.');
     access = session;
     deadLetterRefreshAt = 0;
@@ -250,11 +250,26 @@ async function openDashboard(session) {
     const missing = (access.restaurants || []).filter(x => allowed.has(x.restaurantId.toLowerCase()) && !visible.some(r => r.id.toLowerCase() === x.restaurantId.toLowerCase())).map(x => ({ id: x.restaurantId, name: 'Local ' + short(x.restaurantId) }));
     const restaurants = [...visible, ...missing].sort((a, b) => a.name.localeCompare(b.name));
     restaurantNames = new Map(restaurants.map(x => [x.id.toLowerCase(), x.name]));
-    $('restaurant').innerHTML = `<option value="">${hasAllRestaurants ? 'Todos los Locales' : 'Local asignado'}</option>` + restaurants.map(x => `<option value="${escapeHtml(x.id)}">${escapeHtml(x.name)}</option>`).join('');
+    dashboardRestaurantIds = restaurants.map(x => x.id);
     $('currentUser').textContent = access.user.displayName;
     schedule();
     await load();
+    await loadHealth();
+    await loadDeadLetters();
+    scheduleHealthRefresh();
     realtime()
+}
+
+function scheduleHealthRefresh() {
+    clearTimeout(healthTimer);
+    if (!access) return;
+    healthTimer = setTimeout(async () => {
+        await load();
+        if (!access) return;
+        await loadHealth();
+        await loadDeadLetters();
+        scheduleHealthRefresh();
+    }, 30000);
 }
 
 function logout() {
@@ -264,6 +279,9 @@ function logout() {
     access = null;
     deadLetterRefreshAt = 0;
     clearTimeout(timer);
+    clearTimeout(healthTimer);
+    clearTimeout(realtimeRefreshTimer);
+    dashboardRefreshPending = false;
     sessionStorage.removeItem(sessionKey);
     showLogin()
 }
@@ -290,12 +308,14 @@ async function realtime() {
                 if (!raw) continue;
                 const m = JSON.parse(raw);
                 if (!joined && m.type === undefined) {
-                    const restaurantIds = $('restaurant').value ? [$('restaurant').value] : Array.from($('restaurant').options).map(x => x.value).filter(Boolean);
-                    ws.send(JSON.stringify({ type: 1, target: 'JoinRestaurants', arguments: [restaurantIds] }) + sep);
+                    ws.send(JSON.stringify({ type: 1, target: 'JoinRestaurants', arguments: [dashboardRestaurantIds] }) + sep);
                     joined = true;
                     $('state').textContent = 'Conectado';
                 }
-                if (m.type === 1 && m.target === 'DashboardUpdated') setTimeout(() => load({ includeHealth: false }), 200)
+                if (m.type === 1 && m.target === 'DashboardUpdated') {
+                    clearTimeout(realtimeRefreshTimer);
+                    realtimeRefreshTimer = setTimeout(() => { void load() }, 200);
+                }
             }
         };
         ws.onclose = () => { if (access && generation === realtimeGeneration) setTimeout(realtime, 2000) }
