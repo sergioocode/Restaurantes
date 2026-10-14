@@ -179,16 +179,33 @@ public sealed partial class DiningService
             session.RestaurantId,
             DiningPermission.TablesRelease
         );
+        bool allOrdersCancelled =
+            session.Orders.Count > 0
+            && session.Orders.All(order => order.OrderStatus == "Cancelled");
+        bool hasCurrentUser = Guid.TryParse(
+            principal.FindFirst(ClaimTypes.NameIdentifier)?.Value,
+            out Guid userId
+        );
         bool hasCurrentUserCommanderOrder =
-            Guid.TryParse(principal.FindFirst(ClaimTypes.NameIdentifier)?.Value, out Guid userId)
+            hasCurrentUser
             && session.Orders.Any(order =>
                 order.Source == "Comandero"
                 && order.CreatedByUserId == userId
                 && order.OrderStatus != "Cancelled"
             );
+        bool hasCurrentUserCancelledCommanderOrder =
+            hasCurrentUser
+            && session.Orders.Any(order =>
+                order.Source == "Comandero"
+                && order.CreatedByUserId == userId
+                && order.OrderStatus == "Cancelled"
+            );
         bool canReleasePaidSession =
             session.CanRelease
-            && hasCurrentUserCommanderOrder
+            && (
+                hasCurrentUserCommanderOrder
+                || (allOrdersCancelled && hasCurrentUserCancelledCommanderOrder)
+            )
             && access.CanAccessRestaurant(
                 principal,
                 session.RestaurantId,
@@ -209,7 +226,12 @@ public sealed partial class DiningService
             return DiningResults.Conflict(new { detail = "The dining session has no orders." });
         }
 
-        if (!session.Orders.Any(order => order.OrderStatus != "Cancelled" && order.AmountPaid > 0))
+        if (
+            !allOrdersCancelled
+            && !session.Orders.Any(order =>
+                order.OrderStatus != "Cancelled" && order.AmountPaid > 0
+            )
+        )
         {
             return DiningResults.Conflict(
                 new { detail = "The table can only be released after a payment has been recorded." }
