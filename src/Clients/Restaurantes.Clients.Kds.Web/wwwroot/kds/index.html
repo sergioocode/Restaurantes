@@ -35,8 +35,11 @@
         </form>
 
         <section id="monitorPanel" class="controls hidden">
-            <div class="assigned-context" aria-label="Local y usuario asignados">
-                <strong id="assignedRestaurantName" aria-label="Local asignado"></strong>
+            <label class="field restaurant-field">
+                <span>Local</span>
+                <select id="restaurantId" aria-label="Local" disabled></select>
+            </label>
+            <div class="assigned-context" aria-label="Usuario conectado">
                 <strong id="assignedUserName" aria-label="Usuario"></strong>
             </div>
             <label class="field station-field">

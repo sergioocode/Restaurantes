@@ -211,7 +211,11 @@ input, select {
     gap: 10px;
 }
 
-.current-restaurant { max-width: min(380px, 30vw); overflow: hidden; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.restaurant-picker { display: flex; align-items: center; gap: 8px; margin: 0; color: #fff; font-size: 10px; font-weight: 800; }
+.restaurant-picker > span { flex: 0 0 auto; }
+.restaurant-picker select { width: min(300px, 30vw); min-height: 44px; padding: 8px 12px; border: 1px solid #ffffff30; border-radius: 12px; color: #fff; background: #ffffff18; font-size: 13px; font-weight: 800; }
+.restaurant-picker option { color: #202a24; background: #fff; }
+.restaurant-picker select:disabled { opacity: 1; }
 
     .top-actions .ghost {
         color: #fff;
@@ -1759,7 +1763,7 @@ input, select {
         gap: 5px;
     }
 
-        .locations-shell .top-actions .current-restaurant { max-width: clamp(100px, 30vw, 220px); font-size: 11px; }
+        .locations-shell .restaurant-picker select { width: clamp(100px, 30vw, 220px); font-size: 11px; }
 
         .locations-shell .top-actions .cash-status {
             flex-basis: 196px;
