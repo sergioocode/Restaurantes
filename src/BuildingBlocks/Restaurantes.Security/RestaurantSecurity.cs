@@ -125,7 +125,6 @@ public static class RestaurantPermissions
                 PaymentsRefund,
                 CashRegisterManage,
                 CatalogManage,
-                DashboardRead,
                 KitchenReportsRead,
                 DiscountsApply,
             ],
@@ -228,6 +227,17 @@ public static class RestaurantSecurityExtensions
             }
         }
 
+        if (
+            permission == RestaurantPermissions.DashboardRead
+            && user.FindAll(RestaurantClaimTypes.RestaurantRole)
+                .Any(claim =>
+                    claim.Value.StartsWith($"{restaurantId:N}:", StringComparison.OrdinalIgnoreCase)
+                )
+        )
+        {
+            return HasScopedRolePermission(user, restaurantId, permission);
+        }
+
         string expected = $"{restaurantId:N}:{permission}";
         return user.Claims.Any(claim =>
             claim.Type == RestaurantClaimTypes.Permission
@@ -247,12 +257,44 @@ public static class RestaurantSecurityExtensions
             return true;
         }
 
+        if (permission == RestaurantPermissions.DashboardRead)
+        {
+            return user.FindAll(RestaurantClaimTypes.RestaurantRole)
+                .Any(claim =>
+                {
+                    int separator = claim.Value.IndexOf(':');
+                    return separator > 0
+                        && Guid.TryParseExact(claim.Value[..separator], "N", out Guid restaurantId)
+                        && HasScopedRolePermission(user, restaurantId, permission);
+                });
+        }
+
         string suffix = $":{permission}";
         return user.Identity?.IsAuthenticated == true
             && user.Claims.Any(claim =>
                 claim.Type == RestaurantClaimTypes.Permission
                 && claim.Value.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
             );
+    }
+
+    private static bool HasScopedRolePermission(
+        ClaimsPrincipal user,
+        Guid restaurantId,
+        string permission
+    )
+    {
+        string prefix = $"{restaurantId:N}:";
+        return user.FindAll(RestaurantClaimTypes.RestaurantRole)
+            .Any(claim =>
+            {
+                if (!claim.Value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
+                string role = claim.Value[prefix.Length..];
+                return RestaurantPermissions.ForRole(role).Contains(permission);
+            });
     }
 
     public static bool HasGlobalRestaurantPermission(this ClaimsPrincipal user, string permission)
