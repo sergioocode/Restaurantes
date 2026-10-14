@@ -64,6 +64,51 @@ public partial class Home
     private decimal BillConsumptionTotal =>
         bill?.Orders.Where(order => order.OrderStatus != "Cancelled").Sum(order => order.Amount)
         ?? 0;
+    private IReadOnlyList<TaxBreakdownLine> BillTaxBreakdown
+    {
+        get
+        {
+            if (bill is null)
+                return [];
+            SortedDictionary<decimal, decimal> grossByRate = [];
+            bool hasUnratedLines = false;
+            foreach (
+                SessionBillOrderResponse order in bill.Orders.Where(x =>
+                    x.OrderStatus != "Cancelled"
+                )
+            )
+            {
+                if (!billOrders.TryGetValue(order.OrderId, out OrderDetailResponse? detail))
+                {
+                    hasUnratedLines = true;
+                    continue;
+                }
+                foreach (
+                    OrderLineDetailResponse line in detail.Lines.Where(x => x.Status != "Cancelled")
+                )
+                {
+                    AddTaxableAmount(
+                        grossByRate,
+                        ref hasUnratedLines,
+                        line.TaxRate,
+                        (line.BaseUnitPrice ?? line.UnitPrice) * line.Quantity
+                    );
+                    foreach (OrderLineExtraResponse extra in line.Extras ?? [])
+                        AddTaxableAmount(
+                            grossByRate,
+                            ref hasUnratedLines,
+                            extra.TaxRate,
+                            line.Quantity * extra.Quantity * extra.UnitPrice
+                        );
+                }
+            }
+            return BuildTaxBreakdown(
+                grossByRate,
+                hasUnratedLines,
+                salesTicket?.DiscountPercentage ?? bill.DiscountPercentage
+            );
+        }
+    }
     private bool paymentDialogOpen;
     private string keypadTarget = "Charge";
     private string keypadText = string.Empty;
@@ -95,6 +140,47 @@ public partial class Home
         && (paymentMethod != "Transfer" || currentChargeAmount == bill.Outstanding);
     private Guid checkoutKey;
     private Dictionary<Guid, OrderDetailResponse> billOrders = [];
+
+    private static void AddTaxableAmount(
+        SortedDictionary<decimal, decimal> grossByRate,
+        ref bool hasUnratedLines,
+        decimal? taxRate,
+        decimal amount
+    )
+    {
+        if (taxRate is not decimal rate)
+        {
+            hasUnratedLines = true;
+            return;
+        }
+        grossByRate[rate] = grossByRate.GetValueOrDefault(rate) + amount;
+    }
+
+    private static IReadOnlyList<TaxBreakdownLine> BuildTaxBreakdown(
+        SortedDictionary<decimal, decimal> grossByRate,
+        bool hasUnratedLines,
+        decimal discountPercentage
+    )
+    {
+        if (hasUnratedLines || grossByRate.Count == 0)
+            return [];
+        decimal factor = 1m - discountPercentage / 100m;
+        return grossByRate
+            .Select(pair =>
+            {
+                decimal gross = Math.Round(pair.Value * factor, 2, MidpointRounding.AwayFromZero);
+                decimal tax = Math.Round(
+                    gross * pair.Key / (100m + pair.Key),
+                    2,
+                    MidpointRounding.AwayFromZero
+                );
+                return new TaxBreakdownLine(pair.Key, gross - tax, tax);
+            })
+            .ToArray();
+    }
+
+    private sealed record TaxBreakdownLine(decimal Rate, decimal TaxableBase, decimal TaxAmount);
+
     private CancellationTokenSource? realtimeRefresh;
     private CancellationTokenSource? reconciliation;
     private CancellationTokenSource? kitchenClockRefresh;
@@ -450,7 +536,11 @@ public partial class Home
 
                     return (
                         table.Id,
-                        new TableSessionOrderSnapshot(activeSession.Id, activeSession.Orders)
+                        new TableSessionOrderSnapshot(
+                            activeSession.Id,
+                            activeSession.Source,
+                            activeSession.Orders
+                        )
                     );
                 }
                 catch
@@ -459,6 +549,7 @@ public partial class Home
                         table.Id,
                         new TableSessionOrderSnapshot(
                             table.ActiveSessionId.GetValueOrDefault(),
+                            "",
                             [],
                             false
                         )
@@ -500,6 +591,15 @@ public partial class Home
             ? snapshot
             : null;
     }
+
+    private static string SessionSourceLabel(string source) =>
+        source switch
+        {
+            "Pos" => "TPV",
+            "Comandero" => "Comandero",
+            "CustomerQr" => "QR",
+            _ => source,
+        };
 
     private async Task LoadPickupOrdersCore()
     {
@@ -2043,6 +2143,7 @@ public partial class Home
 
     private sealed record TableSessionOrderSnapshot(
         Guid SessionId,
+        string Source,
         List<DiningSessionOrderResponse> Orders,
         bool IsAvailable = true
     );

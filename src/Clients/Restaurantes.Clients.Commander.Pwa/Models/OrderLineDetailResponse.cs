@@ -17,12 +17,14 @@ public sealed record OrderLineDetailResponse(
     DateTime? DispatchedAtUtc = null,
     string Format = "",
     decimal? BaseUnitPrice = null,
-    IReadOnlyList<OrderLineExtraResponse>? Extras = null
+    IReadOnlyList<OrderLineExtraResponse>? Extras = null,
+    decimal? TaxRate = null
 );
 
 public sealed record OrderLineExtraResponse(
     Guid ProductId,
     string ProductName,
     decimal UnitPrice,
-    int Quantity
+    int Quantity,
+    decimal? TaxRate = null
 );
