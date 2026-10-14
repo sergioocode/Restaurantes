@@ -326,9 +326,9 @@ public sealed class OrdersWriteController(
             await using IDbContextTransaction? transaction = cashRestaurantId.HasValue
                 ? await db.Database.BeginTransactionAsync(cancellationToken)
                 : null;
-            if (transaction is not null)
+            if (transaction is not null && cashRestaurantId is Guid restaurantId)
             {
-                await cashRegister.EnsureOpenAsync(cashRestaurantId.Value, cancellationToken);
+                await cashRegister.EnsureOpenAsync(restaurantId, cancellationToken);
                 db.ChangeTracker.Clear();
             }
             OrderResponse? order = await transition(id, cancellationToken);
