@@ -24,6 +24,10 @@ Catalog es responsable de:
 
 Catalog **no crea pedidos**, **no controla el ciclo de cocina de un pedido** y **no gestiona restaurantes**. Esas responsabilidades pertenecen a Orders, KDS/Orders y RestaurantOperations respectivamente.
 
+## Imágenes de productos
+
+Catalog recibe las fotos cargadas desde Backoffice y genera las variantes que consumen los clientes. Consulta la [guía de imágenes de productos](CatalogMedia.README.md) para conocer los límites de carga, las variantes, las rutas públicas y la configuración de almacenamiento con Azure Blob, Azurite o archivos locales.
+
 ## Proyectos
 
 El servicio se organiza en proyectos por responsabilidad. La API es el punto de entrada ejecutable;
