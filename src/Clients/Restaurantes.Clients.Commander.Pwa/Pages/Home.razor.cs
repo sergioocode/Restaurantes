@@ -1073,7 +1073,7 @@ public partial class Home
 
     private async Task PrintSalesTicket()
     {
-        await Js.InvokeVoidAsync("window.print");
+        await Js.InvokeVoidAsync("window.print", CancellationToken.None);
     }
 
     private static string PaymentLabel(string method)
@@ -1143,7 +1143,7 @@ public partial class Home
         await Run(async () =>
         {
             await Api.CancelOrderLineAsync(order.OrderId, line.Id, "Cancelado desde Comandero");
-            await Task.Delay(500);
+            await Task.Delay(500, CancellationToken.None);
             await LoadBill();
             success = true;
             message = $"{line.ProductName} cancelado antes de preparación.";
