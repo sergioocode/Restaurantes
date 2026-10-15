@@ -58,6 +58,7 @@ public sealed class KitchenHistoryQuery(OrderWriteDbContext db, TimeZoneInfo tim
                     )
                 )
             )
+            .AsSplitQuery()
             .Include(order => order.Stations)
             .Include(order => order.Lines)
             .OrderByDescending(order => order.CreatedAtUtc)
