@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -490,19 +491,37 @@ public sealed class CatalogDesignController(
     private static bool ValidName(string? name) =>
         !string.IsNullOrWhiteSpace(name) && name.Trim().Length <= 120;
 
-    public sealed record TaxInput(string Code, string Name, decimal Rate, bool IsActive);
+    public sealed record TaxInput(
+        string Code,
+        string Name,
+        [property: JsonRequired] decimal Rate,
+        [property: JsonRequired] bool IsActive
+    );
 
-    public sealed record AllergenInput(string Code, string Name, string Description, bool IsActive);
+    public sealed record AllergenInput(
+        string Code,
+        string Name,
+        string Description,
+        [property: JsonRequired] bool IsActive
+    );
 
-    public sealed record DefinitionInput(bool IsCombo, bool AllowsExtras, List<GroupInput> Groups);
+    public sealed record DefinitionInput(
+        [property: JsonRequired] bool IsCombo,
+        [property: JsonRequired] bool AllowsExtras,
+        List<GroupInput> Groups
+    );
 
     public sealed record GroupInput(
         string Name,
         string Kind,
-        int MinSelections,
-        int MaxSelections,
+        [property: JsonRequired] int MinSelections,
+        [property: JsonRequired] int MaxSelections,
         List<Guid> ProductIds
     );
 
-    public sealed record PriceInput(string Channel, string Format, decimal Amount);
+    public sealed record PriceInput(
+        string Channel,
+        string Format,
+        [property: JsonRequired] decimal Amount
+    );
 }
