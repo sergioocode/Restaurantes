@@ -1,0 +1,99 @@
+using Restaurantes.OrderSimulator;
+using Xunit;
+using Simulator = Restaurantes.OrderSimulator.Program;
+
+namespace Restaurantes.OrderSimulator.Tests;
+
+public sealed class PaymentSimulationTests
+{
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(42)]
+    public void Draws_stay_within_the_requested_ranges(int? seed)
+    {
+        Simulator.SimulatorRandom random = new(seed);
+
+        for (int index = 0; index < 100; index++)
+        {
+            Assert.InRange(random.NextInteger(-5, 7), -5, 6);
+            double fraction = random.NextFraction();
+            Assert.True(fraction >= 0 && fraction < 1);
+        }
+        Assert.Equal(3, random.NextInteger(3, 3));
+        Assert.Equal(5, random.NextInteger(5, 4));
+    }
+
+    [Fact]
+    public void The_same_seed_reproduces_a_mixed_sequence_of_draws()
+    {
+        Simulator.SimulatorRandom first = new(123);
+        Simulator.SimulatorRandom second = new(123);
+
+        for (int index = 0; index < 100; index++)
+        {
+            Assert.Equal(first.NextInteger(0, 1000), second.NextInteger(0, 1000));
+            Assert.Equal(first.NextFraction(), second.NextFraction());
+        }
+    }
+
+    [Theory]
+    [InlineData(0.01)]
+    [InlineData(1.00)]
+    [InlineData(29.99)]
+    public void Split_payments_preserve_the_total_without_zero_or_repeated_parts(decimal amount)
+    {
+        PaymentOptions options = new() { SplitProbability = 1 };
+        using SemaphoreSlim gate = new(1, 1);
+        Simulator.SimulatorRandom random = new(42);
+
+        for (int index = 0; index < 100; index++)
+        {
+            List<PaymentPart> parts = Simulator.CreatePaymentParts(options, amount, random, gate);
+
+            Assert.Equal(amount, parts.Sum(part => part.Amount));
+            Assert.Equal(parts.Count, parts.Select(part => part.Method).Distinct().Count());
+            Assert.All(
+                parts,
+                part =>
+                {
+                    Assert.True(part.Amount > 0);
+                    Assert.Equal(decimal.Round(part.Amount, 2), part.Amount);
+                    Assert.Contains(options.Methods, method => method.Name == part.Method);
+                }
+            );
+            Assert.Equal(1, gate.CurrentCount);
+        }
+    }
+
+    [Fact]
+    public void Payments_without_splitting_use_one_configured_method()
+    {
+        PaymentOptions options = new() { SplitProbability = 0 };
+
+        PaymentPart part = Assert.Single(
+            Simulator.CreatePaymentParts(options, 18.35m, new Simulator.SimulatorRandom(null))
+        );
+
+        Assert.Equal(18.35m, part.Amount);
+        Assert.Contains(options.Methods, method => method.Name == part.Method);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(1.001)]
+    public void Invalid_payment_amounts_are_rejected(decimal amount)
+    {
+        ArgumentOutOfRangeException error = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            Simulator.CreatePaymentParts(
+                new PaymentOptions(),
+                amount,
+                new Simulator.SimulatorRandom(1)
+            )
+        );
+
+        Assert.Equal("amount", error.ParamName);
+    }
+}
