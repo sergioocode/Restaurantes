@@ -6,6 +6,7 @@
   </Configurations>
   <Folder Name="/src/" />
   <Folder Name="/tests/">
+    <Project Path="tests/Restaurantes.OrderSimulator.Tests/Restaurantes.OrderSimulator.Tests.csproj" />
     <Project Path="tests/Restaurantes.CashRegister.Api.Tests/Restaurantes.CashRegister.Api.Tests.csproj" />
     <Project Path="tests/Restaurantes.Catalog.Infrastructure.Tests/Restaurantes.Catalog.Infrastructure.Tests.csproj" />
     <Project Path="tests/Restaurantes.Clients.Pwa.Tests/Restaurantes.Clients.Pwa.Tests.csproj" />

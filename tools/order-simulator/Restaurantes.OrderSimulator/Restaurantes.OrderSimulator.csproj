@@ -3,6 +3,7 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Restaurantes.OrderSimulator.Tests" />
     <ProjectReference Include="..\..\..\src\Services\Catalog\Restaurantes.Catalog.Contracts\Restaurantes.Catalog.Contracts.csproj" />
     <ProjectReference Include="..\..\..\src\Services\Dining\Restaurantes.Dining.Contracts\Restaurantes.Dining.Contracts.csproj" />
     <ProjectReference Include="..\..\..\src\Services\Orders\Restaurantes.Orders.Contracts\Restaurantes.Orders.Contracts.csproj" />
