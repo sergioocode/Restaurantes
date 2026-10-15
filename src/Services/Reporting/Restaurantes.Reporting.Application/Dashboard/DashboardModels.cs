@@ -27,7 +27,8 @@ public sealed record SalesLine(
     decimal UnitPrice,
     int Quantity,
     string CategoryName,
-    string PreparationStationCode
+    string PreparationStationCode,
+    string Format = ""
 );
 
 public sealed record CompletedSale(
@@ -35,6 +36,7 @@ public sealed record CompletedSale(
     decimal Total,
     string Source,
     string PaymentMethod,
+    IReadOnlyList<SalesPaymentMethod> PaymentMethods,
     IReadOnlyList<Guid> OrderIds,
     IReadOnlyList<SalesLine> Lines
 );
@@ -61,7 +63,8 @@ public sealed record OperationalLine(
     string ProductName,
     int Quantity,
     string CategoryName,
-    string PreparationStationCode
+    string PreparationStationCode,
+    string KitchenStatus
 );
 
 public sealed record DailyReportingSnapshot(

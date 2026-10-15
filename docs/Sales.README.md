@@ -27,29 +27,28 @@ Sales **no captura pagos**, **no modifica pedidos** y **no calcula el estado ope
 
 ## Proyectos
 
-El bounded context está dividido en siete proyectos:
+El servicio se organiza en proyectos por responsabilidad. La API es el punto de entrada ejecutable;
+los workers se implementan en Infrastructure y se activan según el rol de ejecución.
 
 ```text
 src/Services/Sales/
-├── Restaurantes.Sales.Api.Read
+├── Restaurantes.Sales.Api
 ├── Restaurantes.Sales.Application
-├── Restaurantes.Sales.Consumer
 ├── Restaurantes.Sales.Contracts
 ├── Restaurantes.Sales.Domain
-├── Restaurantes.Sales.Infrastructure
-└── Restaurantes.Sales.Publisher
+└── Restaurantes.Sales.Infrastructure
 ```
 
 | Proyecto | Responsabilidad |
 | --- | --- |
-| `Restaurantes.Sales.Domain` | Modelo `Sale` / `SaleOrder` y regla de completado de la venta. |
-| `Restaurantes.Sales.Application` | Orquestación de eventos de Payments y Orders y puertos de persistencia. |
-| `Restaurantes.Sales.Contracts` | Contratos públicos del servicio: `SaleCompleted`, `SaleResponse` y snapshots de líneas. |
-| `Restaurantes.Sales.Infrastructure` | EF Core, PostgreSQL, stores, Outbox, Inbox y modelos Read/Write. |
-| `Restaurantes.Sales.Consumer` | Consumo de eventos externos y construcción de la proyección Read. |
-| `Restaurantes.Sales.Publisher` | Publicación de eventos pendientes desde Outbox hacia RabbitMQ. |
-| `Restaurantes.Sales.Api.Read` | Consultas de ventas completadas. |
+| `Restaurantes.Sales.Api` | Composición de los roles HTTP y workers. |
+| `Restaurantes.Sales.Application` | Casos de uso y puertos. |
+| `Restaurantes.Sales.Contracts` | Eventos públicos. |
+| `Restaurantes.Sales.Domain` | Modelo de venta y reglas. |
+| `Restaurantes.Sales.Infrastructure` | Persistencia, stores, proyecciones y workers. |
 
+La API expone las consultas de lectura de ventas. El mismo ejecutable puede iniciar esos
+endpoints, los workers o ambos según el perfil; Sales no ofrece controladores de escritura.
 ## Arquitectura interna
 
 ```mermaid
@@ -59,13 +58,13 @@ flowchart LR
     Rabbit[("RabbitMQ")]
 
     subgraph Sales["Sales"]
-        Consumer["Sales.Consumer"]
+        Consumer["CheckoutProcessWorker"]
         App["Application + Domain"]
         WriteDb[("sales_write")]
-        Publisher["Sales.Publisher"]
+        Publisher["SalesOutboxPublisherWorker"]
         ReadProjector["SalesReadProjectionWorker"]
         ReadDb[("sales_read")]
-        ReadApi["Sales.Api.Read"]
+        ReadApi["Sales.Api"]
     end
 
     Gateway["YARP Gateway"]
@@ -112,6 +111,7 @@ Una venta contiene:
 - total consolidado;
 - fecha de creación;
 - fecha de completado;
+- fecha de negocio recibida desde la sesión de caja;
 - pedidos incluidos en la transacción.
 
 Cada pedido asociado se representa mediante `SaleOrder` y conserva:
@@ -191,9 +191,9 @@ Si llegan varios eventos para la misma transacción, `ExpectedOrderCount` conser
 sequenceDiagram
     participant Payments
     participant MQ as RabbitMQ
-    participant Consumer as Sales.Consumer
+    participant Consumer as CheckoutProcessWorker
     participant DB as sales_write
-    participant Publisher as Sales.Publisher
+    participant Publisher as SalesOutboxPublisherWorker
     participant Read as sales_read
     participant Reporting
 
@@ -235,10 +235,13 @@ Sales utiliza este evento para:
 1. obtener o crear la venta;
 2. determinar el `SaleId`;
 3. actualizar `ExpectedOrderCount`;
-4. registrar el pedido como pagado;
-5. asociar importe, método de pago y origen;
-6. incorporar información de entrega previamente recibida, si existe;
-7. comprobar si la venta ya puede completarse.
+4. registrar el cobro individual en `Sale.Payments`;
+5. actualizar el total pagado del pedido y marcarlo pagado solo cuando el evento indique que se cubrió por completo;
+6. asociar importe, método de pago y origen;
+7. incorporar información de entrega previamente recibida, si existe;
+8. comprobar si la venta ya puede completarse.
+
+Payments publica un `PaymentCaptured` por cada cobro real, también para cobros parciales o pagos divididos en varias tandas. Sales persiste cada captura como un `SalePayment`; no espera al último cobro para guardarla. La venta, en cambio, solo pasa a `Completed` cuando ya se recibieron todos los pedidos esperados y todos están completamente pagados. En esa transición se publica un único `SaleCompleted`, con el total final y el desglose acumulado por método de pago. Los cobros parciales no publican un `SaleCompleted`.
 
 ### `PaymentRefunded`
 
@@ -287,8 +290,13 @@ Cada `SaleLineSnapshot` conserva:
 - `Quantity`;
 - `CategoryName`;
 - `PreparationStationCode`.
+- `BaseUnitPrice` y los extras seleccionados, cada uno con nombre, cantidad y precio unitario.
 
 Estas líneas se serializan como JSONB en el modelo transaccional y posteriormente pueden formar parte de `SaleCompleted`.
+
+`UnitPrice` mantiene el precio total de la línea, incluidos los extras; `BaseUnitPrice` permite mostrar el precio del plato por separado de cada extra.
+
+La venta conserva también el porcentaje y el importe del descuento aplicado a la sesión, además del desglose de los cobros por método de pago. El listado que consume Backoffice devuelve una fila por venta completada (ticket), aunque la venta agrupe varios pedidos.
 
 El objetivo es que una venta histórica no dependa de consultar nuevamente Catalog para conocer el nombre o precio que tenía un producto en el momento de la operación.
 
@@ -320,6 +328,7 @@ Source
 PaymentMethod
 Total
 CompletedAtUtc
+BusinessDate
 OrderIds[]
 Lines[]
 ```
@@ -328,16 +337,20 @@ Lines[]
 
 Entre sus consumidores se encuentra **Reporting**, que utiliza este evento junto con sus propias proyecciones de Orders y Payments para construir información agregada del dashboard.
 
+El dashboard contabiliza ventas y tickets finalizados a partir de `SaleCompleted`. Por ello, los cobros parciales ya persistidos no aparecen como una venta finalizada hasta que se completa la cuenta.
+
 ## Persistencia
 
-Sales utiliza dos bases de datos PostgreSQL lógicamente independientes:
+Sales conserva dos esquemas PostgreSQL independientes, ubicados en las bases física
+operativa y de lectura:
 
 ```text
 sales_write
 sales_read
 ```
 
-En desarrollo ambas pueden residir dentro de la misma instancia PostgreSQL. La separación lógica permite moverlas posteriormente a infraestructura física diferente sin modificar las responsabilidades del servicio.
+`sales_write` queda en la base operativa y `sales_read` en la de lectura. Sales
+mantiene su API y sus workers como servicio independiente.
 
 ### `sales_write`
 
@@ -441,9 +454,9 @@ Cuando una venta pasa a `Completed`, `SaleCommandService` agrega `SaleCompleted`
 
 ```mermaid
 sequenceDiagram
-    participant Consumer as Sales.Consumer
+    participant Consumer as CheckoutProcessWorker
     participant DB as sales_write
-    participant Publisher as Sales.Publisher
+    participant Publisher as SalesOutboxPublisherWorker
     participant MQ as RabbitMQ
 
     Consumer->>DB: actualizar Sale + agregar OutboxMessage
@@ -455,7 +468,7 @@ sequenceDiagram
     Publisher->>DB: marcar ProcessedAtUtc
 ```
 
-`Sales.Publisher`:
+`SalesOutboxPublisherWorker`:
 
 - consulta mensajes con `ProcessedAtUtc = null`;
 - publica por orden de `OccurredAtUtc`;
@@ -551,17 +564,19 @@ La consulta de listado:
 - devuelve como máximo 100 registros;
 - consulta exclusivamente `sales_read`.
 
+El filtro `date` usa `BusinessDate` cuando está disponible. Para ventas históricas sin ese dato, calcula los límites del día con `Business:TimeZoneId` (por defecto, `Europe/Madrid`), no con la zona local del proceso. Configura el mismo valor en todos los procesos mediante `Business__TimeZoneId`.
+
 La API consulta exclusivamente `sales_read`.
 
 ## Gateways
 
 Sales se publica a través de los gateways YARP únicamente para operaciones de lectura.
 
-Las rutas `GET /api/sales` y `GET /api/sales/{id}` se dirigen a `Sales.Api.Read`. No existe una ruta de escritura para Sales porque el servicio construye su estado a partir de eventos de integración.
+Las rutas `GET /api/sales` y `GET /api/sales/{id}` se dirigen a `Sales.Api`. No existe una ruta de escritura para Sales porque el servicio construye su estado a partir de eventos de integración.
 
 ## Seguridad
 
-`Sales.Api.Read` no configura actualmente autenticación JWT ni autorización por restaurante. Los endpoints `GET /api/sales` y `GET /api/sales/{id}` se exponen sin una comprobación de permisos dentro del servicio en la implementación actual.
+`Sales.Api` no configura actualmente autenticación JWT ni autorización por restaurante. Los endpoints `GET /api/sales` y `GET /api/sales/{id}` se exponen sin una comprobación de permisos dentro del servicio en la implementación actual.
 
 El gateway define el enrutamiento hacia Sales, pero no sustituye una regla de autorización dentro del bounded context.
 
@@ -594,13 +609,8 @@ Esto evita convertir Sales en una base de datos analítica y permite que consult
 
 ## Ausencia deliberada de API Write
 
-No existe actualmente:
-
-```text
-Restaurantes.Sales.Api.Write
-```
-
-Esto es intencional en el diseño actual.
+El proyecto `Restaurantes.Sales.Api` expone consultas de lectura; no existe un controlador
+HTTP para crear o modificar ventas. Las escrituras de Sales se originan en eventos.
 
 Sales no recibe comandos de usuario para crear ventas. Una venta se deriva de hechos ocurridos en otros bounded contexts:
 
@@ -667,7 +677,7 @@ URL configurada actualmente para la API:
 
 | Componente | URL |
 | --- | --- |
-| Sales Read API | `http://localhost:5162` |
+| Sales API | `http://localhost:5162` |
 
 Bases locales:
 
@@ -699,7 +709,7 @@ Estos endpoints permiten comprobar disponibilidad y liveness sin ejecutar consul
 
 ### Escritura completamente event-driven
 
-Sales no expone `Api.Write`. Las ventas se derivan de hechos confirmados por Payments y Orders, evitando crear ventas manualmente sin correspondencia con una operación real.
+Sales no ofrece comandos HTTP para crear ventas. Las ventas se derivan de hechos confirmados por Payments y Orders, evitando crear ventas manualmente sin correspondencia con una operación real.
 
 ### Read / Write separados
 
@@ -715,15 +725,14 @@ Inbox protege el procesamiento frente a entregas repetidas y Transactional Outbo
 
 ## Despliegue y escalado
 
-Sales está dividido en tres procesos ejecutables independientes:
+Sales usa un ejecutable con roles de despliegue:
 
 ```text
-Sales.Consumer
-Sales.Publisher
-Sales.Api.Read
+Sales.Api (Http)
+Sales.Api (Workers)
 ```
 
-Esto permite escalar de forma diferente:
+Esto permite separar la capacidad de:
 
 - consumo de eventos;
 - publicación de Outbox;
@@ -747,14 +756,14 @@ En cloud, si la carga lo requiere, ambas bases pueden alojarse en recursos disti
 RabbitMQ
    │
    ▼
-Sales.Consumer ──────> PostgreSQL Write
+Sales.Api (Workers) ──> PostgreSQL Write
                           sales_write
 
-Sales.Consumer ──────> PostgreSQL Read
+Sales.Api (Workers) ──> PostgreSQL Read
                           sales_read
                               ▲
                               │
-                       Sales.Api.Read
+                       Sales.Api
 ```
 
 La ventaja principal es que una carga elevada de consulta no necesita competir por CPU, memoria, conexiones o I/O con el procesamiento transaccional de eventos.

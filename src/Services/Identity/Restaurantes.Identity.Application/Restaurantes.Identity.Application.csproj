@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="..\Restaurantes.Identity.Domain\Restaurantes.Identity.Domain.csproj" />
+    <ProjectReference Include="..\Restaurantes.Identity.Contracts\Restaurantes.Identity.Contracts.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Restaurantes.Security\Restaurantes.Security.csproj" />
   </ItemGroup>
 </Project>

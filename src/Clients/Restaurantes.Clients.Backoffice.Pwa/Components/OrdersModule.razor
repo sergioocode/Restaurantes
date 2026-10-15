@@ -1,0 +1,29 @@
+﻿@using Restaurantes.Clients.Backoffice.Pwa.Models
+
+<div class="order-filters">
+    <label>Fecha
+        <input type="date" @bind="Host.historyDate" />
+    </label>
+</div>
+<div class="order-list">
+    @foreach (ManagementOrderResponse order in Host.historyOrders)
+    {
+        <article class="order-row">
+            <div>
+                <strong>@order.Id.ToString()[..8] · @Host.RestaurantName(order.RestaurantId)</strong>
+                <small>@order.CreatedAtLocal.ToString("dd/MM/yyyy HH:mm") · @(string.IsNullOrEmpty(order.TableLabel) ? order.CustomerName : order.TableLabel)</small>
+            </div>
+            <span>@order.Source · @order.Status</span>
+            <strong>@order.Total.ToString("0.00") €</strong>
+        </article>
+    }
+    @if (Host.historyOrders.Count == 0 && !Host.busy)
+    {
+        <p class="muted">No hay pedidos para esta fecha.</p>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public Restaurantes.Clients.Backoffice.Pwa.Pages.Home Host { get; set; } = default!;
+}

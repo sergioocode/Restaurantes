@@ -1,17 +1,31 @@
-namespace Restaurantes.Catalog.Domain;
+﻿namespace Restaurantes.Catalog.Domain;
 
 public sealed class Category
 {
     private Category() { }
 
-    private Category(string code, string name, string stationCode, string stationName, DateTime now)
+    private Category(
+        string code,
+        string name,
+        string stationCode,
+        string stationName,
+        DateTime now,
+        bool showInPos,
+        bool showInCommander,
+        bool showInCustomerQr,
+        bool requiresKds
+    )
     {
         Id = Guid.NewGuid();
         Code = CodeValue(code, 40);
         Name = Required(name, 120);
-        DefaultStationCode = CodeValue(stationCode, 40);
-        DefaultStationName = Required(stationName, 80);
+        DefaultStationCode = NormalizeStationCode(stationCode, requiresKds);
+        DefaultStationName = NormalizeStationName(stationName, requiresKds);
+        RequiresKds = requiresKds;
         IsActive = true;
+        ShowInPos = showInPos;
+        ShowInCommander = showInCommander;
+        ShowInCustomerQr = showInCustomerQr;
         Version = 1;
         UpdatedAtUtc = now;
     }
@@ -21,7 +35,11 @@ public sealed class Category
     public string Name { get; private set; } = "";
     public string DefaultStationCode { get; private set; } = "";
     public string DefaultStationName { get; private set; } = "";
+    public bool RequiresKds { get; private set; } = true;
     public bool IsActive { get; private set; }
+    public bool ShowInPos { get; private set; } = true;
+    public bool ShowInCommander { get; private set; } = true;
+    public bool ShowInCustomerQr { get; private set; } = true;
     public int Version { get; private set; }
     public DateTime UpdatedAtUtc { get; private set; }
 
@@ -30,10 +48,24 @@ public sealed class Category
         string name,
         string stationCode,
         string stationName,
-        DateTime now
+        DateTime now,
+        bool showInPos = true,
+        bool showInCommander = true,
+        bool showInCustomerQr = true,
+        bool requiresKds = true
     )
     {
-        return new(code, name, stationCode, stationName, now);
+        return new(
+            code,
+            name,
+            stationCode,
+            stationName,
+            now,
+            showInPos,
+            showInCommander,
+            showInCustomerQr,
+            requiresKds
+        );
     }
 
     public void Update(
@@ -41,13 +73,21 @@ public sealed class Category
         string stationCode,
         string stationName,
         bool isActive,
-        DateTime now
+        DateTime now,
+        bool showInPos,
+        bool showInCommander,
+        bool showInCustomerQr,
+        bool requiresKds
     )
     {
         Name = Required(name, 120);
-        DefaultStationCode = CodeValue(stationCode, 40);
-        DefaultStationName = Required(stationName, 80);
+        DefaultStationCode = NormalizeStationCode(stationCode, requiresKds);
+        DefaultStationName = NormalizeStationName(stationName, requiresKds);
+        RequiresKds = requiresKds;
         IsActive = isActive;
+        ShowInPos = showInPos;
+        ShowInCommander = showInCommander;
+        ShowInCustomerQr = showInCustomerQr;
         Version++;
         UpdatedAtUtc = now;
     }
@@ -59,6 +99,12 @@ public sealed class Category
             ? throw new ArgumentException($"Value must contain between 1 and {max} characters.")
             : result;
     }
+
+    private static string NormalizeStationCode(string value, bool requiresKds) =>
+        requiresKds || !string.IsNullOrWhiteSpace(value) ? CodeValue(value, 40) : "";
+
+    private static string NormalizeStationName(string value, bool requiresKds) =>
+        requiresKds || !string.IsNullOrWhiteSpace(value) ? Required(value, 80) : "";
 
     internal static string CodeValue(string value, int max)
     {

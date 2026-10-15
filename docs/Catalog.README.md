@@ -26,31 +26,29 @@ Catalog **no crea pedidos**, **no controla el ciclo de cocina de un pedido** y *
 
 ## Proyectos
 
-El bounded context está dividido en ocho proyectos:
+El servicio se organiza en proyectos por responsabilidad. La API es el punto de entrada ejecutable;
+los workers se implementan en Infrastructure y se activan según el rol de ejecución.
 
 ```text
 src/Services/Catalog/
-├── Restaurantes.Catalog.Api.Read
-├── Restaurantes.Catalog.Api.Write
+├── Restaurantes.Catalog.Api
 ├── Restaurantes.Catalog.Application
-├── Restaurantes.Catalog.Consumer
 ├── Restaurantes.Catalog.Contracts
 ├── Restaurantes.Catalog.Domain
-├── Restaurantes.Catalog.Infrastructure
-└── Restaurantes.Catalog.Publisher
+└── Restaurantes.Catalog.Infrastructure
 ```
 
 | Proyecto | Responsabilidad |
 | --- | --- |
-| `Restaurantes.Catalog.Domain` | Entidades y reglas de negocio de categorías, productos, menú por restaurante y estaciones KDS. |
-| `Restaurantes.Catalog.Application` | Casos de uso de escritura y abstracciones Read/Write. |
-| `Restaurantes.Catalog.Contracts` | Requests, responses y eventos de integración públicos del bounded context. |
-| `Restaurantes.Catalog.Infrastructure` | EF Core, PostgreSQL, stores, bases Read/Write, Outbox e Inbox. |
-| `Restaurantes.Catalog.Api.Write` | Operaciones administrativas sobre catálogo, menú y estaciones. |
-| `Restaurantes.Catalog.Publisher` | Publicación de mensajes pendientes desde Outbox hacia RabbitMQ. |
-| `Restaurantes.Catalog.Consumer` | Construcción y actualización idempotente de la proyección Read. |
-| `Restaurantes.Catalog.Api.Read` | Consultas del catálogo global y del menú de cada restaurante. |
+| `Restaurantes.Catalog.Api` | Endpoints HTTP y composición de roles. |
+| `Restaurantes.Catalog.Application` | Casos de uso y puertos. |
+| `Restaurantes.Catalog.Contracts` | Requests, respuestas y eventos públicos. |
+| `Restaurantes.Catalog.Domain` | Entidades y reglas del catálogo. |
+| `Restaurantes.Catalog.Infrastructure` | Persistencia, stores, proyecciones y workers. |
 
+La API atiende las operaciones HTTP de lectura y escritura en un único host. Según el perfil,
+ese ejecutable inicia HTTP, workers o ambos. Read y Write describen responsabilidades/rutas;
+no son proyectos ni APIs separados.
 ## Arquitectura interna
 
 ```mermaid
@@ -63,13 +61,13 @@ flowchart LR
     Gateway["YARP"]
 
     subgraph Catalog["Catalog"]
-        WriteApi["Catalog.Api.Write"]
+        WriteApi["Catalog API · rutas de escritura"]
         App["Application + Domain"]
         WriteDb[("catalog_write")]
-        Publisher["Catalog.Publisher"]
-        Consumer["Catalog.Consumer"]
+        Publisher["CatalogOutboxPublisherWorker"]
+        Consumer["CatalogProjectionWorker"]
         ReadDb[("catalog_read")]
-        ReadApi["Catalog.Api.Read"]
+        ReadApi["Catalog API · rutas de lectura"]
     end
 
     Rabbit[("RabbitMQ")]
@@ -95,7 +93,7 @@ flowchart LR
     Rabbit -->|CatalogItemChanged / KitchenStationChanged| Orders
 ```
 
-La escritura nunca actualiza directamente `catalog_read`. El modelo Read se construye desde eventos publicados después de persistir los cambios en `catalog_write`.
+Las rutas de lectura y escritura pertenecen al mismo host API. La escritura nunca actualiza directamente `catalog_read`; el modelo Read se construye desde eventos publicados después de persistir los cambios en `catalog_write`.
 
 ## Catálogo global y menú por restaurante
 
@@ -292,7 +290,8 @@ La configuración es publicada a Orders mediante `KitchenStationChanged`, permit
 
 ## Persistencia
 
-Catalog utiliza dos bases de datos PostgreSQL lógicamente independientes:
+Catalog conserva dos esquemas PostgreSQL independientes, cada uno en la base física
+asignada a su tipo de carga:
 
 ```text
 catalog_write
@@ -415,7 +414,7 @@ erDiagram
 
 ### `catalog_read`
 
-`Catalog.Consumer` consume todos los eventos del dominio desde:
+`CatalogProjectionWorker`, implementado en `Infrastructure`, consume los eventos del dominio desde:
 
 ```text
 catalog.read-model
@@ -461,13 +460,13 @@ insertar ProductChanged en outbox_messages
 SaveChanges
 ```
 
-El API no publica directamente en RabbitMQ. `Catalog.Publisher` procesa posteriormente los mensajes pendientes.
+La API no publica directamente en RabbitMQ. `CatalogOutboxPublisherWorker`, implementado en `Infrastructure`, procesa los mensajes pendientes.
 
 ```mermaid
 sequenceDiagram
-    participant API as Catalog.Api.Write
+    participant API as Catalog.Api
     participant DB as catalog_write
-    participant Publisher as Catalog.Publisher
+    participant Publisher as CatalogOutboxPublisherWorker
     participant MQ as RabbitMQ
 
     API->>DB: guardar agregado + OutboxMessage
@@ -551,7 +550,7 @@ Los mensajes se publican como persistentes y utilizan el identificador del Outbo
 
 ### Eventos consumidos
 
-El propio `Catalog.Consumer` consume los eventos publicados por Catalog desde la queue:
+El propio `CatalogProjectionWorker` consume los eventos publicados por Catalog desde la queue:
 
 ```text
 catalog.read-model
@@ -670,17 +669,16 @@ El gateway privado separa las rutas según verbo HTTP:
 
 ```text
 GET
-    -> Catalog.Api.Read
+    -> Catalog.Api
 
 POST / PUT / PATCH / DELETE
-    -> Catalog.Api.Write
+    -> Catalog.Api
 ```
 
 Destinos locales actuales:
 
 ```text
-Catalog.Api.Write -> localhost:5131
-Catalog.Api.Read  -> localhost:5132
+Catalog.Api -> localhost:5131
 ```
 
 El gateway público expone únicamente la ruta GET de Catalog. Las restricciones adicionales de endpoints administrativos siguen siendo aplicadas por la API Read.
@@ -838,7 +836,7 @@ Las credenciales de producción deben suministrarse mediante la configuración s
 
 `CatalogWriteDbContext` y `CatalogReadDbContext` mantienen migraciones independientes para `catalog_write` y `catalog_read`.
 
-En la implementación actual, `Catalog.Api.Write` y `Catalog.Api.Read` ejecutan `Database.MigrateAsync()` durante el arranque de cada API.
+La API aplica las migraciones pendientes al arrancar. El rol Workers también inicializa la persistencia que necesita al iniciar.
 
 ## Desarrollo local
 
@@ -846,8 +844,7 @@ URLs configuradas actualmente:
 
 | Componente | URL |
 | --- | --- |
-| Catalog Write API | `http://localhost:5131` |
-| Catalog Read API | `http://localhost:5132` |
+| Catalog API | `http://localhost:5131` |
 
 Bases locales:
 
@@ -866,7 +863,7 @@ dotnet tool restore
 
 ## Health checks
 
-`Catalog.Api.Write` y `Catalog.Api.Read` utilizan `Restaurantes.ServiceDefaults`.
+`Catalog.Api` utiliza `Restaurantes.ServiceDefaults`.
 
 Ambas APIs exponen:
 
@@ -882,11 +879,11 @@ Ambas APIs exponen:
 ```mermaid
 sequenceDiagram
     participant BO as Backoffice
-    participant W as Catalog.Api.Write
+    participant W as Catalog.Api
     participant WDB as catalog_write
-    participant Pub as Catalog.Publisher
+    participant Pub as CatalogOutboxPublisherWorker
     participant MQ as RabbitMQ
-    participant C as Catalog.Consumer
+    participant C as CatalogProjectionWorker
     participant RDB as catalog_read
     participant Orders
 

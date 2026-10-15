@@ -1,4 +1,4 @@
-namespace Restaurantes.Catalog.Domain;
+﻿namespace Restaurantes.Catalog.Domain;
 
 public sealed class RestaurantMenuItem
 {
@@ -72,8 +72,12 @@ public sealed class RestaurantMenuItem
 
         Price = price;
         IsAvailable = available;
-        PreparationStationCode = Category.CodeValue(stationCode, 40);
-        PreparationStationName = Category.Required(stationName, 80);
+        PreparationStationCode = string.IsNullOrWhiteSpace(stationCode)
+            ? ""
+            : Category.CodeValue(stationCode, 40);
+        PreparationStationName = string.IsNullOrWhiteSpace(stationName)
+            ? ""
+            : Category.Required(stationName, 80);
         Version = increment ? Version + 1 : 1;
         UpdatedAtUtc = now;
     }

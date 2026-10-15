@@ -5,7 +5,9 @@ public sealed record RestaurantResponse(
     string Code,
     string Name,
     string Address,
+    Guid? CompanyId,
     bool IsActive,
     int Version,
-    DateTime UpdatedAtUtc
+    DateTime UpdatedAtUtc,
+    RestaurantCompanyResponse? Company = null
 );

@@ -1,4 +1,4 @@
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using Restaurantes.Clients.Commander.Pwa.Models;
 
 namespace Restaurantes.Clients.Commander.Pwa.Api;
@@ -7,7 +7,7 @@ public sealed partial class CommanderApi
 {
     public Task<List<OrderResponse>> OrdersAsync(Guid restaurantId)
     {
-        return GetAsync<List<OrderResponse>>($"/api/orders?restaurantId={restaurantId}");
+        return GetAsync<List<OrderResponse>>($"/api/orders/commander?restaurantId={restaurantId}");
     }
 
     public Task<OrderDetailResponse> OrderAsync(Guid orderId)
@@ -34,7 +34,7 @@ public sealed partial class CommanderApi
         Guid restaurantId,
         TableResponse table,
         Guid sessionId,
-        IReadOnlyDictionary<Guid, int> quantities,
+        IReadOnlyList<CommanderCartLine> lines,
         IReadOnlyDictionary<Guid, string> notes
     )
     {
@@ -45,15 +45,24 @@ public sealed partial class CommanderApi
             diningSessionId = sessionId,
             tableLabel = table.Label,
             serviceMode = "DineIn",
-            source = "WaiterMobile",
+            source = "Comandero",
             paymentTiming = "OnAccount",
-            lines = quantities
-                .Where(x => x.Value > 0)
-                .Select(x => new
+            lines = lines
+                .Where(line => line.Quantity > 0)
+                .Select(line => new
                 {
-                    productId = x.Key,
-                    quantity = x.Value,
-                    notes = notes.GetValueOrDefault(x.Key) ?? string.Empty,
+                    productId = line.ProductId,
+                    format = line.Format,
+                    quantity = line.Quantity,
+                    notes = notes.GetValueOrDefault(line.ProductId) ?? string.Empty,
+                    selectedExtras = line
+                        .Extras.Where(extra => extra.Quantity > 0)
+                        .Select(extra => new
+                        {
+                            groupId = extra.GroupId,
+                            productId = extra.ProductId,
+                            quantity = extra.Quantity,
+                        }),
                 }),
         };
         using HttpRequestMessage create = Authorized(HttpMethod.Post, "/api/orders");

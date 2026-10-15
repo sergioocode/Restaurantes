@@ -1,4 +1,4 @@
-namespace Restaurantes.Clients.Commander.Pwa.Models;
+﻿namespace Restaurantes.Clients.Commander.Pwa.Models;
 
 public sealed record OrderLineDetailResponse(
     Guid Id,
@@ -10,5 +10,21 @@ public sealed record OrderLineDetailResponse(
     string PreparationStationName,
     string Status,
     DateTime? CancelledAtUtc,
-    string CancellationReason
+    string CancellationReason,
+    string KitchenStatus = "Pending",
+    DateTime? PreparationStartedAtUtc = null,
+    DateTime? ReadyAtUtc = null,
+    DateTime? DispatchedAtUtc = null,
+    string Format = "",
+    decimal? BaseUnitPrice = null,
+    IReadOnlyList<OrderLineExtraResponse>? Extras = null,
+    decimal? TaxRate = null
+);
+
+public sealed record OrderLineExtraResponse(
+    Guid ProductId,
+    string ProductName,
+    decimal UnitPrice,
+    int Quantity,
+    decimal? TaxRate = null
 );

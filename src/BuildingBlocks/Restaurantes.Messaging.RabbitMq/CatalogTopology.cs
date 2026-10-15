@@ -91,6 +91,13 @@ public static class CatalogTopology
         await channel.QueueBindAsync(
             OrdersIntegrationQueueName,
             ExchangeName,
+            CategoryChangedRoutingKey,
+            arguments: null,
+            cancellationToken: cancellationToken
+        );
+        await channel.QueueBindAsync(
+            OrdersIntegrationQueueName,
+            ExchangeName,
             CatalogItemChangedRoutingKey,
             arguments: null,
             cancellationToken: cancellationToken

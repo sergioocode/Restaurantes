@@ -1,4 +1,4 @@
-namespace Restaurantes.Orders.Domain;
+﻿namespace Restaurantes.Orders.Domain;
 
 public sealed record OrderLineDraft(
     Guid ProductId,
@@ -11,5 +11,10 @@ public sealed record OrderLineDraft(
     string PreparationStationCode,
     string PreparationStationName,
     bool RequiresPrimaryDispatch,
-    int Priority
+    int Priority,
+    string Format = "",
+    decimal? BaseUnitPrice = null,
+    IReadOnlyList<OrderLineExtra>? Extras = null,
+    bool RequiresKds = true,
+    decimal? TaxRate = null
 );

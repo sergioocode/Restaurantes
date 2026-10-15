@@ -216,20 +216,17 @@ public partial class QrOrder
             }
             order = pendingOrder;
 
-            if (context.QrRequiresImmediatePayment)
-            {
-                progress = "Confirmando pago…";
-                await RetryAsync(
-                    () =>
-                        Api.CaptureOnlineAsync(
-                            order.Id,
-                            context.Session.Id,
-                            pendingPaymentKey,
-                            context.CustomerAccessToken
-                        ),
-                    status => status == (HttpStatusCode)425
-                );
-            }
+            progress = "Confirmando pago…";
+            await RetryAsync(
+                () =>
+                    Api.CaptureOnlineAsync(
+                        order.Id,
+                        context.Session.Id,
+                        pendingPaymentKey,
+                        context.CustomerAccessToken
+                    ),
+                status => status == (HttpStatusCode)425
+            );
 
             progress = "Enviando a cocina…";
             OrderResponse submitted = await RetryAsync(
@@ -245,9 +242,8 @@ public partial class QrOrder
             customerOrders.Add(submitted);
             await PersistOrderIdsAsync();
             StartStatusPolling();
-            success = context.QrRequiresImmediatePayment
-                ? $"Pedido {submitted.Id.ToString()[..8]} · {submitted.Total:0.00} € pagado y enviado."
-                : $"Pedido {submitted.Id.ToString()[..8]} · {submitted.Total:0.00} €. Se añadirá a la cuenta de tu mesa.";
+            success =
+                $"Pedido {submitted.Id.ToString()[..8]} · {submitted.Total:0.00} € pagado y enviado.";
         }
         catch (Exception exception)
         {

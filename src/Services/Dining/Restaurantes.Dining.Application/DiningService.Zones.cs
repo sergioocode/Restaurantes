@@ -11,9 +11,18 @@ public sealed partial class DiningService
         CancellationToken ct
     )
     {
-        return !access.CanAccessRestaurant(principal, restaurantId, DiningPermission.TablesRead)
-            ? DiningResults.Forbid()
-            : DiningResults.Ok(await db.ListZonesAsync(restaurantId, ct));
+        if (!access.CanAccessRestaurant(principal, restaurantId, DiningPermission.TablesRead))
+        {
+            return DiningResults.Forbid();
+        }
+
+        List<DiningZone> zones = await db.ListZonesAsync(restaurantId, ct);
+        foreach (DiningZone zone in zones)
+        {
+            zone.RequestGuestCount ??= false;
+        }
+
+        return DiningResults.Ok(zones);
     }
 
     public async Task<DiningResult> CreateZone(
@@ -78,6 +87,7 @@ public sealed partial class DiningService
 
         zone.Name = name;
         zone.SortOrder = request.SortOrder;
+        zone.RequestGuestCount = request.RequestGuestCount;
         try
         {
             await db.SaveChangesAsync(ct);
@@ -100,45 +110,5 @@ public sealed partial class DiningService
                 new { detail = "The zone was changed or deleted. Refresh and retry." }
             );
         }
-    }
-
-    public async Task<DiningResult> DeleteZone(
-        Guid restaurantId,
-        Guid zoneId,
-        ClaimsPrincipal principal,
-        CancellationToken ct
-    )
-    {
-        if (!access.CanAccessRestaurant(principal, restaurantId, DiningPermission.TablesManage))
-        {
-            return DiningResults.Forbid();
-        }
-
-        await using IDiningTransaction transaction = await db.BeginTransactionAsync(ct);
-        DiningZone? zone = await db.LockZoneAsync(restaurantId, zoneId, ct);
-        if (zone is null)
-        {
-            return DiningResults.NotFound();
-        }
-
-        if (zone.DeletedAtUtc is not null)
-        {
-            return DiningResults.NoContent();
-        }
-
-        if (await db.HasTablesInZoneAsync(restaurantId, zoneId, ct))
-        {
-            return DiningResults.Conflict(
-                new
-                {
-                    detail = "La zona contiene ubicaciones sin eliminar, incluidas las inactivas. Muévelas o elimínalas primero.",
-                }
-            );
-        }
-
-        zone.DeletedAtUtc = time.GetUtcNow().UtcDateTime;
-        await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
-        return DiningResults.NoContent();
     }
 }

@@ -1,4 +1,4 @@
-namespace Restaurantes.Clients.Commander.Pwa.Models;
+﻿namespace Restaurantes.Clients.Commander.Pwa.Models;
 
 public sealed record TableResponse(
     Guid Id,
@@ -10,5 +10,7 @@ public sealed record TableResponse(
     Guid? ActiveSessionId,
     Guid ZoneId,
     string ZoneName,
-    int ZoneSortOrder
+    int ZoneSortOrder,
+    Guid? ActiveSessionOpenedByUserId = null,
+    string? ActiveSessionSource = null
 );

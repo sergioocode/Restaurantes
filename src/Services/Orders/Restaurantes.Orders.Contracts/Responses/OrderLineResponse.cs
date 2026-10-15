@@ -14,5 +14,13 @@ public sealed record OrderLineResponse(
     string PreparationStationName,
     string Status = "Active",
     DateTime? CancelledAtUtc = null,
-    string CancellationReason = ""
+    string CancellationReason = "",
+    string KitchenStatus = "Pending",
+    DateTime? PreparationStartedAtUtc = null,
+    DateTime? ReadyAtUtc = null,
+    DateTime? DispatchedAtUtc = null,
+    string Format = "",
+    decimal? BaseUnitPrice = null,
+    IReadOnlyList<Restaurantes.Orders.Contracts.Events.OrderLineExtraSnapshot>? Extras = null,
+    decimal? TaxRate = null
 );

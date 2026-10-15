@@ -8,5 +8,9 @@ public sealed record CategoryResponse(
     string DefaultStationName,
     bool IsActive,
     int Version,
-    DateTime UpdatedAtUtc
+    DateTime UpdatedAtUtc,
+    bool ShowInPos = true,
+    bool ShowInCommander = true,
+    bool ShowInCustomerQr = true,
+    bool RequiresKds = true
 );

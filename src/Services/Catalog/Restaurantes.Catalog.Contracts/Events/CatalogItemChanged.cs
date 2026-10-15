@@ -1,4 +1,6 @@
-﻿namespace Restaurantes.Catalog.Contracts.Events;
+using Restaurantes.Catalog.Contracts.Responses;
+
+namespace Restaurantes.Catalog.Contracts.Events;
 
 public sealed record CatalogItemChanged(
     Guid RestaurantId,
@@ -13,5 +15,10 @@ public sealed record CatalogItemChanged(
     string PreparationStationCode,
     string PreparationStationName,
     int Version,
-    DateTime OccurredAtUtc
+    DateTime OccurredAtUtc,
+    IReadOnlyList<ProductExtraGroup>? ExtraGroups = null,
+    string DefaultFormat = "PLATO",
+    IReadOnlyList<MenuItemFormatPrice>? Formats = null,
+    bool RequiresKds = true,
+    decimal? TaxRate = null
 );

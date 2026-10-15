@@ -31,6 +31,12 @@ public sealed class OrderWriteDbContext(DbContextOptions<OrderWriteDbContext> op
         order.HasIndex(item => new
         {
             item.RestaurantId,
+            item.BusinessDate,
+            item.CashRegisterSessionId,
+        });
+        order.HasIndex(item => new
+        {
+            item.RestaurantId,
             item.Status,
             item.CreatedAtUtc,
         });
@@ -51,7 +57,14 @@ public sealed class OrderWriteDbContext(DbContextOptions<OrderWriteDbContext> op
         line.ToTable("order_lines");
         line.HasKey(item => item.Id);
         line.Property(item => item.ProductName).HasMaxLength(160).IsRequired();
+        line.Property(item => item.Format).HasMaxLength(40).IsRequired();
         line.Property(item => item.UnitPrice).HasPrecision(12, 2);
+        line.Property(item => item.BaseUnitPrice).HasPrecision(12, 2);
+        line.Property(item => item.TaxRate).HasPrecision(5, 2);
+        line.Property(item => item.ExtrasJson)
+            .HasColumnType("jsonb")
+            .IsRequired()
+            .HasDefaultValueSql("'[]'::jsonb");
         line.Property(item => item.Notes).HasMaxLength(500);
         line.Property(item => item.CategoryName)
             .HasMaxLength(120)
@@ -66,6 +79,9 @@ public sealed class OrderWriteDbContext(DbContextOptions<OrderWriteDbContext> op
             .HasDefaultValue("General")
             .IsRequired();
         line.Property(item => item.Status).HasConversion<int>();
+        line.Property(item => item.KitchenStatus)
+            .HasConversion<int>()
+            .HasDefaultValue(KitchenLineStatus.Pending);
         line.Property(item => item.CancellationReason).HasMaxLength(300).IsRequired();
 
         EntityTypeBuilder<OrderKitchenStation> station = modelBuilder.Entity<OrderKitchenStation>();
@@ -81,9 +97,14 @@ public sealed class OrderWriteDbContext(DbContextOptions<OrderWriteDbContext> op
         catalog.HasKey(item => item.Id);
         catalog.Property(item => item.ProductName).HasMaxLength(160).IsRequired();
         catalog.Property(item => item.Price).HasPrecision(12, 2);
+        catalog.Property(item => item.TaxRate).HasPrecision(5, 2);
+        catalog.Property(item => item.DefaultFormat).HasMaxLength(40).IsRequired();
+        catalog.Property(item => item.FormatsJson).HasColumnType("jsonb").IsRequired();
         catalog.Property(item => item.CategoryName).HasMaxLength(120).IsRequired();
         catalog.Property(item => item.StationCode).HasMaxLength(40).IsRequired();
         catalog.Property(item => item.StationName).HasMaxLength(80).IsRequired();
+        catalog.Property(item => item.RequiresKds).HasDefaultValue(true);
+        catalog.Property(item => item.ExtraGroupsJson).HasColumnType("jsonb").IsRequired();
         catalog.HasIndex(item => new { item.RestaurantId, item.ProductId }).IsUnique();
 
         EntityTypeBuilder<OrderKitchenStationConfiguration> stationConfiguration =
@@ -100,6 +121,7 @@ public sealed class OrderWriteDbContext(DbContextOptions<OrderWriteDbContext> op
         payment.HasKey(item => item.OrderId);
         payment.Property(item => item.Status).HasMaxLength(20).IsRequired();
         payment.Property(item => item.Amount).HasPrecision(12, 2);
+        payment.Property(item => item.Method).HasMaxLength(30);
 
         EntityTypeBuilder<OutboxMessage> outbox = modelBuilder.Entity<OutboxMessage>();
         outbox.ToTable("outbox_messages");

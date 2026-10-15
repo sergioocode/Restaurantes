@@ -9,6 +9,4 @@ public sealed class UpdateRestaurantRequest
 
     [Required, StringLength(300, MinimumLength = 3)]
     public string Address { get; init; } = string.Empty;
-
-    public bool IsActive { get; init; }
 }

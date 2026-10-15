@@ -1,10 +1,19 @@
 # 🍽️ Restaurantes
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![Blazor WebAssembly](https://img.shields.io/badge/Blazor_WebAssembly-10.0.12-512BD4?style=for-the-badge&logo=blazor&logoColor=white)](https://dotnet.microsoft.com/apps/aspnet/web-apps/blazor)
+[![EF Core](https://img.shields.io/badge/EF_Core-10.0.4-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://learn.microsoft.com/ef/core/)
+[![YARP](https://img.shields.io/badge/YARP-2.3.0-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://microsoft.github.io/reverse-proxy/)
+
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![RabbitMQ](https://img.shields.io/badge/RabbitMQ-4.x-FF6600?style=for-the-badge&logo=rabbitmq&logoColor=white)](https://www.rabbitmq.com/)
-[![YARP](https://img.shields.io/badge/YARP-2.3-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://microsoft.github.io/reverse-proxy/)
-[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+[![RabbitMQ](https://img.shields.io/badge/RabbitMQ-4.3.4-FF6600?style=for-the-badge&logo=rabbitmq&logoColor=white)](https://www.rabbitmq.com/)
+[![Vault](https://img.shields.io/badge/Vault-1.21.4-000000?style=for-the-badge&logo=vault&logoColor=white)](https://developer.hashicorp.com/vault)
+[![Docker Compose](https://img.shields.io/badge/Docker%20Compose-5.5.1-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docs.docker.com/compose/)
+
+[![OpenTelemetry .NET](https://img.shields.io/badge/OpenTelemetry_.NET-1.19.x-000000?style=for-the-badge&logo=opentelemetry&logoColor=white)](https://opentelemetry.io/)
+[![OTel Collector](https://img.shields.io/badge/OTel_Collector-0.120.0-000000?style=for-the-badge&logo=opentelemetry&logoColor=white)](https://opentelemetry.io/docs/collector/)
+[![Prometheus](https://img.shields.io/badge/Prometheus-3.8.0-E6522C?style=for-the-badge&logo=prometheus&logoColor=white)](https://prometheus.io/)
+[![Grafana](https://img.shields.io/badge/Grafana-12.3.0-F46800?style=for-the-badge&logo=grafana&logoColor=white)](https://grafana.com/)
 
 **Restaurantes** es una plataforma distribuida para la operación y gestión de una cadena de restaurantes, construida sobre **.NET 10** y diseñada alrededor de dominios independientes, separación de lectura y escritura, mensajería asíncrona y persistencia aislada por servicio.
 
@@ -107,7 +116,11 @@ flowchart TB
     Reporting --> ReadDB
 ```
 
-La solución no aplica CQRS de forma mecánica a todos los dominios. **RestaurantOperations, Catalog y Orders** separan explícitamente APIs y persistencia de lectura/escritura. **Sales** también mantiene modelos separados, aunque su escritura se alimenta principalmente mediante eventos. **Dining**, **Identity** y **CashRegister** están separados por capas, pero cada uno mantiene una única persistencia operacional porque no necesita un modelo Read independiente.
+La solución no aplica CQRS de forma mecánica a todos los dominios. **RestaurantOperations,
+Catalog y Orders** conservan modelos de lectura y escritura separados dentro de una API por
+servicio. **Sales** también mantiene modelos separados, aunque su escritura se alimenta
+principalmente mediante eventos. **Dining**, **Identity** y **CashRegister** mantienen una
+única persistencia operacional por servicio.
 
 ### YARP como punto único de entrada
 
@@ -138,17 +151,26 @@ La separación no se utiliza únicamente como patrón arquitectónico. Responde 
 | Modelos optimizados | Las proyecciones de lectura pueden diseñarse para consultar y mostrar información sin imponer el mismo modelo normalizado utilizado para escribir. |
 | Aislamiento de fallos | Saturación, mantenimiento o problemas en una carga de consulta tienen menor superficie de impacto sobre la operación transaccional. |
 | Evolución independiente | Los esquemas de lectura pueden cambiar para responder a nuevas necesidades de consulta sin modificar necesariamente el modelo transaccional. |
-| Despliegue cloud flexible | Las bases pueden comenzar compartiendo infraestructura y separarse físicamente cuando el volumen o el coste lo justifiquen. |
+| Despliegue cloud flexible | Cada base puede alojarse y dimensionarse por separado en el proveedor elegido. |
 
-En desarrollo local, todas las bases se alojan en **una misma instancia PostgreSQL** dentro de Docker para simplificar el entorno. La separación sigue siendo lógica: cada servicio utiliza su propia base y sus propias cadenas de conexión.
+En desarrollo local, Docker Compose levanta **dos instancias PostgreSQL independientes**, cada una con una base. Los servicios siguen separados en el código; sus contextos comparten la base operativa o la de lectura mediante esquemas PostgreSQL propios y una tabla `__EFMigrationsHistory` en cada esquema.
 
-En un entorno productivo, esa separación puede convertirse también en **separación física**.
+| Base | Esquemas asignados |
+| --- | --- |
+| `restaurants_operational` | Identity, RestaurantOperations Write, Catalog Write, Dining, Orders Write, Payments, CashRegister y Sales Write. |
+| `restaurants_analytics` | RestaurantOperations Read, Catalog Read, Orders Read, Sales Read y Reporting. |
+
+Las cadenas de conexión conservan una clave por contexto y fijan su `Search Path` al esquema correspondiente. Por eso, nombres como `catalog_write` y `reporting` identifican esquemas, no bases independientes. Cada contexto guarda `__EFMigrationsHistory` en su esquema. Las migraciones existentes usan nombres de tabla sin esquema explícito, así que se aplican al esquema del `Search Path`; no es necesario regenerar las migraciones iniciales. `MigrateAsync` se mantiene en el arranque durante esta etapa.
+
+En producción se mantiene esta separación física; cada instancia puede ser administrada o dimensionada de forma independiente.
+
+Compose usa volúmenes nuevos para estas dos instancias. El volumen PostgreSQL anterior no se borra ni se monta, y sus datos no se copian automáticamente.
 
 ## Estrategia de alojamiento cloud
 
 El proyecto está diseñado para no depender de servicios propietarios de un proveedor cloud dentro de su lógica de negocio. Actualmente, sus dependencias de infraestructura principales son **.NET, PostgreSQL, RabbitMQ, HTTP, SignalR y YARP**, lo que permite desplegar los componentes en Azure, AWS, GCP, infraestructura privada o una combinación de ellos.
 
-El despliegue cloud todavía no forma parte del repositorio y se plantea como una etapa posterior. La estrategia prevista es mantener la separación por responsabilidad y decidir el nivel de aislamiento físico según la carga real.
+El despliegue cloud todavía no forma parte del repositorio y se plantea como una etapa posterior. La estrategia prevista es mantener las dos bases en recursos separados y elegir su tamaño según la carga real.
 
 ### Modelo de despliegue previsto
 
@@ -274,7 +296,7 @@ Cada servicio es propietario de sus datos. Un servicio no consulta directamente 
 
 | Perfil | Aplicación | Propósito | Tecnología |
 | --- | --- | --- | --- |
-| Cliente | **Customer QR** | Pedido, pago según la política del restaurante y seguimiento desde el QR asociado a una mesa/sesión. | Blazor WebAssembly PWA |
+| Cliente | **Customer QR** | Pago online obligatorio antes de enviar el pedido a cocina y seguimiento desde el QR asociado a una mesa/sesión. | Blazor WebAssembly PWA |
 | Camarero | **Comandero** | Atención de mesas, registro y seguimiento de pedidos. | Blazor WebAssembly PWA |
 | Caja | **TPV / POS** | Operación de pedidos, cuentas y caja. | Blazor WebAssembly PWA |
 | Cocina | **KDS** | Preparación por estación y seguimiento del ciclo de cocina. | ASP.NET Core Web |
@@ -296,32 +318,25 @@ sequenceDiagram
 
     alt Customer QR
         Client->>Dining: abrir o recuperar sesión QR
-        Dining-->>Client: sesión + QrRequiresImmediatePayment
-    end
-
-    Client->>Orders: crear pedido Draft
-
-    alt Customer QR y QrRequiresImmediatePayment = true
+        Dining-->>Client: sesión activa
+        Client->>Orders: crear pedido Draft (Immediate)
         Orders-->>MQ: OrderCreated
         MQ-->>Payments: proyectar PayableOrder
         Client->>Payments: capturar pago online
         Payments-->>MQ: PaymentCaptured
-        MQ-->>Orders: actualizar proyección de pago
+        MQ-->>Orders: actualizar proyección de pago a Paid
+        Client->>Orders: submit
+        Orders-->>MQ: OrderSubmitted
+        MQ-->>KDS: actualizar proyección operativa
+    else Comandero / POS
+        Client->>Orders: crear pedido Draft (OnAccount)
+        Client->>Orders: submit
+        Orders-->>MQ: OrderSubmitted
+        MQ-->>KDS: actualizar proyección operativa
     end
-
-    Client->>Orders: submit
-    Orders-->>MQ: OrderSubmitted
-    MQ-->>KDS: actualizar proyección operativa
 ```
 
-En Customer QR, `QrRequiresImmediatePayment` es una política configurable por restaurante:
-
-```text
-QrRequiresImmediatePayment = true  -> Immediate -> pagar antes de submit
-QrRequiresImmediatePayment = false -> OnAccount -> submit sin captura inmediata
-```
-
-Cuando está activada, Orders no permite enviar el pedido a cocina mientras su proyección de pago no indique `Paid`. Cuando está desactivada, el pedido se incorpora a la cuenta de la sesión.
+Customer QR siempre crea pedidos `Immediate`. Payments debe confirmar el pago y Orders proyectar `Paid` antes de aceptar `submit`; el pedido `Draft` creado para iniciar el pago aún no se envía a cocina.
 
 La publicación y consumo de eventos introduce consistencia eventual entre servicios. Cada bounded context mantiene su propio estado y las proyecciones se actualizan después del commit del servicio que origina el cambio.
 
@@ -370,7 +385,14 @@ Restaurantes/
 └── Restaurantes.slnx
 ```
 
-Los servicios con mayor complejidad se subdividen en proyectos de **Domain, Application, Infrastructure, Contracts, API, Publisher y Consumer**, evitando que las aplicaciones externas dependan de detalles internos del dominio.
+Los servicios con mayor complejidad se subdividen en proyectos de **Domain, Application,
+Infrastructure y Contracts**, además de sus ejecutables. Catalog, Orders y
+RestaurantOperations reúnen sus rutas de lectura y escritura en una API por servicio.
+Sales y Reporting conservan servicios independientes. Cada uno aloja consumidores y
+publicadores en `Infrastructure/Workers` y los ejecuta desde su propia API.
+
+Las API ejecutan también sus workers. Los perfiles de Visual Studio levantan los servicios
+necesarios para el cliente elegido.
 
 ## Entorno local
 
@@ -384,65 +406,32 @@ Los servicios con mayor complejidad se subdividen en proyectos de **Domain, Appl
 
 El `docker-compose.yml` levanta:
 
-- PostgreSQL 18;
-- RabbitMQ con Management UI;
+- PostgreSQL 18.
+- RabbitMQ con Management UI.
 - pgAdmin.
 - Vault de desarrollo, su inicialización y el proxy de autenticación local.
-- Prometheus y Grafana para métricas y dashboards locales.
+- OpenTelemetry Collector, Prometheus y Grafana para métricas y dashboards locales.
 - SonarQube Community Build bajo el perfil opcional `quality` para análisis estático, seguridad y Quality Gate locales.
-- SonarQube Cloud como referencia de CI para análisis estático, seguridad, cobertura y Quality Gate.
 
 Las bases de datos lógicas necesarias se crean mediante los scripts de `tools/postgres/init`.
 
-Antes de iniciar Compose, copia `tools/vault/.env.example` a `tools/vault/.env` y completa sus variables con valores propios. El archivo `.env` es local y está ignorado por Git.
+Antes de iniciar Compose, copia `tools/vault/.env.example` a `tools/vault/.env` y define valores locales distintos para Vault, PostgreSQL, pgAdmin, RabbitMQ, Grafana y la base de datos de SonarQube. El archivo `.env` está ignorado por Git. Pasa siempre `--env-file tools/vault/.env`: Compose no carga automáticamente un `.env` ubicado en esa subcarpeta.
 
 ```bash
 docker compose --env-file tools/vault/.env up -d
 ```
 
-
 Las migraciones de Entity Framework Core son aplicadas por los servicios correspondientes durante su inicialización.
 
 ### Observabilidad local
 
-Las APIs que usan `AddServiceDefaults()` envían métricas mediante OTLP al OpenTelemetry Collector local. El collector expone esas métricas para Prometheus, evitando incluir un exportador Prometheus en beta dentro de cada aplicación. En producción, configura `OTEL_EXPORTER_OTLP_ENDPOINT` hacia el collector de ese entorno.
+Las APIs y gateways que usan `AddServiceDefaults()` exportan métricas HTTP entrantes, HTTP salientes y del runtime .NET mediante OpenTelemetry: **OTLP/gRPC → Collector → Prometheus → Grafana**.
 
-Prometheus recoge el collector en `http://otel-collector:9464/metrics`. Con una API en ejecución, abre:
+- Prometheus: `http://localhost:9090`.
+- Grafana: `http://localhost:3000` (usuario `admin`; contraseña en `tools/vault/.env`).
+- Carpeta **Restaurantes**: dashboards **Entrada · Gateways**, **Servicios · APIs**, **Dependencias · HTTP saliente**, **Flujo de pedidos** y **Runtime · .NET**, con tags y filtros por servicio.
 
-- Prometheus: `http://localhost:9090`
-- Grafana: `http://localhost:3000` (usuario `admin`; contraseña configurada en `tools/vault/.env`).
-
-Grafana aprovisiona automáticamente la fuente Prometheus y el dashboard **Restaurantes · Operación HTTP**. El stack inicial cubre actividad de las APIs, tráfico HTTP, latencia p95, respuestas y errores 5xx por servicio; las métricas de negocio, alertas, logs centralizados y trazas persistidas se incorporarán en fases posteriores.
-
-#### Prueba limpia de una operación
-
-Para aislar las métricas de una prueba, primero detén todos los procesos de las aplicaciones en Visual Studio. Después, desde la raíz del repositorio, elimina sólo el historial de Prometheus y reinicia el Collector:
-
-```powershell
-docker compose --env-file tools/vault/.env stop prometheus
-docker compose --env-file tools/vault/.env rm -f prometheus
-docker volume rm restaurantes_restaurant-prometheus-data
-docker compose --env-file tools/vault/.env up -d prometheus
-docker compose --env-file tools/vault/.env up -d --force-recreate otel-collector
-```
-
-Este procedimiento no toca PostgreSQL, RabbitMQ ni Vault. No uses `docker compose down -v`, porque eliminaría también sus datos locales. A continuación inicia la solución, toma una línea base en Prometheus y ejecuta el flujo que deseas observar. Es normal que existan llamadas de carga o actualización de los clientes; para aislar una acción, consulta las métricas por servicio y ruta:
-
-```promql
-sum by (service_name, http_route, http_request_method, http_response_status_code) (
-  http_server_request_duration_seconds_count
-)
-```
-
-#### Evidencias visuales
-
-El dashboard consolidado permite detectar actividad, latencia p95 y errores HTTP por servicio durante una operación completa.
-
-![Dashboard de Grafana con operación HTTP](assets/grafana/grafana-operacion-http.jpg)
-
-Prometheus permite inspeccionar la evidencia de cada transición: apertura de mesa, creación y envío de pedido, preparación KDS, captura de pago y cierre de sesión.
-
-![Consulta de Prometheus con el flujo completo](assets/prometheus/prometheus-flujo-completo.jpg)
+La configuración y la interpretación de los paneles se describen en [Observabilidad de gateways y APIs](docs/Gateways.README.md#observabilidad-de-gateways-y-apis).
 
 ### Calidad y seguridad local
 
@@ -459,38 +448,26 @@ $env:SONAR_TOKEN = "<token-de-analisis>"
 .\tools\sonar\Invoke-SonarQubeLocalAnalysis.ps1
 ```
 
-El script restaura el escáner local, ejecuta el análisis alrededor de una compilación completa y espera el resultado del **Quality Gate**. Un Gate fallido devuelve un error, por lo que el mismo comando puede usarse posteriormente en CI/CD. Para detener únicamente esta infraestructura:
-
-![Quality Gate inicial de SonarQube](assets/sonar/sonarqube-quality-gate.jpg)
+El script restaura el escáner local, ejecuta el análisis alrededor de una compilación completa y espera el resultado del **Quality Gate**. Un Gate fallido devuelve un error. Para detener únicamente esta infraestructura:
 
 ```powershell
 docker compose --env-file tools/vault/.env --profile quality stop sonarqube sonarqube-db
 ```
 
+![Quality Gate inicial de SonarQube](assets/sonar/sonarqube-quality-gate.jpg)
+
 ### Calidad continua en Cloud
 
-[SonarQube Cloud](https://sonarcloud.io/project/overview?id=restaurantes) analiza `master`, la rama principal del proyecto Cloud. El trabajo se integra primero en `develop` desde una rama corta; sus pushes no ejecutan GitHub Actions. Tras avanzar `master` por merge directo, el push ejecuta la compilación, las pruebas con cobertura OpenCover y el análisis Cloud. El commit solo es candidato a release si pasan el CI y el Quality Gate.
+[SonarQube Cloud](https://sonarcloud.io/) analiza `master`, la rama principal configurada para este proyecto. `develop` es la rama habitual de trabajo e integración; sus pushes no ejecutan GitHub Actions. Los cambios se promueven a `master` mediante un commit de merge con mensaje de resumen, incluso si se incorpora un solo commit.
 
-Para reproducir ese análisis desde `master` en un equipo local, define `SONAR_TOKEN` con un token de SonarQube Cloud y ejecuta:
+El [workflow de CI](.github/workflows/ci.yml) se ejecuta al subir `master` o manualmente. Compila la solución, ejecuta las pruebas con cobertura OpenCover, publica el análisis Cloud y espera el resultado del **Quality Gate**. Solo un commit de `master` que supere esas comprobaciones es candidato a release.
 
-```powershell
-.\tools\sonar\Invoke-SonarQubeCloudAnalysis.ps1
-```
+El workflow usa `SONAR_TOKEN` como secreto del repositorio en GitHub. La organización y la clave del proyecto están configuradas allí; el valor del token no se versiona.
 
-El valor del token no se versiona. Este segundo script usa la organización `sergioocode` y el proyecto `restaurantes`, compila la solución, ejecuta las pruebas con cobertura OpenCover y espera el resultado del **Quality Gate**. En GitHub, el token se configura como secreto del repositorio llamado `SONAR_TOKEN`.
+### Scripts PostgreSQL
 
-### Datos de desarrollo opcionales
-
-Los datos de ejemplo de `tools/postgres/seed/01-development-catalog.sql` son opcionales y **no se insertan automáticamente** al iniciar Docker ni las aplicaciones. El seed agrega locales, categorías, productos, estaciones KDS, zonas y mesas; no crea usuarios de Identity. El usuario administrador se inicializa por separado al arrancar Identity.
-
-Para cargar estos datos una sola vez, inicia PostgreSQL y arranca al menos `RestaurantOperations.Api.Write` y `Catalog.Api.Write` para que apliquen las migraciones. Después, desde PowerShell en la raíz del repositorio, copia y ejecuta el archivo:
-
-```powershell
-docker cp .\tools\postgres\seed\01-development-catalog.sql restaurantes-postgres:/tmp/01-development-catalog.sql
-docker exec -i restaurantes-postgres psql -U restaurants -d restaurant_operations_write -v ON_ERROR_STOP=1 -f /tmp/01-development-catalog.sql
-```
-
-Si eliminas el volumen de PostgreSQL, tendrás que ejecutar de nuevo el seed. Reiniciar los contenedores no elimina estos datos.
+- `tools/postgres/seed/01-development-catalog.sql`
+- `tools/postgres/reset-operational-data.sql`
 
 ### Restaurar herramientas y dependencias
 

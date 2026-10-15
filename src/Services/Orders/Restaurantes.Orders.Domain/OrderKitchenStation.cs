@@ -1,4 +1,4 @@
-namespace Restaurantes.Orders.Domain;
+﻿namespace Restaurantes.Orders.Domain;
 
 public sealed class OrderKitchenStation
 {
@@ -37,40 +37,51 @@ public sealed class OrderKitchenStation
         };
     }
 
-    internal void StartPreparation(DateTime occurredAtUtc)
+    internal void SynchronizeWithLines(IReadOnlyCollection<OrderLine> lines)
     {
-        if (Status != KitchenTicketStatus.Pending)
+        OrderLine[] activeLines = lines
+            .Where(line => line.Status == OrderLineStatus.Active)
+            .ToArray();
+        if (activeLines.Length == 0)
         {
-            throw new InvalidOperationException(
-                $"Station '{Code}' must be pending to start preparation."
-            );
+            Status = KitchenTicketStatus.Cancelled;
+            return;
         }
-        Status = KitchenTicketStatus.InPreparation;
-        PreparationStartedAtUtc = DateTime.SpecifyKind(occurredAtUtc, DateTimeKind.Utc);
-    }
 
-    internal void MarkReady(DateTime occurredAtUtc)
-    {
-        if (Status != KitchenTicketStatus.InPreparation)
+        DateTime[] preparationStarts = activeLines
+            .Where(line => line.PreparationStartedAtUtc.HasValue)
+            .Select(line => line.PreparationStartedAtUtc!.Value)
+            .ToArray();
+        if (preparationStarts.Length > 0)
         {
-            throw new InvalidOperationException(
-                $"Station '{Code}' must be in preparation before it can be ready."
-            );
+            PreparationStartedAtUtc ??= preparationStarts.Min();
         }
-        Status = KitchenTicketStatus.Ready;
-        ReadyAtUtc = DateTime.SpecifyKind(occurredAtUtc, DateTimeKind.Utc);
-    }
 
-    internal void Dispatch(DateTime occurredAtUtc)
-    {
-        if (Status != KitchenTicketStatus.Ready)
+        bool allDispatched = activeLines.All(line =>
+            line.KitchenStatus == KitchenLineStatus.Dispatched
+        );
+        bool allReady = activeLines.All(line =>
+            line.KitchenStatus is KitchenLineStatus.Ready or KitchenLineStatus.Dispatched
+        );
+        if (allDispatched)
         {
-            throw new InvalidOperationException(
-                $"Station '{Code}' must be ready before it can be dispatched."
-            );
+            Status = KitchenTicketStatus.Dispatched;
+            ReadyAtUtc ??= activeLines.Max(line => line.ReadyAtUtc);
+            DispatchedAtUtc ??= activeLines.Max(line => line.DispatchedAtUtc);
         }
-        Status = KitchenTicketStatus.Dispatched;
-        DispatchedAtUtc = DateTime.SpecifyKind(occurredAtUtc, DateTimeKind.Utc);
+        else if (allReady)
+        {
+            Status = KitchenTicketStatus.Ready;
+            ReadyAtUtc ??= activeLines.Max(line => line.ReadyAtUtc);
+        }
+        else if (activeLines.All(line => line.KitchenStatus == KitchenLineStatus.Pending))
+        {
+            Status = KitchenTicketStatus.Pending;
+        }
+        else
+        {
+            Status = KitchenTicketStatus.InPreparation;
+        }
     }
 
     internal void Cancel()

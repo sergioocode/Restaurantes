@@ -12,7 +12,12 @@ public sealed class DiningDbContextFactory : IDesignTimeDbContextFactory<DiningD
             "DiningWrite"
         );
         return new DiningDbContext(
-            new DbContextOptionsBuilder<DiningDbContext>().UseNpgsql(connectionString).Options
+            new DbContextOptionsBuilder<DiningDbContext>()
+                .UseNpgsql(
+                    connectionString,
+                    npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "dining")
+                )
+                .Options
         );
     }
 }

@@ -11,5 +11,17 @@ public sealed record PaymentCaptured(
     string ExternalReference,
     DateTime CapturedAtUtc,
     Guid? PaymentTransactionId = null,
-    int TransactionOrderCount = 1
+    int TransactionOrderCount = 1,
+    Guid? CashRegisterSessionId = null,
+    DateOnly? BusinessDate = null,
+    decimal TipAmount = 0,
+    decimal AmountPaid = 0,
+    bool IsFullyPaid = true,
+    decimal TipAmountPaid = 0,
+    decimal TenderedAmount = 0,
+    decimal ChangeAmount = 0,
+    Guid? SaleGroupId = null,
+    string? DiscountName = null,
+    decimal DiscountPercentage = 0,
+    decimal DiscountAmount = 0
 );

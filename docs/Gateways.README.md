@@ -75,3 +75,35 @@ Los dominios son ilustrativos. Dashboard debe permanecer accesible únicamente d
 El tráfico exterior debe terminar en HTTPS. YARP puede comunicarse por HTTP con los servicios internos cuando la red de despliegue sea confiable. La infraestructura que se encuentre delante de YARP debe admitir WebSockets para los hubs SignalR.
 
 Mientras se mantengan los prefijos no es necesario modificar los clientes al cambiar dominios, certificados, puertos externos o destinos internos. Cambiar uno de los prefijos sí altera el contrato de publicación y requiere coordinar YARP con la ruta base de la interfaz afectada.
+
+## Observabilidad de gateways y APIs
+
+`AddServiceDefaults()` instrumenta HTTP entrante, llamadas `HttpClient` y el runtime .NET. Las métricas salen por OTLP/gRPC hacia `http://localhost:4317`; `OTEL_EXPORTER_OTLP_ENDPOINT` permite indicar otro Collector. Prometheus recoge `http://otel-collector:9464/metrics` y Grafana consulta esa fuente.
+
+### Dashboards
+
+Los JSON de `tools/grafana/dashboards` se aprovisionan en la carpeta **Restaurantes**. Todos llevan los tags `restaurantes` y `observability`, además de los específicos de su responsabilidad:
+
+| Dashboard | Contenido | Tags específicos |
+| --- | --- | --- |
+| Entrada · Gateways | Peticiones `/api/*` recibidas por los gateways, respuestas y rankings de rutas por método | `http`, `gateways` |
+| Servicios · APIs | Peticiones atendidas por las APIs internas, respuestas y rankings de rutas por método | `http`, `apis` |
+| Dependencias · HTTP saliente | Llamadas salientes, destinos y errores de HTTP o transporte | `http`, `dependencies` |
+| Runtime · .NET | CPU, memoria, heap, asignaciones, pausas de GC, excepciones y ThreadPool | `dotnet`, `runtime` |
+| Flujo de pedidos | Latencia, tráfico y errores de creación, envío a cocina, estados KDS, pagos y cierre de cuenta | `orders`, `kds`, `payments`, `http` |
+
+Los filtros permiten seleccionar servicio e instancia; los dashboards HTTP añaden ruta y método o destino y puerto. La selección inicial muestra un servicio para mantener las gráficas legibles; **All** permite agruparlos. El menú **Dashboards de Restaurantes** conserva el rango temporal al cambiar de vista.
+
+Grafana revisa los archivos de dashboards cada 30 segundos y los paneles se refrescan cada 30 segundos. El exportador .NET utiliza por defecto un intervalo de 60 segundos y Prometheus recoge el Collector cada 15 segundos: el refresco de pantalla no equivale a recibir una muestra nueva. El dashboard de entrada conserva el UID `restaurantes-gateway` para actualizar el anterior sin duplicarlo.
+
+### Interpretación
+
+- **Collector accesible** confirma únicamente que Prometheus puede recoger su endpoint. **Instancias con series runtime disponibles** cuenta instancias con métricas publicadas; el Collector conserva temporalmente sus últimas métricas, por lo que ese contador no es una comprobación de salud de los procesos.
+- **Sin datos** distingue la falta de muestras utilizables de un valor cero. Los totales de errores solo muestran cero cuando existe una base HTTP para la selección; se ocultan los datos operativos cuando falla el scrape del Collector o faltan las series runtime de la instancia.
+- Los indicadores superiores cubren los **últimos cinco minutos**, hasta el final del rango elegido. Los rankings en tabla se calculan sobre **todo el rango seleccionado**. Las tasas de las gráficas ajustan su ventana al intervalo de consulta.
+- Los incrementos son estimaciones de contadores y pueden ser fraccionarios. Una primera petición registrada antes de la primera muestra no se reconstruye con `increase()`. El p95 es una estimación de histograma, especialmente sensible al poco tráfico; no mide por sí solo el tiempo entre enviar un pedido y verlo en KDS.
+- Una petición puede aparecer en el gateway y en una API interna. Cada dashboard cuenta las observaciones de su responsabilidad; sumar ambas vistas no da peticiones externas únicas ni pedidos.
+- En HTTP saliente, **Tráfico OTLP: Ocultar** excluye los puertos estándar `4317` y `4318`; **Mostrar** permite inspeccionarlos. El filtro debe adaptarse si el transporte OTLP utiliza otros puertos. Los errores salientes incluyen respuestas HTTP clasificadas como error y fallos de transporte.
+- En Runtime, CPU se expresa en núcleos utilizados; las pausas de GC son una fracción del tiempo, promediada entre instancias. Las excepciones incluyen las capturadas. La cola y los hilos del ThreadPool se muestran como valores actuales.
+
+Para observar una operación, selecciona su intervalo en Grafana y filtra por servicio, ruta y método. Las métricas permiten comparar actividad y latencia agregadas sin borrar el historial de Prometheus.

@@ -8,6 +8,15 @@
       "MaintenanceDB": "postgres",
       "Username": "restaurants",
       "SSLMode": "prefer"
+    },
+    "2": {
+      "Name": "Restaurantes Analytics",
+      "Group": "Servers",
+      "Host": "postgres-analytics",
+      "Port": 5432,
+      "MaintenanceDB": "postgres",
+      "Username": "restaurants",
+      "SSLMode": "prefer"
     }
   }
 }

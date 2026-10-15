@@ -34,7 +34,6 @@ public sealed partial class DiningService
         {
             return DiningResults.Conflict(new { detail = "The table is not active." });
         }
-
         if (
             !Guid.TryParse(
                 principal.FindFirst(ClaimTypes.NameIdentifier)?.Value,
@@ -60,7 +59,7 @@ public sealed partial class DiningService
             RestaurantId = table.RestaurantId,
             TableId = table.Id,
             OpenedByUserId = openedByUserId,
-            RequestGuestCount = table.RequestGuestCount,
+            RequestGuestCount = table.Zone.RequestGuestCount ?? false,
             Source = request.Source,
             OpenedAtUtc = time.GetUtcNow().UtcDateTime,
         };
@@ -69,7 +68,6 @@ public sealed partial class DiningService
         {
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
-            await PublishTableChanged(realtime, session, "Occupied", time);
             return DiningResults.Created(
                 $"/api/dining/sessions/{session.Id}",
                 SessionResponse(session)
@@ -176,13 +174,44 @@ public sealed partial class DiningService
             return DiningResults.NotFound();
         }
 
-        if (
-            !access.CanAccessRestaurant(
+        bool canReleaseAnySession = access.CanAccessRestaurant(
+            principal,
+            session.RestaurantId,
+            DiningPermission.TablesRelease
+        );
+        bool allOrdersCancelled =
+            session.Orders.Count > 0
+            && session.Orders.All(order => order.OrderStatus == "Cancelled");
+        bool hasCurrentUser = Guid.TryParse(
+            principal.FindFirst(ClaimTypes.NameIdentifier)?.Value,
+            out Guid userId
+        );
+        bool hasCurrentUserCommanderOrder =
+            hasCurrentUser
+            && session.Orders.Any(order =>
+                order.Source == "Comandero"
+                && order.CreatedByUserId == userId
+                && order.OrderStatus != "Cancelled"
+            );
+        bool hasCurrentUserCancelledCommanderOrder =
+            hasCurrentUser
+            && session.Orders.Any(order =>
+                order.Source == "Comandero"
+                && order.CreatedByUserId == userId
+                && order.OrderStatus == "Cancelled"
+            );
+        bool canReleasePaidSession =
+            session.CanRelease
+            && (
+                hasCurrentUserCommanderOrder
+                || (allOrdersCancelled && hasCurrentUserCancelledCommanderOrder)
+            )
+            && access.CanAccessRestaurant(
                 principal,
                 session.RestaurantId,
-                DiningPermission.TablesRelease
-            )
-        )
+                DiningPermission.TablesReleasePaid
+            );
+        if (!canReleaseAnySession && !canReleasePaidSession)
         {
             return DiningResults.Forbid();
         }
@@ -197,8 +226,26 @@ public sealed partial class DiningService
             return DiningResults.Conflict(new { detail = "The dining session has no orders." });
         }
 
+        if (
+            !allOrdersCancelled
+            && !session.Orders.Any(order =>
+                order.OrderStatus != "Cancelled" && order.AmountPaid > 0
+            )
+        )
+        {
+            return DiningResults.Conflict(
+                new { detail = "The table can only be released after a payment has been recorded." }
+            );
+        }
+
+        Guid[] unfinished = session
+            .Orders.Where(x => x.OrderStatus is not ("Delivered" or "Cancelled"))
+            .Select(x => x.OrderId)
+            .ToArray();
         Guid[] unpaid = session
-            .Orders.Where(x => x.PaymentStatus != "Paid" && x.OrderStatus != "Cancelled")
+            .Orders.Where(x =>
+                x.OrderStatus != "Cancelled" && x.AmountPaid < session.ChargeableAmount(x)
+            )
             .Select(x => x.OrderId)
             .ToArray();
         if (unpaid.Length > 0)
@@ -211,10 +258,25 @@ public sealed partial class DiningService
                 }
             );
         }
+        if (unfinished.Length > 0)
+        {
+            return DiningResults.Conflict(
+                new
+                {
+                    detail = "All active session orders must be delivered or cancelled before releasing the table.",
+                    unfinishedOrderIds = unfinished,
+                }
+            );
+        }
+        if (!session.CanRelease)
+        {
+            return DiningResults.Conflict(
+                new { detail = "The table is not ready to be released." }
+            );
+        }
 
         session.Close(time.GetUtcNow().UtcDateTime);
         await db.SaveChangesAsync(ct);
-        await PublishTableChanged(realtime, session, "Available", time);
         return DiningResults.Ok(SessionResponse(session));
     }
 
@@ -277,7 +339,6 @@ public sealed partial class DiningService
         DateTime now = time.GetUtcNow().UtcDateTime;
         session.Cancel(cancelledByUserId, now);
         await db.SaveChangesAsync(ct);
-        await PublishTableChanged(realtime, session, "Available", time);
         return DiningResults.Ok(SessionResponse(session));
     }
 }

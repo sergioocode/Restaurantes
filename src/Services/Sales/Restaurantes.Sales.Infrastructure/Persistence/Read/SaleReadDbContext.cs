@@ -18,9 +18,15 @@ public sealed class SaleReadDbContext(DbContextOptions<SaleReadDbContext> option
         sale.Property(item => item.PaymentMethod).HasMaxLength(30).IsRequired();
         sale.Property(item => item.Status).HasMaxLength(30).IsRequired();
         sale.Property(item => item.Total).HasPrecision(12, 2);
+        sale.Property(item => item.TipTotal).HasPrecision(12, 2);
+        sale.Property(item => item.DiscountName).HasMaxLength(100);
+        sale.Property(item => item.DiscountPercentage).HasPrecision(5, 2);
+        sale.Property(item => item.DiscountAmount).HasPrecision(12, 2);
         sale.Property(item => item.OrderIdsJson).HasColumnType("jsonb").IsRequired();
         sale.Property(item => item.LinesJson).HasColumnType("jsonb").IsRequired();
+        sale.Property(item => item.PaymentMethodsJson).HasColumnType("jsonb").IsRequired();
         sale.HasIndex(item => new { item.RestaurantId, item.CompletedAtUtc });
+        sale.HasIndex(item => new { item.BusinessDate, item.RestaurantId });
 
         modelBuilder.Entity<InboxMessage>().ToTable("inbox_messages").HasKey(item => item.Id);
     }

@@ -16,7 +16,12 @@ public sealed class RestaurantWriteDbContextFactory
                 .UseNpgsql(
                     VaultConfigurationExtensions.GetDesignTimeConnectionString(
                         "RestaurantOperationsWrite"
-                    )
+                    ),
+                    npgsql =>
+                        npgsql.MigrationsHistoryTable(
+                            "__EFMigrationsHistory",
+                            "restaurant_operations"
+                        )
                 )
                 .Options;
         return new RestaurantWriteDbContext(options);
@@ -33,7 +38,12 @@ public sealed class RestaurantReadDbContextFactory
                 .UseNpgsql(
                     VaultConfigurationExtensions.GetDesignTimeConnectionString(
                         "RestaurantOperationsRead"
-                    )
+                    ),
+                    npgsql =>
+                        npgsql.MigrationsHistoryTable(
+                            "__EFMigrationsHistory",
+                            "restaurant_operations_read"
+                        )
                 )
                 .Options;
         return new RestaurantReadDbContext(options);

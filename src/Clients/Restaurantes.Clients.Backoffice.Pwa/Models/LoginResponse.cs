@@ -5,5 +5,6 @@ public sealed record LoginResponse(
     DateTime ExpiresAtUtc,
     LoginUser User,
     List<RestaurantAccess> Restaurants,
-    List<string>? AllRestaurantsRoles = null
+    List<string>? AllRestaurantsRoles = null,
+    List<string>? AllRestaurantsPermissions = null
 );

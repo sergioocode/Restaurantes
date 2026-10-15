@@ -41,29 +41,27 @@ La propiedad de esos datos permanece en:
 
 ## Proyectos
 
-El bounded context está dividido en seis proyectos:
+El servicio se organiza en proyectos por responsabilidad. La API es el punto de entrada ejecutable;
+los workers se implementan en Infrastructure y se activan según el rol de ejecución.
 
 ```text
 src/Services/Reporting/
-├── Restaurantes.Reporting.Api.Read
+├── Restaurantes.Reporting.Api
 ├── Restaurantes.Reporting.Application
-├── Restaurantes.Reporting.Consumer
 ├── Restaurantes.Reporting.Contracts
-├── Restaurantes.Reporting.Infrastructure
-└── Restaurantes.Reporting.Publisher
+└── Restaurantes.Reporting.Infrastructure
 ```
 
 | Proyecto | Responsabilidad |
 | --- | --- |
-| `Restaurantes.Reporting.Application` | Casos de uso de consulta, modelos del dashboard, abstracción del read store y coordinación del health agregado. |
-| `Restaurantes.Reporting.Contracts` | Eventos públicos emitidos por Reporting. |
-| `Restaurantes.Reporting.Infrastructure` | EF Core, PostgreSQL, implementación del read store, sondas HTTP, Inbox y Outbox. |
-| `Restaurantes.Reporting.Consumer` | Consume eventos de Orders, Payments y Sales y actualiza el read model. |
-| `Restaurantes.Reporting.Publisher` | Publica eventos pendientes de la Outbox de Reporting hacia RabbitMQ. |
-| `Restaurantes.Reporting.Api.Read` | Expone dashboard, health y actualizaciones en tiempo real mediante SignalR. |
+| `Restaurantes.Reporting.Api` | Dashboard HTTP, SignalR y composición de roles. |
+| `Restaurantes.Reporting.Application` | Consultas, modelos y puertos del dashboard. |
+| `Restaurantes.Reporting.Contracts` | Eventos públicos de Reporting. |
+| `Restaurantes.Reporting.Infrastructure` | Persistencia de lectura, consultas, health y workers. |
 
-A diferencia de otros bounded contexts de la solución, Reporting **no necesita `Api.Write` ni Domain** porque no implementa un modelo transaccional propio. Sí dispone de una capa `Application`: la API depende de sus casos de uso y abstracciones, mientras Infrastructure proporciona las implementaciones de persistencia y de las sondas HTTP.
-
+La API atiende las operaciones HTTP de lectura y escritura en un único host. Según el perfil,
+ese ejecutable inicia HTTP, workers o ambos. Read y Write describen responsabilidades/rutas;
+no son proyectos ni APIs separados.
 ## Arquitectura interna
 
 ```mermaid
@@ -74,10 +72,10 @@ flowchart LR
     Rabbit[("RabbitMQ")]
 
     subgraph Reporting["Reporting"]
-        Consumer["Reporting.Consumer"]
+        Consumer["ReportingProjectionWorker"]
         ReadDb[("reporting_read")]
-        Publisher["Reporting.Publisher"]
-        Api["Reporting.Api.Read"]
+        Publisher["ReportingOutboxPublisherWorker"]
+        Api["Reporting.Api"]
         Application["Reporting.Application"]
         Realtime["SignalR Worker"]
     end
@@ -103,9 +101,11 @@ flowchart LR
     Realtime -->|DashboardUpdated| Dashboard
 ```
 
-El flujo de lectura está desacoplado de las bases operativas. `Reporting.Api.Read` consulta únicamente `reporting_read`; no realiza joins remotos ni consultas directas sobre las bases de Orders, Payments o Sales.
+El flujo de lectura está desacoplado de la base operativa. `Reporting.Api` consulta
+únicamente el esquema `reporting` de la base de lectura; no realiza joins remotos ni
+consultas directas sobre los esquemas de Orders, Payments o Sales.
 
-## Por qué Reporting tiene una base de datos propia
+## Por qué Reporting tiene un esquema propio
 
 La separación de Reporting responde a un requisito de operación, no únicamente a una elección de estilo arquitectónico.
 
@@ -303,13 +303,14 @@ La intención es que las consultas del dashboard se resuelvan dentro de la base 
 
 ## Construcción de la proyección
 
-`Restaurantes.Reporting.Consumer` ejecuta `ReportingProjectionWorker`, responsable de RabbitMQ y de los ACK. El procesamiento de Orders, Payments y Sales se delega en `ReportingProjectionHandler`, que mantiene `reporting_read` a partir de los eventos de integración.
+`Restaurantes.Reporting.Api` ejecuta `ReportingProjectionWorker` en el rol `Workers` o `All`.
+El procesamiento se delega en `ReportingProjectionHandler`, que mantiene `reporting_read`.
 
 ```mermaid
 sequenceDiagram
     participant S as Orders / Payments / Sales
     participant R as RabbitMQ
-    participant C as Reporting.Consumer
+    participant C as ReportingProjectionWorker
     participant DB as reporting_read
     participant O as Reporting Outbox
 
@@ -373,10 +374,9 @@ Reporting consume:
 `PaymentCaptured` actualiza:
 
 - `PaymentTransactionId`;
-- `PaymentStatus = Paid`;
+- `PaymentStatus = PartiallyPaid` mientras el pedido conserve saldo pendiente, o `Paid` cuando el cobro lo completa;
 - método de pago;
-- `PaidAtUtc`;
-- reconocimiento de la venta.
+- `PaidAtUtc` y reconocimiento de la venta únicamente cuando el pedido queda pagado por completo.
 
 Cuando el evento no contiene un `PaymentTransactionId` válido, se utiliza `PaymentId` como identificador de transacción para la proyección.
 
@@ -387,6 +387,8 @@ Refunded
 ```
 
 y elimina `SaleRecognizedAtUtc` del hecho del pedido.
+
+Payments emite un `PaymentCaptured` por cada captura, incluidas las parciales. Reporting procesa cada evento y actualiza el hecho del pedido, pero las métricas comerciales del dashboard (`TotalSales`, tickets finalizados, ticket medio y desglose por método de pago) se calculan desde `CompletedSaleFact`, que se alimenta con `SaleCompleted`. Sales publica un único `SaleCompleted` cuando todos los pedidos esperados de la venta están completamente pagados. Así, una captura parcial queda registrada sin contabilizar prematuramente un ticket finalizado. El consumidor de Reporting tampoco publica `DashboardProjectionUpdated` por cada `PaymentCaptured`; notifica al dashboard los cambios de ventas al procesar `SaleCompleted`.
 
 En la implementación actual, una venta de un único pedido deja de computar en las métricas cuando ese pedido aparece como reembolsado.
 
@@ -476,7 +478,7 @@ Actualizar read model
      └── Reporting Outbox
              │
              ▼
-      Reporting.Publisher
+      ReportingOutboxPublisherWorker
              │
              ▼
           RabbitMQ
@@ -544,11 +546,13 @@ Parámetros actuales:
 
 | Parámetro | Descripción |
 | --- | --- |
-| `date` | Día comercial a consultar. Si se omite, utiliza el día local actual del servidor. |
+| `date` | Día comercial a consultar. Si se omite, utiliza la fecha actual en `Business:TimeZoneId`. |
 | `restaurantId` | Limita la consulta a un restaurante autorizado. |
 | `orderLimit` | Número máximo de pedidos operativos mostrados. Los valores efectivos actuales son `10`, `20` o `100`. |
 
-La fecha de negocio se calcula actualmente utilizando la zona horaria local del proceso que ejecuta Reporting.
+Reporting utiliza `Business:TimeZoneId` para calcular los límites horarios. Las ventas usan además la `BusinessDate` propagada desde la sesión de caja.
+
+Configura la misma zona en todos los procesos de la instalación mediante `Business__TimeZoneId`. El valor predeterminado es `Europe/Madrid`.
 
 ## Métricas devueltas
 
@@ -669,9 +673,9 @@ Flujo:
 
 ```mermaid
 sequenceDiagram
-    participant C as Reporting.Consumer
+    participant C as ReportingProjectionWorker
     participant DB as reporting_read
-    participant P as Reporting.Publisher
+    participant P as ReportingOutboxPublisherWorker
     participant R as RabbitMQ
     participant H as Reporting SignalR Worker
     participant D as Dashboard
@@ -864,7 +868,7 @@ El cliente Dashboard no se publica mediante el Public Gateway. En desarrollo, el
 
 En producción se conserva `/dashboard/` y se reemplaza el origen local por el dominio HTTPS privado de oficina. El puerto `5600` es sólo el destino interno de desarrollo; el destino real se proporciona mediante la configuración YARP del ambiente y no requiere modificar el cliente Dashboard.
 
-De esta forma, la API y el canal en tiempo real pueden mantenerse detrás de los gateways sin que los clientes necesiten conocer directamente la ubicación física de `Reporting.Api.Read`.
+De esta forma, la API y el canal en tiempo real pueden mantenerse detrás de los gateways sin que los clientes necesiten conocer directamente la ubicación física de `Reporting.Api`.
 
 
 ## Relación con otros servicios
@@ -874,7 +878,7 @@ De esta forma, la API y el canal en tiempo real pueden mantenerse detrás de los
 | `Orders` | Publica los eventos operativos utilizados para mantener el estado, líneas, estaciones y versión de cada pedido. |
 | `Payments` | Publica `PaymentCaptured` y `PaymentRefunded`, utilizados para mantener el estado financiero de los pedidos. |
 | `Sales` | Publica `SaleCompleted`, utilizado para construir `CompletedSaleFact` y las métricas comerciales consolidadas. |
-| `Dashboard` | Consulta `Reporting.Api.Read` y recibe notificaciones `DashboardUpdated` mediante SignalR. |
+| `Dashboard` | Consulta `Reporting.Api` y recibe notificaciones `DashboardUpdated` mediante SignalR. |
 
 Reporting no consulta directamente las bases de datos de Orders, Payments o Sales. La integración se realiza mediante eventos y contratos propios de cada bounded context.
 
@@ -897,15 +901,15 @@ La base de datos de Reporting es:
 reporting_read
 ```
 
-Los proyectos `Api.Read`, `Consumer` y `Publisher` utilizan la misma proyección porque representan tres procesos diferentes alrededor del mismo read model:
+El proyecto API hospeda las consultas del dashboard y puede iniciar los workers de proyección y Outbox según el rol elegido:
 
 ```text
 Consumer  -> construye la proyección
-Api.Read  -> consulta la proyección
+Api       -> consulta la proyección
 Publisher -> publica cambios pendientes de la proyección
 ```
 
-Los tres pueden desplegarse como procesos separados aunque compartan la misma base lógica de Reporting.
+Los workers están implementados en Infrastructure y usan la misma base lógica de Reporting. El perfil Workers ejecuta el mismo proyecto API en un proceso separado; All aloja API y workers juntos.
 
 ## Migraciones
 
@@ -929,7 +933,7 @@ URL configurada actualmente para la API:
 
 | Componente | URL |
 | --- | --- |
-| Reporting Read API | `http://localhost:5142` |
+| Reporting API | `http://localhost:5142` |
 
 Base local:
 
@@ -937,7 +941,7 @@ Base local:
 reporting_read
 ```
 
-Los procesos `Reporting.Api.Read`, `Reporting.Consumer` y `Reporting.Publisher` trabajan sobre la misma base lógica de Reporting durante el desarrollo.
+`Reporting.Api` ejecuta HTTP y workers en un proceso durante el desarrollo.
 
 ## Despliegue y escalado
 
@@ -950,7 +954,7 @@ flowchart LR
     SalesWrite[("sales_write")]
     Rabbit[("RabbitMQ")]
     ReportingRead[("reporting_read")]
-    ReportingApi["Reporting.Api.Read"]
+    ReportingApi["Reporting.Api"]
     Dashboard["Dashboard"]
 
     OrdersWrite --> Rabbit
@@ -965,39 +969,40 @@ El diagrama es conceptual: la comunicación real se realiza mediante publishers,
 
 ### Bases de datos
 
-En una instalación pequeña, varias bases lógicas PostgreSQL pueden residir en una misma instancia administrada:
+Reporting mantiene su propio esquema en la instancia PostgreSQL de lectura:
 
 ```text
-PostgreSQL Server / Cluster
-├── orders_write
+PostgreSQL Analytics
 ├── orders_read
-├── payments_write
-├── sales_write
-└── reporting_read
+├── sales_read
+├── restaurant_operations_read
+├── catalog_read
+└── reporting
 ```
 
-Aunque compartan infraestructura física, cada bounded context conserva una conexión y migraciones propias y puede separarse posteriormente.
+Cada servicio conserva su código independiente y su historial de migraciones en su
+propio esquema.
 
-Si la carga de Reporting aumenta, `reporting_read` puede alojarse en infraestructura independiente:
+La base de lectura está en una instancia independiente de la operativa:
 
 ```text
-Operational PostgreSQL
+PostgreSQL Operativa
 ├── orders_write
-├── payments_write
-└── sales_write
+├── payments
+├── sales_write
+└── otros esquemas operativos
 
-Reporting PostgreSQL
-└── reporting_read
+PostgreSQL Analytics
+└── esquemas de lectura, incluido `reporting`
 ```
 
 Esto permite asignar CPU, memoria, IOPS y almacenamiento a Reporting sin competir con las operaciones transaccionales.
 
-Los procesos también pueden escalarse de forma independiente:
+El rol HTTP y el rol Workers pueden desplegarse por separado:
 
 ```text
-Reporting.Consumer   -> según volumen de eventos
-Reporting.Api.Read   -> según tráfico HTTP del dashboard
-Reporting.Publisher  -> según volumen de cambios de proyección
+Reporting.Api (Workers) -> consumo de eventos y publicación del Outbox
+Reporting.Api (Http)    -> tráfico HTTP del dashboard
 ```
 
 ### Alojamiento cloud
@@ -1008,9 +1013,8 @@ Una topología posible en Azure, sin convertirla en requisito, es:
 
 ```text
 Azure Container Apps / App Service
-├── Reporting.Api.Read
-├── Reporting.Consumer
-└── Reporting.Publisher
+├── Reporting.Api (Http)
+└── Reporting.Api (Workers)
 
 Azure Database for PostgreSQL
 └── reporting_read
@@ -1042,7 +1046,7 @@ Commit del servicio origen
 Outbox / RabbitMQ
    │
    ▼
-Reporting.Consumer
+Reporting.Api (Workers)
    │
    ▼
 reporting_read
@@ -1061,7 +1065,7 @@ Una interrupción temporal de Reporting tampoco debería impedir que Orders o Pa
 
 La proyección se alimenta con eventos. Esto reduce el acoplamiento temporal y evita convertir el dashboard en una cadena de llamadas síncronas a múltiples APIs.
 
-### No existe `Reporting.Api.Write`
+### Reporting expone consultas de solo lectura
 
 Reporting no posee operaciones de negocio transaccionales que deban ser iniciadas por un usuario. Su estado se deriva de eventos.
 

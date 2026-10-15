@@ -1,7 +1,5 @@
-using System;
-using Microsoft.EntityFrameworkCore.Infrastructure;
+﻿using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
-using Restaurantes.Dining.Infrastructure.Persistence;
 
 #nullable disable
 

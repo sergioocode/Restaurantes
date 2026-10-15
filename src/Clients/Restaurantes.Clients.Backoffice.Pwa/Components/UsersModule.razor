@@ -1,11 +1,17 @@
 @if (!Host.CanManageUsers) { <NoAccessPanel /> }
 else
 {
-    <div class="module-toolbar"><button class="secondary" @onclick="Host.RefreshModule" disabled="@Host.busy">Actualizar usuarios</button></div>
     <details class="admin-panel" open>
-        <summary>Autorizar cuenta</summary>
+        <summary>Autorizar cuenta · @Host.CurrentRestaurant?.Name</summary>
+        @if (Host.UserEmailAlreadyAuthorized)
+        {
+            <p class="error user-email-error" role="alert">
+                Este correo ya está autorizado en un local y no puede asignarse a otro.
+            </p>
+        }
         <form class="inline-form user-create-form" @onsubmit="Host.CreateUser" @onsubmit:preventDefault>
-            <input type="email" autocomplete="off" placeholder="Correo corporativo" @bind="Host.userDraft.Email" />
+            <input type="email" autocomplete="off" placeholder="Correo corporativo"
+                   @bind="Host.userDraft.Email" @bind:event="oninput" />
             <input placeholder="Nombre visible" @bind="Host.userDraft.DisplayName" />
             <select @bind="Host.userDraft.Role">
                 @foreach (string role in Host.AssignableRoles)
@@ -13,17 +19,10 @@ else
                     <option value="@role">@Home.RoleLabel(role)</option>
                 }
             </select>
-            <select @bind="Host.userDraft.RestaurantId">
-                @if (Host.CanAssignAllRestaurants)
-                {
-                    <option value="">Todos los Locales</option>
-                }
-                @foreach (RestaurantResponse restaurant in Host.ManageableRestaurants)
-                {
-                    <option value="@restaurant.Id">@restaurant.Name</option>
-                }
-            </select>
-            <button class="primary" disabled="@Host.busy">Autorizar</button>
+            <button class="primary"
+                    disabled="@(Host.busy || Host.restaurantId == Guid.Empty || Host.UserEmailAlreadyAuthorized)">
+                Autorizar
+            </button>
         </form>
     </details>
     <div class="user-list">
@@ -39,16 +38,6 @@ else
                         @foreach (string role in Host.AssignableRoles)
                         {
                             <option value="@role">@Home.RoleLabel(role)</option>
-                        }
-                    </select></label>
-                    <label>Local<select @bind="user.RestaurantId">
-                        @if (Host.CanAssignAllRestaurants)
-                        {
-                            <option value="">Todos los Locales</option>
-                        }
-                        @foreach (RestaurantResponse restaurant in Host.ManageableRestaurants)
-                        {
-                            <option value="@restaurant.Id">@restaurant.Name</option>
                         }
                     </select></label>
                     <label class="availability"><input type="checkbox" @bind="user.IsActive" /> Activa</label>

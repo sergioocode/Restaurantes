@@ -7,7 +7,8 @@ using Restaurantes.Sales.Infrastructure.Persistence.Read;
 
 namespace Restaurantes.Sales.Infrastructure.Stores;
 
-public sealed class SaleReadStore(SaleReadDbContext dbContext) : ISaleReadStore
+public sealed class SaleReadStore(SaleReadDbContext dbContext, TimeZoneInfo timeZone)
+    : ISaleReadStore
 {
     public async Task<SaleResponse?> FindAsync(Guid id, CancellationToken cancellationToken)
     {
@@ -20,6 +21,7 @@ public sealed class SaleReadStore(SaleReadDbContext dbContext) : ISaleReadStore
     public async Task<IReadOnlyList<SaleResponse>> ListAsync(
         Guid? restaurantId,
         DateOnly? date,
+        int offset,
         CancellationToken cancellationToken
     )
     {
@@ -30,16 +32,27 @@ public sealed class SaleReadStore(SaleReadDbContext dbContext) : ISaleReadStore
         }
         if (date.HasValue)
         {
-            DateTime start = DateTime
-                .SpecifyKind(date.Value.ToDateTime(TimeOnly.MinValue), DateTimeKind.Local)
-                .ToUniversalTime();
-            DateTime end = start.AddDays(1);
-            query = query.Where(item => item.CompletedAtUtc >= start && item.CompletedAtUtc < end);
+            DateTime localStart = DateTime.SpecifyKind(
+                date.Value.ToDateTime(TimeOnly.MinValue),
+                DateTimeKind.Unspecified
+            );
+            DateTime start = TimeZoneInfo.ConvertTimeToUtc(localStart, timeZone);
+            DateTime end = TimeZoneInfo.ConvertTimeToUtc(localStart.AddDays(1), timeZone);
+            query = query.Where(item =>
+                item.BusinessDate == date.Value
+                || (
+                    item.BusinessDate == null
+                    && item.CompletedAtUtc >= start
+                    && item.CompletedAtUtc < end
+                )
+            );
         }
 
         return (
             await query
                 .OrderByDescending(item => item.CompletedAtUtc)
+                .ThenByDescending(item => item.Id)
+                .Skip(Math.Max(0, offset))
                 .Take(100)
                 .ToListAsync(cancellationToken)
         )
@@ -59,7 +72,12 @@ public sealed class SaleReadStore(SaleReadDbContext dbContext) : ISaleReadStore
             sale.OrderCount,
             sale.CompletedAtUtc,
             JsonSerializer.Deserialize<List<Guid>>(sale.OrderIdsJson) ?? [],
-            JsonSerializer.Deserialize<List<SaleLineSnapshot>>(sale.LinesJson) ?? []
+            JsonSerializer.Deserialize<List<SaleLineSnapshot>>(sale.LinesJson) ?? [],
+            sale.TipTotal,
+            JsonSerializer.Deserialize<List<SalePaymentBreakdown>>(sale.PaymentMethodsJson) ?? [],
+            sale.DiscountName,
+            sale.DiscountPercentage,
+            sale.DiscountAmount
         );
     }
 }

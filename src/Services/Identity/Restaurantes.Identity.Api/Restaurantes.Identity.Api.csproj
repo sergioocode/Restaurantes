@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <UserSecretsId>952599ba-cfcf-45fd-ae22-3646f852f75d</UserSecretsId>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Restaurantes.Identity.Application\Restaurantes.Identity.Application.csproj" />
+    <ProjectReference Include="..\Restaurantes.Identity.Contracts\Restaurantes.Identity.Contracts.csproj" />
+    <ProjectReference Include="..\Restaurantes.Identity.Infrastructure\Restaurantes.Identity.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Restaurantes.ServiceDefaults\Restaurantes.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Restaurantes.Security\Restaurantes.Security.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference
+      Include="Microsoft.AspNetCore.Authentication.OpenIdConnect"
+      Version="10.0.12"
+    />
+  </ItemGroup>
+</Project>

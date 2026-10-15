@@ -1,10 +1,21 @@
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using Restaurantes.Clients.Pos.Pwa.Models;
 
 namespace Restaurantes.Clients.Pos.Pwa.Api;
 
 public sealed partial class PosApi
 {
+    public async Task<SessionBillResponse> SetDiscountAsync(Guid sessionId, decimal percentage)
+    {
+        using HttpRequestMessage request = Authorized(
+            HttpMethod.Put,
+            $"/api/dining/sessions/{sessionId}/discount"
+        );
+        request.Content = JsonContent.Create(new { percentage });
+        using HttpResponseMessage response = await http.SendAsync(request);
+        return await ReadAsync<SessionBillResponse>(response);
+    }
+
     public async Task<DiningSessionResponse> SetGuestCountAsync(Guid sessionId, int guestCount)
     {
         using HttpRequestMessage request = Authorized(
@@ -19,11 +30,6 @@ public sealed partial class PosApi
     public Task<List<TableResponse>> TablesAsync(Guid restaurantId)
     {
         return GetAsync<List<TableResponse>>($"/api/dining/restaurants/{restaurantId}/tables");
-    }
-
-    public Task<DiningPolicyResponse> PolicyAsync(Guid restaurantId)
-    {
-        return GetAsync<DiningPolicyResponse>($"/api/dining/restaurants/{restaurantId}/policy");
     }
 
     public async Task<DiningSessionResponse> OpenSessionAsync(Guid tableId)
@@ -47,6 +53,11 @@ public sealed partial class PosApi
         return GetAsync<SessionBillResponse>($"/api/dining/sessions/{sessionId}/bill");
     }
 
+    public Task<SaleResponse> SaleAsync(Guid saleId)
+    {
+        return GetAsync<SaleResponse>($"/api/sales/{saleId}");
+    }
+
     public async Task<DiningSessionResponse> CancelSessionAsync(Guid sessionId)
     {
         using HttpRequestMessage request = Authorized(
@@ -61,7 +72,10 @@ public sealed partial class PosApi
         Guid sessionId,
         Guid idempotencyKey,
         string method,
-        string externalReference
+        string externalReference,
+        decimal tipAmount,
+        decimal amountReceived,
+        IReadOnlyList<CheckoutOrderAllocation> allocations
     )
     {
         using HttpRequestMessage request = Authorized(
@@ -74,11 +88,16 @@ public sealed partial class PosApi
                 idempotencyKey,
                 method,
                 externalReference,
+                tipAmount,
+                amountReceived,
+                allocations,
             }
         );
         using HttpResponseMessage response = await http.SendAsync(request);
         return await ReadAsync<SessionBillResponse>(response);
     }
+
+    public sealed record CheckoutOrderAllocation(Guid OrderId, decimal Amount);
 
     public async Task<DiningSessionResponse> ReleaseSessionAsync(Guid sessionId)
     {

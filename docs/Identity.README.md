@@ -18,7 +18,7 @@ La tabla `authorized_accounts` contiene ID, correo, proveedor, identificador del
 
 En Microsoft Entra ID, el `TenantId` es la restricción principal: solo se aceptan miembros del tenant configurado (`acct = 0`) y se rechazan invitados. El sufijo del correo no está fijado en el código; al crear el usuario en Entra ID debe usarse uno de los dominios verificados del tenant y el correo debe coincidir exactamente con la cuenta autorizada en Backoffice. Por tanto, `kds-local01@restaurante.es` solo será válido si `restaurante.es` está verificado en ese tenant. Google sí restringe explícitamente el dominio mediante `ExternalAuth:Google:WorkspaceDomain`.
 
-El rol y el alcance son conceptos independientes. Cualquiera de los roles `Admin`, `Gerente`, `Contabilidad`, `Marketing`, `Manager`, `Camarero` y `Kds` puede asignarse a `Todos los Locales` o a un único local. No existe una selección de varios locales concretos.
+Los perfiles administrativos (`Admin`, `Gerente`, `Contabilidad` y `Marketing`) pueden consultar la información de varios locales y elegir el local en las vistas administrativas. Los perfiles operativos (`Manager`, `Camarero` y `Kds`) se asignan a un único local; TPV, Comandero y KDS usan ese local sin mostrar un selector de locales. No existe una selección de varios locales concretos para una cuenta operativa.
 
 El alcance se modela explícitamente en PostgreSQL mediante `AllRestaurants` y `RestaurantId`. La restricción `CK_authorized_accounts_restaurant_scope` admite únicamente estas combinaciones:
 
@@ -31,9 +31,11 @@ En el JWT, un alcance `Todos los Locales` se representa con una claim de rol. Un
 
 El Backoffice presenta `Todos los Locales` como primera opción del selector. Un Admin con alcance total puede asignar cualquier alcance; un Admin limitado a un local solo puede consultar y administrar cuentas de ese mismo local y no puede elevarlas a `Todos los Locales`.
 
+El correo se comprueba dentro del proveedor activo antes de autorizar una cuenta. No se puede volver a autorizar el mismo correo para otro local.
+
 El Backoffice permite eliminar una cuenta mediante `DELETE /api/identity/users/{id}`. La API impide eliminar la cuenta autenticada, aplica el mismo alcance de administración utilizado para consultar y editar usuarios y rechaza la eliminación del último Admin activo del proveedor correspondiente.
 
-Manager opera el TPV/POS, registra los pagos y libera las mesas al completar el cobro. Camarero opera el Comandero, toma pedidos y los envía a cocina, pero no registra pagos ni libera mesas.
+Manager opera el TPV/POS y puede cobrar pedidos de cualquier origen. Camarero opera el Comandero, toma pedidos y los envía a cocina; también puede cobrar con tarjeta únicamente los pedidos creados con su cuenta y liberar la mesa después de cobrarla. Los cobros en efectivo o transferencia y los pedidos de otros camareros quedan para el TPV.
 
 La tabla authentication_settings conserva el proveedor activo para compatibilidad y auditoría. El proveedor efectivo se define en `ExternalAuth:Provider`; las cuentas del proveedor distinto no pueden iniciar sesión. Al iniciar sesión con Microsoft, Identity envía `prompt=select_account` para que el proveedor permita elegir otra cuenta aunque exista una sesión previa.
 
@@ -41,7 +43,7 @@ La migración histórica `ReplacePasswordIdentityWithExternalAccounts` descartó
 
 ## Configuración
 
-El proyecto `Restaurantes.Identity.Api.Write` tiene un `UserSecretsId`. En desarrollo, los secretos exclusivos de Identity se configuran mediante .NET User Secrets; en producción, mediante el almacén de secretos o las variables del entorno de despliegue. Los valores no secretos pueden definirse en la configuración propia del ambiente.
+El proyecto `Restaurantes.Identity.Api` tiene un `UserSecretsId`. En desarrollo, los secretos exclusivos de Identity se configuran mediante .NET User Secrets; en producción, mediante el almacén de secretos o las variables del entorno de despliegue. Los valores no secretos pueden definirse en la configuración propia del ambiente.
 
 - IdentityBootstrap:AdminEmail: correo corporativo del primer Admin. Solo se usa cuando la tabla de cuentas está vacía; la cuenta bootstrap se crea con alcance `Todos los Locales`.
 - ExternalAuth:Provider: Microsoft o Google. Es el proveedor efectivo del despliegue y debe coincidir con las credenciales configuradas.
@@ -76,7 +78,7 @@ El inicio de sesión acepta solo estos destinos internos: /backoffice/, /pos/, /
 - Restaurantes.Identity.Domain: cuentas y configuración.
 - Restaurantes.Identity.Application: reglas de autorización y contratos.
 - Restaurantes.Identity.Infrastructure: EF Core, PostgreSQL, códigos de intercambio y JWT.
-- Restaurantes.Identity.Api.Write: endpoints y OIDC.
+- Restaurantes.Identity.Api: endpoints y OIDC.
 - Restaurantes.Security: permisos, claims y validación del JWT en las API.
 
 La API aplica las migraciones pendientes al arrancar. `ResetAuthorizedAccounts` elimina las cuentas autorizadas para reiniciar su configuración; esta operación no es reversible porque la migración no conserva sus datos.

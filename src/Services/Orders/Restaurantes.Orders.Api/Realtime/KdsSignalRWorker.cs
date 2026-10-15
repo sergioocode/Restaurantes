@@ -1,0 +1,167 @@
+﻿using System.Text.Json;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Options;
+using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
+using Restaurantes.Messaging.RabbitMq;
+using Restaurantes.Orders.Api.Security;
+using Restaurantes.Orders.Contracts.Events;
+using Restaurantes.Security;
+
+namespace Restaurantes.Orders.Api.Realtime;
+
+public sealed class KdsSignalRWorker(
+    IHubContext<KdsHub, IKdsClient> kdsHubContext,
+    IHubContext<OrdersHub, IKdsClient> ordersHubContext,
+    IOptions<RabbitMqOptions> options,
+    ILogger<KdsSignalRWorker> logger
+) : BackgroundService
+{
+    private IConnection? _connection;
+    private IChannel? _channel;
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                await ConsumeAsync(options.Value, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception exception)
+            {
+                logger.LogError(
+                    exception,
+                    "KDS SignalR consumer disconnected. Retrying in five seconds."
+                );
+                await DisposeBrokerResourcesAsync();
+                await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+            }
+        }
+    }
+
+    private async Task ConsumeAsync(
+        RabbitMqOptions rabbitMqOptions,
+        CancellationToken cancellationToken
+    )
+    {
+        ConnectionFactory factory = RabbitMqConnectionFactory.Create(rabbitMqOptions);
+        _connection = await factory.CreateConnectionAsync("orders-kds-signalr", cancellationToken);
+        _channel = await _connection.CreateChannelAsync(
+            new CreateChannelOptions(true, true),
+            cancellationToken
+        );
+        await OrdersTopology.DeclareAsync(_channel, cancellationToken);
+        await _channel.BasicQosAsync(0, 20, false, cancellationToken);
+
+        AsyncEventingBasicConsumer consumer = new(_channel);
+        consumer.ReceivedAsync += HandleMessageAsync;
+        await _channel.BasicConsumeAsync(
+            OrdersTopology.KdsSignalRQueueName,
+            autoAck: false,
+            consumer: consumer,
+            cancellationToken: cancellationToken
+        );
+        logger.LogInformation(
+            "KDS SignalR notifications listening on {Queue}.",
+            OrdersTopology.KdsSignalRQueueName
+        );
+        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+    }
+
+    private async Task HandleMessageAsync(object sender, BasicDeliverEventArgs eventArgs)
+    {
+        if (_channel is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (eventArgs.BasicProperties.Type != typeof(KdsOrderUpdated).FullName)
+            {
+                throw new NotSupportedException(
+                    $"Unsupported KDS notification: {eventArgs.BasicProperties.Type}"
+                );
+            }
+
+            KdsOrderUpdated notification =
+                JsonSerializer.Deserialize<KdsOrderUpdated>(eventArgs.Body.Span)
+                ?? throw new JsonException("KDS notification body is empty.");
+            HashSet<string> kdsGroups = [KdsHub.StationGroup(notification.RestaurantId, "CHEF")];
+            foreach (string stationCode in notification.StationCodes)
+            {
+                kdsGroups.Add(KdsHub.StationGroup(notification.RestaurantId, stationCode));
+            }
+            List<Task> notifications = kdsGroups
+                .Select(group => kdsHubContext.Clients.Group(group).OrderUpdated(notification))
+                .ToList();
+            string? clientPermission = OrderClientAccess.PermissionForSource(notification.Source);
+            if (clientPermission == RestaurantPermissions.CommanderUse)
+            {
+                notifications.Add(
+                    ordersHubContext
+                        .Clients.Group(OrdersHub.CommanderGroup(notification.RestaurantId))
+                        .OrderUpdated(notification)
+                );
+            }
+            else if (clientPermission == RestaurantPermissions.PosUse)
+            {
+                notifications.Add(
+                    ordersHubContext
+                        .Clients.Group(OrdersHub.PosGroup(notification.RestaurantId))
+                        .OrderUpdated(notification)
+                );
+            }
+            await Task.WhenAll(notifications);
+            await _channel.BasicAckAsync(eventArgs.DeliveryTag, false);
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            logger.LogError(exception, "Invalid KDS SignalR notification sent to dead-letter.");
+            await _channel.BasicNackAsync(eventArgs.DeliveryTag, false, requeue: false);
+        }
+        catch (Exception exception)
+        {
+            RabbitMqRetryResult retry = await RabbitMqRetry.ScheduleOrDeadLetterAsync(
+                _channel,
+                eventArgs,
+                OrdersTopology.KdsSignalRQueueName,
+                exception,
+                eventArgs.CancellationToken
+            );
+            logger.LogError(
+                exception,
+                "KDS SignalR notification failed. Retry scheduled: {RetryScheduled}; attempt {RetryAttempt}/{MaximumAttempts}; delay {RetryDelay}.",
+                retry.Scheduled,
+                retry.Attempt,
+                RabbitMqRetry.MaximumAttempts,
+                retry.Delay
+            );
+        }
+    }
+
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        await base.StopAsync(cancellationToken);
+        await DisposeBrokerResourcesAsync();
+    }
+
+    private async Task DisposeBrokerResourcesAsync()
+    {
+        if (_channel is not null)
+        {
+            await _channel.DisposeAsync();
+            _channel = null;
+        }
+        if (_connection is not null)
+        {
+            await _connection.DisposeAsync();
+            _connection = null;
+        }
+    }
+}

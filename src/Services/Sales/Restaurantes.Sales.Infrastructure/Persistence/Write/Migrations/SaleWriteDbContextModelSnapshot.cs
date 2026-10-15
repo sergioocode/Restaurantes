@@ -24,12 +24,27 @@ namespace Restaurantes.Sales.Infrastructure.Persistence.Write.Migrations
 
             modelBuilder.Entity("Restaurantes.Sales.Domain.Sale", b =>
                 {
+                    b.Property<DateOnly?>("BusinessDate")
+                        .HasColumnType("date");
+
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<DateTime?>("CompletedAtUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DiscountName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<decimal>("DiscountPercentage")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -66,6 +81,37 @@ namespace Restaurantes.Sales.Infrastructure.Persistence.Write.Migrations
                     b.ToTable("sales", (string)null);
                 });
 
+            modelBuilder.Entity("Restaurantes.Sales.Domain.SalePayment", b =>
+                {
+                    b.Property<Guid>("PaymentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<decimal>("TipAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<Guid>("SaleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TransactionId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("PaymentId");
+
+                    b.HasIndex("SaleId");
+
+                    b.ToTable("sale_payments", (string)null);
+                });
+
             modelBuilder.Entity("Restaurantes.Sales.Domain.SaleOrder", b =>
                 {
                     b.Property<Guid>("SaleId")
@@ -75,6 +121,18 @@ namespace Restaurantes.Sales.Infrastructure.Persistence.Write.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<string>("DiscountName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<decimal>("DiscountPercentage")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<decimal>("DiscountAmount")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
 
@@ -169,6 +227,15 @@ namespace Restaurantes.Sales.Infrastructure.Persistence.Write.Migrations
                     b.ToTable("outbox_messages", (string)null);
                 });
 
+            modelBuilder.Entity("Restaurantes.Sales.Domain.SalePayment", b =>
+                {
+                    b.HasOne("Restaurantes.Sales.Domain.Sale", null)
+                        .WithMany("Payments")
+                        .HasForeignKey("SaleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Restaurantes.Sales.Domain.SaleOrder", b =>
                 {
                     b.HasOne("Restaurantes.Sales.Domain.Sale", null)
@@ -181,6 +248,8 @@ namespace Restaurantes.Sales.Infrastructure.Persistence.Write.Migrations
             modelBuilder.Entity("Restaurantes.Sales.Domain.Sale", b =>
                 {
                     b.Navigation("Orders");
+
+                    b.Navigation("Payments");
                 });
 #pragma warning restore 612, 618
         }

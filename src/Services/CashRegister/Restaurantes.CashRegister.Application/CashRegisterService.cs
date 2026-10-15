@@ -2,27 +2,30 @@
 
 namespace Restaurantes.CashRegister.Application;
 
-public sealed class CashRegisterService(ICashRegisterStore store, TimeProvider time)
+public sealed class CashRegisterService(
+    ICashRegisterStore store,
+    IIncompleteOrdersChecker incompleteOrders,
+    TimeProvider time,
+    TimeZoneInfo timeZone
+)
 {
-    private const string MadridTimeZone = "Europe/Madrid";
-
     public async Task<CashRegisterResult> IsOpen(Guid restaurantId, CancellationToken ct)
     {
-        DateTime now = time.GetUtcNow().UtcDateTime;
-        DateOnly today = BusinessDate(now);
-        await ExpirePreviousDays(restaurantId, today, now, ct);
-        Guid? sessionId = await store.GetOpenSessionIdAsync(restaurantId, today, ct);
+        CashRegisterSession? session = await store.GetOpenSessionAsync(restaurantId, ct);
+        DateOnly businessDate = session?.BusinessDate ?? BusinessDate(time.GetUtcNow().UtcDateTime);
         return Ok(
-            new CashRegisterAvailabilityResponse(restaurantId, sessionId.HasValue, today, sessionId)
+            new CashRegisterAvailabilityResponse(
+                restaurantId,
+                session is not null,
+                businessDate,
+                session?.Id
+            )
         );
     }
 
     public async Task<CashRegisterResult> Current(Guid restaurantId, CancellationToken ct)
     {
-        DateTime now = time.GetUtcNow().UtcDateTime;
-        DateOnly today = BusinessDate(now);
-        await ExpirePreviousDays(restaurantId, today, now, ct);
-        CashRegisterSession? session = await store.GetCurrentAsync(restaurantId, today, ct);
+        CashRegisterSession? session = await store.GetCurrentAsync(restaurantId, ct);
         return session is null ? new(CashRegisterOutcome.NoContent) : Ok(ToResponse(session));
     }
 
@@ -45,7 +48,6 @@ public sealed class CashRegisterService(ICashRegisterStore store, TimeProvider t
 
         DateTime now = time.GetUtcNow().UtcDateTime;
         DateOnly today = BusinessDate(now);
-        await ExpirePreviousDays(restaurantId, today, now, ct);
         if (await store.HasOpenSessionAsync(restaurantId, ct))
         {
             return Conflict("Ya existe un turno de caja abierto para este local.");
@@ -83,6 +85,7 @@ public sealed class CashRegisterService(ICashRegisterStore store, TimeProvider t
         Guid sessionId,
         CloseCashRegisterRequest request,
         CashRegisterUser user,
+        string authorization,
         CancellationToken ct
     )
     {
@@ -112,15 +115,6 @@ public sealed class CashRegisterService(ICashRegisterStore store, TimeProvider t
             return Conflict("Este turno de caja ya no está abierto.");
         }
 
-        if (session.BusinessDate != BusinessDate(now))
-        {
-            Expire(session, now);
-            await store.SaveChangesAsync(ct);
-            return Conflict(
-                "El turno pertenecía a un día anterior y ha caducado. Abre una caja nueva."
-            );
-        }
-
         Dictionary<string, decimal> expected = ExpectedByMethod(session);
         Dictionary<string, decimal> reconciled = request.ReconciledByMethod.ToDictionary(
             x => x.Key.Trim(),
@@ -133,6 +127,38 @@ public sealed class CashRegisterService(ICashRegisterStore store, TimeProvider t
             return Validation(
                 "reconciledByMethod",
                 $"Falta conciliar: {string.Join(", ", missing)}."
+            );
+        }
+
+        int incompleteOrderCount;
+        try
+        {
+            incompleteOrderCount = await incompleteOrders.CountAsync(
+                restaurantId,
+                authorization,
+                ct
+            );
+        }
+        catch (IncompleteOrdersUnavailableException)
+        {
+            return new(
+                CashRegisterOutcome.ServiceUnavailable,
+                new
+                {
+                    detail = "No se pudo verificar si quedan pedidos incompletos. Inténtalo de nuevo.",
+                }
+            );
+        }
+
+        if (incompleteOrderCount > 0)
+        {
+            return new(
+                CashRegisterOutcome.Conflict,
+                new
+                {
+                    detail = $"No se puede cerrar la caja: quedan {incompleteOrderCount} pedidos incompletos. Complétalos o resuélvelos desde el TPV.",
+                    incompleteOrderCount,
+                }
             );
         }
 
@@ -167,54 +193,20 @@ public sealed class CashRegisterService(ICashRegisterStore store, TimeProvider t
         return Ok(ToResponse(session));
     }
 
-    private async Task ExpirePreviousDays(
-        Guid restaurantId,
-        DateOnly today,
-        DateTime now,
-        CancellationToken ct
-    )
+    private DateOnly BusinessDate(DateTime utc)
     {
-        List<CashRegisterSession> stale = await store.GetStaleSessionsAsync(
-            restaurantId,
-            today,
-            ct
-        );
-        foreach (CashRegisterSession session in stale)
-        {
-            Expire(session, now);
-        }
-
-        if (stale.Count > 0)
-        {
-            await store.SaveChangesAsync(ct);
-        }
-    }
-
-    private static void Expire(CashRegisterSession session, DateTime now)
-    {
-        session.Status = CashRegisterStatus.Expired;
-        session.ClosedAtUtc = now;
-        session.ClosedByName = "Cierre automático por cambio de día";
-        session.Version++;
-    }
-
-    private static DateOnly BusinessDate(DateTime utc)
-    {
-        return DateOnly.FromDateTime(
-            TimeZoneInfo.ConvertTimeBySystemTimeZoneId(utc, MadridTimeZone)
-        );
-    }
-
-    private static decimal Signed(CashMovement movement)
-    {
-        return movement.Type == CashMovementType.Sale ? movement.Amount : -movement.Amount;
+        return DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(utc, timeZone));
     }
 
     internal static Dictionary<string, decimal> ExpectedByMethod(CashRegisterSession session)
     {
         Dictionary<string, decimal> totals = session
             .Movements.GroupBy(x => x.Method, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(x => x.Key, x => x.Sum(Signed), StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(
+                x => x.Key,
+                x => x.Sum(movement => movement.Amount),
+                StringComparer.OrdinalIgnoreCase
+            );
         totals["Cash"] = totals.GetValueOrDefault("Cash") + session.OpeningFloat;
         return totals;
     }
@@ -224,24 +216,14 @@ public sealed class CashRegisterService(ICashRegisterStore store, TimeProvider t
         decimal totalSales = session
             .Movements.Where(x => x.Type == CashMovementType.Sale)
             .Sum(x => x.Amount);
-        decimal totalRefunds = session
-            .Movements.Where(x => x.Type == CashMovementType.Refund)
-            .Sum(x => x.Amount);
         decimal cashSales = session
             .Movements.Where(x => x.Method == "Cash" && x.Type == CashMovementType.Sale)
             .Sum(x => x.Amount);
-        decimal cashRefunds = session
-            .Movements.Where(x => x.Method == "Cash" && x.Type == CashMovementType.Refund)
-            .Sum(x => x.Amount);
         PaymentMethodTotal[] methods = session
-            .Movements.GroupBy(x => x.Method)
+            .Movements.Where(x => x.Type == CashMovementType.Sale)
+            .GroupBy(x => x.Method)
             .OrderBy(x => x.Key)
-            .Select(g => new PaymentMethodTotal(
-                g.Key,
-                g.Where(x => x.Type == CashMovementType.Sale).Sum(x => x.Amount),
-                g.Where(x => x.Type == CashMovementType.Refund).Sum(x => x.Amount),
-                g.Sum(Signed)
-            ))
+            .Select(g => new PaymentMethodTotal(g.Key, g.Sum(x => x.Amount)))
             .ToArray();
         Dictionary<string, decimal> expected = ExpectedByMethod(session);
         return new(
@@ -251,9 +233,7 @@ public sealed class CashRegisterService(ICashRegisterStore store, TimeProvider t
             session.Status.ToString(),
             session.OpeningFloat,
             totalSales,
-            totalRefunds,
             cashSales,
-            cashRefunds,
             expected.GetValueOrDefault("Cash"),
             expected.Values.Sum(),
             session.ReconciledTotalAtClose,
@@ -278,7 +258,8 @@ public sealed class CashRegisterService(ICashRegisterStore store, TimeProvider t
                 ))
                 .ToArray(),
             session
-                .Movements.OrderByDescending(x => x.OccurredAtUtc)
+                .Movements.Where(x => x.Type == CashMovementType.Sale)
+                .OrderByDescending(x => x.OccurredAtUtc)
                 .Take(100)
                 .Select(x => new CashMovementResponse(
                     x.Id,

@@ -6,7 +6,7 @@
     <title>KDS · Restaurantes</title>
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#111827">
+    <meta name="theme-color" content="#f1f4f2">
 
     <link rel="stylesheet" href="css/kds.css">
     <link rel="manifest" href="manifest.webmanifest">
@@ -17,40 +17,54 @@
 
 <body>
     <main>
-        <section id="authLoading" class="controls auth-loading" aria-live="polite">
-            Comprobando sesión…
+        <section id="authLoading" class="controls auth-loading auth-card" aria-live="polite">
+            <div class="auth-brand">
+                <img src="icons/icon-192.png" alt="" />
+                <div><small>RESTAURANTES · COCINA</small><strong>KDS</strong></div>
+            </div>
+            <div class="auth-progress"><span class="auth-spinner"></span><span>Comprobando sesión…</span></div>
         </section>
 
-        <form id="loginPanel" class="controls hidden">
-            <button id="loginMicrosoft" type="button" disabled>Iniciar sesión con Microsoft</button>
-            <button id="loginGoogle" type="button" disabled>Iniciar sesión con Google</button>
+        <form id="loginPanel" class="controls auth-card hidden">
+            <div class="auth-brand">
+                <img src="icons/icon-192.png" alt="" />
+                <div><small>RESTAURANTES · COCINA</small><strong>KDS</strong></div>
+            </div>
+            <button id="loginMicrosoft" type="button" disabled>Continuar con Microsoft</button>
+            <button id="loginGoogle" type="button" disabled>Continuar con Google</button>
         </form>
 
         <section id="monitorPanel" class="controls hidden">
-            <label class="field">
-                <span>Local autorizado</span>
-                <select id="restaurantId" aria-label="Local autorizado"></select>
+            <label class="field restaurant-field">
+                <span>Local</span>
+                <select id="restaurantId" aria-label="Local" disabled></select>
             </label>
-            <label class="field">
+            <div class="assigned-context" aria-label="Usuario conectado">
+                <strong id="assignedUserName" aria-label="Usuario"></strong>
+            </div>
+            <label class="field station-field">
                 <span>Estación KDS</span>
                 <select id="stationCode" aria-label="Estación KDS" disabled></select>
             </label>
             <div class="monitor-state">
                 <div id="connectionStatus" class="status" role="status">
                     <span class="dot"></span>
-                    <span>Inicia sesión</span>
+                    <span>Sin autenticar</span>
                 </div>
-                <p id="identityStatus" class="identity"></p>
             </div>
             <div class="toolbar">
                 <button id="refresh" type="button" disabled>Actualizar</button>
+                <button id="historyButton" type="button" class="secondary hidden">Historial</button>
                 <button id="logout" class="secondary" type="button">Salir</button>
             </div>
         </section>
 
         <p id="event"></p>
+        <section id="historyPanel" class="history-panel hidden">
+            <div id="historyList"></div>
+        </section>
         <section id="orders">
-            <p class="empty">Inicia sesión para cargar el monitor.</p>
+            <p class="empty">Accede para cargar el monitor.</p>
         </section>
     </main>
 

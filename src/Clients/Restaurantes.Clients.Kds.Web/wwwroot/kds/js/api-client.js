@@ -26,10 +26,17 @@ export class KdsApiClient {
 
   async getOrders(restaurantId, stationCode) {
     const query = new URLSearchParams({ restaurantId, stationCode });
-    const response = await this.fetch('/api/orders?' + query);
+    const response = await this.fetch('/api/orders/kds?' + query);
     if (!response.ok) throw new Error('No se pudo consultar el KDS: HTTP ' + response.status);
     const payload = await response.json();
     return Array.isArray(payload) ? payload : [payload];
+  }
+
+  async getHistory(restaurantId, stationCode) {
+    const query = new URLSearchParams({ restaurantId, stationCode });
+    const response = await this.fetch('/api/orders/kds-history?' + query);
+    if (!response.ok) throw new Error('No se pudo cargar el historial: HTTP ' + response.status);
+    return response.json();
   }
 
   async getStations(restaurantId) {
@@ -46,7 +53,12 @@ export class KdsApiClient {
 
   async sendOrderCommand(orderId, path) {
     const response = await this.fetch('/api/orders/' + orderId + '/' + path, { method: 'POST' });
-    if (!response.ok) throw new Error('El comando fue rechazado: HTTP ' + response.status);
+    if (!response.ok) {
+      const error = new Error('El comando fue rechazado: HTTP ' + response.status);
+      error.status = response.status;
+      throw error;
+    }
+    return response.json();
   }
 
   fetch(path, options = {}) {

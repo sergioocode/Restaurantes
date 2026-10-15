@@ -5,6 +5,7 @@ public sealed record OrderSubmitted(
     Guid RestaurantId,
     Guid? TableId,
     int? GuestCount,
+    Guid? DiningSessionId,
     string TableLabel,
     string CustomerName,
     string ServiceMode,
@@ -14,5 +15,8 @@ public sealed record OrderSubmitted(
     DateTime CreatedAtUtc,
     DateTime SubmittedAtUtc,
     IReadOnlyList<OrderLineSnapshot> Lines,
-    IReadOnlyList<OrderKitchenStationSnapshot> Stations
+    IReadOnlyList<OrderKitchenStationSnapshot> Stations,
+    string Status = "Submitted",
+    DateTime? ReadyAtUtc = null,
+    DateTime? DeliveredAtUtc = null
 );

@@ -1,6 +1,11 @@
-namespace Restaurantes.Payments.Application;
+﻿namespace Restaurantes.Payments.Application;
 
 public interface IPaymentCashRegister
 {
-    Task EnsureOpenAsync(Guid restaurantId, CancellationToken cancellationToken);
+    Task<CashRegisterSessionDetails> GetOpenSessionAsync(
+        Guid restaurantId,
+        CancellationToken cancellationToken
+    );
 }
+
+public sealed record CashRegisterSessionDetails(Guid SessionId, DateOnly BusinessDate);

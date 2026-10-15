@@ -1,0 +1,30 @@
+@writeUrl = http://localhost:5111
+
+### Crea datos: cambie el code antes de repetir
+# @name createRestaurant
+POST {{writeUrl}}/api/restaurant-operations/restaurants
+Content-Type: application/json
+
+{
+  "code": "HTTP-MAD-01",
+  "name": "Restaurante HTTP Madrid",
+  "address": "Calle de prueba 1"
+}
+
+### Actualizar el restaurante creado arriba
+PUT {{writeUrl}}/api/restaurant-operations/restaurants/{{createRestaurant.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "name": "Restaurante HTTP Madrid actualizado",
+  "address": "Calle de prueba 2",
+  "isActive": true
+}
+
+@restaurantId = 5c7811d9-b92c-4453-8f8a-4bdb9f089d31
+
+### Listar restaurantes desde la proyeccion de lectura
+GET {{writeUrl}}/api/restaurant-operations/restaurants
+
+### Consultar un restaurante
+GET {{writeUrl}}/api/restaurant-operations/restaurants/{{restaurantId}}

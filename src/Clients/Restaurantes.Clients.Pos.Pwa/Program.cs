@@ -15,6 +15,6 @@ builder.Services.AddScoped(_ => new HttpClient
 });
 builder.Services.AddScoped<PosApi>();
 builder.Services.AddScoped<OrderRealtimeClient>();
-builder.Services.AddScoped<DiningRealtimeClient>();
+builder.Services.AddScoped<CatalogRealtimeClient>();
 
 await builder.Build().RunAsync();

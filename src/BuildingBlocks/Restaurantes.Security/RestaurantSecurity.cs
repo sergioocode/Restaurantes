@@ -32,10 +32,14 @@ public static class RestaurantPermissions
     public const string TablesRead = "tables.read";
     public const string TablesManage = "tables.manage";
     public const string TablesRelease = "tables.release";
+    public const string TablesReleasePaid = "tables.release.paid";
     public const string OrdersCreate = "orders.create";
+    public const string OrdersRead = "orders.read";
+    public const string OrdersReportRead = "orders.report.read";
     public const string OrdersManage = "orders.manage";
     public const string OrdersRecover = "orders.recover";
     public const string PaymentsCapture = "payments.capture";
+    public const string PaymentsCaptureCard = "payments.capture.card";
     public const string PaymentsRefund = "payments.refund";
     public const string CashRegisterManage = "cash-register.manage";
     public const string CatalogManage = "catalog.manage";
@@ -45,6 +49,7 @@ public static class RestaurantPermissions
     public const string FinancialReportsRead = "reports.financial.read";
     public const string MarketingReportsRead = "reports.marketing.read";
     public const string KitchenReportsRead = "reports.kitchen.read";
+    public const string DiscountsApply = "discounts.apply";
 
     public static IReadOnlyCollection<string> ForRole(string role)
     {
@@ -60,6 +65,8 @@ public static class RestaurantPermissions
                 TablesManage,
                 TablesRelease,
                 OrdersCreate,
+                OrdersRead,
+                OrdersReportRead,
                 OrdersManage,
                 OrdersRecover,
                 PaymentsCapture,
@@ -72,10 +79,36 @@ public static class RestaurantPermissions
                 FinancialReportsRead,
                 MarketingReportsRead,
                 KitchenReportsRead,
+                DiscountsApply,
             ],
-            "Gerente" => [BackofficeAccess, DashboardRead, FinancialReportsRead, PaymentsRefund],
-            "Contabilidad" => [DashboardRead, FinancialReportsRead, PaymentsRefund],
-            "Marketing" => [DashboardRead, FinancialReportsRead, MarketingReportsRead],
+            "Gerente" =>
+            [
+                BackofficeAccess,
+                OrdersRead,
+                OrdersReportRead,
+                DashboardRead,
+                FinancialReportsRead,
+                PaymentsRefund,
+                MarketingReportsRead,
+                KitchenReportsRead,
+            ],
+            "Contabilidad" =>
+            [
+                BackofficeAccess,
+                OrdersRead,
+                OrdersReportRead,
+                DashboardRead,
+                FinancialReportsRead,
+                PaymentsRefund,
+            ],
+            "Marketing" =>
+            [
+                BackofficeAccess,
+                OrdersReportRead,
+                DashboardRead,
+                FinancialReportsRead,
+                MarketingReportsRead,
+            ],
             "Manager" =>
             [
                 BackofficeAccess,
@@ -84,15 +117,26 @@ public static class RestaurantPermissions
                 TablesManage,
                 TablesRelease,
                 OrdersCreate,
+                OrdersRead,
+                OrdersReportRead,
                 OrdersManage,
                 OrdersRecover,
                 PaymentsCapture,
+                PaymentsRefund,
                 CashRegisterManage,
                 CatalogManage,
-                KdsUse,
                 KitchenReportsRead,
+                DiscountsApply,
             ],
-            "Camarero" => [CommanderUse, TablesRead, OrdersCreate, OrdersManage],
+            "Camarero" =>
+            [
+                CommanderUse,
+                TablesRead,
+                TablesReleasePaid,
+                OrdersCreate,
+                OrdersManage,
+                PaymentsCaptureCard,
+            ],
             "Kds" => [KdsUse],
             _ => [],
         };
@@ -183,6 +227,17 @@ public static class RestaurantSecurityExtensions
             }
         }
 
+        if (
+            permission == RestaurantPermissions.DashboardRead
+            && user.FindAll(RestaurantClaimTypes.RestaurantRole)
+                .Any(claim =>
+                    claim.Value.StartsWith($"{restaurantId:N}:", StringComparison.OrdinalIgnoreCase)
+                )
+        )
+        {
+            return HasScopedRolePermission(user, restaurantId, permission);
+        }
+
         string expected = $"{restaurantId:N}:{permission}";
         return user.Claims.Any(claim =>
             claim.Type == RestaurantClaimTypes.Permission
@@ -197,12 +252,21 @@ public static class RestaurantSecurityExtensions
 
     public static bool HasAnyRestaurantPermission(this ClaimsPrincipal user, string permission)
     {
-        foreach (Claim roleClaim in user.FindAll(ClaimTypes.Role))
+        if (user.HasGlobalRestaurantPermission(permission))
         {
-            if (RestaurantPermissions.ForRole(roleClaim.Value).Contains(permission))
-            {
-                return true;
-            }
+            return true;
+        }
+
+        if (permission == RestaurantPermissions.DashboardRead)
+        {
+            return user.FindAll(RestaurantClaimTypes.RestaurantRole)
+                .Any(claim =>
+                {
+                    int separator = claim.Value.IndexOf(':');
+                    return separator > 0
+                        && Guid.TryParseExact(claim.Value[..separator], "N", out Guid restaurantId)
+                        && HasScopedRolePermission(user, restaurantId, permission);
+                });
         }
 
         string suffix = $":{permission}";
@@ -211,5 +275,43 @@ public static class RestaurantSecurityExtensions
                 claim.Type == RestaurantClaimTypes.Permission
                 && claim.Value.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
             );
+    }
+
+    private static bool HasScopedRolePermission(
+        ClaimsPrincipal user,
+        Guid restaurantId,
+        string permission
+    )
+    {
+        string prefix = $"{restaurantId:N}:";
+        return user.FindAll(RestaurantClaimTypes.RestaurantRole)
+            .Any(claim =>
+            {
+                if (!claim.Value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
+                string role = claim.Value[prefix.Length..];
+                return RestaurantPermissions.ForRole(role).Contains(permission);
+            });
+    }
+
+    public static bool HasGlobalRestaurantPermission(this ClaimsPrincipal user, string permission)
+    {
+        if (user.Identity?.IsAuthenticated != true)
+        {
+            return false;
+        }
+
+        foreach (Claim roleClaim in user.FindAll(ClaimTypes.Role))
+        {
+            if (RestaurantPermissions.ForRole(roleClaim.Value).Contains(permission))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

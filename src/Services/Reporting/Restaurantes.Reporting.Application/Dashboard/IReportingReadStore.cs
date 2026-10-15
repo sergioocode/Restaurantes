@@ -3,6 +3,7 @@
 public interface IReportingReadStore
 {
     Task<DailyReportingSnapshot> GetDailySnapshotAsync(
+        DateOnly businessDate,
         DateTime startUtc,
         DateTime endUtc,
         IReadOnlyCollection<Guid>? restaurantIds,

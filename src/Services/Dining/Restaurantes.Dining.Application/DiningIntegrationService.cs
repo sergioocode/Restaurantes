@@ -14,25 +14,42 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
             return;
         }
 
+        Guid? updatedSessionId = null;
         if (type == typeof(OrderCreated).FullName)
         {
             await ApplyOrderCreated(db, body);
         }
         else if (type == typeof(OrderSubmitted).FullName)
         {
-            await ApplyOrderSubmitted(db, body);
+            updatedSessionId = await ApplyOrderSubmitted(db, body);
+        }
+        else if (type == typeof(KitchenTicketPreparationStarted).FullName)
+        {
+            updatedSessionId = await ApplyKitchenTicketPreparationStarted(db, body);
         }
         else if (type == typeof(OrderDelivered).FullName)
         {
-            await ApplyOrderDelivered(db, body);
+            updatedSessionId = await ApplyOrderDelivered(db, body);
         }
         else if (type == typeof(OrderReady).FullName)
         {
-            await ApplyOrderReady(db, body);
+            updatedSessionId = await ApplyOrderReady(db, body);
+        }
+        else if (type == typeof(KitchenTicketReady).FullName)
+        {
+            updatedSessionId = await ApplyKitchenTicketReady(db, body);
+        }
+        else if (type == typeof(KitchenTicketDispatched).FullName)
+        {
+            updatedSessionId = await ApplyKitchenTicketDispatched(db, body);
         }
         else if (type == typeof(OrderLineCancelled).FullName)
         {
-            await ApplyOrderLineCancelled(db, body);
+            updatedSessionId = await ApplyOrderLineCancelled(db, body);
+        }
+        else if (type == typeof(OrderCancelled).FullName)
+        {
+            updatedSessionId = await ApplyOrderCancelled(db, body);
         }
         else if (type == typeof(PaymentCaptured).FullName)
         {
@@ -47,6 +64,10 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
             throw new JsonException($"Unsupported integration event '{type}'.");
         }
 
+        if (updatedSessionId is Guid sessionId)
+        {
+            await db.SaveChangesAsync();
+        }
         db.MarkMessageProcessed(messageId, time.GetUtcNow().UtcDateTime);
         await db.SaveChangesAsync();
     }
@@ -56,7 +77,7 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
         OrderCreated e =
             JsonSerializer.Deserialize<OrderCreated>(body.Span)
             ?? throw new JsonException("OrderCreated is empty.");
-        if (e.ServiceMode == "Takeaway" || e.DiningSessionId is null)
+        if (e.DiningSessionId is null)
         {
             return;
         }
@@ -89,9 +110,16 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
         {
             OrderId = e.OrderId,
             DiningSessionId = e.DiningSessionId.Value,
-            PaymentStatus = pending?.Status ?? "Unpaid",
+            Source = e.Source,
+            CreatedByUserId = e.CreatedByUserId,
+            PaymentStatus =
+                pending is null || pending.AmountPaid <= 0 ? "Unpaid"
+                : pending.AmountPaid >= e.Lines.Sum(x => x.UnitPrice * x.Quantity) ? "Paid"
+                : "PartiallyPaid",
             OrderStatus = "Draft",
             Amount = e.Lines.Sum(x => x.UnitPrice * x.Quantity),
+            AmountPaid = pending?.AmountPaid ?? 0,
+            TipPaid = pending?.TipPaid ?? 0,
             AddedAtUtc = e.OccurredAtUtc,
             UpdatedAtUtc = pending?.UpdatedAtUtc ?? e.OccurredAtUtc,
         };
@@ -102,14 +130,14 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
         }
     }
 
-    private static async Task ApplyOrderDelivered(IDiningStore db, ReadOnlyMemory<byte> body)
+    private static async Task<Guid?> ApplyOrderDelivered(IDiningStore db, ReadOnlyMemory<byte> body)
     {
         OrderDelivered e =
             JsonSerializer.Deserialize<OrderDelivered>(body.Span)
             ?? throw new JsonException("OrderDelivered is empty.");
-        if (e.ServiceMode == "Takeaway")
+        if (e.DiningSessionId is null)
         {
-            return;
+            return null;
         }
         DiningSessionOrder? order = await db.FindOrderAsync(e.OrderId);
         if (order is null)
@@ -122,64 +150,174 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
             .Lines.Where(x => x.Status != "Cancelled")
             .Sum(x => x.UnitPrice * x.Quantity);
         order.UpdatedAtUtc = e.DeliveredAtUtc;
+        return e.DiningSessionId;
     }
 
-    private static async Task ApplyOrderReady(IDiningStore db, ReadOnlyMemory<byte> body)
+    private static async Task<Guid?> ApplyOrderReady(IDiningStore db, ReadOnlyMemory<byte> body)
     {
         OrderReady e =
             JsonSerializer.Deserialize<OrderReady>(body.Span)
             ?? throw new JsonException("OrderReady is empty.");
-        if (e.ServiceMode == "Takeaway")
+        if (e.DiningSessionId is null)
         {
-            return;
+            return null;
         }
         DiningSessionOrder? order = await db.FindOrderAsync(e.OrderId);
         if (order is null)
         {
             throw new JsonException($"Dining order '{e.OrderId}' does not exist.");
         }
-        order.OrderStatus = "Ready";
+        order.OrderStatus = AllKitchenStationsDispatched(e.Stations) ? "Delivered" : "Ready";
         order.Amount = e
             .Lines.Where(x => x.Status != "Cancelled")
             .Sum(x => x.UnitPrice * x.Quantity);
         order.UpdatedAtUtc = e.ReadyAtUtc;
+        return e.DiningSessionId;
     }
 
-    private static async Task ApplyOrderSubmitted(IDiningStore db, ReadOnlyMemory<byte> body)
+    private static async Task<Guid?> ApplyOrderSubmitted(IDiningStore db, ReadOnlyMemory<byte> body)
     {
         OrderSubmitted e =
             JsonSerializer.Deserialize<OrderSubmitted>(body.Span)
             ?? throw new JsonException("OrderSubmitted is empty.");
-        if (e.ServiceMode == "Takeaway")
+        if (e.DiningSessionId is null)
         {
-            return;
+            return null;
         }
-
         DiningSessionOrder order =
             await db.FindOrderAsync(e.OrderId)
             ?? throw new JsonException($"Dining order ''{e.OrderId}'' does not exist.");
-        order.OrderStatus = "Submitted";
+        order.OrderStatus = AllKitchenStationsDispatched(e.Stations) ? "Delivered" : e.Status;
         order.Amount = e
             .Lines.Where(x => x.Status != "Cancelled")
             .Sum(x => x.UnitPrice * x.Quantity);
-        order.UpdatedAtUtc = e.SubmittedAtUtc;
+        order.UpdatedAtUtc = e.DeliveredAtUtc ?? e.SubmittedAtUtc;
+        return e.DiningSessionId;
     }
 
-    private static async Task ApplyOrderLineCancelled(IDiningStore db, ReadOnlyMemory<byte> body)
+    private static async Task<Guid?> ApplyOrderLineCancelled(
+        IDiningStore db,
+        ReadOnlyMemory<byte> body
+    )
     {
         OrderLineCancelled e =
             JsonSerializer.Deserialize<OrderLineCancelled>(body.Span)
             ?? throw new JsonException("OrderLineCancelled is empty.");
-        if (e.ServiceMode == "Takeaway" || e.DiningSessionId is null)
+        if (e.DiningSessionId is null)
         {
-            return;
+            return null;
         }
         DiningSessionOrder order =
             await db.FindOrderAsync(e.OrderId)
             ?? throw new JsonException($"Dining order ''{e.OrderId}'' does not exist.");
-        order.OrderStatus = e.Status;
+        order.OrderStatus = AllKitchenStationsDispatched(e.Stations) ? "Delivered" : e.Status;
         order.Amount = e.Total;
         order.UpdatedAtUtc = e.CancelledAtUtc;
+        return e.DiningSessionId;
+    }
+
+    private static async Task<Guid?> ApplyOrderCancelled(IDiningStore db, ReadOnlyMemory<byte> body)
+    {
+        OrderCancelled e =
+            JsonSerializer.Deserialize<OrderCancelled>(body.Span)
+            ?? throw new JsonException("OrderCancelled is empty.");
+        if (e.DiningSessionId is null)
+        {
+            return null;
+        }
+        DiningSessionOrder order =
+            await db.FindOrderAsync(e.OrderId)
+            ?? throw new JsonException($"Dining order '{e.OrderId}' does not exist.");
+        order.OrderStatus = "Cancelled";
+        order.Amount = 0;
+        order.UpdatedAtUtc = e.CancelledAtUtc;
+        return e.DiningSessionId;
+    }
+
+    private static async Task<Guid?> ApplyKitchenTicketReady(
+        IDiningStore db,
+        ReadOnlyMemory<byte> body
+    )
+    {
+        KitchenTicketReady e =
+            JsonSerializer.Deserialize<KitchenTicketReady>(body.Span)
+            ?? throw new JsonException("KitchenTicketReady is empty.");
+        if (e.DiningSessionId is null)
+        {
+            return null;
+        }
+
+        DiningSessionOrder order =
+            await db.FindOrderAsync(e.OrderId)
+            ?? throw new JsonException($"Dining order '{e.OrderId}' does not exist.");
+        order.OrderStatus = e.ReadyAtUtc is null ? "InPreparation" : "Ready";
+        order.Amount = e
+            .Lines.Where(x => x.Status != "Cancelled")
+            .Sum(x => x.UnitPrice * x.Quantity);
+        order.UpdatedAtUtc =
+            e.ReadyAtUtc
+            ?? e.Stations.Single(station => station.Code == e.ChangedStationCode).ReadyAtUtc
+            ?? e.PreparationStartedAtUtc;
+        return e.DiningSessionId;
+    }
+
+    private static async Task<Guid?> ApplyKitchenTicketPreparationStarted(
+        IDiningStore db,
+        ReadOnlyMemory<byte> body
+    )
+    {
+        KitchenTicketPreparationStarted e =
+            JsonSerializer.Deserialize<KitchenTicketPreparationStarted>(body.Span)
+            ?? throw new JsonException("KitchenTicketPreparationStarted is empty.");
+        if (e.DiningSessionId is null)
+        {
+            return null;
+        }
+
+        DiningSessionOrder order =
+            await db.FindOrderAsync(e.OrderId)
+            ?? throw new JsonException($"Dining order '{e.OrderId}' does not exist.");
+        order.OrderStatus = "InPreparation";
+        order.Amount = e
+            .Lines.Where(x => x.Status != "Cancelled")
+            .Sum(x => x.UnitPrice * x.Quantity);
+        order.UpdatedAtUtc = e.PreparationStartedAtUtc;
+        return e.DiningSessionId;
+    }
+
+    private static async Task<Guid?> ApplyKitchenTicketDispatched(
+        IDiningStore db,
+        ReadOnlyMemory<byte> body
+    )
+    {
+        KitchenTicketDispatched e =
+            JsonSerializer.Deserialize<KitchenTicketDispatched>(body.Span)
+            ?? throw new JsonException("KitchenTicketDispatched is empty.");
+        if (e.DiningSessionId is null)
+        {
+            return null;
+        }
+
+        DiningSessionOrder order =
+            await db.FindOrderAsync(e.OrderId)
+            ?? throw new JsonException($"Dining order '{e.OrderId}' does not exist.");
+        order.OrderStatus = AllKitchenStationsDispatched(e.Stations) ? "Delivered" : "Ready";
+        order.Amount = e
+            .Lines.Where(x => x.Status != "Cancelled")
+            .Sum(x => x.UnitPrice * x.Quantity);
+        order.UpdatedAtUtc = e.DispatchedAtUtc;
+        return e.DiningSessionId;
+    }
+
+    private static bool AllKitchenStationsDispatched(
+        IReadOnlyList<OrderKitchenStationSnapshot> stations
+    )
+    {
+        OrderKitchenStationSnapshot[] activeStations = stations
+            .Where(station => station.Status != "Cancelled")
+            .ToArray();
+        return activeStations.Length > 0
+            && activeStations.All(station => station.Status == "Dispatched");
     }
 
     private static async Task ApplyPayment(
@@ -218,7 +356,30 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
         DiningSessionOrder? order = await db.FindOrderAsync(orderId);
         if (order is not null)
         {
-            order.PaymentStatus = status;
+            PaymentCaptured? capture =
+                status == "Paid" ? JsonSerializer.Deserialize<PaymentCaptured>(body.Span) : null;
+            DiningSession? session = await db.FindSessionWithOrdersAsync(
+                order.DiningSessionId,
+                CancellationToken.None
+            );
+            decimal chargeableAmount = session?.ChargeableAmount(order) ?? order.Amount;
+            decimal amountPaid =
+                status == "Paid"
+                    ? capture?.AmountPaid is > 0
+                        ? capture.AmountPaid
+                        : order.Amount
+                    : 0;
+            order.AmountPaid = amountPaid;
+            order.TipPaid =
+                status == "Paid"
+                    ? capture is { TipAmountPaid: > 0 }
+                        ? capture.TipAmountPaid
+                        : order.TipPaid + (capture?.TipAmount ?? 0)
+                    : 0;
+            order.PaymentStatus =
+                status == "Refunded" ? status
+                : order.AmountPaid >= chargeableAmount ? "Paid"
+                : "PartiallyPaid";
             order.UpdatedAtUtc = occurredAtUtc;
             return;
         }
@@ -230,6 +391,12 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
                 {
                     OrderId = orderId,
                     Status = status,
+                    AmountPaid =
+                        status == "Paid"
+                            ? JsonSerializer.Deserialize<PaymentCaptured>(body.Span)?.AmountPaid
+                                ?? 0
+                            : 0,
+                    TipPaid = status == "Paid" ? ReadCumulativeTip(body) : 0,
                     UpdatedAtUtc = occurredAtUtc,
                 }
             );
@@ -237,7 +404,27 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
         else
         {
             pending.Status = status;
+            if (status == "Paid")
+            {
+                pending.AmountPaid =
+                    JsonSerializer.Deserialize<PaymentCaptured>(body.Span)?.AmountPaid ?? 0;
+                PaymentCaptured? capture = JsonSerializer.Deserialize<PaymentCaptured>(body.Span);
+                pending.TipPaid = capture is { TipAmountPaid: > 0 }
+                    ? capture.TipAmountPaid
+                    : pending.TipPaid + (capture?.TipAmount ?? 0);
+            }
+            else
+            {
+                pending.AmountPaid = 0;
+                pending.TipPaid = 0;
+            }
             pending.UpdatedAtUtc = occurredAtUtc;
         }
+    }
+
+    private static decimal ReadCumulativeTip(ReadOnlyMemory<byte> body)
+    {
+        PaymentCaptured? capture = JsonSerializer.Deserialize<PaymentCaptured>(body.Span);
+        return capture is { TipAmountPaid: > 0 } ? capture.TipAmountPaid : capture?.TipAmount ?? 0;
     }
 }

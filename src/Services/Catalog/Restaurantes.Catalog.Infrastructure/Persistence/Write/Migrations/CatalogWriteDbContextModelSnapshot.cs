@@ -51,6 +51,20 @@ namespace Restaurantes.Catalog.Infrastructure.Persistence.Write.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
+                    b.Property<bool>("RequiresKds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("ShowInCommander")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("ShowInCustomerQr")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("ShowInPos")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -72,11 +86,10 @@ namespace Restaurantes.Catalog.Infrastructure.Persistence.Write.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<decimal>("BasePrice")
-                        .HasPrecision(12, 2)
-                        .HasColumnType("numeric(12,2)");
-
                     b.Property<Guid>("CategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TaxId")
                         .HasColumnType("uuid");
 
                     b.Property<bool>("IsActive")
@@ -102,6 +115,8 @@ namespace Restaurantes.Catalog.Infrastructure.Persistence.Write.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CategoryId");
+
+                    b.HasIndex("TaxId");
 
                     b.HasIndex("Sku")
                         .IsUnique();
@@ -237,6 +252,307 @@ namespace Restaurantes.Catalog.Infrastructure.Persistence.Write.Migrations
                     b.ToTable("outbox_messages", (string)null);
                 });
 
+            modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.CatalogAllergen", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("allergens", (string)null);
+                });
+
+            modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.CatalogMenu", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<Guid>("RestaurantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RestaurantId").IsUnique();
+
+                    b.ToTable("catalog_menus", (string)null, t => t.HasCheckConstraint("CK_catalog_menus_global_only", "\"RestaurantId\" = '00000000-0000-0000-0000-000000000000'"));
+                });
+
+            modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.RestaurantProductAvailability", b =>
+                {
+                    b.Property<Guid>("RestaurantId").HasColumnType("uuid");
+                    b.Property<Guid>("ProductId").HasColumnType("uuid");
+                    b.Property<bool>("IsAvailable").HasColumnType("boolean");
+                    b.HasKey("RestaurantId", "ProductId");
+                    b.HasIndex("ProductId");
+                    b.ToTable("restaurant_product_availability", (string)null);
+                });
+
+            modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.CatalogMenuChannel", b =>
+                {
+                    b.Property<Guid>("MenuEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Channel")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("ExternalId")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<bool>("IsPublished")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("MenuEntryId", "Channel");
+
+                    b.ToTable("catalog_menu_channels", (string)null);
+                });
+
+            modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.CatalogMenuEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DefaultFormat")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<bool>("IsAvailable")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("MenuId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("MenuId", "ProductId")
+                        .IsUnique();
+
+                    b.ToTable("catalog_menu_entries", (string)null);
+                });
+
+            modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.CatalogMenuPrice", b =>
+                {
+                    b.Property<Guid>("MenuId").HasColumnType("uuid");
+                    b.Property<Guid>("ProductId").HasColumnType("uuid");
+                    b.Property<string>("Channel").IsRequired().HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+                    b.Property<string>("Format").IsRequired().HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+                    b.Property<decimal>("Amount").HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+                    b.HasKey("MenuId", "ProductId", "Channel", "Format");
+                    b.HasIndex("ProductId");
+                    b.ToTable("catalog_menu_prices", (string)null);
+                });
+
+            modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.RestaurantProductAvailability", b =>
+                {
+                    b.HasOne("Restaurantes.Catalog.Domain.Product", null)
+                        .WithMany().HasForeignKey("ProductId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                });
+
+            modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.CatalogPrice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Format")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RestaurantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId", "RestaurantId", "Channel", "Format")
+                        .IsUnique();
+
+                    b.ToTable("product_prices", (string)null);
+                });
+
+            modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.CatalogTax", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<decimal>("Rate")
+                        .HasPrecision(7, 4)
+                        .HasColumnType("numeric(7,4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("taxes", (string)null);
+                });
+
+            modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.ProductAllergen", b =>
+                {
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AllergenId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("ProductId", "AllergenId");
+
+                    b.HasIndex("AllergenId");
+
+                    b.ToTable("product_allergens", (string)null);
+                });
+
+            modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.ProductConfiguration", b =>
+                {
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("AllowsExtras")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsCombo")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("ProductId");
+
+                    b.ToTable("product_configurations", (string)null);
+                });
+
+            modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.ProductOption", b =>
+                {
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.HasKey("GroupId", "ProductId");
+
+                    b.HasIndex("ProductId");
+
+                    b.ToTable("product_options", (string)null);
+                });
+
+            modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.ProductOptionGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("MaxSelections")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MinSelections")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<Guid>("ParentProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParentProductId");
+
+                    b.ToTable("product_option_groups", (string)null);
+                });
+
+            modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.ProductPhoto", b =>
+                {
+                    b.Property<Guid>("ProductId").HasColumnType("uuid");
+                    b.Property<Guid>("Revision").HasColumnType("uuid");
+                    b.Property<string>("OriginalContentType").IsRequired().HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+                    b.HasKey("ProductId");
+                    b.ToTable("product_photos", (string)null);
+                });
+
             modelBuilder.Entity("Restaurantes.Catalog.Domain.Product", b =>
                 {
                     b.HasOne("Restaurantes.Catalog.Domain.Category", null)
@@ -244,6 +560,9 @@ namespace Restaurantes.Catalog.Infrastructure.Persistence.Write.Migrations
                         .HasForeignKey("CategoryId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("Restaurantes.Catalog.Infrastructure.Persistence.Write.CatalogTax", null)
+                        .WithMany().HasForeignKey("TaxId").OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Restaurantes.Catalog.Domain.RestaurantMenuItem", b =>
@@ -254,6 +573,103 @@ namespace Restaurantes.Catalog.Infrastructure.Persistence.Write.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
+
+            modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.CatalogMenuChannel", b =>
+                {
+                    b.HasOne("Restaurantes.Catalog.Infrastructure.Persistence.Write.CatalogMenuEntry", null)
+                        .WithMany()
+                        .HasForeignKey("MenuEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.CatalogMenuEntry", b =>
+                {
+                    b.HasOne("Restaurantes.Catalog.Infrastructure.Persistence.Write.CatalogMenu", null)
+                        .WithMany()
+                        .HasForeignKey("MenuId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Restaurantes.Catalog.Domain.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.CatalogPrice", b =>
+                {
+                    b.HasOne("Restaurantes.Catalog.Domain.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.CatalogMenuPrice", b =>
+                {
+                    b.HasOne("Restaurantes.Catalog.Infrastructure.Persistence.Write.CatalogMenu", null)
+                        .WithMany().HasForeignKey("MenuId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                    b.HasOne("Restaurantes.Catalog.Domain.Product", null)
+                        .WithMany().HasForeignKey("ProductId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                });
+
+            modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.ProductAllergen", b =>
+                {
+                    b.HasOne("Restaurantes.Catalog.Infrastructure.Persistence.Write.CatalogAllergen", null)
+                        .WithMany()
+                        .HasForeignKey("AllergenId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Restaurantes.Catalog.Domain.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.ProductPhoto", b =>
+                {
+                    b.HasOne("Restaurantes.Catalog.Domain.Product", null)
+                        .WithOne().HasForeignKey("Restaurantes.Catalog.Infrastructure.Persistence.Write.ProductPhoto", "ProductId")
+                        .OnDelete(DeleteBehavior.Cascade).IsRequired();
+                });
+
+            modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.ProductConfiguration", b =>
+                {
+                    b.HasOne("Restaurantes.Catalog.Domain.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.ProductOption", b =>
+                {
+                    b.HasOne("Restaurantes.Catalog.Infrastructure.Persistence.Write.ProductOptionGroup", null)
+                        .WithMany()
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Restaurantes.Catalog.Domain.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.Write.ProductOptionGroup", b =>
+                {
+                    b.HasOne("Restaurantes.Catalog.Domain.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ParentProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
 #pragma warning restore 612, 618
         }
     }

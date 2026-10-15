@@ -6,9 +6,9 @@ namespace Restaurantes.Orders.Application;
 
 public sealed partial class OrderCommandService
 {
-    public async Task<OrderResponse?> StartPreparationAsync(
+    public async Task<OrderResponse?> StartLinePreparationAsync(
         Guid id,
-        string station,
+        Guid lineId,
         CancellationToken ct
     )
     {
@@ -19,7 +19,8 @@ public sealed partial class OrderCommandService
         }
 
         DateTime now = time.GetUtcNow().UtcDateTime;
-        o.StartStationPreparation(station, now);
+        OrderLine line = o.Lines.Single(item => item.Id == lineId);
+        o.StartLinePreparation(lineId, now);
         await store.SaveWithEventAsync(
             o,
             new KitchenTicketPreparationStarted(
@@ -27,12 +28,13 @@ public sealed partial class OrderCommandService
                 o.RestaurantId,
                 o.TableId,
                 o.GuestCount,
+                o.DiningSessionId,
                 o.TableLabel,
                 o.CustomerName,
                 o.ServiceMode.ToString(),
                 o.Source.ToString(),
                 o.PaymentTiming.ToString(),
-                station.Trim().ToUpperInvariant(),
+                line.PreparationStationCode,
                 o.Version,
                 o.CreatedAtUtc,
                 o.SubmittedAtUtc!.Value,
@@ -45,7 +47,7 @@ public sealed partial class OrderCommandService
         return Map(o);
     }
 
-    public async Task<OrderResponse?> MarkReadyAsync(Guid id, string station, CancellationToken ct)
+    public async Task<OrderResponse?> MarkLineReadyAsync(Guid id, Guid lineId, CancellationToken ct)
     {
         Order? o = await store.FindAsync(id, ct);
         if (o is null)
@@ -54,7 +56,8 @@ public sealed partial class OrderCommandService
         }
 
         DateTime now = time.GetUtcNow().UtcDateTime;
-        o.MarkStationReady(station, now);
+        OrderLine line = o.Lines.Single(item => item.Id == lineId);
+        o.MarkLineReady(lineId, now);
         object integrationEvent =
             o.Status == OrderStatus.Ready
                 ? ReadyEvent(o, now)
@@ -63,12 +66,13 @@ public sealed partial class OrderCommandService
                     o.RestaurantId,
                     o.TableId,
                     o.GuestCount,
+                    o.DiningSessionId,
                     o.TableLabel,
                     o.CustomerName,
                     o.ServiceMode.ToString(),
                     o.Source.ToString(),
                     o.PaymentTiming.ToString(),
-                    station.Trim().ToUpperInvariant(),
+                    line.PreparationStationCode,
                     o.Version,
                     o.CreatedAtUtc,
                     o.SubmittedAtUtc!.Value,
@@ -81,11 +85,7 @@ public sealed partial class OrderCommandService
         return Map(o);
     }
 
-    public async Task<OrderResponse?> DispatchStationAsync(
-        Guid id,
-        string station,
-        CancellationToken ct
-    )
+    public async Task<OrderResponse?> DispatchLineAsync(Guid id, Guid lineId, CancellationToken ct)
     {
         Order? o = await store.FindAsync(id, ct);
         if (o is null)
@@ -94,7 +94,8 @@ public sealed partial class OrderCommandService
         }
 
         DateTime now = time.GetUtcNow().UtcDateTime;
-        o.DispatchStation(station, now);
+        OrderLine line = o.Lines.Single(item => item.Id == lineId);
+        o.DispatchLine(lineId, now);
         object integrationEvent =
             o.Status == OrderStatus.Ready
                 ? ReadyEvent(o, now)
@@ -103,12 +104,13 @@ public sealed partial class OrderCommandService
                     o.RestaurantId,
                     o.TableId,
                     o.GuestCount,
+                    o.DiningSessionId,
                     o.TableLabel,
                     o.CustomerName,
                     o.ServiceMode.ToString(),
                     o.Source.ToString(),
                     o.PaymentTiming.ToString(),
-                    station.Trim().ToUpperInvariant(),
+                    line.PreparationStationCode,
                     o.Version,
                     o.CreatedAtUtc,
                     o.SubmittedAtUtc!.Value,

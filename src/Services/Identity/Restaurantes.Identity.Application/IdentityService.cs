@@ -9,16 +9,7 @@ public sealed class IdentityService(
     TimeProvider time
 )
 {
-    private static readonly string[] Roles =
-    [
-        "Admin",
-        "Gerente",
-        "Contabilidad",
-        "Marketing",
-        "Manager",
-        "Camarero",
-        "Kds",
-    ];
+    private static readonly string[] Roles = ["Manager", "Camarero", "Kds"];
 
     public async Task<IdentityResult> GetProviderSettings(
         string activeProvider,
@@ -119,6 +110,7 @@ public sealed class IdentityService(
                 token.ExpiresAtUtc,
                 new(user.Id, user.Email, user.DisplayName),
                 allRestaurantsRoles,
+                user.AllRestaurants ? RestaurantPermissions.ForRole(user.Role) : [],
                 restaurants
             )
         );
@@ -133,7 +125,8 @@ public sealed class IdentityService(
         return Ok(
             (await store.ListUsersAsync(ct))
                 .Where(user =>
-                    CanManageScope(
+                    Roles.Contains(user.Role, StringComparer.Ordinal)
+                    && CanManageScope(
                         canManageAllRestaurants,
                         managedRestaurantIds,
                         user.AllRestaurants,
@@ -180,7 +173,10 @@ public sealed class IdentityService(
         string email = request.Email.Trim().ToLowerInvariant();
         if (await store.FindByEmailAsync(activeProvider, email, ct) is not null)
         {
-            return new(IdentityOutcome.Conflict, new { detail = "La cuenta ya está autorizada." });
+            return new(
+                IdentityOutcome.Conflict,
+                new { detail = "El correo ya está autorizado en un local." }
+            );
         }
 
         ApplicationUser user = new()

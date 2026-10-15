@@ -31,6 +31,13 @@ namespace Restaurantes.Sales.Infrastructure.Persistence.Read.Migrations
                     b.Property<DateTime>("CompletedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("DiscountName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateOnly?>("BusinessDate")
+                        .HasColumnType("date");
+
                     b.Property<string>("LinesJson")
                         .IsRequired()
                         .HasColumnType("jsonb");
@@ -39,6 +46,10 @@ namespace Restaurantes.Sales.Infrastructure.Persistence.Read.Migrations
                         .HasColumnType("integer");
 
                     b.Property<string>("OrderIdsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("PaymentMethodsJson")
                         .IsRequired()
                         .HasColumnType("jsonb");
 
@@ -64,7 +75,21 @@ namespace Restaurantes.Sales.Infrastructure.Persistence.Read.Migrations
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
 
+                    b.Property<decimal>("TipTotal")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<decimal>("DiscountPercentage")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("BusinessDate", "RestaurantId");
 
                     b.HasIndex("RestaurantId", "CompletedAtUtc");
 

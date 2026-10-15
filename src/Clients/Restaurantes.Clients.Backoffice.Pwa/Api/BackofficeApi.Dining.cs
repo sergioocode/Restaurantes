@@ -1,4 +1,4 @@
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using Restaurantes.Clients.Backoffice.Pwa.Models;
 
 namespace Restaurantes.Clients.Backoffice.Pwa.Api;
@@ -17,32 +17,21 @@ public sealed partial class BackofficeApi
             zone.Id == Guid.Empty ? HttpMethod.Post : HttpMethod.Put,
             zone.Id == Guid.Empty ? path : $"{path}/{zone.Id}"
         );
-        request.Content = JsonContent.Create(new { zone.Name, zone.SortOrder });
-        using HttpResponseMessage response = await http.SendAsync(request);
-        return await ReadAsync<ZoneResponse>(response);
-    }
-
-    public async Task DeleteZoneAsync(Guid restaurantId, Guid zoneId)
-    {
-        using HttpRequestMessage request = Authorized(
-            HttpMethod.Delete,
-            $"/api/dining/restaurants/{restaurantId}/zones/{zoneId}"
+        request.Content = JsonContent.Create(
+            new
+            {
+                zone.Name,
+                zone.SortOrder,
+                zone.RequestGuestCount,
+            }
         );
         using HttpResponseMessage response = await http.SendAsync(request);
-        if (!response.IsSuccessStatusCode)
-        {
-            await ReadAsync<object>(response);
-        }
+        return await ReadAsync<ZoneResponse>(response);
     }
 
     public Task<List<TableResponse>> TablesAsync(Guid restaurantId)
     {
         return GetAsync<List<TableResponse>>($"/api/dining/restaurants/{restaurantId}/tables");
-    }
-
-    public Task<DiningPolicyResponse> DiningPolicyAsync(Guid restaurantId)
-    {
-        return GetAsync<DiningPolicyResponse>($"/api/dining/restaurants/{restaurantId}/policy");
     }
 
     public async Task<TableResponse> CreateTableAsync(Guid restaurantId, TableDraft draft)
@@ -67,7 +56,6 @@ public sealed partial class BackofficeApi
             {
                 item.Label,
                 item.ZoneId,
-                item.RequestGuestCount,
                 item.IsActive,
             }
         );
@@ -96,28 +84,5 @@ public sealed partial class BackofficeApi
         );
         using HttpResponseMessage response = await http.SendAsync(request);
         return await ReadAsync<TableQrResponse>(response);
-    }
-
-    public async Task<DiningPolicyResponse> UpdateDiningPolicyAsync(
-        Guid restaurantId,
-        DiningPolicyResponse policy
-    )
-    {
-        using HttpRequestMessage request = Authorized(
-            HttpMethod.Put,
-            $"/api/dining/restaurants/{restaurantId}/policy"
-        );
-        request.Content = JsonContent.Create(
-            new
-            {
-                policy.QrRequiresImmediatePayment,
-                policy.RequireTrustedNetworkForQr,
-                policy.TakeawayRequiresPrepayment,
-                policy.AllowCheckoutBeforeKitchenCompletion,
-                policy.QrAllowedNetworks,
-            }
-        );
-        using HttpResponseMessage response = await http.SendAsync(request);
-        return await ReadAsync<DiningPolicyResponse>(response);
     }
 }

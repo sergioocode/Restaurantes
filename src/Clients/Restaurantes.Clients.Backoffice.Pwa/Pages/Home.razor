@@ -1,5 +1,6 @@
 ﻿@page "/"
 @using System.Text.Json
+@using Syncfusion.Blazor.Navigations
 @inject BackofficeApi Api
 @inject IJSRuntime Js
 @inject NavigationManager Nav
@@ -20,84 +21,286 @@ else if (login is null)
 {
     <main class="login-shell">
         <section class="login-card">
-            <img class="brand-icon" src="icons/icon-192.png" alt="" /><p class="eyebrow">ADMINISTRACIÓN</p><h1>Backoffice</h1>
-            <p>Acceso exclusivo/default perfil Manager.</p>
+            <div class="login-brand">
+                <img class="brand-icon" src="icons/icon-192.png" alt="" />
+                <div><p class="eyebrow">RESTAURANTES · ADMINISTRACIÓN</p><h1>Backoffice</h1></div>
+            </div>
             <div class="login-providers">
-                <button class="primary" type="button" @onclick='() => StartLogin("Microsoft")'
+                <button class="primary full" type="button" @onclick='() => StartLogin("Microsoft")'
                         disabled="@(providerSettings is null || providerSettings.ActiveProvider != "Microsoft" || !MicrosoftConfigured)">
                     Iniciar sesión con Microsoft
                 </button>
-                <button class="primary" type="button" @onclick='() => StartLogin("Google")'
+                <button class="primary full" type="button" @onclick='() => StartLogin("Google")'
                         disabled="@(providerSettings is null || providerSettings.ActiveProvider != "Google" || !GoogleConfigured)">
                     Iniciar sesión con Google
                 </button>
             </div>
-            @if (!string.IsNullOrWhiteSpace(message)) { <p class="error">@message</p> }
+            @if (!string.IsNullOrWhiteSpace(message))
+            {
+                <p class="error">@message</p>
+            }
         </section>
     </main>
 }
 else
 {
     <header class="topbar">
-        <div><p class="eyebrow">RESTAURANTES · BACKOFFICE</p><strong>@login.User.DisplayName</strong></div>
+        <div class="topbar-brand">
+            <button class="sidebar-menu-toggle" type="button" aria-label="Abrir o cerrar el menú" aria-expanded="@sidebarOpen" @onclick="ToggleSidebar">
+                <span aria-hidden="true">☰</span>
+            </button>
+            <div><p class="eyebrow">RESTAURANTES · BACKOFFICE</p><strong>@login.User.DisplayName</strong></div>
+        </div>
         <div class="top-actions">
             <button class="secondary" @onclick="Logout">Salir</button>
         </div>
     </header>
 
-    <main class="workspace">
-        <aside class="sidebar">
-            <h2>Módulos</h2>
-            @if (HasAnyLocalPermission("catalog.manage")) { <button class="@NavClass("menu")" @onclick='() => module = "menu"'>Menú por local</button> }
-            @if (HasAnyLocalPermission("kds.use")) { <button class="@NavClass("stations")" @onclick='() => module = "stations"'>Estaciones KDS</button> }
-            @if (HasAnyLocalPermission("tables.read")) { <button class="@NavClass("tables")" @onclick='() => module = "tables"'>Mesas y configuración</button> }
-            @if (IsAdmin) { <button class="@NavClass("restaurants")" @onclick='() => module = "restaurants"'>Locales</button> }
-            @if (IsAdmin) { <button class="@NavClass("categories")" @onclick='() => module = "categories"'>Categorías</button> }
-            @if (IsAdmin) { <button class="@NavClass("products")" @onclick='() => module = "products"'>Productos</button> }
-            @if (HasLocalPermission("reports.financial.read")) { <button disabled>Contabilidad <small>Próximo</small></button> }
-            @if (HasLocalPermission("reports.marketing.read")) { <button disabled>Marketing y KPI <small>Próximo</small></button> }
-            @if (HasLocalPermission("reports.kitchen.read")) { <button disabled>Tiempos de cocina <small>Próximo</small></button> }
-            <AuthorizeView Roles="Admin">
-                <Authorized>
-                    <button class="@NavClass("users")" @onclick='() => module = "users"'>Usuarios y perfiles</button>
-                </Authorized>
-            </AuthorizeView>
-        </aside>
+    <div class="backoffice-shell">
+        <SfSidebar @attributes="SidebarAttributes" @bind-IsOpen="sidebarOpen" Width="260px" Target=".workspace" Position="SidebarPosition.Left"
+                   Type="SidebarType.Auto" Animate="true">
+            <ChildContent>
+                <aside class="sidebar" aria-label="Navegación del Backoffice">
+                    <SfTreeView TValue="NavigationNode" CssClass="sidebar-tree" @bind-SelectedNodes="selectedNavigationNodes">
+                        <TreeViewEvents TValue="NavigationNode" NodeSelecting="BeforeNavigationSelect" NodeSelected="OnNavigationSelected" />
+                        <TreeViewFieldsSettings TValue="NavigationNode" Id="Id" Text="Text" ParentID="ParentId" HasChildren="HasChildren" Expanded="Expanded" DataSource="@NavigationNodes" />
+                    </SfTreeView>
+                </aside>
+            </ChildContent>
+        </SfSidebar>
 
-        <section class="content">
-            <div class="page-title">
-                <div><p class="eyebrow">@ModuleEyebrow</p><h1>@ModuleTitle</h1></div>
+        <main class="workspace">
+            <section class="content">
+                <div class="page-title">
+                    <div><p class="eyebrow">@ModuleEyebrow</p><h1>@ModuleTitle</h1></div>
+                    @if (ShowRestaurantContextSelector || RefreshLabel is not null)
+                    {
+                        <div class="context-header-actions">
+                            @if (ShowRestaurantContextSelector)
+                            {
+                                <RestaurantContextSelector Host="this" />
+                            }
+                            @if (module == "daily-orders-report" && !ShowRestaurantContextSelector)
+                            {
+                                <div class="restaurant-context">
+                                    <label>
+                                        <span>Local de trabajo</span>
+                                        <span class="restaurant-context-value">@RestaurantName(restaurantId)</span>
+                                    </label>
+                                </div>
+                            }
+                            @if (RefreshLabel is { } refreshLabel)
+                            {
+                                <button class="secondary" @onclick="RefreshCurrentModule" disabled="@busy">@refreshLabel</button>
+                            }
+                        </div>
+                    }
+                </div>
+
+                @if (module == "catalog-design")
+                {
+                    @if (IsCurrentRestaurantManager)
+                    {
+                        <CatalogDesignModule Host="this" @ref="catalogDesignModule" />
+                    }
+                    else
+                    {
+
+                        <NoAccessPanel />
+                    }
+                }
+                else if (module == "orders")
+                {
+                    @if (OrderRestaurants.Count > 0)
+                    {
+                        <OrdersModule Host="this" />
+                    }
+                    else
+                    {
+
+                        <NoAccessPanel />
+                    }
+                }
+                else if (module == "daily-orders-report")
+                {
+                    @if (ReportRestaurants.Count > 0)
+                    {
+                        <DailySalesModule Host="this" />
+                    }
+                    else
+                    {
+                        <NoAccessPanel />
+                    }
+                }
+                else if (module == "stations")
+                {
+                    @if (IsCurrentRestaurantManager)
+                    {
+                        <StationsModule Host="this" />
+                    }
+                    else
+                    {
+
+                        <NoAccessPanel />
+                    }
+                }
+                else if (module == "categories")
+                {
+                    <CategoriesModule Host="this" />
+                }
+                else if (module == "products")
+                {
+                    <ProductsModule Host="this" />
+                }
+                else if (module == "taxes")
+                {
+                    <TaxesModule Host="this" @ref="taxesModule" />
+                }
+                else if (module == "allergens")
+                {
+                    <AllergensModule Host="this" @ref="allergensModule" />
+                }
+                else if (module == "restaurants")
+                {
+                    <RestaurantsModule Host="this" />
+                }
+                else if (module == "companies")
+                {
+                    <CompaniesModule Host="this" />
+                }
+                else if (module == "users")
+                {
+                    <UsersModule Host="this" />
+                }
+                else if (module == "tables")
+                {
+                    <TablesModule Host="this" />
+                }
+                else if (module == "zones")
+                {
+                    <ZonesModule Host="this" />
+                }
+            </section>
+        </main>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div class="toast @(ok ? "ok" : "error")">@message</div>
+    }
+}
+@if (selectedSale is SaleResponse sale)
+{
+    ManagementOrderResponse? saleOrder = SaleOrderContext(sale);
+    <div class="order-details-overlay">
+        <article class="order-details sales-receipt">
+            <div class="order-details-actions">
+                <button class="primary receipt-icon-button" @onclick="PrintSaleTicket" aria-label="Imprimir ticket de venta" title="Imprimir con Chrome">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                        <path d="M6 14h12v7H6zM18 12h.01" />
+                    </svg>
+                </button>
+                <button class="ghost receipt-icon-button" @onclick="CloseSaleTicket" aria-label="Cerrar ticket de venta" title="Cerrar">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <path d="m18 6-12 12M6 6l12 12" />
+                    </svg>
+                </button>
             </div>
-
-            @if (module == "menu")
+            <header class="account-preview-header">
+                <p class="eyebrow">TICKET DE VENTA</p>
+                <h2>@RestaurantName(sale.RestaurantId)</h2>
+                @if (RestaurantFor(sale.RestaurantId)?.Company is RestaurantCompanyResponse company)
+                {
+                    <p>@company.LegalName</p>
+                    <p>@company.FiscalAddress</p>
+                    <p>CIF: @company.TaxId</p>
+                    @if (!string.IsNullOrWhiteSpace(company.Phone))
+                    {
+                        <p>Tlf.: @company.Phone</p>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(company.Email))
+                    {
+                        <p>Email: @company.Email</p>
+                    }
+                }
+                else if (!string.IsNullOrWhiteSpace(RestaurantFor(sale.RestaurantId)?.Address))
+                {
+                    <p>@RestaurantFor(sale.RestaurantId)!.Address</p>
+                }
+                <p>Ticket: @sale.Id.ToString("N").ToUpperInvariant()</p>
+                <p>Fecha: @sale.CompletedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</p>
+                @if (saleOrder is not null)
+                {
+                    <p>@(string.IsNullOrEmpty(saleOrder.TableLabel) ? saleOrder.CustomerName : saleOrder.TableLabel)</p>
+                    @if (saleOrder.GuestCount is int guests && guests > 0)
+                    {
+                        <p>Comensales: @guests</p>
+                    }
+                }
+            </header>
+            <div class="account-preview-lines">
+            @if (sale.Lines.Count > 0)
             {
-                <MenuModule Host="this" />
+                @foreach (SaleLineSnapshot line in sale.Lines)
+                {
+                    <div class="account-preview-line">
+                        <span>@line.Quantity × @line.ProductName@(!string.IsNullOrWhiteSpace(line.Format) ? $" · {TicketFormatLabel(line.Format)}" : "")</span>
+                        <strong>@((line.Quantity * (line.BaseUnitPrice ?? line.UnitPrice)).ToString("0.00")) €</strong>
+                    </div>
+                    @foreach (SaleLineExtraSnapshot extra in line.Extras ?? [])
+                    {
+                        <div class="account-preview-extra"><span>↳ @(line.Quantity * extra.Quantity) × @extra.ProductName</span><strong>@((line.Quantity * extra.Quantity * extra.UnitPrice).ToString("0.00")) €</strong></div>
+                    }
+                }
             }
-            else if (module == "stations")
+            else
             {
-                <StationsModule Host="this" />
+                @foreach (ManagementOrderResponse relatedOrder in historyOrders.Where(order => sale.OrderIds.Contains(order.Id)))
+                {
+                    @foreach (ManagementOrderLineResponse line in relatedOrder.Lines.Where(line => line.Status != "Cancelled"))
+                    {
+                        <div class="account-preview-line">
+                            <span>@line.Quantity × @line.ProductName@(!string.IsNullOrWhiteSpace(line.Format) ? $" · {TicketFormatLabel(line.Format)}" : "")</span>
+                            <strong>@((line.Quantity * (line.BaseUnitPrice ?? line.UnitPrice)).ToString("0.00")) €</strong>
+                        </div>
+                        @foreach (ManagementOrderExtraResponse extra in line.Extras ?? [])
+                        {
+                            <div class="account-preview-extra"><span>↳ @(line.Quantity * extra.Quantity) × @extra.ProductName</span><strong>@((line.Quantity * extra.Quantity * extra.UnitPrice).ToString("0.00")) €</strong></div>
+                        }
+                    }
+                }
             }
-            else if (module == "categories")
+            </div>
+            <div class="account-preview-total">
+                @if (sale.DiscountAmount > 0)
+                {
+                    <div class="account-preview-discount"><span>Descuento (@sale.DiscountPercentage.ToString("0.##") %)</span><strong>-@sale.DiscountAmount.ToString("0.00") €</strong></div>
+                }
+                <span>Total (IVA incluido)</span><strong>@sale.Total.ToString("0.00") €</strong>
+            </div>
+            @if (saleOrder?.GuestCount is int diners && diners > 0)
             {
-                <CategoriesModule Host="this" />
+                <p class="account-preview-per-person">Total por comensal (@diners): @Math.Round(sale.Total / diners, 2, MidpointRounding.AwayFromZero).ToString("0.00") €</p>
             }
-            else if (module == "products")
-            {
-                <ProductsModule Host="this" />
-            }
-            else if (module == "restaurants")
-            {
-                <RestaurantsModule Host="this" />
-            }
-            else if (module == "users")
-            {
-                <UsersModule Host="this" />
-            }
-            else if (module == "tables")
-            {
-                <TablesModule Host="this" />
-            }
-        </section>
-    </main>
-    @if (!string.IsNullOrWhiteSpace(message)) { <div class="toast @(ok ? "ok" : "error")">@message</div> }
+            <section class="account-preview-tips" aria-label="Detalle del pago">
+                @if (sale.PaymentMethods is { Count: > 0 })
+                {
+                    @foreach (SalePaymentBreakdown payment in sale.PaymentMethods)
+                    {
+                        <div><span>Medio de pago · @PaymentMethodLabel(payment.Method)</span><strong>@payment.Amount.ToString("0.00") €</strong></div>
+                    }
+                }
+                else
+                {
+                    <div><span>Medio de pago</span><strong>@(sale.PaymentMethod == "Mixed" ? "Sin desglose disponible" : PaymentMethodLabel(sale.PaymentMethod))</strong></div>
+                }
+                @if (sale.TipTotal > 0)
+                {
+                    <div><span>Propina</span><strong>@sale.TipTotal.ToString("0.00") €</strong></div>
+                }
+                <div><span>Total cobrado</span><strong>@((sale.Total + sale.TipTotal).ToString("0.00")) €</strong></div>
+            </section>
+            <p class="account-preview-footer">Gracias por su visita.</p>
+        </article>
+    </div>
 }

@@ -18,11 +18,20 @@ public sealed class RestaurantCommandService(IRestaurantWriteStore store, TimePr
             return null;
         }
 
+        if (
+            request.CompanyId is not Guid companyId
+            || !await store.CompanyExistsAsync(companyId, cancellationToken)
+        )
+        {
+            return null;
+        }
+
         DateTime now = timeProvider.GetUtcNow().UtcDateTime;
         Restaurant restaurant = Restaurant.Create(
             normalizedCode,
             request.Name,
             request.Address,
+            companyId,
             now
         );
         await store.SaveWithEventAsync(
@@ -46,18 +55,55 @@ public sealed class RestaurantCommandService(IRestaurantWriteStore store, TimePr
             return null;
         }
 
-        restaurant.Update(
-            request.Name,
-            request.Address,
-            request.IsActive,
-            timeProvider.GetUtcNow().UtcDateTime
-        );
+        restaurant.Update(request.Name, request.Address, timeProvider.GetUtcNow().UtcDateTime);
         await store.SaveWithEventAsync(
             restaurant,
             ToIntegrationEvent(restaurant),
             cancellationToken
         );
 
+        return ToResponse(restaurant);
+    }
+
+    public async Task<RestaurantResponse?> SetCompanyAsync(
+        Guid id,
+        Guid companyId,
+        CancellationToken cancellationToken
+    )
+    {
+        Restaurant? restaurant = await store.FindAsync(id, cancellationToken);
+        if (restaurant is null || !await store.CompanyExistsAsync(companyId, cancellationToken))
+        {
+            return null;
+        }
+
+        restaurant.SetCompany(companyId, timeProvider.GetUtcNow().UtcDateTime);
+        await store.SaveWithEventAsync(
+            restaurant,
+            ToIntegrationEvent(restaurant),
+            cancellationToken
+        );
+        return ToResponse(restaurant);
+    }
+
+    public async Task<RestaurantResponse?> SetActiveAsync(
+        Guid id,
+        bool isActive,
+        CancellationToken cancellationToken
+    )
+    {
+        Restaurant? restaurant = await store.FindAsync(id, cancellationToken);
+        if (restaurant is null)
+        {
+            return null;
+        }
+
+        restaurant.SetActive(isActive, timeProvider.GetUtcNow().UtcDateTime);
+        await store.SaveWithEventAsync(
+            restaurant,
+            ToIntegrationEvent(restaurant),
+            cancellationToken
+        );
         return ToResponse(restaurant);
     }
 
@@ -68,6 +114,7 @@ public sealed class RestaurantCommandService(IRestaurantWriteStore store, TimePr
             restaurant.Code,
             restaurant.Name,
             restaurant.Address,
+            restaurant.CompanyId,
             restaurant.IsActive,
             restaurant.Version,
             restaurant.UpdatedAtUtc
@@ -81,6 +128,7 @@ public sealed class RestaurantCommandService(IRestaurantWriteStore store, TimePr
             restaurant.Code,
             restaurant.Name,
             restaurant.Address,
+            restaurant.CompanyId,
             restaurant.IsActive,
             restaurant.Version,
             restaurant.UpdatedAtUtc

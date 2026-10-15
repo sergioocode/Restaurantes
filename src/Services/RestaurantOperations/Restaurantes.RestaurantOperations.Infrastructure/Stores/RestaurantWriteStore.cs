@@ -10,6 +10,9 @@ namespace Restaurantes.RestaurantOperations.Infrastructure.Stores;
 
 public sealed class RestaurantWriteStore(RestaurantWriteDbContext dbContext) : IRestaurantWriteStore
 {
+    public Task<bool> CompanyExistsAsync(Guid companyId, CancellationToken cancellationToken) =>
+        dbContext.Companies.AnyAsync(item => item.Id == companyId, cancellationToken);
+
     public Task<bool> CodeExistsAsync(string normalizedCode, CancellationToken cancellationToken)
     {
         return dbContext.Restaurants.AnyAsync(

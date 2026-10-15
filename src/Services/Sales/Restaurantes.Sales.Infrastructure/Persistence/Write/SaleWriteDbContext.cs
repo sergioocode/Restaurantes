@@ -9,6 +9,7 @@ public sealed class SaleWriteDbContext(DbContextOptions<SaleWriteDbContext> opti
 {
     public DbSet<Sale> Sales => Set<Sale>();
     public DbSet<SaleOrder> SaleOrders => Set<SaleOrder>();
+    public DbSet<SalePayment> SalePayments => Set<SalePayment>();
     public DbSet<DeliveredOrderMarker> DeliveredOrders => Set<DeliveredOrderMarker>();
     public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
@@ -22,7 +23,14 @@ public sealed class SaleWriteDbContext(DbContextOptions<SaleWriteDbContext> opti
         sale.Property(item => item.PaymentMethod).HasMaxLength(30).IsRequired();
         sale.Property(item => item.Status).HasMaxLength(30).IsRequired();
         sale.Property(item => item.Total).HasPrecision(12, 2);
+        sale.Property(item => item.DiscountName).HasMaxLength(100);
+        sale.Property(item => item.DiscountPercentage).HasPrecision(5, 2);
+        sale.Property(item => item.DiscountAmount).HasPrecision(12, 2);
         sale.HasMany(item => item.Orders)
+            .WithOne()
+            .HasForeignKey(item => item.SaleId)
+            .OnDelete(DeleteBehavior.Cascade);
+        sale.HasMany(item => item.Payments)
             .WithOne()
             .HasForeignKey(item => item.SaleId)
             .OnDelete(DeleteBehavior.Cascade);
@@ -32,8 +40,20 @@ public sealed class SaleWriteDbContext(DbContextOptions<SaleWriteDbContext> opti
         order.ToTable("sale_orders");
         order.HasKey(item => new { item.SaleId, item.OrderId });
         order.Property(item => item.Amount).HasPrecision(12, 2);
+        order.Property(item => item.DiscountName).HasMaxLength(100);
+        order.Property(item => item.DiscountPercentage).HasPrecision(5, 2);
+        order.Property(item => item.DiscountAmount).HasPrecision(12, 2);
         order.Property(item => item.LinesJson).HasColumnType("jsonb").IsRequired();
         order.HasIndex(item => item.OrderId).IsUnique();
+
+        EntityTypeBuilder<SalePayment> payment = modelBuilder.Entity<SalePayment>();
+        payment.ToTable("sale_payments");
+        payment.Property(item => item.PaymentId).ValueGeneratedNever();
+        payment.HasKey(item => item.PaymentId);
+        payment.Property(item => item.Method).HasMaxLength(30).IsRequired();
+        payment.Property(item => item.Amount).HasPrecision(12, 2);
+        payment.Property(item => item.TipAmount).HasPrecision(12, 2);
+        payment.HasIndex(item => item.SaleId);
 
         EntityTypeBuilder<DeliveredOrderMarker> marker =
             modelBuilder.Entity<DeliveredOrderMarker>();

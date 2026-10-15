@@ -17,9 +17,21 @@ public sealed class RestaurantReadStore(RestaurantReadDbContext dbContext) : IRe
                 item.Code,
                 item.Name,
                 item.Address,
+                item.CompanyId,
                 item.IsActive,
                 item.Version,
-                item.UpdatedAtUtc
+                item.UpdatedAtUtc,
+                dbContext
+                    .Companies.Where(company => company.Id == item.CompanyId)
+                    .Select(company => new RestaurantCompanyResponse(
+                        company.Id,
+                        company.LegalName,
+                        company.TaxId,
+                        company.FiscalAddress,
+                        company.Phone,
+                        company.Email
+                    ))
+                    .FirstOrDefault()
             ))
             .SingleOrDefaultAsync(cancellationToken);
     }
@@ -36,9 +48,21 @@ public sealed class RestaurantReadStore(RestaurantReadDbContext dbContext) : IRe
                 item.Code,
                 item.Name,
                 item.Address,
+                item.CompanyId,
                 item.IsActive,
                 item.Version,
-                item.UpdatedAtUtc
+                item.UpdatedAtUtc,
+                dbContext
+                    .Companies.Where(company => company.Id == item.CompanyId)
+                    .Select(company => new RestaurantCompanyResponse(
+                        company.Id,
+                        company.LegalName,
+                        company.TaxId,
+                        company.FiscalAddress,
+                        company.Phone,
+                        company.Email
+                    ))
+                    .FirstOrDefault()
             ))
             .ToListAsync(cancellationToken);
     }

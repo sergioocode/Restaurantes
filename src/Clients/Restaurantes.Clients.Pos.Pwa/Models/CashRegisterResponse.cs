@@ -1,4 +1,4 @@
-namespace Restaurantes.Clients.Pos.Pwa.Models;
+﻿namespace Restaurantes.Clients.Pos.Pwa.Models;
 
 public sealed record CashRegisterResponse(
     Guid Id,
@@ -7,9 +7,7 @@ public sealed record CashRegisterResponse(
     string Status,
     decimal OpeningFloat,
     decimal TotalSales,
-    decimal TotalRefunds,
     decimal CashSales,
-    decimal CashRefunds,
     decimal ExpectedCash,
     decimal ExpectedTotal,
     decimal? ReconciledTotal,

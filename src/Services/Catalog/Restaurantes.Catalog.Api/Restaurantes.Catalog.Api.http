@@ -1,0 +1,44 @@
+@catalogUrl = http://localhost:5131
+@restaurantId = 5c7811d9-b92c-4453-8f8a-4bdb9f089d31
+
+### Categorias proyectadas
+GET {{catalogUrl}}/api/catalog/categories
+
+### Productos proyectados
+GET {{catalogUrl}}/api/catalog/products
+
+### Carta disponible para un local
+GET {{catalogUrl}}/api/catalog/restaurants/{{restaurantId}}/menu
+
+### Crea datos: cambie code y sku antes de repetir
+# @name createCategory
+POST {{catalogUrl}}/api/catalog/categories
+Content-Type: application/json
+
+{
+  "code": "HTTP_BEBIDAS",
+  "name": "Bebidas HTTP",
+  "defaultStationCode": "BEBIDAS",
+  "defaultStationName": "Bebidas"
+}
+
+# @name createProduct
+POST {{catalogUrl}}/api/catalog/products
+Content-Type: application/json
+
+{
+  "sku": "HTTP_COLA_01",
+  "name": "Cola HTTP",
+  "categoryId": "{{createCategory.response.body.$.id}}"
+}
+
+### Añadir el producto al menu del local
+PUT {{catalogUrl}}/api/catalog/restaurants/{{restaurantId}}/products/{{createProduct.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "price": 3.50,
+  "isAvailable": true,
+  "preparationStationCode": "BEBIDAS",
+  "preparationStationName": "Bebidas"
+}

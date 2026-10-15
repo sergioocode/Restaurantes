@@ -1,5 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.4" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.4">
       <PrivateAssets>all</PrivateAssets>
@@ -9,7 +12,10 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Restaurantes.CashRegister.Application\Restaurantes.CashRegister.Application.csproj" />
+    <ProjectReference Include="..\Restaurantes.CashRegister.Contracts\Restaurantes.CashRegister.Contracts.csproj" />
     <ProjectReference Include="..\Restaurantes.CashRegister.Domain\Restaurantes.CashRegister.Domain.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Restaurantes.ServiceDefaults\Restaurantes.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Restaurantes.Messaging.RabbitMq\Restaurantes.Messaging.RabbitMq.csproj" />
+    <ProjectReference Include="..\..\Payments\Restaurantes.Payments.Contracts\Restaurantes.Payments.Contracts.csproj" />
   </ItemGroup>
 </Project>

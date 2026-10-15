@@ -22,7 +22,22 @@ public sealed partial class OrderCommandService
                 x.PreparationStationName,
                 x.Status.ToString(),
                 x.CancelledAtUtc,
-                x.CancellationReason
+                x.CancellationReason,
+                x.KitchenStatus.ToString(),
+                x.PreparationStartedAtUtc,
+                x.ReadyAtUtc,
+                x.DispatchedAtUtc,
+                x.Format,
+                x.BaseUnitPrice,
+                x.Extras.Select(extra => new OrderLineExtraSnapshot(
+                        extra.ProductId,
+                        extra.ProductName,
+                        extra.UnitPrice,
+                        extra.Quantity,
+                        extra.TaxRate
+                    ))
+                    .ToList(),
+                x.TaxRate
             ))
             .ToList();
     }
@@ -34,6 +49,7 @@ public sealed partial class OrderCommandService
             o.RestaurantId,
             o.TableId,
             o.GuestCount,
+            o.DiningSessionId,
             o.TableLabel,
             o.CustomerName,
             o.ServiceMode.ToString(),
@@ -57,6 +73,7 @@ public sealed partial class OrderCommandService
             o.RestaurantId,
             o.TableId,
             o.GuestCount,
+            o.DiningSessionId,
             o.TableLabel,
             o.CustomerName,
             o.ServiceMode.ToString(),
@@ -124,7 +141,22 @@ public sealed partial class OrderCommandService
                     x.PreparationStationName,
                     x.Status.ToString(),
                     x.CancelledAtUtc,
-                    x.CancellationReason
+                    x.CancellationReason,
+                    x.KitchenStatus.ToString(),
+                    x.PreparationStartedAtUtc,
+                    x.ReadyAtUtc,
+                    x.DispatchedAtUtc,
+                    x.Format,
+                    x.BaseUnitPrice,
+                    x.Extras.Select(extra => new OrderLineExtraSnapshot(
+                            extra.ProductId,
+                            extra.ProductName,
+                            extra.UnitPrice,
+                            extra.Quantity,
+                            extra.TaxRate
+                        ))
+                        .ToList(),
+                    x.TaxRate
                 ))
                 .ToList(),
             o.Stations.OrderBy(x => x.Code)

@@ -22,17 +22,11 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
     {
         return db
             .Tables.AsNoTracking()
+            .Include(x => x.Zone)
             .SingleOrDefaultAsync(
                 x => x.QrCode == code && x.DeletedAtUtc == null && x.IsActive,
                 ct
             );
-    }
-
-    public Task<DiningRestaurantPolicy?> ReadPolicyAsync(Guid restaurantId, CancellationToken ct)
-    {
-        return db
-            .RestaurantPolicies.AsNoTracking()
-            .SingleOrDefaultAsync(x => x.RestaurantId == restaurantId, ct);
     }
 
     public Task<DiningSession?> ReadActiveSessionWithOrdersAsync(Guid tableId, CancellationToken ct)
@@ -43,13 +37,19 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
             .SingleOrDefaultAsync(x => x.TableId == tableId && x.Status == "Open", ct);
     }
 
-    public Task<RestaurantTable?> LockTableAsync(Guid tableId, CancellationToken ct)
+    public async Task<RestaurantTable?> LockTableAsync(Guid tableId, CancellationToken ct)
     {
-        return db
+        RestaurantTable? table = await db
             .Tables.FromSqlInterpolated(
                 $"SELECT * FROM restaurant_tables WHERE \"Id\" = {tableId} FOR UPDATE"
             )
             .SingleOrDefaultAsync(ct);
+        if (table is not null)
+        {
+            await db.Entry(table).Reference(x => x.Zone).LoadAsync(ct);
+        }
+
+        return table;
     }
 
     public Task<bool> HasOpenSessionAsync(Guid tableId, CancellationToken ct)
@@ -57,16 +57,21 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
         return db.Sessions.AnyAsync(x => x.TableId == tableId && x.Status == "Open", ct);
     }
 
+    public Task<bool> HasSalesForTableAsync(Guid tableId, CancellationToken ct)
+    {
+        return db.Sessions.AnyAsync(
+            session =>
+                session.TableId == tableId
+                && (session.PaidAtUtc != null || session.Orders.Any(order => order.AmountPaid > 0)),
+            ct
+        );
+    }
+
     public Task<DiningSession> ReadRequiredActiveSessionAsync(Guid tableId, CancellationToken ct)
     {
         return db
             .Sessions.AsNoTracking()
             .SingleAsync(x => x.TableId == tableId && x.Status == "Open", ct);
-    }
-
-    public Task<DiningRestaurantPolicy?> FindPolicyAsync(Guid restaurantId, CancellationToken ct)
-    {
-        return db.RestaurantPolicies.SingleOrDefaultAsync(x => x.RestaurantId == restaurantId, ct);
     }
 
     public Task<Dictionary<Guid, DiningSession>> ReadActiveSessionsAsync(
@@ -90,13 +95,22 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
             .ToListAsync(ct);
     }
 
-    public Task<RestaurantTable?> LockQrTableAsync(string normalizedQrCode, CancellationToken ct)
+    public async Task<RestaurantTable?> LockQrTableAsync(
+        string normalizedQrCode,
+        CancellationToken ct
+    )
     {
-        return db
+        RestaurantTable? table = await db
             .Tables.FromSqlInterpolated(
                 $"SELECT * FROM restaurant_tables WHERE \"QrCode\" = {normalizedQrCode} FOR UPDATE"
             )
             .SingleOrDefaultAsync(ct);
+        if (table is not null)
+        {
+            await db.Entry(table).Reference(x => x.Zone).LoadAsync(ct);
+        }
+
+        return table;
     }
 
     public Task<DiningSession?> FindActiveSessionWithOrdersAsync(Guid tableId, CancellationToken ct)
@@ -133,15 +147,6 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
             );
     }
 
-    public Task<bool> AllowsEarlyCheckoutAsync(Guid restaurantId, CancellationToken ct)
-    {
-        return db
-            .RestaurantPolicies.AsNoTracking()
-            .Where(x => x.RestaurantId == restaurantId)
-            .Select(x => x.AllowCheckoutBeforeKitchenCompletion)
-            .SingleOrDefaultAsync(ct);
-    }
-
     public Task<DiningSession?> FindSessionWithOrdersAsync(Guid sessionId, CancellationToken ct)
     {
         return db.Sessions.Include(x => x.Orders).SingleOrDefaultAsync(x => x.Id == sessionId, ct);
@@ -172,14 +177,6 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
                 $"SELECT * FROM dining_zones WHERE \"Id\" = {zoneId} AND \"RestaurantId\" = {restaurantId} FOR UPDATE"
             )
             .SingleOrDefaultAsync(ct);
-    }
-
-    public Task<bool> HasTablesInZoneAsync(Guid restaurantId, Guid zoneId, CancellationToken ct)
-    {
-        return db.Tables.AnyAsync(
-            x => x.ZoneId == zoneId && x.RestaurantId == restaurantId && x.DeletedAtUtc == null,
-            ct
-        );
     }
 
     public void Add<T>(T entity)

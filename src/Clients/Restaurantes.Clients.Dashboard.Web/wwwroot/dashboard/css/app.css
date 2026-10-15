@@ -19,8 +19,12 @@ body.login-mode {
 
 #loginView,
 #authLoading {
-    width: min(430px, 100%);
-    padding: 32px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    width: min(460px, calc(100% - 32px));
+    min-height: 260px;
+    padding: 28px 36px;
     border: 1px solid #2c3b49;
     border-radius: 16px;
     background: #18212b;
@@ -31,6 +35,25 @@ body.login-mode {
     font-weight: 800;
     letter-spacing: .1em
 }
+
+.auth-brand {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-height: 52px;
+}
+
+.auth-brand img {
+    flex: 0 0 52px;
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    object-fit: contain;
+}
+
+.auth-brand div { display: grid; gap: 4px; }
+.auth-brand small { color: #9fb0c0; font-size: 11px; font-weight: 800; letter-spacing: .1em; }
+.auth-brand strong { font-size: clamp(32px, 7vw, 42px); line-height: 1.1; }
 
 #loginView h1 {
     margin: 8px 0;
@@ -50,18 +73,26 @@ body.login-mode {
 
 #loginForm {
     gap: 16px;
-    margin-top: 24px
+    margin-top: auto;
+    padding-top: 24px
 }
 
 #loginView input,
 #loginView button {
     width: 100%;
+    min-height: 48px;
     padding: 13px 14px;
     border-radius: 9px;
     font: inherit
 }
 
+#loginForm button { margin-top: 0; }
+.auth-progress { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: #9fb0c0; }
+.auth-spinner { width: 42px; height: 42px; border: 4px solid #496076; border-top-color: #62d98b; border-radius: 50%; animation: auth-spin .8s linear infinite; }
+@keyframes auth-spin { to { transform: rotate(360deg); } }
+
 #loginView button {
+    box-sizing: border-box;
     background: #246b47;
     border-color: #2f8a5d;
     font-weight: 850;
@@ -82,9 +113,12 @@ body.login-mode {
 }
 
 #loginError {
-    min-height: 24px;
+    min-height: 0;
+    margin-bottom: 0;
     color: #ff8b85 !important
 }
+
+#loginError:empty { display: none; }
 
 header {
     display: flex;
@@ -106,6 +140,35 @@ select {
     color: white;
     border: 1px solid #496076;
     border-radius: 6px
+}
+
+button {
+    cursor: pointer;
+    box-shadow: 0 2px 0 #0c1218, 0 3px 8px #0003;
+    transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+}
+
+button:hover:not(:disabled) {
+    filter: brightness(1.12);
+    box-shadow: 0 3px 0 #0c1218, 0 5px 12px #0005;
+}
+
+button:active:not(:disabled),
+button[aria-busy="true"] {
+    transform: translateY(2px);
+    box-shadow: 0 0 0 #0c1218, 0 1px 3px #0004;
+}
+
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+    outline: 2px solid #62d98b;
+    outline-offset: 2px;
+}
+
+button:disabled {
+    cursor: wait;
+    opacity: .8;
 }
 
 .grid {
@@ -170,15 +233,29 @@ small,
 
 .orders {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 10px
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    align-items: stretch
 }
 
 .order {
+    box-sizing: border-box;
+    width: 100%;
     border: 1px solid #344858;
     background: #121a22;
     border-radius: 8px;
     padding: 12px
+}
+
+.orders:has(> .order:only-child) > .order {
+    max-width: 620px
+}
+
+@media(max-width:1400px) {
+
+    .orders {
+        grid-template-columns: repeat(3, minmax(0, 1fr))
+    }
 }
 
 .order-head {
@@ -252,7 +329,26 @@ ul {
     margin: 7px 0
 }
 
-#restaurant { min-width: 340px }
+.line-complete-marker {
+    color: #74e29a;
+    font-weight: 800;
+}
+
+.line-waiting-marker {
+    color: #e4c76a;
+}
+
+.line-pending-marker,
+.line-preparing-marker,
+.line-complete-marker,
+.line-waiting-marker {
+    display: inline-block;
+    width: 1.25em;
+    text-align: center;
+}
+
+.filter-summary { display: grid; gap: 3px; min-width: 160px; color: #aebdcc; font-size: 12px; }
+.filter-summary strong { color: #fff; font-size: 14px; }
 
 .section-header {
     display: flex;
@@ -266,8 +362,19 @@ ul {
 
 @media(max-width:800px) {
 
+    .orders {
+        grid-template-columns: repeat(2, minmax(0, 1fr))
+    }
+
     .metric,
     .wide {
         grid-column: 1/-1
+    }
+}
+
+@media(max-width:520px) {
+
+    .orders {
+        grid-template-columns: 1fr
     }
 }

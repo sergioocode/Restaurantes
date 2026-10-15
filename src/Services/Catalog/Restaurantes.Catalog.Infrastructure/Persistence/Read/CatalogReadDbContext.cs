@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Restaurantes.Catalog.Infrastructure.Persistence.Read;
@@ -22,13 +22,13 @@ public sealed class CatalogReadDbContext(DbContextOptions<CatalogReadDbContext> 
         c.Property(x => x.Name).HasMaxLength(120).IsRequired();
         c.Property(x => x.DefaultStationCode).HasMaxLength(40).IsRequired();
         c.Property(x => x.DefaultStationName).HasMaxLength(80).IsRequired();
+        c.Property(x => x.RequiresKds).HasDefaultValue(true);
         EntityTypeBuilder<ProductReadModel> p = b.Entity<ProductReadModel>();
         p.ToTable("product_views");
         p.HasKey(x => x.Id);
         p.Property(x => x.Sku).HasMaxLength(60).IsRequired();
         p.HasIndex(x => x.Sku).IsUnique();
         p.Property(x => x.Name).HasMaxLength(160).IsRequired();
-        p.Property(x => x.BasePrice).HasPrecision(12, 2);
         EntityTypeBuilder<MenuItemReadModel> m = b.Entity<MenuItemReadModel>();
         m.ToTable("menu_item_views");
         m.HasKey(x => x.Id);
@@ -39,6 +39,7 @@ public sealed class CatalogReadDbContext(DbContextOptions<CatalogReadDbContext> 
         m.Property(x => x.Price).HasPrecision(12, 2);
         m.Property(x => x.PreparationStationCode).HasMaxLength(40).IsRequired();
         m.Property(x => x.PreparationStationName).HasMaxLength(80).IsRequired();
+        m.Property(x => x.RequiresKds).HasDefaultValue(true);
         m.HasIndex(x => new { x.RestaurantId, x.ProductId }).IsUnique();
         EntityTypeBuilder<KitchenStationReadModel> s = b.Entity<KitchenStationReadModel>();
         s.ToTable("kitchen_station_views");

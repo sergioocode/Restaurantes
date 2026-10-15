@@ -1,9 +1,10 @@
-namespace Restaurantes.CashRegister.Domain;
+﻿namespace Restaurantes.CashRegister.Domain;
 
 public enum CashMovementType
 {
     Sale,
-    Refund,
+    CardTender,
+    CashChange,
 }
 
 public sealed class CashMovement

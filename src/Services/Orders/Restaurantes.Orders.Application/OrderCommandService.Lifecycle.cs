@@ -30,6 +30,7 @@ public sealed partial class OrderCommandService
                 o.RestaurantId,
                 o.TableId,
                 o.GuestCount,
+                o.DiningSessionId,
                 o.TableLabel,
                 o.CustomerName,
                 o.ServiceMode.ToString(),
@@ -39,7 +40,10 @@ public sealed partial class OrderCommandService
                 o.CreatedAtUtc,
                 now,
                 Lines(o),
-                Stations(o)
+                Stations(o),
+                o.Status.ToString(),
+                o.ReadyAtUtc,
+                o.DeliveredAtUtc
             ),
             ct
         );

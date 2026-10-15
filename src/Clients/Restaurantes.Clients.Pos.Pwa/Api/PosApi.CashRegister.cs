@@ -1,4 +1,4 @@
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using Restaurantes.Clients.Pos.Pwa.Models;
 
 namespace Restaurantes.Clients.Pos.Pwa.Api;

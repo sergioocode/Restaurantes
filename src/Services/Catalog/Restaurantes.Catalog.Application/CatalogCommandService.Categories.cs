@@ -1,4 +1,4 @@
-using Restaurantes.Catalog.Contracts.Events;
+﻿using Restaurantes.Catalog.Contracts.Events;
 using Restaurantes.Catalog.Contracts.Requests;
 using Restaurantes.Catalog.Contracts.Responses;
 using Restaurantes.Catalog.Domain;
@@ -24,7 +24,11 @@ public sealed partial class CatalogCommandService
             request.Name,
             request.DefaultStationCode,
             request.DefaultStationName,
-            now
+            now,
+            request.ShowInPos,
+            request.ShowInCommander,
+            request.ShowInCustomerQr,
+            request.RequiresKds
         );
         CategoryChanged message = new(
             item.Id,
@@ -34,7 +38,11 @@ public sealed partial class CatalogCommandService
             item.DefaultStationName,
             item.IsActive,
             item.Version,
-            now
+            now,
+            item.ShowInPos,
+            item.ShowInCommander,
+            item.ShowInCustomerQr,
+            item.RequiresKds
         );
         await store.SaveWithEventAsync(item, message, ct);
         return new(
@@ -45,7 +53,11 @@ public sealed partial class CatalogCommandService
             item.DefaultStationName,
             item.IsActive,
             item.Version,
-            now
+            now,
+            item.ShowInPos,
+            item.ShowInCommander,
+            item.ShowInCustomerQr,
+            item.RequiresKds
         );
     }
 
@@ -67,7 +79,11 @@ public sealed partial class CatalogCommandService
             request.DefaultStationCode,
             request.DefaultStationName,
             request.IsActive,
-            now
+            now,
+            request.ShowInPos ?? item.ShowInPos,
+            request.ShowInCommander ?? item.ShowInCommander,
+            request.ShowInCustomerQr ?? item.ShowInCustomerQr,
+            request.RequiresKds ?? item.RequiresKds
         );
         CategoryChanged message = new(
             item.Id,
@@ -77,7 +93,11 @@ public sealed partial class CatalogCommandService
             item.DefaultStationName,
             item.IsActive,
             item.Version,
-            now
+            now,
+            item.ShowInPos,
+            item.ShowInCommander,
+            item.ShowInCustomerQr,
+            item.RequiresKds
         );
         await store.SaveWithEventAsync(item, message, ct);
         return new(
@@ -88,7 +108,11 @@ public sealed partial class CatalogCommandService
             item.DefaultStationName,
             item.IsActive,
             item.Version,
-            now
+            now,
+            item.ShowInPos,
+            item.ShowInCommander,
+            item.ShowInCustomerQr,
+            item.RequiresKds
         );
     }
 }

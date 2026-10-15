@@ -1,4 +1,6 @@
-﻿using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Restaurantes.Catalog.Contracts.Responses;
 using Restaurantes.Orders.Application;
 using Restaurantes.Orders.Infrastructure.Persistence.Write;
 
@@ -40,9 +42,47 @@ public sealed class OrderCatalogStore(OrderWriteDbContext dbContext) : IOrderCat
                     item.StationName,
                     configuration?.RequiresPrimaryDispatch ?? false,
                     configuration?.Priority ?? 1,
-                    item.IsAvailable
+                    item.IsAvailable,
+                    MapExtraGroups(item.ExtraGroupsJson),
+                    item.DefaultFormat,
+                    MapFormats(item.FormatsJson, item.DefaultFormat, item.Price),
+                    item.RequiresKds,
+                    item.TaxRate
                 );
             }
         );
+    }
+
+    private static OrderExtraGroup[] MapExtraGroups(string json)
+    {
+        ProductExtraGroup[] groups = JsonSerializer.Deserialize<ProductExtraGroup[]>(json) ?? [];
+        return groups
+            .Select(group => new OrderExtraGroup(
+                group.Id,
+                group.Name,
+                group.MinSelections,
+                group.MaxSelections,
+                group
+                    .Options.Select(option => new OrderExtraOption(
+                        option.ProductId,
+                        option.ProductName,
+                        option.Price,
+                        option.TaxRate
+                    ))
+                    .ToArray()
+            ))
+            .ToArray();
+    }
+
+    private static OrderCatalogFormat[] MapFormats(
+        string json,
+        string defaultFormat,
+        decimal defaultPrice
+    )
+    {
+        OrderCatalogFormat[] formats = JsonSerializer.Deserialize<OrderCatalogFormat[]>(json) ?? [];
+        return formats.Length == 0
+            ? [new OrderCatalogFormat(defaultFormat, defaultPrice)]
+            : formats;
     }
 }

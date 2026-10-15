@@ -1,4 +1,4 @@
-using Restaurantes.Identity.Domain;
+﻿using Restaurantes.Identity.Domain;
 
 namespace Restaurantes.Identity.Application;
 

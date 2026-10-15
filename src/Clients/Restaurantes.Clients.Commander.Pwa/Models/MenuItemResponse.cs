@@ -1,4 +1,4 @@
-namespace Restaurantes.Clients.Commander.Pwa.Models;
+﻿namespace Restaurantes.Clients.Commander.Pwa.Models;
 
 public sealed record MenuItemResponse(
     Guid RestaurantId,
@@ -11,5 +11,38 @@ public sealed record MenuItemResponse(
     decimal Price,
     bool IsAvailable,
     string PreparationStationCode,
-    string PreparationStationName
+    string PreparationStationName,
+    IReadOnlyList<ProductExtraGroup>? ExtraGroups = null,
+    string DefaultFormat = "PLATO",
+    IReadOnlyList<MenuItemFormatPrice>? Formats = null
 );
+
+public sealed record MenuItemFormatPrice(string Format, decimal Price);
+
+public sealed record ProductExtraGroup(
+    Guid Id,
+    string Name,
+    int MinSelections,
+    int MaxSelections,
+    IReadOnlyList<ProductExtraOption> Options
+);
+
+public sealed record ProductExtraOption(
+    Guid ProductId,
+    string Sku,
+    string ProductName,
+    decimal Price
+);
+
+public sealed class CommanderCartLine
+{
+    public Guid Id { get; init; } = Guid.NewGuid();
+    public Guid ProductId { get; init; }
+    public string Format { get; init; } = "PLATO";
+    public decimal BasePrice { get; init; }
+    public decimal ExpectedUnitPrice { get; set; }
+    public int Quantity { get; set; } = 1;
+    public List<CommanderCartExtra> Extras { get; init; } = [];
+}
+
+public sealed record CommanderCartExtra(Guid GroupId, Guid ProductId, int Quantity);

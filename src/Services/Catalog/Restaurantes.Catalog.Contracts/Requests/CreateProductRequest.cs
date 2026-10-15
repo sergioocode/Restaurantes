@@ -10,7 +10,4 @@ public sealed class CreateProductRequest
     [Required, StringLength(160)]
     public string Name { get; init; } = "";
     public Guid CategoryId { get; init; }
-
-    [Range(typeof(decimal), "0", "9999999")]
-    public decimal BasePrice { get; init; }
 }

@@ -24,9 +24,14 @@ namespace Restaurantes.Orders.Infrastructure.Persistence.Write.Migrations
 
             modelBuilder.Entity("Restaurantes.Orders.Domain.Order", b =>
                 {
-                    b.Property<int?>("GuestCount").HasColumnType("integer");
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("BusinessDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("CashRegisterSessionId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAtUtc")
@@ -42,6 +47,9 @@ namespace Restaurantes.Orders.Infrastructure.Persistence.Write.Migrations
 
                     b.Property<Guid?>("DiningSessionId")
                         .HasColumnType("uuid");
+
+                    b.Property<int?>("GuestCount")
+                        .HasColumnType("integer");
 
                     b.Property<int>("PaymentTiming")
                         .HasColumnType("integer");
@@ -80,6 +88,8 @@ namespace Restaurantes.Orders.Infrastructure.Persistence.Write.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("RestaurantId", "BusinessDate", "CashRegisterSessionId");
 
                     b.HasIndex("RestaurantId", "Status", "CreatedAtUtc");
 
@@ -145,6 +155,32 @@ namespace Restaurantes.Orders.Infrastructure.Persistence.Write.Migrations
                     b.Property<DateTime?>("CancelledAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("DispatchedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Format")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<decimal>("BaseUnitPrice")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<decimal?>("TaxRate")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<string>("ExtrasJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValueSql("'[]'::jsonb");
+
+                    b.Property<int>("KitchenStatus")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.Property<Guid?>("CategoryId")
                         .HasColumnType("uuid");
 
@@ -177,6 +213,9 @@ namespace Restaurantes.Orders.Infrastructure.Persistence.Write.Migrations
                         .HasColumnType("character varying(80)")
                         .HasDefaultValue("General");
 
+                    b.Property<DateTime?>("PreparationStartedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("ProductId")
                         .HasColumnType("uuid");
 
@@ -190,6 +229,9 @@ namespace Restaurantes.Orders.Infrastructure.Persistence.Write.Migrations
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ReadyAtUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<decimal>("UnitPrice")
                         .HasPrecision(12, 2)
@@ -243,6 +285,19 @@ namespace Restaurantes.Orders.Infrastructure.Persistence.Write.Migrations
                     b.Property<Guid>("CategoryId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("DefaultFormat")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("ExtraGroupsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("FormatsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
                     b.Property<string>("CategoryName")
                         .IsRequired()
                         .HasMaxLength(120)
@@ -255,8 +310,17 @@ namespace Restaurantes.Orders.Infrastructure.Persistence.Write.Migrations
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
 
+                    b.Property<decimal?>("TaxRate")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
                     b.Property<Guid>("ProductId")
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("RequiresKds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
 
                     b.Property<string>("ProductName")
                         .IsRequired()
@@ -295,6 +359,7 @@ namespace Restaurantes.Orders.Infrastructure.Persistence.Write.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
 
                     b.Property<string>("Code")
                         .IsRequired()
@@ -344,6 +409,13 @@ namespace Restaurantes.Orders.Infrastructure.Persistence.Write.Migrations
                     b.Property<decimal>("Amount")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
+
+                    b.Property<DateTime?>("CapturedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Method")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
 
                     b.Property<Guid>("PaymentId")
                         .HasColumnType("uuid");

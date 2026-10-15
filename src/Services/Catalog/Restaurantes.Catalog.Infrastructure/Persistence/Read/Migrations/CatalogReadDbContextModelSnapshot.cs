@@ -51,6 +51,20 @@ namespace Restaurantes.Catalog.Infrastructure.Persistence.Read.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
+                    b.Property<bool>("RequiresKds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("ShowInCommander")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("ShowInCustomerQr")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("ShowInPos")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -177,6 +191,11 @@ namespace Restaurantes.Catalog.Infrastructure.Persistence.Read.Migrations
                         .HasMaxLength(160)
                         .HasColumnType("character varying(160)");
 
+                    b.Property<bool>("RequiresKds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<Guid>("RestaurantId")
                         .HasColumnType("uuid");
 
@@ -204,10 +223,6 @@ namespace Restaurantes.Catalog.Infrastructure.Persistence.Read.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
-
-                    b.Property<decimal>("BasePrice")
-                        .HasPrecision(12, 2)
-                        .HasColumnType("numeric(12,2)");
 
                     b.Property<Guid>("CategoryId")
                         .HasColumnType("uuid");

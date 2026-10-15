@@ -4,8 +4,17 @@ using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Restaurantes.Clients.Backoffice.Pwa;
 using Restaurantes.Clients.Backoffice.Pwa.Api;
 using Restaurantes.Clients.Backoffice.Pwa.Security;
+using Syncfusion.Blazor;
+using Syncfusion.Licensing;
 
 WebAssemblyHostBuilder builder = WebAssemblyHostBuilder.CreateDefault(args);
+string? syncfusionLicenseKey = builder.Configuration["Syncfusion:LicenseKey"];
+if (!string.IsNullOrWhiteSpace(syncfusionLicenseKey))
+{
+    SyncfusionLicenseProvider.RegisterLicense(syncfusionLicenseKey);
+}
+
+builder.Services.AddSyncfusionBlazor();
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 Uri applicationUri = new(builder.HostEnvironment.BaseAddress);

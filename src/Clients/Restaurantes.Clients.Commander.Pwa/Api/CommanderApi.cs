@@ -1,4 +1,4 @@
-namespace Restaurantes.Clients.Commander.Pwa.Api;
+﻿namespace Restaurantes.Clients.Commander.Pwa.Api;
 
 public sealed partial class CommanderApi(HttpClient http)
 {

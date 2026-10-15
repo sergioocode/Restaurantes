@@ -1,0 +1,96 @@
+@using Restaurantes.Clients.Backoffice.Pwa.Models
+@inject Restaurantes.Clients.Backoffice.Pwa.Api.BackofficeApi Api
+
+@if (!string.IsNullOrWhiteSpace(status)) { <p role="status">@status</p> }
+@if (snapshot is not null)
+{
+    <div class="maintenance-list">
+        @foreach (IGrouping<Guid, ProductResponse> group in DefaultProducts().GroupBy(x => x.CategoryId)
+            .OrderBy(x => Host.categories.FirstOrDefault(c => c.Id == x.Key)?.Name ?? "Sin categoría"))
+        {
+            <section class="product-category-group">
+                <h2>@(Host.categories.FirstOrDefault(c => c.Id == group.Key)?.Name ?? "Sin categoría")</h2>
+                @foreach (ProductResponse item in group.OrderBy(x => x.Name).ThenBy(x => x.Sku))
+                {
+                    <article @key="item.Id" class="maintenance-row product-maintenance local-product-maintenance @(availability.GetValueOrDefault(item.Id) ? "" : "inactive")">
+                        <div>
+                            @if (snapshot.ProductPhotos.FirstOrDefault(x => x.ProductId == item.Id) is { } photo)
+                            {
+                                <img class="product-thumb" src="@($"/api/catalog/products/{item.Id}/photos/small?v={photo.Revision}")" alt="" loading="lazy" width="64" height="64" />
+                            }
+                            <strong>@item.Sku</strong>
+                        </div>
+                        <label>Nombre<input value="@item.Name" readonly /></label>
+                        <label>Categoría<select value="@item.CategoryId" disabled>
+                            @foreach (CategoryResponse category in Host.categories) { <option value="@category.Id">@category.Name</option> }
+                        </select></label>
+                        <label class="availability"><input type="checkbox" checked="@availability[item.Id]" @onchange="args => Save(item.Id, args)" disabled="@(busy || !item.IsActive)" /> Activo</label>
+                        <ProductSettings Product="item" Host="Host" Snapshot="snapshot" ReadOnly="true" />
+                    </article>
+                }
+            </section>
+        }
+    </div>
+}
+@code {
+    [Parameter, EditorRequired] public Home Host { get; set; } = default!;
+    private CatalogDesignSnapshot? snapshot;
+    private Dictionary<Guid, bool> availability = [];
+    private Guid lastRestaurantId;
+    private string? status;
+    private bool busy;
+
+    protected override async Task OnInitializedAsync() => await Refresh();
+
+    protected override void OnParametersSet()
+    {
+        if (lastRestaurantId == Host.restaurantId) return;
+        lastRestaurantId = Host.restaurantId;
+        LoadAvailability();
+    }
+
+    internal async Task Refresh()
+    {
+        busy = true;
+        status = null;
+        try
+        {
+            await Host.RefreshModule();
+            snapshot = await Api.CatalogDesignAsync();
+            lastRestaurantId = Host.restaurantId;
+            LoadAvailability();
+        }
+        catch (Exception error) { status = error.Message; }
+        finally { busy = false; }
+    }
+
+    private IEnumerable<ProductResponse> DefaultProducts()
+    {
+        return snapshot?.Products ?? [];
+    }
+
+    private void LoadAvailability() => availability = DefaultProducts().ToDictionary(x => x.Id,
+        x => x.IsActive && (snapshot?.LocalAvailability.FirstOrDefault(a =>
+            a.RestaurantId == Host.restaurantId && a.ProductId == x.Id)?.IsAvailable ?? false));
+
+    private async Task Save(Guid productId, ChangeEventArgs args)
+    {
+        if (busy || !availability.TryGetValue(productId, out bool previous)) return;
+        bool selected = args.Value is bool value && value;
+        busy = true;
+        status = null;
+        availability[productId] = selected;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            await Api.SetLocalProductAvailabilityAsync(Host.restaurantId, productId, selected);
+        }
+        catch (Exception error)
+        {
+            availability[productId] = previous;
+            status = error.Message;
+        }
+        finally { busy = false; }
+    }
+
+}

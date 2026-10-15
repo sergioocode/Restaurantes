@@ -1,4 +1,4 @@
-using Restaurantes.Clients.CustomerQr.Pwa.Models;
+﻿using Restaurantes.Clients.CustomerQr.Pwa.Models;
 
 namespace Restaurantes.Clients.CustomerQr.Pwa.Api;
 
@@ -7,7 +7,7 @@ public sealed partial class CustomerQrApi
     public async Task<List<MenuItemResponse>> MenuAsync(Guid restaurantId)
     {
         using HttpResponseMessage response = await http.GetAsync(
-            $"/api/catalog/restaurants/{restaurantId}/menu"
+            $"/api/catalog/restaurants/{restaurantId}/menu?channel=CustomerQr"
         );
         return await ReadAsync<List<MenuItemResponse>>(response);
     }

@@ -27,7 +27,7 @@ public sealed partial class CommanderApi
             HttpMethod.Post,
             $"/api/dining/tables/{tableId}/sessions"
         );
-        request.Content = JsonContent.Create(new { source = "WaiterMobile" });
+        request.Content = JsonContent.Create(new { source = "Comandero" });
         using HttpResponseMessage response = await http.SendAsync(request);
         return await ReadAsync<DiningSessionResponse>(response);
     }
@@ -47,8 +47,49 @@ public sealed partial class CommanderApi
         return await ReadAsync<DiningSessionResponse>(response);
     }
 
+    public async Task<DiningSessionResponse> CloseSessionAsync(Guid sessionId)
+    {
+        using HttpRequestMessage request = Authorized(
+            HttpMethod.Post,
+            $"/api/dining/sessions/{sessionId}/close"
+        );
+        using HttpResponseMessage response = await http.SendAsync(request);
+        return await ReadAsync<DiningSessionResponse>(response);
+    }
+
     public Task<SessionBillResponse> BillAsync(Guid sessionId)
     {
         return GetAsync<SessionBillResponse>($"/api/dining/sessions/{sessionId}/bill");
     }
+
+    public async Task<SessionBillResponse> CheckoutAsync(
+        Guid sessionId,
+        Guid idempotencyKey,
+        string method,
+        string externalReference,
+        decimal tipAmount,
+        decimal amountReceived,
+        IReadOnlyList<CheckoutOrderAllocation> allocations
+    )
+    {
+        using HttpRequestMessage request = Authorized(
+            HttpMethod.Post,
+            $"/api/dining/sessions/{sessionId}/checkout"
+        );
+        request.Content = JsonContent.Create(
+            new
+            {
+                idempotencyKey,
+                method,
+                externalReference,
+                tipAmount,
+                amountReceived,
+                allocations,
+            }
+        );
+        using HttpResponseMessage response = await http.SendAsync(request);
+        return await ReadAsync<SessionBillResponse>(response);
+    }
+
+    public sealed record CheckoutOrderAllocation(Guid OrderId, decimal Amount);
 }

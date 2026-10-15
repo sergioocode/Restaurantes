@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 
 namespace Restaurantes.Clients.CustomerQr.Pwa.Api;
 

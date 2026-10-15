@@ -6,7 +6,10 @@ const $ = id => document.getElementById(id),
     }),
     gatewayOrigin = location.origin,
     sessionKey = 'restaurantes.dashboard.login';
-let timer, access, socket, realtimeGeneration = 0, deadLetterRefreshAt = 0;
+let timer, healthTimer, realtimeRefreshTimer, access, socket, realtimeGeneration = 0, deadLetterRefreshAt = 0, deadLetterRequestGeneration = 0;
+let dashboardLoadPromise = null, dashboardRefreshPending = false;
+let restaurantNames = new Map();
+let dashboardRestaurantIds = [];
 const today = new Date();
 $('date').value = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
 
@@ -41,25 +44,56 @@ async function loadProvider() {
     $('loginGoogle').disabled = settings.activeProvider !== 'Google' || !settings.googleConfigured;
 }
 
-async function load() {
+async function loadOnce() {
+    const requestedDate = $('date').value;
+    const requestedOrderLimit = $('orderLimit').value;
     try {
         const params = new URLSearchParams();
-        if ($('date').value) params.set('date', $('date').value);
-        if ($('restaurant').value) params.set('restaurantId', $('restaurant').value);
-        params.set('orderLimit', $('orderLimit').value);
-        const [d, h] = await Promise.all([authorizedFetch('/api/reporting/dashboard/daily?' + params).then(r => r.json()), authorizedFetch('/api/reporting/health').then(r => r.json()), loadDeadLetters()]);
+        if (requestedDate) params.set('date', requestedDate);
+        params.set('orderLimit', requestedOrderLimit);
+        const d = await authorizedFetch('/api/reporting/dashboard/daily?' + params).then(r => r.json());
+        if (
+            requestedDate !== $('date').value
+            || requestedOrderLimit !== $('orderLimit').value
+        ) return;
         $('sales').textContent = money.format(d.totalSales);
         $('orders').textContent = d.completedSales;
         $('average').textContent = money.format(d.averageTicket);
         fill($('products'), d.topProducts, x => `<td>${escapeHtml(x.name)}</td><td>${x.quantity}</td><td>${money.format(x.sales)}</td>`);
-        fill($('restaurants'), d.restaurantRanking, x => `<td>${short(x.restaurantId)}</td><td>${x.tickets}</td><td>${money.format(x.sales)}</td>`);
+        fill($('restaurants'), d.restaurantRanking, x => `<td>${escapeHtml(restaurantName(x.restaurantId))}</td><td>${x.tickets}</td><td>${money.format(x.sales)}</td>`);
         fill($('channels'), d.channels, x => `<td>${escapeHtml(x.source)}</td><td>${x.tickets}</td><td>${money.format(x.sales)}</td>`);
         fill($('paymentMethods'), d.paymentMethods, x => `<td>${escapeHtml(paymentMethodLabel(x.method))}</td><td>${x.tickets}</td><td>${money.format(x.sales)}</td>`);
-        fill($('health'), h, x => `<td>${escapeHtml(x.service)}</td><td class="${x.healthy ? 'ok' : 'bad'}">${x.healthy ? 'OK' : 'Error'} ${x.status || ''}</td>`);
         renderOperations(d.operationalOrders);
         $('state').textContent = 'Actualizado ' + new Date().toLocaleTimeString();
     } catch (e) {
-        $('state').textContent = 'Error: ' + e.message
+        if (access) $('state').textContent = 'Error: ' + e.message
+    }
+}
+
+function load() {
+    if (!access) return Promise.resolve();
+    dashboardRefreshPending = true;
+    if (dashboardLoadPromise) return dashboardLoadPromise;
+
+    const drain = async () => {
+        while (dashboardRefreshPending && access) {
+            dashboardRefreshPending = false;
+            await loadOnce();
+        }
+    };
+    dashboardLoadPromise = drain().finally(() => {
+        dashboardLoadPromise = null;
+        if (dashboardRefreshPending && access) void load();
+    });
+    return dashboardLoadPromise;
+}
+
+async function loadHealth() {
+    try {
+        const health = await authorizedFetch('/api/reporting/health').then(r => r.json());
+        fill($('health'), health, x => `<td>${escapeHtml(x.service)}</td><td class="${x.healthy ? 'ok' : 'bad'}">${x.healthy ? 'OK' : 'Error'} ${x.status || ''}</td>`)
+    } catch {
+        $('health').innerHTML = '<tr><td>Salud</td><td class="bad">Error al consultar</td></tr>'
     }
 }
 
@@ -73,6 +107,7 @@ async function loadDeadLetters() {
     const now = Date.now();
     if (now < deadLetterRefreshAt) return;
     deadLetterRefreshAt = now + 30000;
+    const requestGeneration = ++deadLetterRequestGeneration;
 
     try {
         const queues = await authorizedFetch('/api/reporting/dead-letters').then(r => r.json()),
@@ -80,18 +115,20 @@ async function loadDeadLetters() {
             unavailable = queues.filter(x => !x.available),
             total = pending.reduce((sum, x) => sum + x.messageCount, 0),
             hasAlert = total > 0 || unavailable.length > 0;
+        if (requestGeneration !== deadLetterRequestGeneration) return;
 
         alert.hidden = false;
         alert.className = 'dead-letter-alert ' + (hasAlert ? 'bad' : 'ok');
-        alert.textContent = total > 0 ? `⚠ DLQ ${total}` : unavailable.length > 0 ? '⚠ DLQ ?' : '✓ DLQ 0';
+        alert.textContent = (total > 0 ? `⚠ DLQ ${total}` : unavailable.length > 0 ? '⚠ DLQ ?' : '✓ DLQ 0') + ' · cada 30 s';
         alert.title = [
             ...pending.map(x => `${x.queue}: ${x.messageCount} pendiente${x.messageCount === 1 ? '' : 's'}`),
             ...unavailable.map(x => `${x.queue}: no disponible`)
         ].join('\n') || 'No hay mensajes muertos pendientes.'
     } catch (error) {
+        if (requestGeneration !== deadLetterRequestGeneration) return;
         alert.hidden = false;
         alert.className = 'dead-letter-alert bad';
-        alert.textContent = '⚠ DLQ ?';
+        alert.textContent = '⚠ DLQ ? · cada 30 s';
         alert.title = 'No se pudo consultar el estado de las colas de mensajes muertos.'
     }
 }
@@ -104,7 +141,7 @@ function check(r) {
 function authorizedFetch(path, options = {}) {
     const headers = new Headers(options.headers || {});
     headers.set('Authorization', 'Bearer ' + access.accessToken);
-    return fetch(gatewayOrigin + path, { ...options, headers }).then(check)
+    return fetch(gatewayOrigin + path, { ...options, headers, cache: 'no-store' }).then(check)
 }
 
 function fill(node, items, row) {
@@ -113,6 +150,10 @@ function fill(node, items, row) {
 
 function short(id) {
     return id ? id.slice(0, 8) : '-'
+}
+
+function restaurantName(id) {
+    return restaurantNames.get(id?.toLowerCase()) || 'Local ' + short(id)
 }
 
 function escapeHtml(v) {
@@ -133,6 +174,9 @@ function paymentMethodLabel(method) {
     return ({
         Card: 'Tarjeta',
         Cash: 'Efectivo',
+        Transfer: 'Transferencia',
+        Mixed: 'Mixto',
+        UnavailableBreakdown: 'Sin desglose',
         Online: 'Pago online',
         Check: 'Cheque',
         Cheque: 'Cheque',
@@ -146,32 +190,53 @@ function renderOperations(items) {
         all[item.restaurantId].push(item);
     return all
 }, { });
-$('operations').innerHTML = Object.entries(groups).map(([local, orders]) => `<section><h3 class="local">Local ${short(local)}</h3><div class="orders">${orders.map(renderOrder).join('')}</div></section>`).join('') || '<p>Sin pedidos para este día.</p>'
+$('operations').innerHTML = Object.entries(groups).map(([local, orders]) => `<section><h3 class="local">${escapeHtml(restaurantName(local))}</h3><div class="orders">${orders.map(renderOrder).join('')}</div></section>`).join('') || '<p>Sin pedidos para este día.</p>'
   }
 
 function renderOrder(o) {
-    const stations = o.stations.map(s => badge(s.code + ': ' + s.status)).join('');
-    const lines = o.lines.map(l => `<li>${l.quantity} × ${escapeHtml(l.productName)} <small>${escapeHtml(l.categoryName)} · ${escapeHtml(l.preparationStationCode)}</small></li>`).join('');
+    const lines = o.lines.map(l => {
+        const marker = lineStatusMarker(l.kitchenStatus);
+        return `<li class="operation-line">${marker}${l.quantity} × ${escapeHtml(l.productName)} <small>${escapeHtml(l.categoryName)} · ${escapeHtml(l.preparationStationCode)}</small></li>`;
+    }).join('');
     const label = o.serviceMode === 'DineIn' ? o.tableLabel : o.serviceMode === 'Bar' ? (o.tableLabel || 'Barra') : ('Para llevar · ' + (o.customerName || 'Sin nombre'));
-    return `<article class="order"><div class="order-head"><strong>${escapeHtml(label)}</strong><small>${short(o.orderId)}</small></div><div class="badges">${badge(o.serviceMode)}${badge(o.source)}${badge(o.orderStatus)}${badge(o.paymentStatus)}${o.paymentMethod ? badge(o.paymentMethod) : ''}</div><div class="badges">${stations}</div><ul>${lines}</ul><strong>${money.format(o.total)}</strong></article>`
+    return `<article class="order"><div class="order-head"><strong>${escapeHtml(label)}</strong><small>${short(o.orderId)}</small></div><div class="badges">${badge(o.serviceMode)}${badge(o.source)}${badge(o.orderStatus)}${badge(o.paymentStatus)}${o.paymentMethod ? badge(o.paymentMethod) : ''}</div><ul>${lines}</ul><strong>${money.format(o.total)}</strong></article>`
+}
+
+function lineStatusMarker(status) {
+    const markers = {
+        Pending: ['⏳', 'Pendiente', 'line-pending-marker'],
+        InPreparation: ['🍴', 'En preparación', 'line-preparing-marker'],
+        Ready: ['⏳', 'Esperando despacho del chef', 'line-waiting-marker'],
+        Dispatched: ['✔', 'Despachado', 'line-complete-marker']
+    };
+    const marker = markers[status];
+    return marker
+        ? `<span class="${marker[2]}" role="img" aria-label="${marker[1]}" title="${marker[1]}">${marker[0]}</span> `
+        : '';
 }
 
 function schedule() {
-    clearInterval(timer);
+    clearTimeout(timer);
     const ms = +$('interval').value;
-    if (ms) timer = setInterval(load, ms)
+    if (!ms) return;
+    const refreshAfterCurrentLoad = async () => {
+        await load();
+        if (+$('interval').value === ms) timer = setTimeout(refreshAfterCurrentLoad, ms);
+    };
+    timer = setTimeout(refreshAfterCurrentLoad, ms);
 }
-$('refresh').onclick = load;
-$('interval').onchange = schedule;
-$('date').onchange = load;
-$('restaurant').onchange = async () => { await load(); realtime() };
-$('orderLimit').onchange = load;
+$('interval').onchange = () => { schedule(); void load() };
+$('date').onchange = () => { void load() };
+$('orderLimit').onchange = () => { void load() };
 
 $('logout').onclick = logout;
 
 async function openDashboard(session) {
-    const hasAllRestaurants = (session.allRestaurantsRoles || []).some(role => ['Admin', 'Gerente', 'Contabilidad', 'Marketing'].includes(role));
-    const allowed = new Set((session.restaurants || []).filter(x => (x.permissions || []).includes('dashboard.read')).map(x => x.restaurantId.toLowerCase()));
+    const dashboardRoles = new Set(['Admin', 'Gerente', 'Contabilidad', 'Marketing']);
+    const hasAllRestaurants = (session.allRestaurantsRoles || []).some(role => dashboardRoles.has(role))
+        && (session.allRestaurantsPermissions || []).includes('dashboard.read');
+    const allowed = new Set((session.restaurants || []).filter(x => dashboardRoles.has(x.role)
+        && (x.permissions || []).includes('dashboard.read')).map(x => x.restaurantId.toLowerCase()));
     if (!hasAllRestaurants && allowed.size === 0) throw new Error('Este perfil no tiene acceso al Dashboard.');
     access = session;
     deadLetterRefreshAt = 0;
@@ -184,11 +249,27 @@ async function openDashboard(session) {
     const visible = knownRestaurants.filter(x => hasAllRestaurants || allowed.has(x.id.toLowerCase()));
     const missing = (access.restaurants || []).filter(x => allowed.has(x.restaurantId.toLowerCase()) && !visible.some(r => r.id.toLowerCase() === x.restaurantId.toLowerCase())).map(x => ({ id: x.restaurantId, name: 'Local ' + short(x.restaurantId) }));
     const restaurants = [...visible, ...missing].sort((a, b) => a.name.localeCompare(b.name));
-    $('restaurant').innerHTML = `<option value="">${hasAllRestaurants ? 'Todos los Locales' : 'Local asignado'}</option>` + restaurants.map(x => `<option value="${escapeHtml(x.id)}">${escapeHtml(x.name)} · ${escapeHtml(x.id)}</option>`).join('');
+    restaurantNames = new Map(restaurants.map(x => [x.id.toLowerCase(), x.name]));
+    dashboardRestaurantIds = restaurants.map(x => x.id);
     $('currentUser').textContent = access.user.displayName;
     schedule();
     await load();
+    await loadHealth();
+    await loadDeadLetters();
+    scheduleHealthRefresh();
     realtime()
+}
+
+function scheduleHealthRefresh() {
+    clearTimeout(healthTimer);
+    if (!access) return;
+    healthTimer = setTimeout(async () => {
+        await load();
+        if (!access) return;
+        await loadHealth();
+        await loadDeadLetters();
+        scheduleHealthRefresh();
+    }, 30000);
 }
 
 function logout() {
@@ -197,7 +278,10 @@ function logout() {
     socket = null;
     access = null;
     deadLetterRefreshAt = 0;
-    clearInterval(timer);
+    clearTimeout(timer);
+    clearTimeout(healthTimer);
+    clearTimeout(realtimeRefreshTimer);
+    dashboardRefreshPending = false;
     sessionStorage.removeItem(sessionKey);
     showLogin()
 }
@@ -224,12 +308,14 @@ async function realtime() {
                 if (!raw) continue;
                 const m = JSON.parse(raw);
                 if (!joined && m.type === undefined) {
-                    const restaurantIds = $('restaurant').value ? [$('restaurant').value] : Array.from($('restaurant').options).map(x => x.value).filter(Boolean);
-                    ws.send(JSON.stringify({ type: 1, target: 'JoinRestaurants', arguments: [restaurantIds] }) + sep);
+                    ws.send(JSON.stringify({ type: 1, target: 'JoinRestaurants', arguments: [dashboardRestaurantIds] }) + sep);
                     joined = true;
                     $('state').textContent = 'Conectado';
                 }
-                if (m.type === 1 && m.target === 'DashboardUpdated') setTimeout(load, 200)
+                if (m.type === 1 && m.target === 'DashboardUpdated') {
+                    clearTimeout(realtimeRefreshTimer);
+                    realtimeRefreshTimer = setTimeout(() => { void load() }, 200);
+                }
             }
         };
         ws.onclose = () => { if (access && generation === realtimeGeneration) setTimeout(realtime, 2000) }

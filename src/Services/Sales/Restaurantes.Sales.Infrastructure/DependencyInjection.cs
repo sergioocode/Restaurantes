@@ -5,6 +5,7 @@ using Restaurantes.Sales.Application;
 using Restaurantes.Sales.Infrastructure.Persistence.Read;
 using Restaurantes.Sales.Infrastructure.Persistence.Write;
 using Restaurantes.Sales.Infrastructure.Stores;
+using Restaurantes.ServiceDefaults;
 
 namespace Restaurantes.Sales.Infrastructure;
 
@@ -16,7 +17,10 @@ public static class DependencyInjection
     )
     {
         services.AddDbContext<SaleWriteDbContext>(options =>
-            options.UseNpgsql(configuration.GetConnectionString("SalesWrite"))
+            options.UseNpgsql(
+                configuration.GetConnectionString("SalesWrite"),
+                npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "sales_write")
+            )
         );
         services.AddScoped<ISaleWriteStore, SaleWriteStore>();
         return services;
@@ -27,8 +31,12 @@ public static class DependencyInjection
         IConfiguration configuration
     )
     {
+        services.AddBusinessTimeZone(configuration);
         services.AddDbContext<SaleReadDbContext>(options =>
-            options.UseNpgsql(configuration.GetConnectionString("SalesRead"))
+            options.UseNpgsql(
+                configuration.GetConnectionString("SalesRead"),
+                npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "sales_read")
+            )
         );
         services.AddScoped<ISaleReadStore, SaleReadStore>();
         return services;

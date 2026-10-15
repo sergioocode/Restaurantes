@@ -487,6 +487,7 @@ $RECYCLE.BIN/
 
 /.artifacts/
 /.sonarqube/
+/tools/order-simulator/simulator.local.json
 
 # Local Codex conversation artifacts and configuration
 /.codex/

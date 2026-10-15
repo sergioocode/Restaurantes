@@ -1,4 +1,4 @@
-namespace Restaurantes.Payments.Application;
+﻿namespace Restaurantes.Payments.Application;
 
 public interface ICustomerDiningSessionValidator
 {
@@ -8,6 +8,15 @@ public interface ICustomerDiningSessionValidator
         Guid tableId,
         string serviceMode,
         string customerAccessToken,
+        CancellationToken cancellationToken
+    );
+
+    Task<bool> IsChargeAmountValidAsync(
+        Guid sessionId,
+        Guid orderId,
+        Guid restaurantId,
+        decimal amount,
+        string? authorization,
         CancellationToken cancellationToken
     );
 }

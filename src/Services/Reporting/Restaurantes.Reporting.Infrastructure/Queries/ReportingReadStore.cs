@@ -2,12 +2,14 @@
 using Microsoft.EntityFrameworkCore;
 using Restaurantes.Reporting.Application.Dashboard;
 using Restaurantes.Reporting.Infrastructure.Persistence.Read;
+using Restaurantes.Sales.Contracts.Events;
 
 namespace Restaurantes.Reporting.Infrastructure.Queries;
 
 public sealed class ReportingReadStore(ReportingReadDbContext db) : IReportingReadStore
 {
     public async Task<DailyReportingSnapshot> GetDailySnapshotAsync(
+        DateOnly businessDate,
         DateTime startUtc,
         DateTime endUtc,
         IReadOnlyCollection<Guid>? restaurantIds,
@@ -24,7 +26,14 @@ public sealed class ReportingReadStore(ReportingReadDbContext db) : IReportingRe
         }
 
         List<CompletedSaleFact> saleFacts = await salesQuery
-            .Where(x => x.CompletedAtUtc >= startUtc && x.CompletedAtUtc < endUtc)
+            .Where(x =>
+                x.BusinessDate == businessDate
+                || (
+                    x.BusinessDate == null
+                    && x.CompletedAtUtc >= startUtc
+                    && x.CompletedAtUtc < endUtc
+                )
+            )
             .ToListAsync(ct);
         HashSet<Guid> refundedOrderIds = (
             await orderQuery
@@ -32,11 +41,29 @@ public sealed class ReportingReadStore(ReportingReadDbContext db) : IReportingRe
                 .Select(x => x.OrderId)
                 .ToListAsync(ct)
         ).ToHashSet();
-        List<OrderReportingFact> orderFacts = await orderQuery
-            .Where(x => x.CreatedAtUtc >= startUtc && x.CreatedAtUtc < endUtc)
-            .OrderByDescending(x => x.UpdatedAtUtc)
-            .Take(orderLimit)
+        IQueryable<OrderReportingFact> dailyOrders = orderQuery.Where(x =>
+            x.CreatedAtUtc >= startUtc && x.CreatedAtUtc < endUtc
+        );
+        List<Guid> dailyRestaurantIds = await dailyOrders
+            .Select(x => x.RestaurantId)
+            .Distinct()
             .ToListAsync(ct);
+        List<OrderReportingFact> orderFacts = [];
+        foreach (Guid restaurantId in dailyRestaurantIds)
+        {
+            orderFacts.AddRange(
+                await dailyOrders
+                    .Where(x => x.RestaurantId == restaurantId)
+                    .OrderByDescending(x => x.CreatedAtUtc)
+                    .ThenByDescending(x => x.OrderId)
+                    .Take(orderLimit)
+                    .ToListAsync(ct)
+            );
+        }
+        orderFacts = orderFacts
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ThenByDescending(x => x.OrderId)
+            .ToList();
         return new(
             saleFacts.Select(MapSale).ToList(),
             refundedOrderIds,
@@ -51,6 +78,13 @@ public sealed class ReportingReadStore(ReportingReadDbContext db) : IReportingRe
             fact.Total,
             fact.Source,
             fact.PaymentMethod,
+            (JsonSerializer.Deserialize<List<SalePaymentBreakdown>>(fact.PaymentMethodsJson) ?? [])
+                .Select(payment => new SalesPaymentMethod(
+                    payment.Method,
+                    payment.Payments,
+                    payment.Amount
+                ))
+                .ToList(),
             JsonSerializer.Deserialize<List<Guid>>(fact.OrderIdsJson) ?? [],
             JsonSerializer.Deserialize<List<SalesLine>>(fact.LinesJson) ?? []
         );
@@ -70,7 +104,8 @@ public sealed class ReportingReadStore(ReportingReadDbContext db) : IReportingRe
                 x.ProductName,
                 x.Quantity,
                 x.CategoryName,
-                x.PreparationStationCode
+                x.PreparationStationCode,
+                x.KitchenStatus
             ))
             .ToList();
         return new(
@@ -107,6 +142,7 @@ public sealed class ReportingReadStore(ReportingReadDbContext db) : IReportingRe
         Guid? CategoryId,
         string CategoryName,
         string PreparationStationCode,
-        string PreparationStationName
+        string PreparationStationName,
+        string KitchenStatus
     );
 }

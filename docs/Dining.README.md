@@ -2,7 +2,7 @@
 
 El servicio **Dining** administra la ocupación y configuración operativa de sala dentro de la plataforma Restaurantes: zonas, ubicaciones, sesiones de mesa, comensales, acceso mediante QR y cierre de cuentas asociadas a una sesión.
 
-Dining mantiene una única base operacional PostgreSQL, pero su implementación ya está separada por responsabilidades en **Domain, Application, Infrastructure, Api.Write y Consumer**. La API expone las operaciones HTTP y SignalR, mientras que el Consumer procesa de forma independiente los eventos procedentes de **Orders** y **Payments**.
+Dining mantiene una única base operacional PostgreSQL. La API expone HTTP y SignalR; `Infrastructure` contiene el worker que procesa eventos de **Orders** y **Payments**.
 
 ## Responsabilidad del servicio
 
@@ -29,27 +29,27 @@ Dining **no crea pedidos**, **no captura pagos directamente**, **no administra l
 
 ## Proyectos
 
-El bounded context está dividido en cinco proyectos:
+El servicio se organiza en proyectos por responsabilidad. La API es el punto de entrada ejecutable;
+los workers se implementan en Infrastructure y se activan según el rol de ejecución.
 
 ```text
 src/Services/Dining/
-├── Restaurantes.Dining.Api.Write
+├── Restaurantes.Dining.Api
 ├── Restaurantes.Dining.Application
-├── Restaurantes.Dining.Consumer
 ├── Restaurantes.Dining.Domain
 └── Restaurantes.Dining.Infrastructure
 ```
 
 | Proyecto | Responsabilidad |
 | --- | --- |
-| `Restaurantes.Dining.Domain` | Entidades y reglas del dominio de sala: zonas, ubicaciones, sesiones, políticas y proyecciones operativas de pedidos/pagos. |
-| `Restaurantes.Dining.Application` | Casos de uso, contratos HTTP internos del bounded context, puertos de infraestructura, validación QR/red y procesamiento de eventos de integración. |
-| `Restaurantes.Dining.Infrastructure` | EF Core, PostgreSQL, `DiningStore`, migraciones e integraciones HTTP con Payments y CashRegister. |
-| `Restaurantes.Dining.Api.Write` | API HTTP, autenticación/autorización, contexto de petición, SignalR y composición de dependencias. |
-| `Restaurantes.Dining.Consumer` | Worker independiente que consume eventos de Orders y Payments desde RabbitMQ y mantiene las proyecciones locales mediante Inbox. |
+| `Restaurantes.Dining.Api` | Endpoints HTTP, SignalR y composición de roles. |
+| `Restaurantes.Dining.Application` | Casos de uso y puertos internos. |
+| `Restaurantes.Dining.Domain` | Entidades y reglas de negocio. |
+| `Restaurantes.Dining.Infrastructure` | Persistencia, stores y workers aplicables. |
 
-Dining no dispone actualmente de `Api.Read`, `Publisher` ni un proyecto `Contracts` propio. Los requests y resultados utilizados por la API se encuentran en Application, mientras que los contratos de eventos consumidos proceden de `Orders.Contracts` y `Payments.Contracts`.
-
+La API atiende las operaciones HTTP de lectura y escritura en un único host. Según el perfil,
+ese ejecutable inicia HTTP, workers o ambos. Read y Write describen responsabilidades/rutas;
+no son proyectos ni APIs separados.
 ## Arquitectura interna
 
 ```mermaid
@@ -62,11 +62,11 @@ flowchart LR
     Rabbit[("RabbitMQ")]
 
     subgraph Dining["Dining"]
-        Api["Dining.Api.Write"]
+        Api["Dining.Api · HTTP y SignalR"]
         App["Application"]
         Domain["Domain"]
         Infra["Infrastructure"]
-        Consumer["Dining.Consumer"]
+        Consumer["DiningIntegrationWorker"]
         Db[("dining_write")]
         Hub["SignalR /hubs/dining"]
     end
@@ -87,7 +87,7 @@ flowchart LR
     Consumer --> Infra
 ```
 
-La API y el Consumer son procesos ejecutables independientes, pero ambos trabajan sobre la misma base lógica `dining_write`. Dining no dispone actualmente de una API Read ni de una base `dining_read`.
+La API y el worker usan `dining_write`. El perfil puede ejecutar HTTP, workers o ambos; no hay un proyecto ejecutable Consumer independiente. Dining no dispone de una base `dining_read`.
 
 ## Modelo de dominio
 
@@ -133,19 +133,11 @@ sin DiningSession Open  -> Available
 con DiningSession Open  -> Occupied
 ```
 
-### `DiningRestaurantPolicy`
+### Acceso de red al Customer QR
 
-Conserva reglas configurables por restaurante:
+La lista de IP o redes CIDR permitidas se configura en `QrAccess:AllowedClientNetworks` de la configuración de los servicios QR. No es una política por restaurante ni se persiste en Dining. Las direcciones reenviadas solo se aceptan desde proxies configurados en `QrAccess:TrustedProxyAddresses`.
 
-| Campo | Propósito |
-| --- | --- |
-| `QrRequiresImmediatePayment` | Indica al flujo Customer QR que el pago debe realizarse de forma inmediata. |
-| `RequireTrustedNetworkForQr` | Exige que el cliente QR proceda de una red autorizada. |
-| `QrAllowedNetworks` | Lista normalizada de direcciones IP o redes CIDR permitidas. |
-| `TakeawayRequiresPrepayment` | Política de prepago utilizada por clientes operativos para takeaway. |
-| `AllowCheckoutBeforeKitchenCompletion` | Permite checkout antes de que todos los pedidos estén `Ready`, `Delivered` o `Cancelled`. |
-| `Version` | Token de concurrencia de la política. |
-| `UpdatedAtUtc` | Última modificación UTC. |
+Customer QR siempre requiere pago online antes de enviar el pedido a cocina. Esta regla es fija y no se configura desde Backoffice.
 
 ### `DiningSession`
 
@@ -165,6 +157,7 @@ Campos relevantes:
 - `ClosedAtUtc`;
 - `CheckoutIdempotencyKey`;
 - `PaymentMethod`;
+- `DiscountPercentage`;
 - `PaidAtUtc`;
 - `CustomerAccessToken`;
 - datos de cancelación;
@@ -178,7 +171,7 @@ Existe como máximo una sesión `Open` por ubicación mediante un índice único
 flowchart LR
     S((Inicio)) --> A[Open]
 
-    A -->|checkout o close| B[Closed]
+    A -->|close tras pago y entrega| B[Closed]
     A -->|cancel sin pedidos| C[Cancelled]
 
     B --> F((Fin))
@@ -245,7 +238,7 @@ El origen admitido por el contrato es:
 
 ```text
 CustomerQr
-WaiterMobile
+Comandero
 Pos
 ```
 
@@ -336,36 +329,21 @@ Se admiten como máximo 20 redes configuradas. Dining normaliza IPv4, IPv6 y CID
 
 La aplicación utiliza `X-Forwarded-For` y `X-Forwarded-Proto` únicamente a través de proxies configurados en `QrAccess:TrustedProxyAddresses`.
 
-### Política de pago Customer QR
+### Pago obligatorio en Customer QR
 
-El comportamiento de pago se configura por restaurante mediante:
-
-```text
-QrRequiresImmediatePayment
-```
-
-El flag es deliberadamente configurable y Customer QR admite dos flujos:
+Todos los pedidos Customer QR usan `PaymentTiming = Immediate`. El cliente paga online antes de enviar el pedido a cocina:
 
 ```text
-QrRequiresImmediatePayment = true
-    -> PaymentTiming = Immediate
-    -> crear pedido Draft
+abrir o recuperar sesión QR
+    -> crear pedido Draft con PaymentTiming = Immediate
     -> capturar pago online
     -> PaymentCaptured
+    -> Orders proyecta el pago como Paid
     -> submit
     -> cocina / KDS
-
-QrRequiresImmediatePayment = false
-    -> PaymentTiming = OnAccount
-    -> crear pedido Draft
-    -> submit
-    -> cocina / KDS
-    -> el pedido permanece en la cuenta de la sesión
 ```
 
-Dining es propietario de esta política y la devuelve al cliente Customer QR al abrir o recuperar la sesión. El PWA utiliza el valor para seleccionar `Immediate` u `OnAccount`.
-
-Dining no captura el pago ni envía directamente la comanda a cocina. **Payments** captura el cobro online y publica `PaymentCaptured`; **Orders** impide el `submit` de cualquier pedido `Immediate` mientras su proyección de pago no indique `Paid`.
+La creación técnica de un `Draft` precede a la captura porque Payments necesita proyectar el pedido. Ese borrador no se envía a cocina. Orders rechaza `submit` hasta que su proyección indique `Paid`; el servidor valida la regla aunque un cliente intente enviar otra modalidad.
 
 El QR físico permanece asociado a la ubicación mientras no se rote su `QrCode`. Si se deteriora, se pierde o necesita reemplazarse, Backoffice puede rotar el identificador e imprimir un nuevo QR, invalidando el anterior.
 
@@ -407,20 +385,23 @@ La respuesta incluye, entre otros datos:
 
 ```text
 total
+DiscountPercentage
+discountAmount
 outstanding
 canCheckout
 orders[]
 ```
 
-`total` corresponde a la suma de los importes proyectados.
+`total` suma los importes de los pedidos después del descuento y las propinas registradas. `discountAmount` informa la diferencia entre los importes originales de los pedidos y los importes con descuento.
+
+El TPV puede aplicar a la sesión un porcentaje predefinido (5 %, 10 %, 20 % o 25 %), uno manual o cero. El porcentaje queda guardado en la sesión; el importe descontado se calcula desde los pedidos y ambos valores se conservan en la venta. No existe un catálogo de descuentos administrable. Se puede cambiar o quitar el descuento antes del primer cobro. Una vez iniciado el cobro, la API rechaza cambios al descuento.
 
 `outstanding` corresponde a los importes cuyo `PaymentStatus` todavía no es `Paid`.
 
 `canCheckout` exige:
 
 - sesión `Open`;
-- al menos un pedido;
-- y, salvo que la política lo permita expresamente, todos los pedidos en `Ready`, `Delivered` o `Cancelled`.
+- al menos un pedido no cancelado con importe pendiente.
 
 ## Checkout multipedido
 
@@ -433,8 +414,11 @@ POST /api/dining/sessions/{sessionId}/checkout
 El contrato exige:
 
 - `IdempotencyKey` distinto de `Guid.Empty`;
-- método `Card` o `Cash`;
+- método `Card`, `Cash` o `Transfer`;
+- asignaciones opcionales del cobro a pedidos concretos;
 - referencia externa opcional.
+
+Se permiten pagos parciales y varios cobros para una misma sesión. Si no se envían asignaciones, el checkout cobra el saldo completo de todos los pedidos pendientes. Para cobrar solo una parte, se envían asignaciones a pedidos concretos; cada importe debe ser positivo y no superar el saldo de ese pedido. `TipAmount` y `AmountReceived` son opcionales.
 
 ```mermaid
 sequenceDiagram
@@ -452,11 +436,11 @@ sequenceDiagram
         Payments-->>Dining: pago aceptado
     end
 
-    Dining->>DB: Session = Closed + Version++
-    Dining-->>Client: cuenta cerrada
+    Dining->>DB: registrar cobros y estados de pago
+    Dining-->>Client: cuenta actualizada
 ```
 
-Dining utiliza la **misma `IdempotencyKey`** para todas las capturas de una misma operación y envía `TransactionOrderCount` con la cantidad de pedidos que deben cobrarse.
+Dining utiliza la **misma `IdempotencyKey`** para todas las capturas de una misma operación y envía `TransactionOrderCount` con la cantidad de pedidos no cancelados de la sesión.
 
 Si no se proporciona `ExternalReference`, se utiliza:
 
@@ -464,14 +448,7 @@ Si no se proporciona `ExternalReference`, se utiliza:
 DINING-{sessionId}
 ```
 
-Cuando todos los cobros necesarios han sido aceptados:
-
-- la sesión pasa a `Closed`;
-- se registra `CheckoutIdempotencyKey`;
-- se registra el método de pago;
-- se establece `PaidAtUtc` y `ClosedAtUtc`;
-- se incrementa `Version`;
-- la ubicación se notifica como `Available`.
+Cada cobro aceptado actualiza el importe pagado del pedido y los datos del pago en la sesión. El checkout no cierra la sesión ni libera la ubicación. Para liberar la mesa se usa `POST /api/dining/sessions/{sessionId}/close`, que exige que todos los pedidos estén pagados y entregados o cancelados; entonces la sesión pasa a `Closed` y la ubicación queda disponible.
 
 ### Idempotencia del checkout
 
@@ -537,7 +514,6 @@ Tablas principales:
 | --- | --- |
 | `dining_zones` | Zonas operativas del restaurante. |
 | `restaurant_tables` | Ubicaciones y configuración QR. |
-| `dining_restaurant_policies` | Políticas QR, takeaway y checkout por restaurante. |
 | `dining_sessions` | Sesiones de ocupación. |
 | `dining_session_orders` | Proyección local de pedidos asociados a cada sesión. |
 | `pending_payments` | Pagos recibidos antes de la proyección del pedido. |
@@ -570,17 +546,6 @@ erDiagram
         bool IsActive
         datetime DeletedAtUtc
         datetime CreatedAtUtc
-    }
-
-    dining_restaurant_policies {
-        uuid RestaurantId PK
-        bool QrRequiresImmediatePayment
-        bool RequireTrustedNetworkForQr
-        bool TakeawayRequiresPrepayment
-        bool AllowCheckoutBeforeKitchenCompletion
-        string QrAllowedNetworks
-        int Version
-        datetime UpdatedAtUtc
     }
 
     dining_sessions {
@@ -624,7 +589,6 @@ erDiagram
 - `restaurant_tables.QrCode` es único;
 - una ubicación pertenece a una zona del mismo restaurante mediante clave compuesta;
 - `dining_sessions` permite como máximo una sesión `Open` por `TableId`;
-- `DiningRestaurantPolicy.Version` es concurrency token;
 - `DiningSession.Version` es concurrency token;
 - `DiningZone.DeletedAtUtc` se utiliza como concurrency token en la eliminación lógica.
 
@@ -718,7 +682,7 @@ dining.dead-letter
 dining.dead-letter.messages
 ```
 
-`DiningIntegrationWorker` utiliza ACK manual y mantiene una conexión RabbitMQ propia dentro del proceso `Restaurantes.Dining.Consumer`.
+`DiningIntegrationWorker` utiliza ACK manual y mantiene una conexión RabbitMQ propia dentro del proceso `Restaurantes.Dining.Infrastructure`.
 
 ## SignalR
 
@@ -784,7 +748,7 @@ Ruta base:
 | `PUT` | `/restaurants/{restaurantId}/zones/{zoneId}` | Actualizar zona. |
 | `DELETE` | `/restaurants/{restaurantId}/zones/{zoneId}` | Eliminar lógicamente una zona. |
 
-### Ubicaciones y política
+### Ubicaciones
 
 | Método | Endpoint | Operación |
 | --- | --- | --- |
@@ -792,8 +756,6 @@ Ruta base:
 | `POST` | `/restaurants/{restaurantId}/tables` | Crear ubicación. |
 | `PUT` | `/tables/{tableId}` | Actualizar ubicación. |
 | `DELETE` | `/tables/{tableId}` | Eliminar lógicamente una ubicación. |
-| `GET` | `/restaurants/{restaurantId}/policy` | Consultar política Dining. |
-| `PUT` | `/restaurants/{restaurantId}/policy` | Actualizar política Dining. |
 | `POST` | `/tables/{tableId}/qr/rotate` | Rotar QR de una ubicación. |
 
 ### Sesiones
@@ -955,23 +917,20 @@ RabbitMq:VirtualHost
 
 `DiningDbContext` dispone de migraciones EF Core propias para `dining_write`.
 
-`Restaurantes.Dining.Api.Write` ejecuta actualmente:
+`Restaurantes.Dining.Api` ejecuta actualmente:
 
 ```text
 Database.MigrateAsync()
 ```
 
-al iniciar la API. El proceso `Restaurantes.Dining.Consumer` utiliza la misma persistencia, pero no ejecuta las migraciones por su cuenta.
+al iniciar la API. El proceso `Restaurantes.Dining.Infrastructure` utiliza la misma persistencia, pero no ejecuta las migraciones por su cuenta.
 
 Las migraciones existentes cubren, entre otros cambios ya implementados:
 
 - checkout de sesión;
-- QR y políticas Dining;
-- redes confiables para QR;
+- QR y sesiones Customer QR;
 - token de acceso Customer QR;
 - cancelación de sesión;
-- política de prepago takeaway;
-- checkout antes de finalización de cocina;
 - zonas;
 - eliminación lógica de ubicaciones y zonas;
 - número de comensales.
@@ -997,11 +956,11 @@ dining_write
 Procesos y dependencias locales principales:
 
 ```text
-Dining.Api.Write     -> http://localhost:5102
-Dining.Consumer      -> RabbitMQ + dining_write
+Dining.Api            -> HTTP + dining_write
+Dining.Api (Workers)  -> RabbitMQ + dining_write
 PostgreSQL
 RabbitMQ
-Payments.Api.Write   -> http://localhost:5151
+Payments.Api   -> http://localhost:5151
 CashRegister         -> http://localhost:5105
 ```
 
@@ -1015,14 +974,14 @@ dotnet tool restore
 
 ## Health checks
 
-`Restaurantes.Dining.Api.Write` utiliza `ServiceDefaults` y expone:
+`Restaurantes.Dining.Api` utiliza `ServiceDefaults` y expone:
 
 ```text
 /health
 /alive
 ```
 
-`/health` representa el endpoint general de salud de la API y `/alive` la comprobación básica de liveness configurada por la solución. El Consumer es un worker independiente y no expone endpoints HTTP propios en la implementación actual.
+`/health` representa el endpoint general de salud de la API y `/alive` la comprobación básica de liveness configurada por la solución. El worker no expone endpoints HTTP propios.
 
 ## Decisiones de diseño
 
@@ -1052,7 +1011,7 @@ Zonas y ubicaciones se eliminan mediante `DeletedAtUtc`, preservando las referen
 
 ### Sin separación Read / Write actual
 
-Dining utiliza una única base operacional porque sus consultas actuales forman parte directa de la operación de sala. No existe `Dining.Api.Read` ni `dining_read` en la implementación actual. La separación de procesos entre Api.Write y Consumer responde a responsabilidades de ejecución, no a una separación CQRS de persistencia.
+Dining utiliza una única base operacional. La API contiene las operaciones HTTP de lectura y escritura; el worker procesa eventos desde `Infrastructure`. No existe una base `dining_read`.
 
 ### Sin Outbox propio
 
@@ -1060,29 +1019,17 @@ Dining consume eventos de integración pero no publica actualmente contratos de 
 
 ## Despliegue y escalado
 
-Dining dispone actualmente de dos procesos ejecutables independientes:
+Dining dispone de un proyecto ejecutable API que permite estos roles:
 
 ```text
-Restaurantes.Dining.Api.Write
-Restaurantes.Dining.Consumer
+Restaurantes.Dining.Api
+Restaurantes.Dining.Infrastructure
 ```
 
-`Api.Write` contiene:
-
-- API HTTP;
-- SignalR;
-- autenticación y autorización;
-- acceso EF Core a PostgreSQL;
-- integraciones HTTP con Payments y CashRegister.
-
-`Consumer` contiene:
-
-- conexión RabbitMQ;
-- consumo de eventos de Orders y Payments;
-- actualización de proyecciones locales;
-- Inbox e idempotencia.
-
-Esta separación permite desplegar y reiniciar el consumidor sin reiniciar la API, aunque ambos continúan compartiendo el mismo modelo de persistencia.
+El rol Http contiene endpoints, SignalR, autenticación, autorización e integraciones HTTP.
+El rol Workers contiene el consumo RabbitMQ, la actualización de proyecciones y la Inbox.
+Ambos roles comparten el mismo ejecutable y la persistencia `dining_write`; pueden iniciarse
+en procesos distintos o juntos con el rol All.
 
 ### Bases de datos
 

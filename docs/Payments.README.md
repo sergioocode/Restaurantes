@@ -23,60 +23,46 @@ El servicio **no consulta directamente las tablas de Orders** para averiguar qu�
 
 ## Proyectos
 
-El bounded context está dividido en siete proyectos:
+El servicio se organiza en proyectos por responsabilidad. La API es el punto de entrada ejecutable;
+los workers se implementan en Infrastructure y se activan según el rol de ejecución.
 
 ```text
 src/Services/Payments/
-├── Restaurantes.Payments.Api.Write
+├── Restaurantes.Payments.Api
 ├── Restaurantes.Payments.Application
-├── Restaurantes.Payments.Consumer
 ├── Restaurantes.Payments.Contracts
 ├── Restaurantes.Payments.Domain
-├── Restaurantes.Payments.Infrastructure
-└── Restaurantes.Payments.Publisher
+└── Restaurantes.Payments.Infrastructure
 ```
 
 | Proyecto | Responsabilidad |
 | --- | --- |
-| `Restaurantes.Payments.Domain` | Modelo de dominio y reglas de transición del pago. |
-| `Restaurantes.Payments.Contracts` | Requests, responses y eventos de integración públicos. |
-| `Restaurantes.Payments.Application` | Casos de uso de captura y devolución. |
-| `Restaurantes.Payments.Infrastructure` | EF Core, PostgreSQL, store, Inbox, Outbox, migraciones e integraciones HTTP con Dining y CashRegister. |
-| `Restaurantes.Payments.Api.Write` | API HTTP para operaciones de pago. |
-| `Restaurantes.Payments.Consumer` | Proyección de eventos de Orders hacia `payable_orders`. |
-| `Restaurantes.Payments.Publisher` | Publicación fiable de eventos pendientes del Outbox a RabbitMQ. |
+| `Restaurantes.Payments.Api` | Endpoints HTTP y composición de roles. |
+| `Restaurantes.Payments.Application` | Casos de uso y puertos. |
+| `Restaurantes.Payments.Contracts` | Requests, respuestas y eventos públicos. |
+| `Restaurantes.Payments.Domain` | Reglas de pago. |
+| `Restaurantes.Payments.Infrastructure` | Persistencia, stores, integraciones y workers. |
 
-La dependencia principal sigue esta dirección:
-
-```text
-Domain
-   ↑
-Application ← Contracts
-   ↑
-Infrastructure
-   ↑
-Api.Write / Consumer / Publisher
-```
-
-`Consumer` referencia además `Orders.Contracts` porque consume eventos publicados por ese bounded context.
-
+La API atiende las operaciones HTTP de lectura y escritura en un único host. Según el perfil,
+ese ejecutable inicia HTTP, workers o ambos. Read y Write describen responsabilidades/rutas;
+no son proyectos ni APIs separados.
 ## Arquitectura interna
 
 ```mermaid
 flowchart LR
-    POS[POS / Comandero] -->|POST capture| API[Payments Api.Write]
+    POS[POS / Comandero] -->|POST capture| API[Payments API]
     QR[Customer QR] -->|POST capture-customer-qr| API
     Dining[Dining] -->|checkout multipedido| API
 
     Orders[Orders] -->|OrderCreated<br/>OrderLineCancelled| RMQ[(RabbitMQ)]
-    RMQ --> Consumer[Payments Consumer]
+    RMQ --> Consumer[PayableOrderProjectionWorker]
     Consumer --> DB[(payments_write)]
 
     API --> DB
     API -->|validar caja abierta| CashRegister[CashRegister]
     API -->|validar sesión Customer QR| DiningApi[Dining]
 
-    DB --> Outbox[Outbox Publisher]
+    DB --> Outbox[PaymentOutboxPublisherWorker]
     Outbox -->|PaymentCaptured<br/>PaymentRefunded| RMQ
 
     RMQ --> OrdersProjection[Orders payment projection]
@@ -317,26 +303,15 @@ y utiliza la referencia recibida o, si viene vacía:
 QR-{OrderId}
 ```
 
-### Relación con `QrRequiresImmediatePayment`
+### Pago obligatorio en Customer QR
 
-Payments **no decide** si un restaurante exige pago inmediato por Customer QR. Esa política pertenece a Dining y se expone mediante:
-
-```text
-QrRequiresImmediatePayment
-```
-
-El cliente Customer QR aplica la política así:
+Customer QR siempre paga online antes de solicitar el envío a cocina. No hay una política de Dining que permita omitir el pago:
 
 ```text
-true
-    -> crea el pedido con PaymentTiming = Immediate
+crear un pedido Draft con PaymentTiming = Immediate
     -> llama a capture-customer-qr
     -> espera PaymentCaptured
-    -> solicita submit en Orders
-
-false
-    -> crea el pedido con PaymentTiming = OnAccount
-    -> no realiza captura inmediata
+    -> Orders proyecta Paid
     -> solicita submit en Orders
 ```
 
@@ -485,7 +460,7 @@ La captura o devolución y la creación del evento se guardan en la misma base d
 
 ```mermaid
 sequenceDiagram
-    participant API as Payments Api.Write
+    participant API as Payments API
     participant DB as PostgreSQL
     participant PUB as Payments Publisher
     participant MQ as RabbitMQ
@@ -510,7 +485,7 @@ El evento permanece pendiente en el Outbox y el publisher puede volver a intenta
 
 ### Publisher
 
-`Restaurantes.Payments.Publisher`:
+`Restaurantes.Payments.Infrastructure`:
 
 - migra la base de datos al iniciar;
 - abre una conexión RabbitMQ dedicada;
@@ -522,7 +497,7 @@ El evento permanece pendiente en el Outbox y el publisher puede volver a intenta
 
 ## Inbox e idempotencia
 
-`Restaurantes.Payments.Consumer` usa `inbox_messages` para evitar reprocesar eventos de Orders.
+`Restaurantes.Payments.Infrastructure` usa `inbox_messages` para evitar reprocesar eventos de Orders.
 
 El `MessageId` de RabbitMQ se interpreta como `Guid` y se comprueba antes de aplicar el evento.
 
@@ -880,7 +855,7 @@ La evolución actual incluye, entre otras:
 - asociación con `DiningSessionId` y `TableId`;
 - `ServiceMode`.
 
-API, Consumer y Publisher ejecutan la migración de la base al iniciar en la implementación actual.
+La API aplica las migraciones pendientes al arrancar. El rol Workers inicializa la persistencia que necesita al iniciar.
 
 ## Desarrollo local
 
@@ -902,7 +877,7 @@ Los perfiles de arranque de la solución pueden utilizarse para iniciar conjunta
 
 ## Health checks
 
-`Payments.Api.Write` utiliza `Restaurantes.ServiceDefaults` y expone los endpoints comunes de salud de la solución:
+`Payments.Api` utiliza `Restaurantes.ServiceDefaults` y expone los endpoints comunes de salud de la solución:
 
 ```text
 /health
@@ -947,19 +922,20 @@ Aunque el endpoint es anónimo a nivel JWT, la sesión se valida contra Dining u
 
 ## Despliegue y escalado
 
-Payments puede desplegar y escalar sus procesos de forma independiente:
+Payments usa un único ejecutable API con perfiles de ejecución:
 
 ```text
-Payments.Api.Write
-Payments.Consumer
-Payments.Publisher
+Http: API de pagos.
+Workers: proyección de pedidos cobrables y publicación del Outbox.
+All: API y workers en el mismo proceso.
 ```
 
-La separación permite tratar de forma distinta la API transaccional, el consumo de eventos y la publicación del Outbox.
+Cuando Http y Workers se ejecutan por separado, el despliegue puede asignar recursos distintos a cada rol.
 
-Payments representa un buen ejemplo de **database-per-service** aunque actualmente no necesite una pareja Read/Write propia.
+Payments conserva su servicio y su esquema operacional `payments`, compartiendo la
+base física operativa con otros contextos.
 
-La base `payments_write` contiene exclusivamente el estado necesario para operar cobros y garantizar su publicación fiable.
+El esquema `payments` contiene exclusivamente el estado necesario para operar cobros y garantizar su publicación fiable.
 
 Las consultas de oficina, dashboards o reporting **no deben ejecutarse sobre esta base operacional**. Esos escenarios se sirven desde las proyecciones de `Sales` y `Reporting`.
 
@@ -1024,4 +1000,4 @@ Para Payments, la prioridad de despliegue debe ser:
 - secretos fuera de `appsettings`;
 - métricas y alertas;
 - persistencia fiable del broker;
-- capacidad de escalar `Consumer` y `Publisher` independientemente de la API.
+- posibilidad de ejecutar los workers en un proceso Workers separado usando el mismo ejecutable API.

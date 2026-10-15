@@ -5,25 +5,6 @@ namespace Restaurantes.Dining.Application;
 
 public sealed partial class DiningService
 {
-    private static Task PublishTableChanged(
-        IDiningNotifications realtime,
-        DiningSession session,
-        string status,
-        TimeProvider time
-    )
-    {
-        return realtime.TableChanged(
-            new DiningTableChanged(
-                session.RestaurantId,
-                session.TableId,
-                status,
-                status == "Occupied" ? session.Id : null,
-                session.Source,
-                time.GetUtcNow().UtcDateTime
-            )
-        );
-    }
-
     private static object TableResponse(RestaurantTable table, DiningSession? session)
     {
         return new
@@ -33,7 +14,7 @@ public sealed partial class DiningService
             table.Code,
             table.Label,
             table.ZoneId,
-            table.RequestGuestCount,
+            requestGuestCount = table.Zone.RequestGuestCount ?? false,
             zoneName = table.Zone.Name,
             zoneSortOrder = table.Zone.SortOrder,
             table.QrCode,
@@ -42,6 +23,9 @@ public sealed partial class DiningService
             table.IsActive,
             status = session is null ? "Available" : "Occupied",
             activeSessionId = session?.Id,
+            activeSessionOpenedByUserId = session?.OpenedByUserId,
+            activeSessionSource = session?.Source,
+            guestCount = session?.GuestCount,
         };
     }
 
@@ -54,7 +38,7 @@ public sealed partial class DiningService
             table.Code,
             table.Label,
             table.ZoneId,
-            table.RequestGuestCount,
+            requestGuestCount = table.Zone.RequestGuestCount ?? false,
             table.QrCode,
             qrPath = $"/api/dining/qr/{table.QrCode}/sessions",
             customerQrPath = $"/qr/{table.QrCode}",
@@ -64,7 +48,6 @@ public sealed partial class DiningService
     private static object QrSessionResponse(
         RestaurantTable table,
         DiningSession session,
-        DiningRestaurantPolicy? policy,
         bool isRestaurantOpen = true
     )
     {
@@ -77,11 +60,10 @@ public sealed partial class DiningService
                 table.Code,
                 table.Label,
                 table.ZoneId,
-                table.RequestGuestCount,
+                session.RequestGuestCount,
             },
             session = SessionResponse(session),
             customerAccessToken = session.CustomerAccessToken,
-            qrRequiresImmediatePayment = policy?.QrRequiresImmediatePayment ?? true,
             isRestaurantOpen,
         };
     }

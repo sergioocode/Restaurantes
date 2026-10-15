@@ -1,19 +1,11 @@
-using Restaurantes.CashRegister.Domain;
+﻿using Restaurantes.CashRegister.Domain;
 
 namespace Restaurantes.CashRegister.Application;
 
 public interface ICashRegisterStore
 {
-    Task<Guid?> GetOpenSessionIdAsync(
-        Guid restaurantId,
-        DateOnly businessDate,
-        CancellationToken ct
-    );
-    Task<CashRegisterSession?> GetCurrentAsync(
-        Guid restaurantId,
-        DateOnly businessDate,
-        CancellationToken ct
-    );
+    Task<CashRegisterSession?> GetOpenSessionAsync(Guid restaurantId, CancellationToken ct);
+    Task<CashRegisterSession?> GetCurrentAsync(Guid restaurantId, CancellationToken ct);
     Task<List<CashRegisterSession>> GetHistoryAsync(
         Guid restaurantId,
         int take,
@@ -25,13 +17,7 @@ public interface ICashRegisterStore
         Guid sessionId,
         CancellationToken ct
     );
-    Task<List<CashRegisterSession>> GetStaleSessionsAsync(
-        Guid restaurantId,
-        DateOnly businessDate,
-        CancellationToken ct
-    );
     Task<bool> HasProcessedMessageAsync(Guid messageId, CancellationToken ct);
-    Task<Guid?> GetSaleSessionIdAsync(Guid paymentId, CancellationToken ct);
     Task<CashRegisterSession?> FindProjectionSessionAsync(
         PaymentProjection payment,
         Guid? sessionId,

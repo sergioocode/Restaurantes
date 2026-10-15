@@ -1,10 +1,79 @@
 using System.Net;
+using System.Net.Http.Headers;
+using System.Text.Json;
 using Restaurantes.Payments.Application;
 
 namespace Restaurantes.Payments.Infrastructure.Integrations;
 
 public sealed class DiningSessionValidator(HttpClient httpClient) : ICustomerDiningSessionValidator
 {
+    public async Task<bool> IsChargeAmountValidAsync(
+        Guid sessionId,
+        Guid orderId,
+        Guid restaurantId,
+        decimal amount,
+        string? authorization,
+        CancellationToken cancellationToken
+    )
+    {
+        if (
+            !AuthenticationHeaderValue.TryParse(
+                authorization,
+                out AuthenticationHeaderValue? header
+            )
+        )
+        {
+            return false;
+        }
+
+        using HttpRequestMessage request = new(
+            HttpMethod.Get,
+            $"/api/dining/sessions/{sessionId}/bill"
+        );
+        request.Headers.Authorization = header;
+        try
+        {
+            using HttpResponseMessage response = await httpClient.SendAsync(
+                request,
+                cancellationToken
+            );
+            if (!response.IsSuccessStatusCode)
+            {
+                return false;
+            }
+
+            using JsonDocument document = JsonDocument.Parse(
+                await response.Content.ReadAsStringAsync(cancellationToken)
+            );
+            JsonElement root = document.RootElement;
+            if (
+                !root.TryGetProperty("restaurantId", out JsonElement restaurant)
+                || restaurant.GetGuid() != restaurantId
+                || !root.TryGetProperty("orders", out JsonElement orders)
+            )
+            {
+                return false;
+            }
+
+            return orders
+                .EnumerateArray()
+                .Any(order =>
+                    order.TryGetProperty("orderId", out JsonElement id)
+                    && id.GetGuid() == orderId
+                    && order.TryGetProperty("amount", out JsonElement expected)
+                    && expected.GetDecimal() == amount
+                );
+        }
+        catch (HttpRequestException)
+        {
+            return false;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
     public async Task<bool> IsValidAsync(
         Guid sessionId,
         Guid restaurantId,

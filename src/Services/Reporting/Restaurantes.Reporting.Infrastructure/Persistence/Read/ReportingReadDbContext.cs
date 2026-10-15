@@ -43,7 +43,9 @@ public sealed class ReportingReadDbContext(DbContextOptions<ReportingReadDbConte
         s.Property(x => x.Total).HasPrecision(12, 2);
         s.Property(x => x.OrderIdsJson).HasColumnType("jsonb").IsRequired();
         s.Property(x => x.LinesJson).HasColumnType("jsonb").IsRequired();
+        s.Property(x => x.PaymentMethodsJson).HasColumnType("jsonb").IsRequired();
         s.HasIndex(x => new { x.RestaurantId, x.CompletedAtUtc });
+        s.HasIndex(x => new { x.BusinessDate, x.RestaurantId });
         EntityTypeBuilder<ReportingInboxMessage> i = b.Entity<ReportingInboxMessage>();
         i.ToTable("inbox_messages");
         i.HasKey(x => x.Id);

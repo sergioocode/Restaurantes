@@ -25,31 +25,29 @@ Orders **no es propietario** del catálogo, de las sesiones de sala, de los pago
 
 ## Proyectos
 
-El bounded context está dividido en ocho proyectos:
+El servicio se organiza en proyectos por responsabilidad. La API es el punto de entrada ejecutable;
+los workers se implementan en Infrastructure y se activan según el rol de ejecución.
 
 ```text
 src/Services/Orders/
-├── Restaurantes.Orders.Api.Read
-├── Restaurantes.Orders.Api.Write
+├── Restaurantes.Orders.Api
 ├── Restaurantes.Orders.Application
-├── Restaurantes.Orders.Consumer
 ├── Restaurantes.Orders.Contracts
 ├── Restaurantes.Orders.Domain
-├── Restaurantes.Orders.Infrastructure
-└── Restaurantes.Orders.Publisher
+└── Restaurantes.Orders.Infrastructure
 ```
 
 | Proyecto | Responsabilidad |
 | --- | --- |
-| `Restaurantes.Orders.Domain` | Agregado `Order`, líneas, estaciones de cocina, estados e invariantes. |
-| `Restaurantes.Orders.Application` | Casos de uso y puertos necesarios por el dominio. |
-| `Restaurantes.Orders.Contracts` | Requests, responses y eventos de integración. |
-| `Restaurantes.Orders.Infrastructure` | EF Core, PostgreSQL, stores, proyecciones locales e integración HTTP con Dining. |
-| `Restaurantes.Orders.Api.Write` | Comandos y transiciones del pedido. |
-| `Restaurantes.Orders.Api.Read` | Consultas operativas y hub SignalR del KDS. |
-| `Restaurantes.Orders.Publisher` | Publicación de eventos pendientes desde Outbox hacia RabbitMQ. |
-| `Restaurantes.Orders.Consumer` | Proyecciones de Catalog, Payments y KDS. |
+| `Restaurantes.Orders.Api` | Endpoints HTTP, SignalR y composición de roles. |
+| `Restaurantes.Orders.Application` | Casos de uso y puertos. |
+| `Restaurantes.Orders.Contracts` | Requests, respuestas y eventos públicos. |
+| `Restaurantes.Orders.Domain` | Agregado Order y sus reglas. |
+| `Restaurantes.Orders.Infrastructure` | Persistencia, stores, proyecciones y workers. |
 
+La API atiende las operaciones HTTP de lectura y escritura en un único host. Según el perfil,
+ese ejecutable inicia HTTP, workers o ambos. Read y Write describen responsabilidades/rutas;
+no son proyectos ni APIs separados.
 ## Arquitectura interna
 
 ```mermaid
@@ -58,14 +56,15 @@ flowchart LR
     Gateway["YARP Gateway"]
 
     subgraph Orders["Orders"]
-        WriteApi["Orders.Api.Write"]
+        WriteApi["Orders API · rutas de escritura"]
         Domain["Domain + Application"]
         WriteDb[("orders_write")]
-        Publisher["Orders.Publisher"]
-        Consumer["Orders.Consumer"]
+        Publisher["OrderOutboxPublisherWorker"]
+        Consumer["Projection workers"]
         ReadDb[("orders_read")]
-        ReadApi["Orders.Api.Read"]
-        Hub["SignalR /hubs/kds"]
+        ReadApi["Orders API · rutas de lectura y KDS"]
+        KdsHub["SignalR /hubs/kds"]
+        OrdersHub["SignalR /hubs/orders"]
     end
 
     Dining["Dining"]
@@ -95,11 +94,12 @@ flowchart LR
 
     ReadApi --> ReadDb
     Rabbit --> ReadApi
-    ReadApi --> Hub
+    ReadApi --> KdsHub
+    ReadApi --> OrdersHub
     Hub --> Clients
 ```
 
-La API de escritura y la API de lectura son procesos independientes. En los gateways, las peticiones `GET` se dirigen a `Orders.Api.Read`, mientras que los métodos de modificación se dirigen a `Orders.Api.Write`.
+El gateway separa las rutas de lectura y escritura, pero ambas llegan al mismo host de Orders. Los workers están en `Infrastructure` y se activan con el rol correspondiente.
 
 ## Modelo de dominio
 
@@ -160,23 +160,15 @@ Orders no permite combinaciones arbitrarias. El dominio valida explícitamente l
 | Origen | Servicio | Pago | Permitido |
 | --- | --- | --- | :---: |
 | Customer QR | Dine-in | Immediate | Sí |
-| Customer QR | Dine-in | OnAccount | Sí |
-| Waiter Mobile | Dine-in | OnAccount | Sí |
+| Comandero | Dine-in | OnAccount | Sí |
 | POS | Dine-in | OnAccount | Sí |
 | POS | Bar | OnAccount | Sí |
-| POS | Takeaway | Immediate | Sí |
+| POS | Takeaway | Immediate | No |
 | POS | Takeaway | OnAccount | Sí |
 
 Las demás combinaciones se rechazan en el dominio.
 
-En Customer QR, `Immediate` y `OnAccount` son ambas combinaciones válidas porque la elección depende de la política de Dining para el restaurante:
-
-```text
-QrRequiresImmediatePayment = true  -> Customer QR crea el pedido como Immediate
-QrRequiresImmediatePayment = false -> Customer QR crea el pedido como OnAccount
-```
-
-El PWA Customer QR obtiene ese flag al abrir o recuperar la sesión en Dining. Orders conserva ambas modalidades y aplica las reglas correspondientes al `PaymentTiming` recibido.
+Customer QR siempre usa `Immediate`; Orders rechaza otras modalidades para ese origen. La regla no es configurable por restaurante.
 
 ### Reglas de ubicación
 
@@ -198,7 +190,7 @@ El PWA Customer QR obtiene ese flag al abrir o recuperar la sesión en Dining. O
 ```mermaid
 sequenceDiagram
     participant Client as Cliente / POS / Comandero
-    participant API as Orders.Api.Write
+    participant API as Orders.Api
     participant Cash as CashRegister
     participant Dining as Dining
     participant DB as orders_write
@@ -236,7 +228,7 @@ El consumer mantiene dentro de `orders_write` una proyección local de:
 
 Esta decisión reduce el acoplamiento temporal entre Orders y Catalog durante la creación del pedido. Catalog sigue siendo el propietario del dato; Orders conserva únicamente la información necesaria para ejecutar su propio dominio.
 
-Los precios y nombres que se incorporan a las líneas quedan almacenados como **snapshot del momento del pedido**, por lo que un cambio posterior en Catalog no modifica retroactivamente pedidos existentes.
+Los precios y nombres que se incorporan a las líneas quedan almacenados como **snapshot del momento del pedido**, por lo que un cambio posterior en Catalog no modifica retroactivamente pedidos existentes. Cada extra seleccionado conserva su nombre, cantidad y precio unitario en una instantánea independiente. Su importe se añade al total del pedido y se muestra separado del precio del plato, en una fila bajo este, en los tickets de venta.
 
 ## Cocina multiestación
 
@@ -297,32 +289,28 @@ Reglas actuales:
 
 - un pedido `Immediate` debe estar pagado antes de enviarse a cocina;
 - un `Takeaway` debe estar pagado antes de entregarse al cliente;
+- TPV puede registrar el pago de un `Takeaway` antes o después de que KDS termine; la entrega solo se habilita cuando esté listo;
+- las líneas de un pedido impagado pueden cancelarse individualmente mientras su estación siga `Pending`;
 - una línea de un pedido pagado no puede cancelarse mediante el flujo operativo normal;
 - un takeaway pagado debe haber sido reembolsado antes de poder cancelarse.
 
 Los reembolsos completos y otros procesos administrativos pertenecen al flujo de Backoffice / Payments, no al agregado Orders.
 
-### Customer QR y pago configurable
+### Customer QR y pago obligatorio
 
-Para pedidos `CustomerQr`, el flujo depende de `QrRequiresImmediatePayment`:
+Para pedidos `CustomerQr`, la captura online es obligatoria antes de `submit`:
 
 ```mermaid
 flowchart LR
-    A[Crear pedido Draft] --> B{QrRequiresImmediatePayment}
-
-    B -- true --> C[PaymentTiming = Immediate]
-    C --> D[Captura online en Payments]
-    D --> E[PaymentCaptured]
-    E --> F[Orders proyecta Paid]
-    F --> G[submit]
-    G --> H[Submitted / cocina]
-
-    B -- false --> I[PaymentTiming = OnAccount]
-    I --> J[submit]
-    J --> H
+    A[Abrir o recuperar sesión QR] --> B[Crear pedido Draft Immediate]
+    B --> C[Captura online en Payments]
+    C --> D[PaymentCaptured]
+    D --> E[Orders proyecta Paid]
+    E --> F[submit]
+    F --> G[Submitted / cocina]
 ```
 
-Cuando el pedido es `Immediate`, `SubmitAsync` consulta la proyección local de pagos y rechaza el envío a cocina mientras el pedido no figure como pagado. Cuando es `OnAccount`, no existe esa precondición de captura inmediata y el pedido puede incorporarse a la cuenta de la sesión.
+`SubmitAsync` consulta la proyección local y rechaza el envío a cocina mientras el pedido no figure como pagado. El borrador técnico existe durante la captura, pero no aparece en KDS hasta `submit`.
 
 La sesión Customer QR y su `X-Customer-Session-Token` se vuelven a validar contra Dining al ejecutar `submit`.
 
@@ -336,14 +324,15 @@ Orders no mantiene el estado maestro de caja; la comprobación se realiza contra
 
 ## Persistencia
 
-Orders utiliza dos bases de datos PostgreSQL lógicamente independientes:
+Orders conserva dos esquemas PostgreSQL independientes, cada uno en la base física
+asignada a su tipo de carga:
 
 ```text
 orders_write
 orders_read
 ```
 
-En desarrollo ambas pueden ejecutarse dentro de la misma instancia PostgreSQL. La separación es lógica desde el inicio y puede convertirse en separación física en cloud cuando la carga lo justifique.
+`orders_write` está en la base operativa y `orders_read` en la base de lectura. Cada esquema mantiene su historial de migraciones.
 
 ### `orders_write`
 
@@ -435,9 +424,9 @@ Cada cambio relevante del agregado se guarda junto con su evento en `outbox_mess
 
 ```mermaid
 sequenceDiagram
-    participant API as Orders.Api.Write
+    participant API as Orders.Api
     participant DB as orders_write
-    participant Publisher as Orders.Publisher
+    participant Publisher as OrderOutboxPublisherWorker
     participant MQ as RabbitMQ
 
     API->>DB: guardar Order + OutboxMessage
@@ -452,7 +441,7 @@ sequenceDiagram
 
 El objetivo es evitar el escenario clásico en el que el pedido se confirma en PostgreSQL pero el proceso cae antes de publicar el evento correspondiente.
 
-`Orders.Publisher` publica lotes de hasta 50 mensajes pendientes y conserva información de error cuando una publicación falla.
+`OrderOutboxPublisherWorker` publica lotes de hasta 50 mensajes pendientes y conserva información de error cuando una publicación falla.
 
 ## Inbox e idempotencia
 
@@ -543,17 +532,18 @@ La proyección contiene, entre otros:
 - líneas serializadas;
 - estaciones serializadas.
 
-Esta estructura está pensada para responder a las necesidades del KDS sin hacer joins sobre el modelo transaccional ni consultar la base `orders_write`.
+Esta estructura está pensada para responder a las necesidades del KDS sin hacer joins sobre el modelo transaccional ni consultar el esquema `orders_write`.
 
 ## SignalR
 
-La API de lectura expone:
+La API de lectura expone un canal de monitor exclusivo para KDS y otro canal para notificaciones de pedidos consumidas por Comandero y TPV:
 
 ```text
 /hubs/kds
+/hubs/orders
 ```
 
-Después de actualizar la proyección, el consumer publica `KdsOrderUpdated`. `KdsSignalRWorker` consume esa notificación y la distribuye a grupos SignalR por restaurante y estación.
+Después de actualizar la proyección, el consumer publica `KdsOrderUpdated`. `KdsSignalRWorker` distribuye esa notificación al grupo KDS de cada estación y a los grupos de pedidos de Comandero y TPV. `/hubs/kds` exige `kds.use`; `/hubs/orders` valida `commander.use` o `pos.use` según el método de unión solicitado.
 
 El KDS puede suscribirse a:
 
@@ -593,8 +583,9 @@ Ruta base:
 
 | Método | Endpoint | Operación |
 | --- | --- | --- |
-| `GET` | `/api/orders?restaurantId={id}` | Pedidos de un restaurante. |
-| `GET` | `/api/orders?restaurantId={id}&stationCode={code}` | Vista filtrada por estación KDS. |
+| `GET` | `/api/orders/commander?restaurantId={id}` | Pedidos para Comandero; requiere `commander.use`. |
+| `GET` | `/api/orders/pos?restaurantId={id}` | Pedidos para TPV; requiere `pos.use`. |
+| `GET` | `/api/orders/kds?restaurantId={id}&stationCode={code}` | Vista filtrada por estación KDS; requiere `kds.use`. |
 | `GET` | `/api/orders/{id}` | Obtener la proyección de un pedido. |
 
 ## Gateways
@@ -603,8 +594,8 @@ Orders se publica mediante los gateways YARP de la solución. Tanto el gateway p
 
 | Métodos | Destino |
 | --- | --- |
-| `GET` | `Orders.Api.Read` |
-| `POST`, `PUT`, `PATCH`, `DELETE` | `Orders.Api.Write` |
+| `GET` | Orders API, controlador de lectura |
+| `POST`, `PUT`, `PATCH`, `DELETE` | Orders API, controlador de escritura |
 
 La ruta expuesta es `/api/orders/{**catch-all}` y la división Read / Write se mantiene también en el borde de la plataforma.
 
@@ -616,10 +607,12 @@ Permisos relacionados:
 
 | Permiso | Uso |
 | --- | --- |
+| `pos.use` | Lectura de pedidos y notificaciones del TPV. |
+| `commander.use` | Lectura de pedidos y notificaciones del Comandero. |
 | `orders.create` | Creación desde POS / Comandero. |
 | `orders.manage` | Gestión general y transiciones operativas. |
 | `orders.recover` | Cancelación de recuperación operacional. |
-| `kds.use` | Operación de estaciones y lectura KDS. |
+| `kds.use` | Lectura y operación del monitor KDS. |
 
 ### Customer QR
 
@@ -694,8 +687,7 @@ Puertos configurados actualmente:
 
 | Componente | URL |
 | --- | --- |
-| Orders Write API | `http://localhost:5121` |
-| Orders Read API | `http://localhost:5122` |
+| Orders API | `http://localhost:5121` |
 
 La infraestructura local utiliza PostgreSQL y RabbitMQ definidos en el `docker-compose.yml` de la raíz del repositorio.
 
@@ -709,7 +701,7 @@ Los perfiles de arranque de la solución pueden utilizarse para iniciar conjunta
 
 ## Health checks
 
-`Orders.Api.Write` y `Orders.Api.Read` utilizan `Restaurantes.ServiceDefaults` y exponen los endpoints comunes de salud de la solución:
+`Orders.Api` utiliza `Restaurantes.ServiceDefaults` y expone los endpoints comunes de salud de la solución:
 
 ```text
 /health
@@ -736,16 +728,15 @@ Transactional Outbox evita confirmar un cambio de pedido sin conservar el evento
 
 ## Despliegue y escalado
 
-Orders está dividido en procesos que pueden desplegarse y escalarse por separado:
+Orders usa un único ejecutable API con perfiles de ejecución:
 
 ```text
-Orders.Api.Write
-Orders.Publisher
-Orders.Consumer
-Orders.Api.Read
+Http: controladores y KDS SignalR.
+Workers: proyecciones y Outbox.
+All: API y workers en el mismo proceso.
 ```
 
-La separación permite tratar como cargas diferentes:
+Cuando Http y Workers se inician por separado, se pueden asignar recursos distintos a:
 
 - comandos transaccionales;
 - publicación de eventos;
@@ -760,11 +751,11 @@ Una primera instalación puede ejecutar `orders_write` y `orders_read` dentro de
 En escenarios con mayor volumen pueden separarse físicamente:
 
 ```text
-Orders.Api.Write ──> PostgreSQL Write
+Orders.Api ──> PostgreSQL Write
 
-RabbitMQ ──> Orders.Consumer ──> PostgreSQL Read
+RabbitMQ ──> Orders projection workers ──> PostgreSQL Read
 
-Orders.Api.Read ──> PostgreSQL Read
+Orders.Api ──> PostgreSQL Read
 ```
 
 La base de lectura puede recibir más CPU, memoria o réplicas según la demanda de KDS y consultas sin incrementar necesariamente los recursos dedicados al camino transaccional.

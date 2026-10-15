@@ -8,5 +8,13 @@ public sealed record SaleCompleted(
     decimal Total,
     DateTime CompletedAtUtc,
     IReadOnlyList<Guid> OrderIds,
-    IReadOnlyList<SaleLineSnapshot> Lines
+    IReadOnlyList<SaleLineSnapshot> Lines,
+    DateOnly? BusinessDate = null,
+    IReadOnlyList<SalePaymentBreakdown>? PaymentMethods = null,
+    decimal TipTotal = 0,
+    string? DiscountName = null,
+    decimal DiscountPercentage = 0,
+    decimal DiscountAmount = 0
 );
+
+public sealed record SalePaymentBreakdown(string Method, int Payments, decimal Amount);

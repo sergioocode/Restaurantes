@@ -1,0 +1,72 @@
+﻿@using Restaurantes.Clients.Backoffice.Pwa.Models
+@inject Restaurantes.Clients.Backoffice.Pwa.Api.BackofficeApi Api
+
+@if (!Host.HasGlobalPermission("catalog.global.manage")) { <NoAccessPanel /> }
+else
+{
+    @if (!string.IsNullOrWhiteSpace(status)) { <p role="status">@status</p> }
+    @if (snapshot is not null)
+    {
+        <details class="admin-panel" open><summary>Nuevo alérgeno</summary>
+            <div class="inline-form allergen-create-form">
+                <input aria-label="Código del nuevo alérgeno" placeholder="Código" @bind="newAllergen.Code" />
+                <input aria-label="Nombre del nuevo alérgeno" placeholder="Alérgeno" @bind="newAllergen.Name" />
+                <textarea aria-label="Descripción del nuevo alérgeno" placeholder="Descripción" @bind="newAllergen.Description"></textarea>
+                <button class="primary" @onclick="() => SaveAllergen(newAllergen, true)" disabled="@busy">Agregar Alérgeno</button>
+            </div>
+        </details>
+        <div class="maintenance-list">
+            @foreach (CatalogAllergenModel allergen in snapshot.Allergens.OrderBy(x => x.Name))
+            {
+                <div class="maintenance-row @(allergen.IsActive ? "" : "inactive")">
+                    <input aria-label="Código de alérgeno" @bind="allergen.Code" />
+                    <input aria-label="Nombre de alérgeno" @bind="allergen.Name" />
+                    <textarea aria-label="Descripción de alérgeno" @bind="allergen.Description"></textarea>
+                    <label class="availability"><input type="checkbox" @bind="allergen.IsActive" /> Activo</label>
+                    <button class="primary" @onclick="() => SaveAllergen(allergen, false)" disabled="@busy">Guardar</button>
+                </div>
+            }
+        </div>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public Home Host { get; set; } = default!;
+    private CatalogDesignSnapshot? snapshot;
+    private CatalogAllergenModel newAllergen = new();
+    private string? status;
+    private bool busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Host.HasGlobalPermission("catalog.global.manage")) await Refresh();
+    }
+
+    internal Task Refresh() => Run(async () => snapshot = await Api.CatalogDesignAsync(), false);
+
+    private Task SaveAllergen(CatalogAllergenModel allergen, bool isNew) => Run(async () =>
+    {
+        await Api.SaveAllergenAsync(allergen);
+        if (isNew) newAllergen = new();
+        snapshot = await Api.CatalogDesignAsync();
+    }, true);
+
+    private async Task Run(Func<Task> action, bool saved)
+    {
+        busy = true;
+        status = null;
+        try
+        {
+            await action();
+            if (saved) status = "Alérgeno guardado.";
+        }
+        catch (Exception error)
+        {
+            status = error.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

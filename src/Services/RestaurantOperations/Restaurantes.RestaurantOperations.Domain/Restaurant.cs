@@ -4,12 +4,20 @@ public sealed class Restaurant
 {
     private Restaurant() { }
 
-    private Restaurant(Guid id, string code, string name, string address, DateTime occurredAtUtc)
+    private Restaurant(
+        Guid id,
+        string code,
+        string name,
+        string address,
+        Guid companyId,
+        DateTime occurredAtUtc
+    )
     {
         Id = id;
         Code = NormalizeCode(code);
         Name = NormalizeRequired(name, nameof(name));
         Address = NormalizeRequired(address, nameof(address));
+        CompanyId = companyId;
         IsActive = true;
         Version = 1;
         UpdatedAtUtc = occurredAtUtc;
@@ -19,6 +27,7 @@ public sealed class Restaurant
     public string Code { get; private set; } = string.Empty;
     public string Name { get; private set; } = string.Empty;
     public string Address { get; private set; } = string.Empty;
+    public Guid? CompanyId { get; private set; }
     public bool IsActive { get; private set; }
     public int Version { get; private set; }
     public DateTime UpdatedAtUtc { get; private set; }
@@ -27,17 +36,34 @@ public sealed class Restaurant
         string code,
         string name,
         string address,
+        Guid companyId,
         DateTime occurredAtUtc
     )
     {
-        return new(Guid.NewGuid(), code, name, address, occurredAtUtc);
+        return new(Guid.NewGuid(), code, name, address, companyId, occurredAtUtc);
     }
 
-    public void Update(string name, string address, bool isActive, DateTime occurredAtUtc)
+    public void Update(string name, string address, DateTime occurredAtUtc)
     {
         Name = NormalizeRequired(name, nameof(name));
         Address = NormalizeRequired(address, nameof(address));
+        Updated(occurredAtUtc);
+    }
+
+    public void SetCompany(Guid companyId, DateTime occurredAtUtc)
+    {
+        CompanyId = companyId;
+        Updated(occurredAtUtc);
+    }
+
+    public void SetActive(bool isActive, DateTime occurredAtUtc)
+    {
         IsActive = isActive;
+        Updated(occurredAtUtc);
+    }
+
+    private void Updated(DateTime occurredAtUtc)
+    {
         Version++;
         UpdatedAtUtc = occurredAtUtc;
     }
