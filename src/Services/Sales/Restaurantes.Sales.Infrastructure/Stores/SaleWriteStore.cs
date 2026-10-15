@@ -20,6 +20,7 @@ public sealed class SaleWriteStore(SaleWriteDbContext dbContext) : ISaleWriteSto
         return dbContext
             .Sales.Include(item => item.Orders)
             .Include(item => item.Payments)
+            .AsSplitQuery()
             .SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
     }
 
@@ -28,6 +29,7 @@ public sealed class SaleWriteStore(SaleWriteDbContext dbContext) : ISaleWriteSto
         return dbContext
             .Sales.Include(item => item.Orders)
             .Include(item => item.Payments)
+            .AsSplitQuery()
             .SingleOrDefaultAsync(
                 item => item.Orders.Any(order => order.OrderId == orderId),
                 cancellationToken
