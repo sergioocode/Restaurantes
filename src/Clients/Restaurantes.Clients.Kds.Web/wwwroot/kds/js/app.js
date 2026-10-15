@@ -387,7 +387,7 @@ loginGoogle.addEventListener('click', () => startLogin('Google'));
 refreshButton.addEventListener('click', refreshMonitor);
 historyButton.addEventListener('click', () => {
   if (historyOpen) closeHistory();
-  else openHistory();
+  else openHistory().catch(error => { eventText.textContent = error.message; });
 });
 logoutButton.addEventListener('click', logout);
 restaurantSelect.addEventListener('change', () => {
@@ -396,7 +396,7 @@ restaurantSelect.addEventListener('change', () => {
   selectedRestaurantId = restaurantId;
   localStorage.setItem(restaurantKey, restaurantId);
   pendingOrders.clear();
-  loadStationsAndConnect();
+  loadStationsAndConnect().catch(error => { eventText.textContent = error.message; });
 });
 stationSelect.addEventListener('change', () => {
   closeHistory();

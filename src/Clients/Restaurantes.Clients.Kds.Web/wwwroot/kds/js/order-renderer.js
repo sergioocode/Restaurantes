@@ -166,9 +166,11 @@ export class OrderRenderer {
     name.className = 'product-name';
     const notes = line.notes || '';
     const extrasMarker = notes.indexOf('Extras:');
-    const productNotes = extrasMarker < 0
-      ? notes
-      : notes.slice(0, extrasMarker).replace(/[·\s]+$/, '').trim();
+    let productNotes = notes;
+    if (extrasMarker >= 0) {
+      productNotes = notes.slice(0, extrasMarker).trimEnd();
+      if (productNotes.endsWith('·')) productNotes = productNotes.slice(0, -1).trimEnd();
+    }
     name.textContent = line.quantity + ' × ' + line.productName
       + productFormatLabel(line.format) + ' · ' + line.categoryName
       + (productNotes ? ' — ' + productNotes : '');
