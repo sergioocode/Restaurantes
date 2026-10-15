@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Restaurantes.Catalog.Api;
 using Restaurantes.Catalog.Api.Realtime;
 using Restaurantes.Catalog.Api.Services;
 using Restaurantes.Catalog.Application;

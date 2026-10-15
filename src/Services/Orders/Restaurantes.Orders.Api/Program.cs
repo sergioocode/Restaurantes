@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Restaurantes.Messaging.RabbitMq;
+using Restaurantes.Orders.Api;
 using Restaurantes.Orders.Api.Realtime;
 using Restaurantes.Orders.Application;
 using Restaurantes.Orders.Infrastructure;

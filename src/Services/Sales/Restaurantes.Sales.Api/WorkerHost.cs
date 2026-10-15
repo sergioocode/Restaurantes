@@ -6,6 +6,8 @@ using Restaurantes.Sales.Infrastructure.Persistence.Read;
 using Restaurantes.Sales.Infrastructure.Persistence.Write;
 using Restaurantes.Sales.Infrastructure.Workers;
 
+namespace Restaurantes.Sales.Api;
+
 internal static class WorkerHost
 {
     public static void ConfigureServices(IServiceCollection services, IConfiguration configuration)
