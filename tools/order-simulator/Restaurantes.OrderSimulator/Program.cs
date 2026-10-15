@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Restaurantes.Catalog.Contracts.Responses;
 using Restaurantes.Dining.Contracts.Requests;
@@ -42,11 +43,12 @@ internal static class Program
                 Timeout = Timeout.InfiniteTimeSpan,
             };
 
-            Random sharedRandom = options.RandomSeed is int seed ? new Random(seed) : Random.Shared;
+            SimulatorRandom sharedRandom = new(options.RandomSeed);
             SemaphoreSlim randomLock = new(1, 1);
             RandomOrderScheduler orderScheduler = new(
                 options.MaxConcurrentOrders,
-                options.Restaurants.Select(restaurant => restaurant.RestaurantId)
+                options.Restaurants.Select(restaurant => restaurant.RestaurantId),
+                sharedRandom
             );
             Task<Exception?>[] preflights = options
                 .Restaurants.Select(restaurant =>
@@ -188,7 +190,7 @@ internal static class Program
         RandomOrderScheduler orderScheduler,
         TimeSpan kitchenStepDelay,
         TimeSpan runDuration,
-        Random random,
+        SimulatorRandom random,
         SemaphoreSlim randomLock,
         CancellationToken stopCreating
     )
@@ -380,7 +382,7 @@ internal static class Program
         RandomOrderScheduler orderScheduler,
         TimeSpan kitchenStepDelay,
         TimeSpan runDuration,
-        Random random,
+        SimulatorRandom random,
         SemaphoreSlim randomLock,
         CancellationToken stopCreating
     )
@@ -525,14 +527,21 @@ internal static class Program
                 break;
             }
 
-            Task pollDelay = Task.Delay(TableAvailabilityPollInterval);
-            if (activeOrders.Count == 0)
+            if (stopCreating.IsCancellationRequested && activeOrders.Count > 0)
             {
-                await pollDelay;
+                await Task.WhenAny(activeOrders.Values.Cast<Task>());
             }
             else
             {
-                await Task.WhenAny(activeOrders.Values.Cast<Task>().Append(pollDelay));
+                Task pollDelay = Task.Delay(TableAvailabilityPollInterval, stopCreating);
+                if (activeOrders.Count == 0)
+                {
+                    await pollDelay;
+                }
+                else
+                {
+                    await Task.WhenAny(activeOrders.Values.Cast<Task>().Append(pollDelay));
+                }
             }
         }
 
@@ -595,7 +604,7 @@ internal static class Program
 
     private static List<TableInfo> InterleaveTablesByZone(
         IReadOnlyList<TableInfo> tables,
-        Random random,
+        SimulatorRandom random,
         SemaphoreSlim randomLock
     )
     {
@@ -629,7 +638,7 @@ internal static class Program
         IReadOnlySet<Guid> availableProductIds,
         TableInfo table,
         TimeSpan kitchenStepDelay,
-        Random random,
+        SimulatorRandom random,
         SemaphoreSlim randomLock
     )
     {
@@ -792,7 +801,7 @@ internal static class Program
         RestaurantOptions restaurant,
         IReadOnlyList<MenuItemResponse> menu,
         IReadOnlySet<Guid> availableProductIds,
-        Random random,
+        SimulatorRandom random,
         SemaphoreSlim randomLock
     )
     {
@@ -999,7 +1008,7 @@ internal static class Program
         Guid sessionId,
         OrderResponse order,
         int guestCount,
-        Random random,
+        SimulatorRandom random,
         SemaphoreSlim randomLock
     )
     {
@@ -1087,7 +1096,7 @@ internal static class Program
         PaymentOptions options,
         decimal amount,
         int guestCount,
-        Random random,
+        SimulatorRandom random,
         SemaphoreSlim randomLock
     )
     {
@@ -1134,7 +1143,7 @@ internal static class Program
     internal static List<PaymentPart> CreatePaymentParts(
         PaymentOptions options,
         decimal amount,
-        Random random,
+        SimulatorRandom random,
         SemaphoreSlim? randomLock = null
     )
     {
@@ -1187,7 +1196,7 @@ internal static class Program
     private static List<PaymentMethodOptions> PickWeightedMethods(
         IReadOnlyList<PaymentMethodOptions> methods,
         int count,
-        Random random,
+        SimulatorRandom random,
         SemaphoreSlim? randomLock
     )
     {
@@ -1303,16 +1312,16 @@ internal static class Program
             ?? throw new InvalidDataException("El servicio respondió sin contenido JSON.");
     }
 
-    private static int Next(Random random, SemaphoreSlim? randomLock, IntRange range)
+    private static int Next(SimulatorRandom random, SemaphoreSlim? randomLock, IntRange range)
     {
         if (randomLock is null)
         {
-            return random.Next(range.Minimum, range.Maximum + 1);
+            return random.NextInteger(range.Minimum, range.Maximum + 1);
         }
         randomLock.Wait();
         try
         {
-            return random.Next(range.Minimum, range.Maximum + 1);
+            return random.NextInteger(range.Minimum, range.Maximum + 1);
         }
         finally
         {
@@ -1320,16 +1329,16 @@ internal static class Program
         }
     }
 
-    private static double NextDouble(Random random, SemaphoreSlim? randomLock)
+    private static double NextDouble(SimulatorRandom random, SemaphoreSlim? randomLock)
     {
         if (randomLock is null)
         {
-            return random.NextDouble();
+            return random.NextFraction();
         }
         randomLock.Wait();
         try
         {
-            return random.NextDouble();
+            return random.NextFraction();
         }
         finally
         {
@@ -1337,14 +1346,14 @@ internal static class Program
         }
     }
 
-    private static T Pick<T>(IReadOnlyList<T> items, Random random, SemaphoreSlim? randomLock)
+    private static int Pick(List<int> items, SimulatorRandom random, SemaphoreSlim? randomLock)
     {
         return items[Next(random, randomLock, new IntRange(0, items.Count - 1))];
     }
 
     private static List<T> Shuffle<T>(
         IReadOnlyList<T> items,
-        Random random,
+        SimulatorRandom random,
         SemaphoreSlim? randomLock
     )
     {
@@ -1366,9 +1375,57 @@ internal static class Program
     private static decimal RoundMoney(decimal value) =>
         decimal.Round(value, 2, MidpointRounding.AwayFromZero);
 
+    internal sealed class SimulatorRandom(int? seed)
+    {
+        private readonly object gate = new();
+        private ulong state = seed is int value ? unchecked((ulong)(long)value) : 0;
+
+        public int NextInteger(int minimum, int maximum)
+        {
+            lock (gate)
+            {
+                if (minimum >= maximum)
+                {
+                    return minimum;
+                }
+
+                if (seed is null)
+                {
+                    return RandomNumberGenerator.GetInt32(minimum, maximum);
+                }
+
+                ulong range = (ulong)((long)maximum - minimum);
+                return (int)(minimum + (long)(NextSeededUInt64() % range));
+            }
+        }
+
+        public double NextFraction()
+        {
+            lock (gate)
+            {
+                if (seed is null)
+                {
+                    return RandomNumberGenerator.GetInt32(0, 1 << 24) / (double)(1 << 24);
+                }
+
+                return (NextSeededUInt64() >> 11) * (1.0 / (1UL << 53));
+            }
+        }
+
+        private ulong NextSeededUInt64()
+        {
+            state += 0x9E3779B97F4A7C15;
+            ulong value = state;
+            value = (value ^ (value >> 30)) * 0xBF58476D1CE4E5B9;
+            value = (value ^ (value >> 27)) * 0x94D049BB133111EB;
+            return value ^ (value >> 31);
+        }
+    }
+
     private sealed class RandomOrderScheduler(
         int maxConcurrentOrders,
-        IEnumerable<Guid> restaurantIds
+        IEnumerable<Guid> restaurantIds,
+        SimulatorRandom random
     )
     {
         private readonly object gate = new();
@@ -1419,7 +1476,7 @@ internal static class Program
                     return;
                 }
 
-                int selectedIndex = Random.Shared.Next(eligibleRestaurants.Length);
+                int selectedIndex = random.NextInteger(0, eligibleRestaurants.Length);
                 KeyValuePair<Guid, Queue<PendingOrder>> selected = eligibleRestaurants[
                     selectedIndex
                 ];
