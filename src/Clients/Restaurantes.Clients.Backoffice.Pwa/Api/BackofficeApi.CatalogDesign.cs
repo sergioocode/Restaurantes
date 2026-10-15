@@ -45,10 +45,10 @@ public sealed partial class BackofficeApi
 
     public async Task UploadProductPhotoAsync(Guid productId, IBrowserFile photo)
     {
-        if (photo.Size > 10_000_000)
-            throw new InvalidOperationException("La foto supera 10 MB.");
+        if (photo.Size > 7_000_000)
+            throw new InvalidOperationException("La foto supera 7 MB.");
         using MultipartFormDataContent body = new();
-        AddFile(body, photo, "original", 10_000_000);
+        AddFile(body, photo, "original", 7_000_000);
         using HttpRequestMessage request = Authorized(
             HttpMethod.Post,
             $"/api/catalog/products/{productId}/photos"

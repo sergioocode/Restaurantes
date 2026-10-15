@@ -1,6 +1,6 @@
 # Imágenes de productos
 
-El Backoffice envía una sola imagen original (máximo 10 MB). La API valida el formato, limita la imagen a 40 megapíxeles y genera tres variantes WebP manteniendo la proporción:
+El Backoffice envía una sola imagen original (máximo 7 MB, 7.000.000 bytes). La API limita la petición completa a 8 MB para incluir el formulario multipart, valida el formato, limita la imagen a 40 megapíxeles y genera tres variantes WebP manteniendo la proporción:
 
 - `thumbnail.webp`: lado máximo de 160 px para listados.
 - `card.webp`: lado máximo de 640 px para TPV y Comandero.

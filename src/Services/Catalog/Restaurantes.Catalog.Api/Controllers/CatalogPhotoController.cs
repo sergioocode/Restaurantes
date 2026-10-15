@@ -11,7 +11,10 @@ namespace Restaurantes.Catalog.Api.Controllers;
 public sealed class CatalogPhotoController(CatalogWriteDbContext db, IProductImageStorage storage)
     : ControllerBase
 {
-    [HttpPost, Authorize, RequestSizeLimit(12_000_000)]
+    private const int MaxRequestBytes = 8_000_000;
+
+    [HttpPost, Authorize, RequestSizeLimit(MaxRequestBytes)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 7_000_000)]
     public async Task<IActionResult> Upload(
         Guid productId,
         [FromForm] IFormFile original,
@@ -20,10 +23,12 @@ public sealed class CatalogPhotoController(CatalogWriteDbContext db, IProductIma
     {
         if (!User.HasAnyRestaurantPermission(RestaurantPermissions.CatalogGlobalManage))
             return Forbid();
+        if (Request.ContentLength is > MaxRequestBytes)
+            return StatusCode(StatusCodes.Status413PayloadTooLarge);
         if (!await db.Products.AnyAsync(x => x.Id == productId, ct))
             return NotFound();
-        if (original.Length is < 1 or > 10_000_000)
-            return BadRequest("La imagen debe ocupar entre 1 byte y 10 MB.");
+        if (original.Length is < 1 or > 7_000_000)
+            return BadRequest("La imagen debe ocupar entre 1 byte y 7 MB.");
 
         byte[] originalBytes = await ReadAsync(original, ct);
         ProcessedProductImage processed;
