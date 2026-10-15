@@ -25,6 +25,11 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Instalar Node.js para las pruebas de KDS
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
       - name: Restaurar herramientas locales
         if: github.ref == 'refs/heads/master'
         run: dotnet tool restore
@@ -42,6 +47,7 @@ jobs:
           /o:"sergioocode"
           /d:sonar.token="$SONAR_TOKEN"
           /d:sonar.cs.opencover.reportsPaths="TestResults/coverage.opencover*.xml"
+          /d:sonar.javascript.lcov.reportPaths="$GITHUB_WORKSPACE/TestResults/kds.lcov.info"
           /d:sonar.qualitygate.wait=true
 
       - name: Compilar la solución
@@ -53,6 +59,10 @@ jobs:
           --results-directory TestResults
           -- --coverlet --coverlet-output-format opencover
           --coverlet-include "[Restaurantes.*]*"
+
+      - name: Ejecutar pruebas de KDS y generar cobertura JavaScript
+        shell: pwsh
+        run: ./tools/sonar/Invoke-KdsCoverage.ps1
 
       - name: Publicar análisis en SonarQube Cloud
         if: github.ref == 'refs/heads/master'
@@ -67,5 +77,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cobertura-opencover
-          path: TestResults/coverage.opencover*.xml
+          path: |
+            TestResults/coverage.opencover*.xml
+            TestResults/kds.lcov.info
           if-no-files-found: error
