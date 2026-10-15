@@ -14,6 +14,14 @@ const appShell = [
   './icons/icon-512.png'
 ];
 
+function cacheResponse(event, request, response) {
+  event.waitUntil(
+    caches.open(cacheName)
+      .then(cache => cache.put(request, response))
+      .catch(error => console.error('No se pudo guardar la respuesta en caché.', error))
+  );
+}
+
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(cacheName)
@@ -46,8 +54,7 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       fetch(request)
         .then(response => {
-          const copy = response.clone();
-          caches.open(cacheName).then(cache => cache.put('./index.html', copy));
+          cacheResponse(event, './index.html', response.clone());
           return response;
         })
         .catch(() => caches.match('./index.html'))
@@ -60,8 +67,7 @@ self.addEventListener('fetch', event => {
       fetch(request)
         .then(response => {
           if (response.ok) {
-            const copy = response.clone();
-            caches.open(cacheName).then(cache => cache.put(request, copy));
+            cacheResponse(event, request, response.clone());
           }
           return response;
         })
@@ -73,8 +79,7 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(request).then(cached => cached || fetch(request).then(response => {
       if (response.ok) {
-        const copy = response.clone();
-        caches.open(cacheName).then(cache => cache.put(request, copy));
+        cacheResponse(event, request, response.clone());
       }
       return response;
     }))
