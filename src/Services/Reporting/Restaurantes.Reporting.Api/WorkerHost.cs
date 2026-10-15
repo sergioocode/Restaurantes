@@ -2,6 +2,8 @@
 using Restaurantes.Reporting.Infrastructure;
 using Restaurantes.Reporting.Infrastructure.Workers;
 
+namespace Restaurantes.Reporting.Api;
+
 internal static class WorkerHost
 {
     public static void ConfigureServices(IServiceCollection services, IConfiguration configuration)

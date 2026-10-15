@@ -3,6 +3,8 @@ using Restaurantes.Dining.Infrastructure;
 using Restaurantes.Dining.Infrastructure.Workers;
 using Restaurantes.Messaging.RabbitMq;
 
+namespace Restaurantes.Dining.Api;
+
 internal static class WorkerHost
 {
     public static void ConfigureServices(IServiceCollection services, IConfiguration configuration)

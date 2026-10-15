@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Restaurantes.RestaurantOperations.Api;
 using Restaurantes.RestaurantOperations.Application;
 using Restaurantes.RestaurantOperations.Infrastructure;
 using Restaurantes.RestaurantOperations.Infrastructure.Persistence.Read;

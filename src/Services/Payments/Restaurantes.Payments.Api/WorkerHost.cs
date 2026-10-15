@@ -2,6 +2,8 @@
 using Restaurantes.Payments.Infrastructure;
 using Restaurantes.Payments.Infrastructure.Workers;
 
+namespace Restaurantes.Payments.Api;
+
 internal static class WorkerHost
 {
     public static void ConfigureServices(IServiceCollection services, IConfiguration configuration)

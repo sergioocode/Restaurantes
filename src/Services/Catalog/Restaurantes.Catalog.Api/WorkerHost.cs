@@ -2,6 +2,8 @@
 using Restaurantes.Catalog.Infrastructure.Workers;
 using Restaurantes.Messaging.RabbitMq;
 
+namespace Restaurantes.Catalog.Api;
+
 internal static class WorkerHost
 {
     public static void ConfigureServices(IServiceCollection services, IConfiguration configuration)
