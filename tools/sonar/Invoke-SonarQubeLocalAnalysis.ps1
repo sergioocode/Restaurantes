@@ -30,6 +30,9 @@ if (Test-Path -LiteralPath $coverageDirectory) {
 }
 New-Item -ItemType Directory -Path $coverageDirectory -Force | Out-Null
 $coverageReportPattern = Join-Path $coverageDirectory "coverage.opencover*.xml"
+$kdsCoverageReport = [System.IO.Path]::GetFullPath(
+    (Join-Path $coverageDirectory "kds.lcov.info")
+).Replace('\', '/')
 
 Invoke-DotNet @("tool", "restore")
 
@@ -44,6 +47,7 @@ $beginArguments = @(
     "/d:sonar.host.url=$ServerUrl",
     "/d:sonar.token=$Token",
     "/d:sonar.cs.opencover.reportsPaths=$coverageReportPattern",
+    "/d:sonar.javascript.lcov.reportPaths=$kdsCoverageReport",
     "/d:sonar.qualitygate.wait=true",
     "/d:sonar.qualitygate.timeout=$QualityGateTimeoutSeconds"
 )
@@ -63,4 +67,5 @@ Invoke-DotNet @(
     "--coverlet-include",
     "[Restaurantes.*]*"
 )
+& (Join-Path $PSScriptRoot "Invoke-KdsCoverage.ps1") -ResultsDirectory $coverageDirectory
 Invoke-DotNet @("tool", "run", "dotnet-sonarscanner", "--", "end", "/d:sonar.token=$Token")

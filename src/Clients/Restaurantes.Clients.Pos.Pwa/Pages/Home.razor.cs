@@ -545,7 +545,7 @@ public partial class Home
         Task<(Guid TableId, TableSessionOrderSnapshot? Snapshot)>[] requests = occupiedTables
             .Select(async table =>
             {
-                await concurrencyLimit.WaitAsync();
+                await concurrencyLimit.WaitAsync(CancellationToken.None);
                 try
                 {
                     DiningSessionResponse activeSession = await Api.ActiveSessionAsync(table.Id);
@@ -1353,7 +1353,7 @@ public partial class Home
             async () =>
             {
                 await Api.CancelOrderLineAsync(order.OrderId, line.Id, "Cancelado desde TPV");
-                await Task.Delay(500);
+                await Task.Delay(500, CancellationToken.None);
                 await LoadBill();
                 success = true;
                 message = $"{line.ProductName} cancelado antes de preparación.";
@@ -1383,7 +1383,8 @@ public partial class Home
 
     private void CloseAccountPreview() => accountPreviewOpen = false;
 
-    private async Task PrintAccountPreview() => await Js.InvokeVoidAsync("window.print");
+    private async Task PrintAccountPreview() =>
+        await Js.InvokeVoidAsync("window.print", CancellationToken.None);
 
     private async Task OpenSalesTicket()
     {
@@ -1408,7 +1409,8 @@ public partial class Home
         salesTicket = null;
     }
 
-    private async Task PrintSalesTicket() => await Js.InvokeVoidAsync("window.print");
+    private async Task PrintSalesTicket() =>
+        await Js.InvokeVoidAsync("window.print", CancellationToken.None);
 
     private void OpenPaymentDialog()
     {

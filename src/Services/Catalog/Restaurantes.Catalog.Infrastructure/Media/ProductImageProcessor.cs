@@ -11,7 +11,7 @@ public sealed record ProcessedProductImage(
 
 public static class ProductImageProcessor
 {
-    private const int MaxFileBytes = 10_000_000;
+    private const int MaxFileBytes = 7_000_000;
     private const long MaxPixels = 40_000_000;
     private static readonly (string Name, int MaxEdge)[] Sizes =
     [
@@ -23,9 +23,7 @@ public static class ProductImageProcessor
     public static ProcessedProductImage Process(byte[] original)
     {
         if (original.Length is < 1 or > MaxFileBytes)
-            throw new ProductImageValidationException(
-                "La imagen debe ocupar entre 1 byte y 10 MB."
-            );
+            throw new ProductImageValidationException("La imagen debe ocupar entre 1 byte y 7 MB.");
 
         string contentType = DetectFormat(original);
         using SKBitmap? source = SKBitmap.Decode(original);

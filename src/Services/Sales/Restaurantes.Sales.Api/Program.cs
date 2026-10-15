@@ -1,4 +1,5 @@
-﻿using Restaurantes.ServiceDefaults;
+﻿using Restaurantes.Sales.Api;
+using Restaurantes.ServiceDefaults;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 builder.AddVaultConfiguration();

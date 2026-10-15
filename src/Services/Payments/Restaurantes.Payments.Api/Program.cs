@@ -1,6 +1,7 @@
 ﻿using System.Net;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
+using Restaurantes.Payments.Api;
 using Restaurantes.Payments.Application;
 using Restaurantes.Payments.Infrastructure;
 using Restaurantes.Payments.Infrastructure.Persistence.Write;

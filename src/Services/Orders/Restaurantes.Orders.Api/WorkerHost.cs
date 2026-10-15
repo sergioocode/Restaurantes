@@ -3,6 +3,8 @@ using Restaurantes.Orders.Infrastructure;
 using Restaurantes.Orders.Infrastructure.Workers;
 using Restaurantes.Orders.Infrastructure.Workers.Handlers;
 
+namespace Restaurantes.Orders.Api;
+
 internal static class WorkerHost
 {
     public static void ConfigureServices(IServiceCollection services, IConfiguration configuration)

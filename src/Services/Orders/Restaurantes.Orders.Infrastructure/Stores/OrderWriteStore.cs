@@ -15,6 +15,7 @@ public sealed class OrderWriteStore(OrderWriteDbContext dbContext) : IOrderWrite
         return dbContext
             .Orders.Include(item => item.Lines)
             .Include(item => item.Stations)
+            .AsSplitQuery()
             .SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
     }
 
