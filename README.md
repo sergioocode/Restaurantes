@@ -458,7 +458,15 @@ $env:SONAR_TOKEN = "<token-de-analisis>"
 .\tools\sonar\Invoke-SonarQubeLocalAnalysis.ps1
 ```
 
-El script restaura el escáner local, ejecuta el análisis alrededor de una compilación completa y espera el resultado del **Quality Gate**. Un Gate fallido devuelve un error. Para detener únicamente esta infraestructura:
+El análisis requiere .NET 10 y Node.js 24. El script restaura el escáner local, compila la solución completa, ejecuta las pruebas .NET con cobertura OpenCover y las pruebas JavaScript de KDS con cobertura LCOV, y espera el resultado del **Quality Gate**. Un Gate fallido devuelve un error.
+
+Para ejecutar únicamente las pruebas de KDS y generar `TestResults/kds.lcov.info`, sin publicar un análisis:
+
+```powershell
+.\tools\sonar\Invoke-KdsCoverage.ps1
+```
+
+Para detener únicamente esta infraestructura:
 
 ```powershell
 docker compose --env-file tools/vault/.env --profile quality stop sonarqube sonarqube-db
@@ -470,7 +478,7 @@ docker compose --env-file tools/vault/.env --profile quality stop sonarqube sona
 
 [SonarQube Cloud](https://sonarcloud.io/) analiza `master`, la rama principal configurada para este proyecto. `develop` es la rama habitual de trabajo e integración; sus pushes no ejecutan GitHub Actions. Los cambios se promueven a `master` mediante un commit de merge con mensaje de resumen, incluso si se incorpora un solo commit.
 
-El [workflow de CI](.github/workflows/ci.yml) se ejecuta al subir `master` o manualmente. Compila la solución, ejecuta las pruebas con cobertura OpenCover, publica el análisis Cloud y espera el resultado del **Quality Gate**. Solo un commit de `master` que supere esas comprobaciones es candidato a release.
+El [workflow de CI](.github/workflows/ci.yml) se ejecuta al subir `master` o manualmente. Compila la solución, ejecuta las pruebas .NET con cobertura OpenCover y las pruebas de KDS con LCOV, publica el análisis Cloud y espera el resultado del **Quality Gate**. Solo un commit de `master` que supere esas comprobaciones es candidato a release.
 
 El workflow usa `SONAR_TOKEN` como secreto del repositorio en GitHub. La organización y la clave del proyecto están configuradas allí; el valor del token no se versiona.
 
