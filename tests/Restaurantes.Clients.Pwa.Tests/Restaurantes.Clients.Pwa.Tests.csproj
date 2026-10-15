@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Clients\Restaurantes.Clients.Commander.Pwa\Restaurantes.Clients.Commander.Pwa.csproj" />
+    <ProjectReference Include="..\..\src\Clients\Restaurantes.Clients.Backoffice.Pwa\Restaurantes.Clients.Backoffice.Pwa.csproj" />
     <ProjectReference Include="..\..\src\Clients\Restaurantes.Clients.CustomerQr.Pwa\Restaurantes.Clients.CustomerQr.Pwa.csproj" />
     <ProjectReference Include="..\..\src\Clients\Restaurantes.Clients.Pos.Pwa\Restaurantes.Clients.Pos.Pwa.csproj" />
     <ProjectReference Include="..\..\src\Services\Dining\Restaurantes.Dining.Domain\Restaurantes.Dining.Domain.csproj" />
