@@ -160,6 +160,14 @@ export class OrderRenderer {
   renderProductLine(order, line, isPrimary, blocked = false, stationActions = !isPrimary) {
     const item = document.createElement('li');
     item.className = 'product-line';
+    item.append(
+      this.renderProductDescription(line),
+      this.renderProductControls(order, line, isPrimary, blocked, stationActions)
+    );
+    return item;
+  }
+
+  renderProductDescription(line) {
     const description = document.createElement('div');
     description.className = 'product-description';
     const name = document.createElement('span');
@@ -168,8 +176,9 @@ export class OrderRenderer {
     const extrasMarker = notes.indexOf('Extras:');
     let productNotes = notes;
     if (extrasMarker >= 0) {
-      productNotes = notes.slice(0, extrasMarker).trimEnd();
-      if (productNotes.endsWith('·')) productNotes = productNotes.slice(0, -1).trimEnd();
+      let end = extrasMarker;
+      while (end > 0 && (notes[end - 1] === '·' || notes[end - 1].trim() === '')) end--;
+      productNotes = notes.slice(0, end).trim();
     }
     name.textContent = line.quantity + ' × ' + line.productName
       + productFormatLabel(line.format) + ' · ' + line.categoryName
@@ -188,6 +197,10 @@ export class OrderRenderer {
         description.append(extraLines);
       }
     }
+    return description;
+  }
+
+  renderProductControls(order, line, isPrimary, blocked, stationActions) {
     const state = document.createElement('small');
     state.className = 'line-state ' + (line.kitchenStatus || 'Pending');
     state.textContent = kitchenStatusLabel(line.kitchenStatus);
@@ -196,34 +209,38 @@ export class OrderRenderer {
     if (!(isPrimary && line.kitchenStatus === 'Ready')) controls.append(state);
 
     if (isPrimary) {
-      controls.append(
-        this.renderLineClock('Preparación', line.preparationStartedAtUtc, line.readyAtUtc),
-        this.renderLineClock('Principal', line.readyAtUtc, line.dispatchedAtUtc)
-      );
-      if (line.kitchenStatus === 'Ready') {
-        if (blocked) {
-          const note = document.createElement('small');
-          note.className = 'line-waiting';
-          note.textContent = 'Esperando un pase anterior.';
-          controls.append(note);
-        } else {
-          controls.append(this.createLineAction(order, line, 'dispatch', 'Despachar'));
-        }
-      }
+      this.appendPrimaryControls(controls, order, line, blocked);
     } else {
-      controls.append(this.renderLineClock(
-          'Preparación',
-          line.preparationStartedAtUtc,
-          line.readyAtUtc
-        ));
-      if (stationActions && line.kitchenStatus === 'Pending') {
-        controls.append(this.createLineAction(order, line, 'start-preparation', 'Iniciar'));
-      } else if (stationActions && line.kitchenStatus === 'InPreparation') {
-        controls.append(this.createLineAction(order, line, 'ready', 'Listo'));
-      }
+      this.appendStationControls(controls, order, line, stationActions);
     }
-    item.append(description, controls);
-    return item;
+    return controls;
+  }
+
+  appendPrimaryControls(controls, order, line, blocked) {
+    controls.append(
+      this.renderLineClock('Preparación', line.preparationStartedAtUtc, line.readyAtUtc),
+      this.renderLineClock('Principal', line.readyAtUtc, line.dispatchedAtUtc)
+    );
+    if (line.kitchenStatus !== 'Ready') return;
+    if (blocked) {
+      const note = document.createElement('small');
+      note.className = 'line-waiting';
+      note.textContent = 'Esperando un pase anterior.';
+      controls.append(note);
+    } else {
+      controls.append(this.createLineAction(order, line, 'dispatch', 'Despachar'));
+    }
+  }
+
+  appendStationControls(controls, order, line, stationActions) {
+    controls.append(this.renderLineClock(
+      'Preparación', line.preparationStartedAtUtc, line.readyAtUtc
+    ));
+    if (stationActions && line.kitchenStatus === 'Pending') {
+      controls.append(this.createLineAction(order, line, 'start-preparation', 'Iniciar'));
+    } else if (stationActions && line.kitchenStatus === 'InPreparation') {
+      controls.append(this.createLineAction(order, line, 'ready', 'Listo'));
+    }
   }
 
   createLineAction(order, line, action, label) {
