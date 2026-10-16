@@ -194,6 +194,51 @@ public sealed class AsyncEventDispatcherTests : BunitContext
     }
 
     [Fact]
+    public async Task Backoffice_without_authorized_restaurants_clears_local_data_without_loading_it()
+    {
+        RecordingJsonHandler handler = new();
+        using HttpClient http = new(handler) { BaseAddress = new Uri("https://localhost") };
+        var home = new Restaurantes.Clients.Backoffice.Pwa.Pages.Home();
+        home.GetType()
+            .GetProperty(
+                "Api",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic
+            )!
+            .SetValue(home, new Restaurantes.Clients.Backoffice.Pwa.Api.BackofficeApi(http));
+        SetField(
+            home,
+            "stations",
+            new List<Restaurantes.Clients.Backoffice.Pwa.Models.KitchenStationResponse> { new() }
+        );
+        SetField(
+            home,
+            "tables",
+            new List<Restaurantes.Clients.Backoffice.Pwa.Models.TableResponse> { new() }
+        );
+        SetField(
+            home,
+            "zones",
+            new List<Restaurantes.Clients.Backoffice.Pwa.Models.ZoneResponse> { new() }
+        );
+
+        MethodInfo loadAll = home.GetType()
+            .GetMethod("LoadAllCore", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        await (Task)loadAll.Invoke(home, null)!;
+
+        Assert.Empty((System.Collections.IEnumerable)GetField(home, "stations")!);
+        Assert.Empty((System.Collections.IEnumerable)GetField(home, "tables")!);
+        Assert.Empty((System.Collections.IEnumerable)GetField(home, "zones")!);
+        Assert.Equal(4, handler.Requests.Count);
+
+        MethodInfo refreshCategories = home.GetType()
+            .GetMethod("RefreshCategoriesCore", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        await (Task)refreshCategories.Invoke(home, null)!;
+
+        Assert.Equal(5, handler.Requests.Count);
+        Assert.All(handler.Requests, request => Assert.DoesNotContain("/stations", request));
+    }
+
+    [Fact]
     public void Commander_payment_keypad_builds_and_validates_values()
     {
         object home = new Restaurantes.Clients.Commander.Pwa.Pages.Home();
