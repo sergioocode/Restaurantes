@@ -21,8 +21,9 @@ public sealed class CatalogProjectionWorker(
     private IConnection? connection;
     private IChannel? channel;
 
-    protected override async Task ExecuteAsync(CancellationToken ct)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        CancellationToken ct = stoppingToken;
         bool databaseInitialized = false;
         while (!ct.IsCancellationRequested)
         {
@@ -62,7 +63,7 @@ public sealed class CatalogProjectionWorker(
             catch (Exception e)
             {
                 log.LogError(e, "Orders catalog projection disconnected; retrying.");
-                await Dispose();
+                await DisposeResourcesAsync();
                 await Task.Delay(5000, ct);
             }
         }
@@ -227,10 +228,10 @@ public sealed class CatalogProjectionWorker(
         }
     }
 
-    public override async Task StopAsync(CancellationToken ct)
+    public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        await base.StopAsync(ct);
-        await Dispose();
+        await base.StopAsync(cancellationToken);
+        await DisposeResourcesAsync();
     }
 
     private static DateTime EnsureUtc(DateTime value)
@@ -238,7 +239,7 @@ public sealed class CatalogProjectionWorker(
         return value.Kind == DateTimeKind.Utc ? value : value.ToUniversalTime();
     }
 
-    private new async Task Dispose()
+    private async Task DisposeResourcesAsync()
     {
         if (channel is not null)
         {

@@ -27,9 +27,9 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
     public DbSet<CatalogMenuEntry> CatalogMenuEntries => Set<CatalogMenuEntry>();
     public DbSet<CatalogMenuChannel> CatalogMenuChannels => Set<CatalogMenuChannel>();
 
-    protected override void OnModelCreating(ModelBuilder b)
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        EntityTypeBuilder<Category> c = b.Entity<Category>();
+        EntityTypeBuilder<Category> c = modelBuilder.Entity<Category>();
         c.ToTable("categories");
         c.HasKey(x => x.Id);
         c.Property(x => x.Code).HasMaxLength(40).IsRequired();
@@ -39,7 +39,7 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
         c.Property(x => x.DefaultStationName).HasMaxLength(80).IsRequired();
         c.Property(x => x.RequiresKds).HasDefaultValue(true);
         c.Property(x => x.Version).IsConcurrencyToken();
-        EntityTypeBuilder<Product> p = b.Entity<Product>();
+        EntityTypeBuilder<Product> p = modelBuilder.Entity<Product>();
         p.ToTable("products");
         p.HasKey(x => x.Id);
         p.Property(x => x.Sku).HasMaxLength(60).IsRequired();
@@ -54,7 +54,7 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
             .WithMany()
             .HasForeignKey(x => x.TaxId)
             .OnDelete(DeleteBehavior.Restrict);
-        EntityTypeBuilder<RestaurantMenuItem> m = b.Entity<RestaurantMenuItem>();
+        EntityTypeBuilder<RestaurantMenuItem> m = modelBuilder.Entity<RestaurantMenuItem>();
         m.ToTable("restaurant_menu_items");
         m.HasKey(x => x.Id);
         m.Property(x => x.Price).HasPrecision(12, 2);
@@ -66,7 +66,8 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
             .WithMany()
             .HasForeignKey(x => x.ProductId)
             .OnDelete(DeleteBehavior.Restrict);
-        EntityTypeBuilder<RestaurantKitchenStation> s = b.Entity<RestaurantKitchenStation>();
+        EntityTypeBuilder<RestaurantKitchenStation> s =
+            modelBuilder.Entity<RestaurantKitchenStation>();
         s.ToTable("restaurant_kitchen_stations");
         s.HasKey(x => x.Id);
         s.Property(x => x.Code).HasMaxLength(40).IsRequired();
@@ -76,7 +77,7 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
         s.HasIndex(x => x.RestaurantId)
             .HasFilter("\"IsPrimary\" = TRUE AND \"IsActive\" = TRUE")
             .IsUnique();
-        EntityTypeBuilder<OutboxMessage> o = b.Entity<OutboxMessage>();
+        EntityTypeBuilder<OutboxMessage> o = modelBuilder.Entity<OutboxMessage>();
         o.ToTable("outbox_messages");
         o.HasKey(x => x.Id);
         o.Property(x => x.Type).HasMaxLength(300).IsRequired();
@@ -84,7 +85,7 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
         o.Property(x => x.Error).HasMaxLength(2000);
         o.HasIndex(x => new { x.ProcessedAtUtc, x.OccurredAtUtc });
 
-        b.Entity<CatalogTax>(x =>
+        modelBuilder.Entity<CatalogTax>(x =>
         {
             x.ToTable("taxes");
             x.HasKey(t => t.Id);
@@ -93,7 +94,7 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
             x.Property(t => t.Name).HasMaxLength(120).IsRequired();
             x.Property(t => t.Rate).HasPrecision(7, 4);
         });
-        b.Entity<CatalogAllergen>(x =>
+        modelBuilder.Entity<CatalogAllergen>(x =>
         {
             x.ToTable("allergens");
             x.HasKey(a => a.Id);
@@ -102,7 +103,7 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
             x.Property(a => a.Name).HasMaxLength(120).IsRequired();
             x.Property(a => a.Description).HasMaxLength(500).IsRequired();
         });
-        b.Entity<ProductAllergen>(x =>
+        modelBuilder.Entity<ProductAllergen>(x =>
         {
             x.ToTable("product_allergens");
             x.HasKey(a => new { a.ProductId, a.AllergenId });
@@ -115,7 +116,7 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
                 .HasForeignKey(a => a.AllergenId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
-        b.Entity<ProductPhoto>(x =>
+        modelBuilder.Entity<ProductPhoto>(x =>
         {
             x.ToTable("product_photos");
             x.HasKey(p => p.ProductId);
@@ -125,7 +126,7 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
                 .HasForeignKey<ProductPhoto>(p => p.ProductId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
-        b.Entity<ProductConfiguration>(x =>
+        modelBuilder.Entity<ProductConfiguration>(x =>
         {
             x.ToTable("product_configurations");
             x.HasKey(p => p.ProductId);
@@ -134,7 +135,7 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
                 .HasForeignKey(p => p.ProductId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
-        b.Entity<ProductOptionGroup>(x =>
+        modelBuilder.Entity<ProductOptionGroup>(x =>
         {
             x.ToTable("product_option_groups");
             x.HasKey(g => g.Id);
@@ -145,7 +146,7 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
                 .HasForeignKey(g => g.ParentProductId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
-        b.Entity<ProductOption>(x =>
+        modelBuilder.Entity<ProductOption>(x =>
         {
             x.ToTable("product_options");
             x.HasKey(o => new { o.GroupId, o.ProductId });
@@ -158,7 +159,7 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
                 .HasForeignKey(o => o.ProductId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
-        b.Entity<CatalogPrice>(x =>
+        modelBuilder.Entity<CatalogPrice>(x =>
         {
             x.ToTable("product_prices");
             x.HasKey(p => p.Id);
@@ -178,7 +179,7 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
                 .HasForeignKey(p => p.ProductId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
-        b.Entity<CatalogMenu>(x =>
+        modelBuilder.Entity<CatalogMenu>(x =>
         {
             x.ToTable("catalog_menus");
             x.HasKey(m => m.Id);
@@ -191,7 +192,7 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
             );
             x.Property(m => m.Name).HasMaxLength(120).IsRequired();
         });
-        b.Entity<RestaurantProductAvailability>(x =>
+        modelBuilder.Entity<RestaurantProductAvailability>(x =>
         {
             x.ToTable("restaurant_product_availability");
             x.HasKey(a => new { a.RestaurantId, a.ProductId });
@@ -200,7 +201,7 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
                 .HasForeignKey(a => a.ProductId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
-        b.Entity<CatalogMenuEntry>(x =>
+        modelBuilder.Entity<CatalogMenuEntry>(x =>
         {
             x.ToTable("catalog_menu_entries");
             x.HasKey(e => e.Id);
@@ -215,7 +216,7 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
                 .HasForeignKey(e => e.ProductId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
-        b.Entity<CatalogMenuPrice>(x =>
+        modelBuilder.Entity<CatalogMenuPrice>(x =>
         {
             x.ToTable("catalog_menu_prices");
             x.HasKey(p => new
@@ -237,7 +238,7 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
                 .HasForeignKey(p => p.ProductId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
-        b.Entity<CatalogMenuChannel>(x =>
+        modelBuilder.Entity<CatalogMenuChannel>(x =>
         {
             x.ToTable("catalog_menu_channels");
             x.HasKey(c => new { c.MenuEntryId, c.Channel });

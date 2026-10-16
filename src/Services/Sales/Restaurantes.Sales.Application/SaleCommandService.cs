@@ -19,12 +19,19 @@ public sealed class SaleCommandService(ISaleWriteStore store, TimeProvider timeP
             return;
         }
 
-        Guid saleId =
-            integrationEvent.SaleGroupId is Guid groupId && groupId != Guid.Empty ? groupId
-            : integrationEvent.PaymentTransactionId is Guid transactionId
-            && transactionId != Guid.Empty
-                ? transactionId
-            : integrationEvent.PaymentId;
+        Sale sale = await FindOrCreateSaleAsync(integrationEvent, cancellationToken);
+        await AddOrUpdateSaleOrderAsync(sale, integrationEvent, cancellationToken);
+        AddPaymentIfNew(sale, integrationEvent);
+
+        await CompleteAndSaveAsync(messageId, sale, cancellationToken);
+    }
+
+    private async Task<Sale> FindOrCreateSaleAsync(
+        PaymentCaptured integrationEvent,
+        CancellationToken cancellationToken
+    )
+    {
+        Guid saleId = GetSaleId(integrationEvent);
         Sale? sale = await store.FindAsync(saleId, cancellationToken);
         sale ??= await store.FindByOrderIdAsync(integrationEvent.OrderId, cancellationToken);
         if (sale is null)
@@ -40,30 +47,62 @@ public sealed class SaleCommandService(ISaleWriteStore store, TimeProvider timeP
                 BusinessDate = integrationEvent.BusinessDate,
             };
             store.Add(sale);
+            return sale;
         }
-        else
+
+        UpdateSaleDetails(sale, integrationEvent);
+        return sale;
+    }
+
+    private static Guid GetSaleId(PaymentCaptured integrationEvent)
+    {
+        if (integrationEvent.SaleGroupId is Guid groupId && groupId != Guid.Empty)
         {
-            if (sale.PaymentMethod != integrationEvent.Method)
-            {
-                sale.PaymentMethod = "Mixed";
-            }
-            if (
-                sale.BusinessDate is not null
-                && integrationEvent.BusinessDate is not null
-                && sale.BusinessDate != integrationEvent.BusinessDate
-            )
-            {
-                throw new InvalidOperationException(
-                    "Payments in one sale have different business dates."
-                );
-            }
-            sale.BusinessDate ??= integrationEvent.BusinessDate;
-            sale.ExpectedOrderCount = Math.Max(
-                sale.ExpectedOrderCount,
-                Math.Max(1, integrationEvent.TransactionOrderCount)
+            return groupId;
+        }
+
+        if (
+            integrationEvent.PaymentTransactionId is Guid transactionId
+            && transactionId != Guid.Empty
+        )
+        {
+            return transactionId;
+        }
+
+        return integrationEvent.PaymentId;
+    }
+
+    private static void UpdateSaleDetails(Sale sale, PaymentCaptured integrationEvent)
+    {
+        if (sale.PaymentMethod != integrationEvent.Method)
+        {
+            sale.PaymentMethod = "Mixed";
+        }
+
+        if (
+            sale.BusinessDate is not null
+            && integrationEvent.BusinessDate is not null
+            && sale.BusinessDate != integrationEvent.BusinessDate
+        )
+        {
+            throw new InvalidOperationException(
+                "Payments in one sale have different business dates."
             );
         }
 
+        sale.BusinessDate ??= integrationEvent.BusinessDate;
+        sale.ExpectedOrderCount = Math.Max(
+            sale.ExpectedOrderCount,
+            Math.Max(1, integrationEvent.TransactionOrderCount)
+        );
+    }
+
+    private async Task AddOrUpdateSaleOrderAsync(
+        Sale sale,
+        PaymentCaptured integrationEvent,
+        CancellationToken cancellationToken
+    )
+    {
         SaleOrder? saleOrder = sale.Orders.SingleOrDefault(item =>
             item.OrderId == integrationEvent.OrderId
         );
@@ -73,66 +112,76 @@ public sealed class SaleCommandService(ISaleWriteStore store, TimeProvider timeP
                 integrationEvent.OrderId,
                 cancellationToken
             );
-            sale.Orders.Add(
-                new SaleOrder
-                {
-                    SaleId = sale.Id,
-                    OrderId = integrationEvent.OrderId,
-                    Amount =
-                        integrationEvent.AmountPaid > 0
-                            ? integrationEvent.AmountPaid
-                            : integrationEvent.Amount,
-                    IsPaid = integrationEvent.IsFullyPaid,
-                    PaidAtUtc = integrationEvent.IsFullyPaid
-                        ? integrationEvent.CapturedAtUtc
-                        : null,
-                    IsDelivered = delivery is not null,
-                    DeliveredAtUtc = delivery?.DeliveredAtUtc,
-                    LinesJson = delivery?.LinesJson ?? "[]",
-                    DiscountName = integrationEvent.DiscountName,
-                    DiscountPercentage = integrationEvent.DiscountPercentage,
-                    DiscountAmount = integrationEvent.DiscountAmount,
-                }
-            );
-        }
-        else
-        {
-            saleOrder.Amount = Math.Max(
-                saleOrder.Amount,
-                integrationEvent.AmountPaid > 0
-                    ? integrationEvent.AmountPaid
-                    : saleOrder.Amount + integrationEvent.Amount
-            );
-            if (integrationEvent.IsFullyPaid)
-            {
-                saleOrder.IsPaid = true;
-                saleOrder.PaidAtUtc = integrationEvent.CapturedAtUtc;
-            }
-            saleOrder.DiscountName = integrationEvent.DiscountName;
-            saleOrder.DiscountPercentage = integrationEvent.DiscountPercentage;
-            saleOrder.DiscountAmount = integrationEvent.DiscountAmount;
+            sale.Orders.Add(CreateSaleOrder(sale.Id, integrationEvent, delivery));
+            return;
         }
 
+        UpdateSaleOrder(saleOrder, integrationEvent);
+    }
+
+    private static SaleOrder CreateSaleOrder(
+        Guid saleId,
+        PaymentCaptured integrationEvent,
+        DeliveredOrderSnapshot? delivery
+    ) =>
+        new()
+        {
+            SaleId = saleId,
+            OrderId = integrationEvent.OrderId,
+            Amount =
+                integrationEvent.AmountPaid > 0
+                    ? integrationEvent.AmountPaid
+                    : integrationEvent.Amount,
+            IsPaid = integrationEvent.IsFullyPaid,
+            PaidAtUtc = integrationEvent.IsFullyPaid ? integrationEvent.CapturedAtUtc : null,
+            IsDelivered = delivery is not null,
+            DeliveredAtUtc = delivery?.DeliveredAtUtc,
+            LinesJson = delivery?.LinesJson ?? "[]",
+            DiscountName = integrationEvent.DiscountName,
+            DiscountPercentage = integrationEvent.DiscountPercentage,
+            DiscountAmount = integrationEvent.DiscountAmount,
+        };
+
+    private static void UpdateSaleOrder(SaleOrder saleOrder, PaymentCaptured integrationEvent)
+    {
+        saleOrder.Amount = Math.Max(
+            saleOrder.Amount,
+            integrationEvent.AmountPaid > 0
+                ? integrationEvent.AmountPaid
+                : saleOrder.Amount + integrationEvent.Amount
+        );
+        if (integrationEvent.IsFullyPaid)
+        {
+            saleOrder.IsPaid = true;
+            saleOrder.PaidAtUtc = integrationEvent.CapturedAtUtc;
+        }
+
+        saleOrder.DiscountName = integrationEvent.DiscountName;
+        saleOrder.DiscountPercentage = integrationEvent.DiscountPercentage;
+        saleOrder.DiscountAmount = integrationEvent.DiscountAmount;
+    }
+
+    private static void AddPaymentIfNew(Sale sale, PaymentCaptured integrationEvent)
+    {
         if (sale.Payments.All(item => item.PaymentId != integrationEvent.PaymentId))
         {
+            Guid transactionId =
+                integrationEvent.PaymentTransactionId is Guid captureTransactionId
+                && captureTransactionId != Guid.Empty
+                    ? captureTransactionId
+                    : integrationEvent.PaymentId;
             sale.Payments.Add(
                 new SalePayment
                 {
                     PaymentId = integrationEvent.PaymentId,
                     SaleId = sale.Id,
-                    TransactionId =
-                        integrationEvent.PaymentTransactionId is Guid captureTransactionId
-                        && captureTransactionId != Guid.Empty
-                            ? captureTransactionId
-                            : integrationEvent.PaymentId,
+                    TransactionId = transactionId,
                     Method = integrationEvent.Method,
                     Amount = integrationEvent.Amount,
                     TipAmount = integrationEvent.TipAmount,
                 }
             );
         }
-
-        await CompleteAndSaveAsync(messageId, sale, cancellationToken);
     }
 
     public async Task ProcessAsync(

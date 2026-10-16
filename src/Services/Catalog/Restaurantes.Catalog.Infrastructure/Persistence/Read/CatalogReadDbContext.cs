@@ -12,9 +12,9 @@ public sealed class CatalogReadDbContext(DbContextOptions<CatalogReadDbContext> 
     public DbSet<KitchenStationReadModel> KitchenStations => Set<KitchenStationReadModel>();
     public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
 
-    protected override void OnModelCreating(ModelBuilder b)
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        EntityTypeBuilder<CategoryReadModel> c = b.Entity<CategoryReadModel>();
+        EntityTypeBuilder<CategoryReadModel> c = modelBuilder.Entity<CategoryReadModel>();
         c.ToTable("category_views");
         c.HasKey(x => x.Id);
         c.Property(x => x.Code).HasMaxLength(40).IsRequired();
@@ -23,13 +23,13 @@ public sealed class CatalogReadDbContext(DbContextOptions<CatalogReadDbContext> 
         c.Property(x => x.DefaultStationCode).HasMaxLength(40).IsRequired();
         c.Property(x => x.DefaultStationName).HasMaxLength(80).IsRequired();
         c.Property(x => x.RequiresKds).HasDefaultValue(true);
-        EntityTypeBuilder<ProductReadModel> p = b.Entity<ProductReadModel>();
+        EntityTypeBuilder<ProductReadModel> p = modelBuilder.Entity<ProductReadModel>();
         p.ToTable("product_views");
         p.HasKey(x => x.Id);
         p.Property(x => x.Sku).HasMaxLength(60).IsRequired();
         p.HasIndex(x => x.Sku).IsUnique();
         p.Property(x => x.Name).HasMaxLength(160).IsRequired();
-        EntityTypeBuilder<MenuItemReadModel> m = b.Entity<MenuItemReadModel>();
+        EntityTypeBuilder<MenuItemReadModel> m = modelBuilder.Entity<MenuItemReadModel>();
         m.ToTable("menu_item_views");
         m.HasKey(x => x.Id);
         m.Property(x => x.Sku).HasMaxLength(60).IsRequired();
@@ -41,7 +41,8 @@ public sealed class CatalogReadDbContext(DbContextOptions<CatalogReadDbContext> 
         m.Property(x => x.PreparationStationName).HasMaxLength(80).IsRequired();
         m.Property(x => x.RequiresKds).HasDefaultValue(true);
         m.HasIndex(x => new { x.RestaurantId, x.ProductId }).IsUnique();
-        EntityTypeBuilder<KitchenStationReadModel> s = b.Entity<KitchenStationReadModel>();
+        EntityTypeBuilder<KitchenStationReadModel> s =
+            modelBuilder.Entity<KitchenStationReadModel>();
         s.ToTable("kitchen_station_views");
         s.HasKey(x => x.Id);
         s.Property(x => x.Code).HasMaxLength(40).IsRequired();
@@ -50,7 +51,7 @@ public sealed class CatalogReadDbContext(DbContextOptions<CatalogReadDbContext> 
         s.HasIndex(x => x.RestaurantId)
             .HasFilter("\"IsPrimary\" = TRUE AND \"IsActive\" = TRUE")
             .IsUnique();
-        EntityTypeBuilder<InboxMessage> i = b.Entity<InboxMessage>();
+        EntityTypeBuilder<InboxMessage> i = modelBuilder.Entity<InboxMessage>();
         i.ToTable("inbox_messages");
         i.HasKey(x => x.Id);
         i.Property(x => x.Type).HasMaxLength(300).IsRequired();

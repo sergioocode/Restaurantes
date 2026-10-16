@@ -21,8 +21,9 @@ public sealed class CheckoutProcessWorker(
     private IConnection? connection;
     private IChannel? channel;
 
-    protected override async Task ExecuteAsync(CancellationToken ct)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        CancellationToken ct = stoppingToken;
         while (!ct.IsCancellationRequested)
         {
             try
@@ -129,9 +130,9 @@ public sealed class CheckoutProcessWorker(
         }
     }
 
-    public override async Task StopAsync(CancellationToken ct)
+    public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        await base.StopAsync(ct);
+        await base.StopAsync(cancellationToken);
         await DisposeBroker();
     }
 

@@ -24,8 +24,9 @@ public sealed class PayableOrderProjectionWorker(
     private IConnection? connection;
     private IChannel? channel;
 
-    protected override async Task ExecuteAsync(CancellationToken ct)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        CancellationToken ct = stoppingToken;
         await using (AsyncServiceScope s = scopes.CreateAsyncScope())
         {
             await s
@@ -153,9 +154,9 @@ public sealed class PayableOrderProjectionWorker(
         }
     }
 
-    public override async Task StopAsync(CancellationToken ct)
+    public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        await base.StopAsync(ct);
+        await base.StopAsync(cancellationToken);
         await DisposeBroker();
     }
 

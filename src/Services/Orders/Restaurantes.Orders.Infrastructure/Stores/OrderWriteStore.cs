@@ -10,20 +10,16 @@ namespace Restaurantes.Orders.Infrastructure.Stores;
 
 public sealed class OrderWriteStore(OrderWriteDbContext dbContext) : IOrderWriteStore
 {
-    public Task<Order?> FindAsync(Guid id, CancellationToken cancellationToken)
+    public Task<Order?> FindAsync(Guid id, CancellationToken ct)
     {
         return dbContext
             .Orders.Include(item => item.Lines)
             .Include(item => item.Stations)
             .AsSplitQuery()
-            .SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
+            .SingleOrDefaultAsync(item => item.Id == id, ct);
     }
 
-    public async Task SaveWithEventAsync(
-        Order order,
-        object integrationEvent,
-        CancellationToken cancellationToken
-    )
+    public async Task SaveWithEventAsync(Order order, object integrationEvent, CancellationToken ct)
     {
         if (dbContext.Entry(order).State == EntityState.Detached)
         {
@@ -61,6 +57,6 @@ public sealed class OrderWriteStore(OrderWriteDbContext dbContext) : IOrderWrite
                 OccurredAtUtc = occurredAtUtc,
             }
         );
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await dbContext.SaveChangesAsync(ct);
     }
 }

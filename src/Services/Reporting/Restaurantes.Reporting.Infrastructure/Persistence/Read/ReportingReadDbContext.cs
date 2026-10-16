@@ -11,9 +11,9 @@ public sealed class ReportingReadDbContext(DbContextOptions<ReportingReadDbConte
     public DbSet<ReportingInboxMessage> InboxMessages => Set<ReportingInboxMessage>();
     public DbSet<ReportingOutboxMessage> OutboxMessages => Set<ReportingOutboxMessage>();
 
-    protected override void OnModelCreating(ModelBuilder b)
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        EntityTypeBuilder<OrderReportingFact> o = b.Entity<OrderReportingFact>();
+        EntityTypeBuilder<OrderReportingFact> o = modelBuilder.Entity<OrderReportingFact>();
         o.ToTable("order_reporting_facts");
         o.HasKey(x => x.OrderId);
         o.Property(x => x.TableLabel).HasMaxLength(80).IsRequired();
@@ -35,7 +35,7 @@ public sealed class ReportingReadDbContext(DbContextOptions<ReportingReadDbConte
         });
         o.HasIndex(x => x.SaleRecognizedAtUtc);
         o.HasIndex(x => x.PaymentTransactionId);
-        EntityTypeBuilder<CompletedSaleFact> s = b.Entity<CompletedSaleFact>();
+        EntityTypeBuilder<CompletedSaleFact> s = modelBuilder.Entity<CompletedSaleFact>();
         s.ToTable("completed_sale_facts");
         s.HasKey(x => x.SaleId);
         s.Property(x => x.Source).HasMaxLength(30).IsRequired();
@@ -46,10 +46,10 @@ public sealed class ReportingReadDbContext(DbContextOptions<ReportingReadDbConte
         s.Property(x => x.PaymentMethodsJson).HasColumnType("jsonb").IsRequired();
         s.HasIndex(x => new { x.RestaurantId, x.CompletedAtUtc });
         s.HasIndex(x => new { x.BusinessDate, x.RestaurantId });
-        EntityTypeBuilder<ReportingInboxMessage> i = b.Entity<ReportingInboxMessage>();
+        EntityTypeBuilder<ReportingInboxMessage> i = modelBuilder.Entity<ReportingInboxMessage>();
         i.ToTable("inbox_messages");
         i.HasKey(x => x.Id);
-        EntityTypeBuilder<ReportingOutboxMessage> x = b.Entity<ReportingOutboxMessage>();
+        EntityTypeBuilder<ReportingOutboxMessage> x = modelBuilder.Entity<ReportingOutboxMessage>();
         x.ToTable("outbox_messages");
         x.HasKey(m => m.Id);
         x.Property(m => m.Type).HasMaxLength(300).IsRequired();

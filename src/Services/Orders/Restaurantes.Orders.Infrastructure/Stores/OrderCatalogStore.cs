@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Restaurantes.Catalog.Contracts.Responses;
 using Restaurantes.Orders.Application;
@@ -11,18 +11,18 @@ public sealed class OrderCatalogStore(OrderWriteDbContext dbContext) : IOrderCat
     public async Task<IReadOnlyDictionary<Guid, OrderCatalogProduct>> FindAsync(
         Guid restaurantId,
         IReadOnlyCollection<Guid> productIds,
-        CancellationToken cancellationToken
+        CancellationToken ct
     )
     {
         List<OrderCatalogItem> items = await dbContext
             .CatalogItems.AsNoTracking()
             .Where(item => item.RestaurantId == restaurantId && productIds.Contains(item.ProductId))
-            .ToListAsync(cancellationToken);
+            .ToListAsync(ct);
         string[] stationCodes = items.Select(item => item.StationCode).Distinct().ToArray();
         Dictionary<string, OrderKitchenStationConfiguration> configurations = await dbContext
             .KitchenStationConfigurations.AsNoTracking()
             .Where(item => item.RestaurantId == restaurantId && stationCodes.Contains(item.Code))
-            .ToDictionaryAsync(item => item.Code, cancellationToken);
+            .ToDictionaryAsync(item => item.Code, ct);
         return items.ToDictionary(
             item => item.ProductId,
             item =>

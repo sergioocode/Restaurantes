@@ -19,8 +19,9 @@ public sealed class SalesOutboxPublisherWorker(
     ILogger<SalesOutboxPublisherWorker> log
 ) : BackgroundService
 {
-    protected override async Task ExecuteAsync(CancellationToken ct)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        CancellationToken ct = stoppingToken;
         while (!ct.IsCancellationRequested)
         {
             try

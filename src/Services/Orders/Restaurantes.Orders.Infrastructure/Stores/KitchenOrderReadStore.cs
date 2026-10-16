@@ -8,18 +8,18 @@ namespace Restaurantes.Orders.Infrastructure.Stores;
 
 public sealed class KitchenOrderReadStore(OrderReadDbContext dbContext) : IKitchenOrderReadStore
 {
-    public async Task<OrderResponse?> FindAsync(Guid id, CancellationToken cancellationToken)
+    public async Task<OrderResponse?> FindAsync(Guid id, CancellationToken ct)
     {
         KitchenOrderReadModel? item = await dbContext
             .KitchenOrders.AsNoTracking()
-            .SingleOrDefaultAsync(order => order.Id == id, cancellationToken);
+            .SingleOrDefaultAsync(order => order.Id == id, ct);
         return item is null ? null : Map(item, null);
     }
 
     public async Task<IReadOnlyList<OrderResponse>> ListAsync(
         Guid restaurantId,
         string? stationCode,
-        CancellationToken cancellationToken
+        CancellationToken ct
     )
     {
         List<KitchenOrderReadModel> items = await dbContext
@@ -33,7 +33,7 @@ public sealed class KitchenOrderReadStore(OrderReadDbContext dbContext) : IKitch
                 )
             )
             .OrderBy(item => item.SubmittedAtUtc)
-            .ToListAsync(cancellationToken);
+            .ToListAsync(ct);
         string? normalizedStationCode = string.IsNullOrWhiteSpace(stationCode)
             ? null
             : stationCode.Trim().ToUpperInvariant();

@@ -1,10 +1,40 @@
-using Restaurantes.Orders.Domain;
+﻿using Restaurantes.Orders.Domain;
 using Xunit;
 
 namespace Restaurantes.Orders.Domain.Tests;
 
 public sealed class OrderKitchenLineLifecycleTests
 {
+    [Fact]
+    public void Order_line_rejects_invalid_prices_and_draft_details()
+    {
+        OrderLineDraft valid = Draft();
+
+        Assert.Throws<ArgumentException>(() =>
+            CreateSingleLineOrder(valid with { ProductId = Guid.Empty })
+        );
+        Assert.Throws<ArgumentException>(() =>
+            CreateSingleLineOrder(valid with { ProductName = " " })
+        );
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            CreateSingleLineOrder(valid with { TaxRate = 101m })
+        );
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            CreateSingleLineOrder(valid with { Quantity = 0 })
+        );
+        Assert.Throws<ArgumentException>(() =>
+            CreateSingleLineOrder(valid with { UnitPrice = 5m, BaseUnitPrice = 6m })
+        );
+        Assert.Throws<ArgumentException>(() =>
+            CreateSingleLineOrder(
+                valid with
+                {
+                    Extras = [new OrderLineExtra(Guid.Empty, "Extra", 1m, 1)],
+                }
+            )
+        );
+    }
+
     [Fact]
     public void Controlled_station_tracks_and_dispatches_each_line_independently()
     {
@@ -221,4 +251,35 @@ public sealed class OrderKitchenLineLifecycleTests
         order.Submit(now);
         return order;
     }
+
+    private static Order CreateSingleLineOrder(OrderLineDraft draft) =>
+        Order.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            null,
+            Guid.NewGuid(),
+            "Mesa 01",
+            string.Empty,
+            ServiceMode.DineIn,
+            OrderSource.Pos,
+            PaymentTiming.OnAccount,
+            [draft],
+            DateTime.UtcNow
+        );
+
+    private static OrderLineDraft Draft() =>
+        new(
+            Guid.NewGuid(),
+            "Pasta",
+            5m,
+            1,
+            string.Empty,
+            null,
+            "Pastas",
+            "PASTAS",
+            "Pastas",
+            false,
+            1,
+            TaxRate: 10m
+        );
 }

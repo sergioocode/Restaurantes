@@ -19,8 +19,9 @@ public sealed class ReportingOutboxPublisherWorker(
     ILogger<ReportingOutboxPublisherWorker> log
 ) : BackgroundService
 {
-    protected override async Task ExecuteAsync(CancellationToken ct)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        CancellationToken ct = stoppingToken;
         await using (AsyncServiceScope scope = scopes.CreateAsyncScope())
         {
             await scope

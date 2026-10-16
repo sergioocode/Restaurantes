@@ -41,62 +41,82 @@ public sealed class OrderLine
         OrderLineExtra[] extras = draft.Extras?.ToArray() ?? [];
         decimal extrasUnitPrice = extras.Sum(extra => extra.UnitPrice * extra.Quantity);
         decimal baseUnitPrice = draft.BaseUnitPrice ?? draft.UnitPrice - extrasUnitPrice;
-        if (
-            baseUnitPrice < 0
-            || baseUnitPrice + extrasUnitPrice != draft.UnitPrice
-            || extras.Any(extra =>
-                extra.ProductId == Guid.Empty
-                || string.IsNullOrWhiteSpace(extra.ProductName)
-                || extra.UnitPrice < 0
-                || extra.Quantity is < 1 or > 99
-                || extra.TaxRate is < 0 or > 100
-            )
-        )
+        ValidatePriceDetails(baseUnitPrice, extrasUnitPrice, draft.UnitPrice, extras);
+
+        string productName = draft.ProductName.Trim();
+        ValidateDraft(draft, productName);
+
+        return new OrderLine
+        {
+            Id = Guid.NewGuid(),
+            OrderId = orderId,
+            ProductId = draft.ProductId,
+            ProductName = productName,
+            Format = draft.Format,
+            UnitPrice = draft.UnitPrice,
+            BaseUnitPrice = baseUnitPrice,
+            TaxRate = draft.TaxRate,
+            ExtrasJson = System.Text.Json.JsonSerializer.Serialize(extras),
+            Quantity = draft.Quantity,
+            Notes = draft.Notes.Trim(),
+            CategoryId = draft.CategoryId,
+            CategoryName = NormalizeLabel(draft.CategoryName, "CategoryName", 120),
+            PreparationStationCode = draft.RequiresKds
+                ? OrderKitchenStation.NormalizeCode(draft.PreparationStationCode)
+                : "",
+            PreparationStationName = draft.RequiresKds
+                ? NormalizeLabel(draft.PreparationStationName, "PreparationStationName", 80)
+                : "",
+            Status = OrderLineStatus.Active,
+            KitchenStatus = KitchenLineStatus.Pending,
+        };
+    }
+
+    private static void ValidatePriceDetails(
+        decimal baseUnitPrice,
+        decimal extrasUnitPrice,
+        decimal unitPrice,
+        OrderLineExtra[] extras
+    )
+    {
+        bool hasInvalidExtra = extras.Any(extra =>
+            extra.ProductId == Guid.Empty
+            || string.IsNullOrWhiteSpace(extra.ProductName)
+            || extra.UnitPrice < 0
+            || extra.Quantity is < 1 or > 99
+            || extra.TaxRate is < 0 or > 100
+        );
+
+        if (baseUnitPrice < 0 || baseUnitPrice + extrasUnitPrice != unitPrice || hasInvalidExtra)
         {
             throw new ArgumentException("Order line extra prices are invalid.");
         }
+    }
 
-        string productName = draft.ProductName.Trim();
-        return productName.Length is < 1 or > 160
-                ? throw new ArgumentException(
-                    "ProductName must contain between 1 and 160 characters."
-                )
-            : draft.UnitPrice < 0
-                ? throw new ArgumentOutOfRangeException(
-                    nameof(draft),
-                    "UnitPrice cannot be negative."
-                )
-            : draft.TaxRate is < 0 or > 100
-                ? throw new ArgumentOutOfRangeException(nameof(draft), "TaxRate is invalid.")
-            : draft.Quantity is < 1 or > 100
-                ? throw new ArgumentOutOfRangeException(
-                    nameof(draft),
-                    "Quantity must be between 1 and 100."
-                )
-            : new OrderLine
-            {
-                Id = Guid.NewGuid(),
-                OrderId = orderId,
-                ProductId = draft.ProductId,
-                ProductName = productName,
-                Format = draft.Format,
-                UnitPrice = draft.UnitPrice,
-                BaseUnitPrice = baseUnitPrice,
-                TaxRate = draft.TaxRate,
-                ExtrasJson = System.Text.Json.JsonSerializer.Serialize(extras),
-                Quantity = draft.Quantity,
-                Notes = draft.Notes.Trim(),
-                CategoryId = draft.CategoryId,
-                CategoryName = NormalizeLabel(draft.CategoryName, "CategoryName", 120),
-                PreparationStationCode = draft.RequiresKds
-                    ? OrderKitchenStation.NormalizeCode(draft.PreparationStationCode)
-                    : "",
-                PreparationStationName = draft.RequiresKds
-                    ? NormalizeLabel(draft.PreparationStationName, "PreparationStationName", 80)
-                    : "",
-                Status = OrderLineStatus.Active,
-                KitchenStatus = KitchenLineStatus.Pending,
-            };
+    private static void ValidateDraft(OrderLineDraft draft, string productName)
+    {
+        if (productName.Length is < 1 or > 160)
+        {
+            throw new ArgumentException("ProductName must contain between 1 and 160 characters.");
+        }
+
+        if (draft.UnitPrice < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(draft), "UnitPrice cannot be negative.");
+        }
+
+        if (draft.TaxRate is < 0 or > 100)
+        {
+            throw new ArgumentOutOfRangeException(nameof(draft), "TaxRate is invalid.");
+        }
+
+        if (draft.Quantity is < 1 or > 100)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(draft),
+                "Quantity must be between 1 and 100."
+            );
+        }
     }
 
     internal void MarkDirectlyReadyAndDispatched(DateTime occurredAtUtc)

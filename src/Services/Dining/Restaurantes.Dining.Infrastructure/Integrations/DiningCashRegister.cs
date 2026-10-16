@@ -5,16 +5,16 @@ namespace Restaurantes.Dining.Infrastructure.Integrations;
 
 public sealed class DiningCashRegister(HttpClient httpClient) : IDiningCashRegister
 {
-    public async Task EnsureOpenAsync(Guid restaurantId, CancellationToken cancellationToken)
+    public async Task EnsureOpenAsync(Guid restaurantId, CancellationToken ct)
     {
         using HttpResponseMessage response = await httpClient.GetAsync(
             $"api/cash-register/restaurants/{restaurantId}/is-open",
-            cancellationToken
+            ct
         );
         response.EnsureSuccessStatusCode();
         CashRegisterAvailability availability =
             await response.Content.ReadFromJsonAsync<CashRegisterAvailability>(
-                cancellationToken: cancellationToken
+                cancellationToken: ct
             )
             ?? throw new InvalidOperationException(
                 "CashRegister returned an empty operational status."

@@ -1,4 +1,4 @@
-using Restaurantes.Payments.Contracts.Events;
+﻿using Restaurantes.Payments.Contracts.Events;
 using Restaurantes.Sales.Application;
 using Restaurantes.Sales.Contracts.Events;
 using Restaurantes.Sales.Domain;
@@ -8,6 +8,85 @@ namespace Restaurantes.Sales.Application.Tests;
 
 public sealed class SaleCommandServiceTests
 {
+    [Fact]
+    public async Task Sale_id_uses_transaction_then_payment_when_group_id_is_missing()
+    {
+        InMemorySaleStore store = new();
+        SaleCommandService service = new(store, TimeProvider.System);
+        Guid transactionId = Guid.NewGuid();
+        PaymentCaptured transactionCapture = Captured(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            5m,
+            5m,
+            true,
+            "Cash"
+        ) with
+        {
+            SaleGroupId = null,
+            PaymentTransactionId = transactionId,
+        };
+        PaymentCaptured paymentCapture = Captured(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            5m,
+            5m,
+            true,
+            "Cash"
+        ) with
+        {
+            SaleGroupId = Guid.Empty,
+            PaymentTransactionId = Guid.Empty,
+        };
+
+        await service.ProcessAsync(
+            Guid.NewGuid(),
+            transactionCapture,
+            TestContext.Current.CancellationToken
+        );
+        await service.ProcessAsync(
+            Guid.NewGuid(),
+            paymentCapture,
+            TestContext.Current.CancellationToken
+        );
+
+        Assert.Contains(store.Sales, sale => sale.Id == transactionId);
+        Assert.Contains(store.Sales, sale => sale.Id == paymentCapture.PaymentId);
+    }
+
+    [Fact]
+    public async Task Delivered_snapshot_is_copied_to_new_sale_order()
+    {
+        InMemorySaleStore store = new();
+        DateTime deliveredAt = DateTime.UtcNow.AddMinutes(-1);
+        store.DeliveredOrder = new DeliveredOrderSnapshot(
+            Guid.Empty,
+            Guid.NewGuid(),
+            deliveredAt,
+            "[{\"name\":\"Pasta\"}]"
+        );
+        SaleCommandService service = new(store, TimeProvider.System);
+        PaymentCaptured capture = Captured(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            5m,
+            5m,
+            true,
+            "Cash"
+        );
+        store.DeliveredOrder = store.DeliveredOrder with { OrderId = capture.OrderId };
+
+        await service.ProcessAsync(Guid.NewGuid(), capture, TestContext.Current.CancellationToken);
+
+        SaleOrder order = Assert.Single(Assert.Single(store.Sales).Orders);
+        Assert.True(order.IsDelivered);
+        Assert.Equal(deliveredAt, order.DeliveredAtUtc);
+        Assert.Equal(store.DeliveredOrder.LinesJson, order.LinesJson);
+    }
+
     [Fact]
     public async Task Split_payments_complete_one_sale_only_after_the_account_is_paid()
     {
@@ -143,6 +222,7 @@ public sealed class SaleCommandServiceTests
         private readonly HashSet<Guid> processed = [];
         public List<Sale> Sales { get; } = [];
         public List<SaleCompleted> Completed { get; } = [];
+        public DeliveredOrderSnapshot? DeliveredOrder { get; set; }
 
         public Task<bool> WasProcessedAsync(Guid messageId, CancellationToken cancellationToken) =>
             Task.FromResult(processed.Contains(messageId));
@@ -158,7 +238,7 @@ public sealed class SaleCommandServiceTests
         public Task<DeliveredOrderSnapshot?> FindDeliveredOrderAsync(
             Guid orderId,
             CancellationToken cancellationToken
-        ) => Task.FromResult<DeliveredOrderSnapshot?>(null);
+        ) => Task.FromResult(DeliveredOrder?.OrderId == orderId ? DeliveredOrder : null);
 
         public void Add(Sale sale) => Sales.Add(sale);
 
