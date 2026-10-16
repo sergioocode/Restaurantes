@@ -1,104 +1,13 @@
-﻿using Microsoft.AspNetCore.SignalR.Client;
-using Restaurantes.Clients.Pos.Pwa.Api;
+﻿using Restaurantes.Clients.Pos.Pwa.Api;
 using Restaurantes.Clients.Pos.Pwa.Models;
+using Restaurantes.Clients.Shared.Operations;
 
 namespace Restaurantes.Clients.Pos.Pwa.Realtime;
 
-public sealed class OrderRealtimeClient(HttpClient http, PosApi api) : IAsyncDisposable
-{
-    private HubConnection? connection;
-    private Guid restaurantId;
-
-    public event Func<OrderRealtimeNotification, Task>? OrderUpdated;
-
-    public event Func<Guid, Task>? DiningTableUpdated;
-
-    public async Task ConnectAsync(Guid newRestaurantId)
-    {
-        if (newRestaurantId == Guid.Empty || string.IsNullOrWhiteSpace(api.AccessToken))
-        {
-            return;
-        }
-
-        if (connection is null)
-        {
-            connection = new HubConnectionBuilder()
-                .WithUrl(
-                    new Uri(http.BaseAddress!, "/hubs/orders"),
-                    options =>
-                        options.AccessTokenProvider = () =>
-                            Task.FromResult<string?>(api.AccessToken)
-                )
-                .WithAutomaticReconnect([
-                    TimeSpan.Zero,
-                    TimeSpan.FromSeconds(2),
-                    TimeSpan.FromSeconds(5),
-                ])
-                .Build();
-            connection.On<OrderRealtimeNotification>("OrderUpdated", NotifyAsync);
-            connection.On<Guid>("DiningTableUpdated", NotifyDiningTableUpdatedAsync);
-            connection.Reconnected += async _ =>
-            {
-                if (restaurantId != Guid.Empty)
-                {
-                    await connection.InvokeAsync("JoinPos", restaurantId);
-                }
-            };
-            await connection.StartAsync();
-        }
-
-        if (restaurantId == newRestaurantId)
-        {
-            return;
-        }
-        if (restaurantId != Guid.Empty)
-        {
-            await connection.InvokeAsync("LeavePos", restaurantId);
-        }
-        restaurantId = newRestaurantId;
-        await connection.InvokeAsync("JoinPos", restaurantId);
-    }
-
-    public async Task DisconnectAsync()
-    {
-        if (connection is null)
-        {
-            return;
-        }
-        await connection.DisposeAsync();
-        connection = null;
-        restaurantId = Guid.Empty;
-    }
-
-    public Task NotifyDiningTableUpdatedAsync()
-    {
-        return connection is { State: HubConnectionState.Connected } && restaurantId != Guid.Empty
-            ? connection.InvokeAsync("NotifyDiningTableUpdated", restaurantId)
-            : Task.CompletedTask;
-    }
-
-    private Task NotifyAsync(OrderRealtimeNotification notification)
-    {
-        return Restaurantes.Clients.Shared.Operations.AsyncEventDispatcher.InvokeForRestaurantAsync(
-            OrderUpdated,
-            notification,
-            restaurantId,
-            notification.RestaurantId
-        );
-    }
-
-    private Task NotifyDiningTableUpdatedAsync(Guid changedRestaurantId)
-    {
-        return Restaurantes.Clients.Shared.Operations.AsyncEventDispatcher.InvokeForRestaurantAsync(
-            DiningTableUpdated,
-            changedRestaurantId,
-            restaurantId,
-            changedRestaurantId
-        );
-    }
-
-    public ValueTask DisposeAsync()
-    {
-        return connection?.DisposeAsync() ?? ValueTask.CompletedTask;
-    }
-}
+public sealed class OrderRealtimeClient(HttpClient http, PosApi api)
+    : RestaurantOrderRealtimeClient<OrderRealtimeNotification>(
+        http,
+        () => api.AccessToken,
+        "Pos",
+        notification => notification.RestaurantId
+    );

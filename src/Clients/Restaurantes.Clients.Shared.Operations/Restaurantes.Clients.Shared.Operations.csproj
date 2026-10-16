@@ -1,5 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.13" />
     <ProjectReference Include="..\..\Services\Orders\Restaurantes.Orders.Contracts\Restaurantes.Orders.Contracts.csproj" />
   </ItemGroup>
 </Project>

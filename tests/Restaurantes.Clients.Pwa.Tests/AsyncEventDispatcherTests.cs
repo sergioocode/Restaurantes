@@ -400,7 +400,10 @@ public sealed class AsyncEventDispatcherTests : BunitContext
     )
     {
         Guid restaurantId = Guid.NewGuid();
-        SetField(client, "restaurantId", restaurantId);
+        Type realtimeBaseType = client.GetType().BaseType!;
+        realtimeBaseType
+            .GetField("restaurantId", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(client, restaurantId);
         TNotification matchingNotification = createNotification(restaurantId);
         TNotification otherRestaurantNotification = createNotification(Guid.NewGuid());
 
@@ -411,9 +414,10 @@ public sealed class AsyncEventDispatcherTests : BunitContext
             return Task.CompletedTask;
         };
         client.GetType().GetEvent("OrderUpdated")!.AddEventHandler(client, orderHandler);
-        MethodInfo notifyOrder = client
-            .GetType()
-            .GetMethod("NotifyAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        MethodInfo notifyOrder = realtimeBaseType.GetMethod(
+            "NotifyAsync",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        )!;
         await (Task)notifyOrder.Invoke(client, [matchingNotification])!;
         await (Task)notifyOrder.Invoke(client, [otherRestaurantNotification])!;
         Assert.Equal(1, orderNotifications);
@@ -425,15 +429,13 @@ public sealed class AsyncEventDispatcherTests : BunitContext
             return Task.CompletedTask;
         };
         client.GetType().GetEvent("DiningTableUpdated")!.AddEventHandler(client, diningHandler);
-        MethodInfo notifyDining = client
-            .GetType()
-            .GetMethod(
-                "NotifyDiningTableUpdatedAsync",
-                BindingFlags.Instance | BindingFlags.NonPublic,
-                null,
-                [typeof(Guid)],
-                null
-            )!;
+        MethodInfo notifyDining = realtimeBaseType.GetMethod(
+            "NotifyDiningTableUpdatedAsync",
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            null,
+            [typeof(Guid)],
+            null
+        )!;
         await (Task)notifyDining.Invoke(client, [restaurantId])!;
         await (Task)notifyDining.Invoke(client, [Guid.NewGuid()])!;
         Assert.Equal(1, diningNotifications);
