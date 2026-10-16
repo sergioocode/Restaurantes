@@ -329,17 +329,18 @@ public partial class QrOrder
     )
     {
         const int attempts = 30;
-        for (int attempt = 1; ; attempt++)
+        for (int attempt = 1; attempt < attempts; attempt++)
         {
             try
             {
                 return await action();
             }
-            catch (CustomerApiException exception)
-                when (attempt < attempts && shouldRetry(exception.StatusCode))
+            catch (CustomerApiException exception) when (shouldRetry(exception.StatusCode))
             {
                 await Task.Delay(500);
             }
         }
+
+        return await action();
     }
 }
