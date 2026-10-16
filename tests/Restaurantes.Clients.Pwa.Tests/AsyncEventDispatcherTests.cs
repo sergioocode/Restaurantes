@@ -81,6 +81,33 @@ public sealed class AsyncEventDispatcherTests : BunitContext
     }
 
     [Fact]
+    public async Task Pos_catalog_notifications_keep_restaurant_filter_and_global_broadcast()
+    {
+        using HttpClient http = new();
+        await using var client = new Restaurantes.Clients.Pos.Pwa.Realtime.CatalogRealtimeClient(
+            http,
+            new Restaurantes.Clients.Pos.Pwa.Api.PosApi(http)
+        );
+        Guid restaurantId = Guid.NewGuid();
+        SetField(client, "restaurantId", restaurantId);
+        List<Guid> received = [];
+        client.MenuChanged += changedRestaurantId =>
+        {
+            received.Add(changedRestaurantId);
+            return Task.CompletedTask;
+        };
+        MethodInfo notify = client
+            .GetType()
+            .GetMethod("NotifyAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+        await (Task)notify.Invoke(client, [Guid.NewGuid()])!;
+        await (Task)notify.Invoke(client, [restaurantId])!;
+        await (Task)notify.Invoke(client, [Guid.Empty])!;
+
+        Assert.Equal([restaurantId, Guid.Empty], received);
+    }
+
+    [Fact]
     public async Task Backoffice_pagination_stops_after_a_partial_page()
     {
         List<int> requestedOffsets = [];

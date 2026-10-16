@@ -1,5 +1,6 @@
-using Microsoft.AspNetCore.SignalR.Client;
+﻿using Microsoft.AspNetCore.SignalR.Client;
 using Restaurantes.Clients.Pos.Pwa.Api;
+using Restaurantes.Clients.Shared.Operations;
 
 namespace Restaurantes.Clients.Pos.Pwa.Realtime;
 
@@ -59,14 +60,11 @@ public sealed class CatalogRealtimeClient(HttpClient http, PosApi api) : IAsyncD
         restaurantId = Guid.Empty;
     }
 
-    private async Task NotifyAsync(Guid changedRestaurantId)
+    private Task NotifyAsync(Guid changedRestaurantId)
     {
         if (changedRestaurantId != Guid.Empty && changedRestaurantId != restaurantId)
-            return;
-        if (MenuChanged is null)
-            return;
-        foreach (Func<Guid, Task> handler in MenuChanged.GetInvocationList())
-            await handler(changedRestaurantId);
+            return Task.CompletedTask;
+        return AsyncEventDispatcher.InvokeAsync(MenuChanged, changedRestaurantId);
     }
 
     public ValueTask DisposeAsync() => connection?.DisposeAsync() ?? ValueTask.CompletedTask;
