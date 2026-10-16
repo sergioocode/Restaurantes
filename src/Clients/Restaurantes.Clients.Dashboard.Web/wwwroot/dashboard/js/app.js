@@ -1,3 +1,4 @@
+(() => {
 const $ = id => document.getElementById(id),
     sep = String.fromCodePoint(30),
     money = new Intl.NumberFormat('es-ES', {
@@ -367,4 +368,5 @@ if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('./service-worker.js', { updateViaCache: 'none' });
     });
 }
+})();
 
