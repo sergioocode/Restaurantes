@@ -519,45 +519,55 @@ public partial class Home
             List<SaleResponse> sales = [];
             foreach (RestaurantResponse restaurant in allowed)
             {
-                int offset = 0;
-                while (true)
-                {
-                    List<ManagementOrderResponse> page = await Api.ManagementOrdersAsync(
-                        restaurant.Id,
-                        historyDate,
-                        offset
-                    );
-                    result.AddRange(page);
-                    if (page.Count < 100)
-                    {
-                        break;
-                    }
-
-                    offset += page.Count;
-                }
+                await AppendRestaurantOrdersAsync(restaurant.Id, result);
                 if (module == "daily-orders-report")
                 {
-                    int saleOffset = 0;
-                    while (true)
-                    {
-                        List<SaleResponse> page = await Api.SalesAsync(
-                            restaurant.Id,
-                            historyDate,
-                            saleOffset
-                        );
-                        sales.AddRange(page);
-                        if (page.Count < 100)
-                        {
-                            break;
-                        }
-
-                        saleOffset += page.Count;
-                    }
+                    sales.AddRange(await LoadRestaurantSalesAsync(restaurant.Id));
                 }
             }
             historyOrders = result.OrderByDescending(order => order.CreatedAtUtc).ToList();
             historySales = sales;
         });
+    }
+
+    private async Task AppendRestaurantOrdersAsync(
+        Guid restaurantId,
+        List<ManagementOrderResponse> orders
+    )
+    {
+        int offset = 0;
+        while (true)
+        {
+            List<ManagementOrderResponse> page = await Api.ManagementOrdersAsync(
+                restaurantId,
+                historyDate,
+                offset
+            );
+            orders.AddRange(page);
+            if (page.Count < 100)
+            {
+                return;
+            }
+
+            offset += page.Count;
+        }
+    }
+
+    private async Task<List<SaleResponse>> LoadRestaurantSalesAsync(Guid restaurantId)
+    {
+        List<SaleResponse> sales = [];
+        int offset = 0;
+        while (true)
+        {
+            List<SaleResponse> page = await Api.SalesAsync(restaurantId, historyDate, offset);
+            sales.AddRange(page);
+            if (page.Count < 100)
+            {
+                return sales;
+            }
+
+            offset += page.Count;
+        }
     }
 
     internal ManagementOrderResponse? SaleOrderContext(SaleResponse sale) =>
