@@ -192,7 +192,8 @@ public partial class Home
         && currentChargeAmount > 0
         && currentChargeAmount <= CommanderOutstanding
         && AmountReceived <= 1_000_000m;
-    private List<string> Categories =>
+
+    private List<string> Categories() =>
         menu.Where(x => x.IsAvailable).Select(x => x.CategoryName).Distinct().Order().ToList();
 
     private static IReadOnlyList<MenuItemFormatPrice> PricesFor(MenuItemResponse item)
@@ -249,7 +250,7 @@ public partial class Home
             : DefaultFormatForCategory(item.CategoryName);
     }
 
-    private List<string> AvailableFormats =>
+    private List<string> AvailableFormats() =>
         menu.Where(item => item.IsAvailable && (category is null || item.CategoryName == category))
             .SelectMany(PricesFor)
             .Select(price => price.Format)
@@ -257,7 +258,8 @@ public partial class Home
             .Distinct()
             .Order()
             .ToList();
-    private List<MenuItemResponse> VisibleMenu =>
+
+    private List<MenuItemResponse> VisibleMenu() =>
         menu.Where(item =>
                 item.IsAvailable
                 && (category is null || item.CategoryName == category)

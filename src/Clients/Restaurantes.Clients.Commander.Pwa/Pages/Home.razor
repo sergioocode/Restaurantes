@@ -127,7 +127,7 @@
 
             <nav class="category-tabs" aria-label="Categorías del menú">
                 <button class="@CategoryClass(null)" @onclick="() => SelectCategory(null)">Todo</button>
-                @foreach (string itemCategory in Categories)
+                @foreach (string itemCategory in Categories())
                 {
                     <button class="@CategoryClass(itemCategory)" @onclick="() => SelectCategory(itemCategory)">@itemCategory</button>
                 }
@@ -135,14 +135,14 @@
 
             <nav class="category-tabs format-tabs" aria-label="Formatos del menú">
                 <button class="@FormatClass(null)" @onclick="() => selectedFormat = null">@(category is null ? "Carta" : FormatLabel(DefaultFormatForCategory(category)))</button>
-                @foreach (string format in AvailableFormats)
+                @foreach (string format in AvailableFormats())
                 {
                     <button class="@FormatClass(format)" @onclick="() => selectedFormat = format">@FormatLabel(format)</button>
                 }
             </nav>
 
             <section class="menu-grid">
-                @foreach (MenuItemResponse item in VisibleMenu)
+                @foreach (MenuItemResponse item in VisibleMenu())
                 {
                     <article class="product-card">
                         <div><span class="category">@item.CategoryName</span>@if (item.ExtraGroups is { Count: > 0 }) { <span class="extra-marker">Con extras</span> }<h3>@item.ProductName</h3><strong>@FormatLabel(FormatFor(item)) · @DisplayPrice(item).ToString("0.00") €</strong></div>

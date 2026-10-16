@@ -1,4 +1,4 @@
-@using Restaurantes.Clients.Backoffice.Pwa.Models
+﻿@using Restaurantes.Clients.Backoffice.Pwa.Models
 
 @if (!Host.CanViewCompanySettings)
 {
@@ -26,7 +26,7 @@ else
         </details>
     }
     <div class="restaurant-list">
-        @foreach (RestaurantResponse restaurant in Host.VisibleCompanyRestaurants.OrderBy(x => x.Name))
+        @foreach (RestaurantResponse restaurant in Host.VisibleCompanyRestaurants().OrderBy(x => x.Name))
         {
             <section class="settings-panel restaurant-settings @(restaurant.IsActive ? "" : "inactive")" @key="restaurant.Id">
                 <div class="restaurant-identity"><strong>@restaurant.Code</strong><small>ID @restaurant.Id</small></div>

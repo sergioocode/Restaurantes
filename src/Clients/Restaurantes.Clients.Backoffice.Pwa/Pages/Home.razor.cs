@@ -151,7 +151,8 @@ public partial class Home
     internal bool CanAssignAllRestaurants =>
         login?.AllRestaurantsPermissions?.Contains("identity.manage") == true;
     internal IEnumerable<string> AssignableRoles => Roles;
-    internal List<RestaurantResponse> ManageableRestaurants =>
+
+    internal List<RestaurantResponse> ManageableRestaurants() =>
         restaurants
             .Where(x =>
                 CanAssignAllRestaurants
@@ -160,7 +161,8 @@ public partial class Home
                 )
             )
             .ToList();
-    internal List<RestaurantResponse> SelectableRestaurants =>
+
+    internal List<RestaurantResponse> SelectableRestaurants() =>
         login?.AllRestaurantsPermissions?.Contains("backoffice.access") == true
             ? restaurants
             : restaurants
@@ -170,7 +172,8 @@ public partial class Home
                     )
                 )
                 .ToList();
-    internal List<RestaurantResponse> VisibleCompanyRestaurants =>
+
+    internal List<RestaurantResponse> VisibleCompanyRestaurants() =>
         IsAdmin
         || login?.AllRestaurantsRoles?.Any(role => role is "Gerente" or "Contabilidad") == true
             ? restaurants
@@ -182,7 +185,8 @@ public partial class Home
                     ) == true
                 )
                 .ToList();
-    internal List<RestaurantResponse> OrderRestaurants =>
+
+    internal List<RestaurantResponse> OrderRestaurants() =>
         restaurants
             .Where(x =>
                 login?.AllRestaurantsPermissions?.Contains("orders.read") == true
@@ -196,7 +200,8 @@ public partial class Home
                 ) == true
             )
             .ToList();
-    internal List<RestaurantResponse> ReportRestaurants =>
+
+    internal List<RestaurantResponse> ReportRestaurants() =>
         restaurants
             .Where(x =>
                 login?.AllRestaurantsPermissions?.Contains(OrdersReportReadPermission) == true
@@ -205,11 +210,14 @@ public partial class Home
                 ) == true
             )
             .ToList();
-    internal List<RestaurantResponse> ContextRestaurants =>
-        module == "daily-orders-report" ? ReportRestaurants : SelectableRestaurants;
+
+    internal List<RestaurantResponse> ContextRestaurants() =>
+        module == "daily-orders-report" ? ReportRestaurants() : SelectableRestaurants();
+
     internal RestaurantResponse? CurrentRestaurant =>
         restaurants.FirstOrDefault(x => x.Id == restaurantId);
-    internal List<ProductResponse> VisibleProducts =>
+
+    internal List<ProductResponse> VisibleProducts() =>
         products
             .Where(x =>
                 string.IsNullOrWhiteSpace(search)
@@ -218,6 +226,7 @@ public partial class Home
             )
             .OrderBy(x => x.Name)
             .ToList();
+
     private string ModuleEyebrow =>
         module switch
         {
@@ -262,8 +271,8 @@ public partial class Home
         module switch
         {
             "catalog-design" when IsCurrentRestaurantManager => "Recargar",
-            "orders" when OrderRestaurants.Count > 0 => "Consultar pedidos",
-            "daily-orders-report" when ReportRestaurants.Count > 0 => "Consultar pedidos",
+            "orders" when OrderRestaurants().Count > 0 => "Consultar pedidos",
+            "daily-orders-report" when ReportRestaurants().Count > 0 => "Consultar pedidos",
             "stations" when IsCurrentRestaurantManager => "Actualizar estaciones",
             "tables" when HasLocalPermission("tables.manage") => "Actualizar mesas",
             "zones" when HasLocalPermission("tables.manage") => "Actualizar zonas",
@@ -467,11 +476,12 @@ public partial class Home
     internal bool HasAnyLocalPermission(string permission)
     {
         return login?.AllRestaurantsPermissions?.Contains(permission) == true
-            || SelectableRestaurants.Any(restaurant =>
-                login
-                    ?.Restaurants.FirstOrDefault(x => x.RestaurantId == restaurant.Id)
-                    ?.Permissions.Contains(permission) == true
-            );
+            || SelectableRestaurants()
+                .Any(restaurant =>
+                    login
+                        ?.Restaurants.FirstOrDefault(x => x.RestaurantId == restaurant.Id)
+                        ?.Permissions.Contains(permission) == true
+                );
     }
 
     internal Task RefreshModule()
@@ -503,7 +513,7 @@ public partial class Home
         return Run(async () =>
         {
             IEnumerable<RestaurantResponse> allowed = (
-                module == "daily-orders-report" ? ReportRestaurants : OrderRestaurants
+                module == "daily-orders-report" ? ReportRestaurants() : OrderRestaurants()
             ).Where(restaurant => restaurant.Id == restaurantId);
             List<ManagementOrderResponse> result = [];
             List<SaleResponse> sales = [];
@@ -617,7 +627,7 @@ public partial class Home
     {
         categories = await Api.CategoriesAsync();
         stations =
-            SelectableRestaurants.Count > 0 && HasLocalPermission("kds.use")
+            SelectableRestaurants().Count > 0 && HasLocalPermission("kds.use")
                 ? await Api.StationsAsync(restaurantId)
                 : [];
     }
@@ -647,12 +657,12 @@ public partial class Home
         companies = await Api.CompaniesAsync();
         if (!CanAssignAllRestaurants && userDraft.RestaurantId is null)
         {
-            userDraft.RestaurantId = ManageableRestaurants.FirstOrDefault()?.Id;
+            userDraft.RestaurantId = ManageableRestaurants().FirstOrDefault()?.Id;
             userDraft.AllRestaurants = false;
         }
-        if (!restaurants.Any(x => x.Id == restaurantId) && SelectableRestaurants.Count > 0)
+        if (!restaurants.Any(x => x.Id == restaurantId) && SelectableRestaurants().Count > 0)
         {
-            restaurantId = SelectableRestaurants[0].Id;
+            restaurantId = SelectableRestaurants()[0].Id;
         }
 
         if (CanManageUsers)
@@ -665,7 +675,7 @@ public partial class Home
 
     private async Task LoadLocalCore()
     {
-        if (SelectableRestaurants.Count == 0)
+        if (SelectableRestaurants().Count == 0)
         {
             stations = [];
             tables = [];
