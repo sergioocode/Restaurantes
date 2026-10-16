@@ -1,10 +1,12 @@
 ﻿using System.Reflection;
+using Bunit;
+using Microsoft.Extensions.DependencyInjection;
 using Restaurantes.Clients.Shared.Operations;
 using Xunit;
 
 namespace Restaurantes.Clients.Pwa.Tests;
 
-public sealed class AsyncEventDispatcherTests
+public sealed class AsyncEventDispatcherTests : BunitContext
 {
     [Fact]
     public async Task InvokeAsync_awaits_each_subscriber_in_registration_order()
@@ -29,7 +31,10 @@ public sealed class AsyncEventDispatcherTests
     [Fact]
     public async Task InvokeAsync_allows_no_subscribers()
     {
-        await AsyncEventDispatcher.InvokeAsync<int>(null, 1);
+        Task invocation = AsyncEventDispatcher.InvokeAsync<int>(null, 1);
+
+        Assert.True(invocation.IsCompletedSuccessfully);
+        await invocation;
     }
 
     [Fact]
@@ -98,6 +103,94 @@ public sealed class AsyncEventDispatcherTests
         Assert.Equal([0, 100], requestedOffsets);
         Assert.Equal(102, result.Count);
         Assert.Equal(101, result[^1]);
+    }
+
+    [Fact]
+    public async Task Backoffice_order_and_sale_pages_use_the_requested_restaurant()
+    {
+        RecordingJsonHandler handler = new();
+        using HttpClient http = new(handler) { BaseAddress = new Uri("https://localhost") };
+        object home = new Restaurantes.Clients.Backoffice.Pwa.Pages.Home();
+        home.GetType()
+            .GetProperty(
+                "Api",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic
+            )!
+            .SetValue(home, new Restaurantes.Clients.Backoffice.Pwa.Api.BackofficeApi(http));
+        Guid restaurantId = Guid.NewGuid();
+        List<Restaurantes.Clients.Backoffice.Pwa.Models.ManagementOrderResponse> orders = [];
+        MethodInfo appendOrders = home.GetType()
+            .GetMethod(
+                "AppendRestaurantOrdersAsync",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            )!;
+        await (Task)appendOrders.Invoke(home, [restaurantId, orders])!;
+        MethodInfo loadSales = home.GetType()
+            .GetMethod("LoadRestaurantSalesAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        Task<List<Restaurantes.Clients.Backoffice.Pwa.Models.SaleResponse>> salesTask =
+            (Task<List<Restaurantes.Clients.Backoffice.Pwa.Models.SaleResponse>>)
+                loadSales.Invoke(home, [restaurantId])!;
+
+        List<Restaurantes.Clients.Backoffice.Pwa.Models.SaleResponse> sales = await salesTask;
+
+        Assert.Empty(orders);
+        Assert.Empty(sales);
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.All(handler.Requests, request => Assert.Contains(restaurantId.ToString(), request));
+    }
+
+    [Fact]
+    public async Task Backoffice_history_refresh_loads_orders_and_sales_for_daily_reports()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        RecordingJsonHandler handler = new();
+        HttpClient http = new(handler) { BaseAddress = new Uri("https://localhost") };
+        Services.AddSingleton(new Restaurantes.Clients.Backoffice.Pwa.Api.BackofficeApi(http));
+        Services.AddSingleton(
+            new Restaurantes.Clients.Backoffice.Pwa.Security.SessionAuthenticationStateProvider()
+        );
+        var cut = Render<Restaurantes.Clients.Backoffice.Pwa.Pages.Home>();
+        SetField(
+            cut.Instance,
+            "login",
+            new Restaurantes.Clients.Backoffice.Pwa.Models.LoginResponse(
+                "token",
+                DateTime.UtcNow.AddHours(1),
+                new Restaurantes.Clients.Backoffice.Pwa.Models.LoginUser(
+                    Guid.NewGuid(),
+                    "user",
+                    "User"
+                ),
+                [
+                    new(
+                        restaurantId,
+                        "Gerente",
+                        ["backoffice.access", "orders.read", "orders.report.read"]
+                    ),
+                ]
+            )
+        );
+        SetField(
+            cut.Instance,
+            "restaurants",
+            new List<Restaurantes.Clients.Backoffice.Pwa.Models.RestaurantResponse>
+            {
+                new() { Id = restaurantId, Name = "Centro" },
+            }
+        );
+        SetField(cut.Instance, "restaurantId", restaurantId);
+        SetField(cut.Instance, "module", "daily-orders-report");
+
+        await InvokeRefreshOrdersAsync(cut.Instance);
+
+        Assert.Equal(3, handler.Requests.Count);
+        Assert.Contains(handler.Requests, request => request.Contains("/api/orders/management"));
+        Assert.Contains(handler.Requests, request => request.Contains("/api/sales"));
+
+        SetField(cut.Instance, "module", "orders");
+        await InvokeRefreshOrdersAsync(cut.Instance);
+
+        Assert.Equal(4, handler.Requests.Count);
     }
 
     [Fact]
@@ -274,6 +367,13 @@ public sealed class AsyncEventDispatcherTests
         Assert.Equal(1, diningNotifications);
     }
 
+    private static Task InvokeRefreshOrdersAsync(object home)
+    {
+        MethodInfo refresh = home.GetType()
+            .GetMethod("RefreshOrders", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        return (Task)refresh.Invoke(home, null)!;
+    }
+
     private static void Press(object home, string key) =>
         typeof(Restaurantes.Clients.Commander.Pwa.Pages.Home)
             .GetMethod("PressPaymentKey", BindingFlags.Instance | BindingFlags.NonPublic)!
@@ -296,4 +396,27 @@ public sealed class AsyncEventDispatcherTests
             .GetType()
             .GetProperty(name, BindingFlags.Instance | BindingFlags.NonPublic)!
             .GetValue(instance);
+
+    private sealed class RecordingJsonHandler : HttpMessageHandler
+    {
+        public List<string> Requests { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken
+        )
+        {
+            Requests.Add(request.RequestUri!.ToString());
+            return Task.FromResult(
+                new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        request.RequestUri.AbsolutePath == "/api/identity/auth/provider"
+                            ? "{\"activeProvider\":\"Local\",\"microsoftConfigured\":false,\"googleConfigured\":false}"
+                            : "[]"
+                    ),
+                }
+            );
+        }
+    }
 }

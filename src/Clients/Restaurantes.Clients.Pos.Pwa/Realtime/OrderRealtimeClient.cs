@@ -79,22 +79,22 @@ public sealed class OrderRealtimeClient(HttpClient http, PosApi api) : IAsyncDis
 
     private Task NotifyAsync(OrderRealtimeNotification notification)
     {
-        return notification.RestaurantId == restaurantId
-            ? Restaurantes.Clients.Shared.Operations.AsyncEventDispatcher.InvokeAsync(
-                OrderUpdated,
-                notification
-            )
-            : Task.CompletedTask;
+        return Restaurantes.Clients.Shared.Operations.AsyncEventDispatcher.InvokeForRestaurantAsync(
+            OrderUpdated,
+            notification,
+            restaurantId,
+            notification.RestaurantId
+        );
     }
 
     private Task NotifyDiningTableUpdatedAsync(Guid changedRestaurantId)
     {
-        return changedRestaurantId == restaurantId
-            ? Restaurantes.Clients.Shared.Operations.AsyncEventDispatcher.InvokeAsync(
-                DiningTableUpdated,
-                changedRestaurantId
-            )
-            : Task.CompletedTask;
+        return Restaurantes.Clients.Shared.Operations.AsyncEventDispatcher.InvokeForRestaurantAsync(
+            DiningTableUpdated,
+            changedRestaurantId,
+            restaurantId,
+            changedRestaurantId
+        );
     }
 
     public ValueTask DisposeAsync()
