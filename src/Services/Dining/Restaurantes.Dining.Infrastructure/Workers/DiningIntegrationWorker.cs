@@ -7,6 +7,7 @@ using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Restaurantes.Dining.Application;
 using Restaurantes.Messaging.RabbitMq;
+using Restaurantes.ServiceDefaults;
 
 namespace Restaurantes.Dining.Infrastructure.Workers;
 
@@ -14,7 +15,7 @@ public sealed class DiningIntegrationWorker(
     IServiceScopeFactory scopes,
     IOptions<RabbitMqOptions> options,
     ILogger<DiningIntegrationWorker> log
-) : BackgroundService
+) : AsyncDisposingBackgroundService
 {
     private IConnection? connection;
     private IChannel? channel;
@@ -45,7 +46,7 @@ public sealed class DiningIntegrationWorker(
             catch (Exception e)
             {
                 log.LogError(e, "Dining integration disconnected; retrying.");
-                await DisposeBroker();
+                await DisposeResourcesAsync();
                 await Task.Delay(5000, ct);
             }
         }
@@ -96,13 +97,7 @@ public sealed class DiningIntegrationWorker(
         }
     }
 
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        await base.StopAsync(cancellationToken);
-        await DisposeBroker();
-    }
-
-    private async Task DisposeBroker()
+    protected override async Task DisposeResourcesAsync()
     {
         if (channel is not null)
         {

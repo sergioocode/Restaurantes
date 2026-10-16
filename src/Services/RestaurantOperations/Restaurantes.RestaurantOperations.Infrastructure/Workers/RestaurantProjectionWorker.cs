@@ -10,6 +10,7 @@ using Restaurantes.Messaging.RabbitMq;
 using Restaurantes.RestaurantOperations.Contracts.Events;
 using Restaurantes.RestaurantOperations.Infrastructure.Persistence;
 using Restaurantes.RestaurantOperations.Infrastructure.Persistence.Read;
+using Restaurantes.ServiceDefaults;
 
 namespace Restaurantes.RestaurantOperations.Infrastructure.Workers;
 
@@ -18,7 +19,7 @@ public sealed class RestaurantProjectionWorker(
     IOptions<RabbitMqOptions> options,
     TimeProvider timeProvider,
     ILogger<RestaurantProjectionWorker> logger
-) : BackgroundService
+) : AsyncDisposingBackgroundService
 {
     private IConnection? _connection;
     private IChannel? _channel;
@@ -43,7 +44,7 @@ public sealed class RestaurantProjectionWorker(
                     exception,
                     "RabbitMQ consumer disconnected. Retrying in five seconds."
                 );
-                await DisposeBrokerResourcesAsync();
+                await DisposeResourcesAsync();
                 await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
             }
         }
@@ -190,12 +191,6 @@ public sealed class RestaurantProjectionWorker(
         }
     }
 
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        await base.StopAsync(cancellationToken);
-        await DisposeBrokerResourcesAsync();
-    }
-
     private static DateTime EnsureUtc(DateTime value)
     {
         return value.Kind == DateTimeKind.Utc ? value : value.ToUniversalTime();
@@ -273,7 +268,7 @@ public sealed class RestaurantProjectionWorker(
         }
     }
 
-    private async Task DisposeBrokerResourcesAsync()
+    protected override async Task DisposeResourcesAsync()
     {
         if (_channel is not null)
         {

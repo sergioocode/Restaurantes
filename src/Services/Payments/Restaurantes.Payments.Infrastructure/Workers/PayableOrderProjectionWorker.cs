@@ -11,6 +11,7 @@ using Restaurantes.Orders.Contracts.Events;
 using Restaurantes.Payments.Domain;
 using Restaurantes.Payments.Infrastructure.Persistence;
 using Restaurantes.Payments.Infrastructure.Persistence.Write;
+using Restaurantes.ServiceDefaults;
 
 namespace Restaurantes.Payments.Infrastructure.Workers;
 
@@ -19,7 +20,7 @@ public sealed class PayableOrderProjectionWorker(
     IOptions<RabbitMqOptions> options,
     TimeProvider time,
     ILogger<PayableOrderProjectionWorker> log
-) : BackgroundService
+) : AsyncDisposingBackgroundService
 {
     private IConnection? connection;
     private IChannel? channel;
@@ -62,7 +63,7 @@ public sealed class PayableOrderProjectionWorker(
             catch (Exception e)
             {
                 log.LogError(e, "Payments order projection disconnected; retrying.");
-                await DisposeBroker();
+                await DisposeResourcesAsync();
                 await Task.Delay(5000, ct);
             }
         }
@@ -154,13 +155,7 @@ public sealed class PayableOrderProjectionWorker(
         }
     }
 
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        await base.StopAsync(cancellationToken);
-        await DisposeBroker();
-    }
-
-    private async Task DisposeBroker()
+    protected override async Task DisposeResourcesAsync()
     {
         if (channel is not null)
         {

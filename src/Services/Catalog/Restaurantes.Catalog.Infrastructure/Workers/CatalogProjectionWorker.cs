@@ -9,6 +9,7 @@ using RabbitMQ.Client.Events;
 using Restaurantes.Catalog.Contracts.Events;
 using Restaurantes.Catalog.Infrastructure.Persistence.Read;
 using Restaurantes.Messaging.RabbitMq;
+using Restaurantes.ServiceDefaults;
 
 namespace Restaurantes.Catalog.Infrastructure.Workers;
 
@@ -17,7 +18,7 @@ public sealed class CatalogProjectionWorker(
     IOptions<RabbitMqOptions> options,
     TimeProvider time,
     ILogger<CatalogProjectionWorker> log
-) : BackgroundService
+) : AsyncDisposingBackgroundService
 {
     private IConnection? connection;
     private IChannel? channel;
@@ -335,18 +336,12 @@ public sealed class CatalogProjectionWorker(
         }
     }
 
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        await base.StopAsync(cancellationToken);
-        await DisposeResourcesAsync();
-    }
-
     private static DateTime EnsureUtc(DateTime value)
     {
         return value.Kind == DateTimeKind.Utc ? value : value.ToUniversalTime();
     }
 
-    private async Task DisposeResourcesAsync()
+    protected override async Task DisposeResourcesAsync()
     {
         if (channel is not null)
         {

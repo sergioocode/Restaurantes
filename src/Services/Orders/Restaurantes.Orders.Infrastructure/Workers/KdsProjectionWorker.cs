@@ -10,6 +10,7 @@ using Restaurantes.Messaging.RabbitMq;
 using Restaurantes.Orders.Contracts.Events;
 using Restaurantes.Orders.Infrastructure.Persistence.Read;
 using Restaurantes.Orders.Infrastructure.Workers.Handlers;
+using Restaurantes.ServiceDefaults;
 
 namespace Restaurantes.Orders.Infrastructure.Workers;
 
@@ -18,7 +19,7 @@ public sealed class KdsProjectionWorker(
     IOptions<RabbitMqOptions> options,
     TimeProvider timeProvider,
     ILogger<KdsProjectionWorker> logger
-) : BackgroundService
+) : AsyncDisposingBackgroundService
 {
     private IConnection? _connection;
     private IChannel? _channel;
@@ -49,7 +50,7 @@ public sealed class KdsProjectionWorker(
                     exception,
                     "Orders consumer disconnected. Retrying in five seconds."
                 );
-                await DisposeBrokerResourcesAsync();
+                await DisposeResourcesAsync();
                 await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
             }
         }
@@ -188,13 +189,7 @@ public sealed class KdsProjectionWorker(
         );
     }
 
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        await base.StopAsync(cancellationToken);
-        await DisposeBrokerResourcesAsync();
-    }
-
-    private async Task DisposeBrokerResourcesAsync()
+    protected override async Task DisposeResourcesAsync()
     {
         if (_notificationChannel is not null)
         {

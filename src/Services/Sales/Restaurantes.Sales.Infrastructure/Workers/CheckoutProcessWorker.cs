@@ -9,6 +9,7 @@ using Restaurantes.Messaging.RabbitMq;
 using Restaurantes.Orders.Contracts.Events;
 using Restaurantes.Payments.Contracts.Events;
 using Restaurantes.Sales.Application;
+using Restaurantes.ServiceDefaults;
 
 namespace Restaurantes.Sales.Infrastructure.Workers;
 
@@ -16,7 +17,7 @@ public sealed class CheckoutProcessWorker(
     IServiceScopeFactory scopes,
     IOptions<RabbitMqOptions> options,
     ILogger<CheckoutProcessWorker> log
-) : BackgroundService
+) : AsyncDisposingBackgroundService
 {
     private IConnection? connection;
     private IChannel? channel;
@@ -54,7 +55,7 @@ public sealed class CheckoutProcessWorker(
             catch (Exception e)
             {
                 log.LogError(e, "Sales checkout consumer disconnected; retrying.");
-                await DisposeBroker();
+                await DisposeResourcesAsync();
                 await Task.Delay(5000, ct);
             }
         }
@@ -130,13 +131,7 @@ public sealed class CheckoutProcessWorker(
         }
     }
 
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        await base.StopAsync(cancellationToken);
-        await DisposeBroker();
-    }
-
-    private async Task DisposeBroker()
+    protected override async Task DisposeResourcesAsync()
     {
         if (channel is not null)
         {

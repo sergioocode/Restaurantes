@@ -8,6 +8,7 @@ using RabbitMQ.Client.Events;
 using Restaurantes.Messaging.RabbitMq;
 using Restaurantes.Orders.Infrastructure.Persistence.Write;
 using Restaurantes.Payments.Contracts.Events;
+using Restaurantes.ServiceDefaults;
 
 namespace Restaurantes.Orders.Infrastructure.Workers;
 
@@ -15,7 +16,7 @@ public sealed class PaymentProjectionWorker(
     IServiceScopeFactory scopes,
     IOptions<RabbitMqOptions> options,
     ILogger<PaymentProjectionWorker> log
-) : BackgroundService
+) : AsyncDisposingBackgroundService
 {
     private IConnection? connection;
     private IChannel? channel;
@@ -51,7 +52,7 @@ public sealed class PaymentProjectionWorker(
             catch (Exception e)
             {
                 log.LogError(e, "Orders payment projection disconnected; retrying.");
-                await DisposeBroker();
+                await DisposeResourcesAsync();
                 await Task.Delay(5000, ct);
             }
         }
@@ -162,13 +163,7 @@ public sealed class PaymentProjectionWorker(
         }
     }
 
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        await base.StopAsync(cancellationToken);
-        await DisposeBroker();
-    }
-
-    private async Task DisposeBroker()
+    protected override async Task DisposeResourcesAsync()
     {
         if (channel is not null)
         {

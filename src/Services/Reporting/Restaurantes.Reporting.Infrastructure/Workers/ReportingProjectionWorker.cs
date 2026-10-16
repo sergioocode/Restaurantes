@@ -8,6 +8,7 @@ using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Restaurantes.Messaging.RabbitMq;
 using Restaurantes.Reporting.Infrastructure.Persistence.Read;
+using Restaurantes.ServiceDefaults;
 
 namespace Restaurantes.Reporting.Infrastructure.Workers;
 
@@ -15,7 +16,7 @@ public sealed class ReportingProjectionWorker(
     IServiceScopeFactory scopes,
     IOptions<RabbitMqOptions> options,
     ILogger<ReportingProjectionWorker> log
-) : BackgroundService
+) : AsyncDisposingBackgroundService
 {
     private IConnection? connection;
     private IChannel? channel;
@@ -59,7 +60,7 @@ public sealed class ReportingProjectionWorker(
             catch (Exception e)
             {
                 log.LogError(e, "Reporting consumer disconnected; retrying.");
-                await DisposeBroker();
+                await DisposeResourcesAsync();
                 await Task.Delay(5000, ct);
             }
         }
@@ -115,13 +116,7 @@ public sealed class ReportingProjectionWorker(
         }
     }
 
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        await base.StopAsync(cancellationToken);
-        await DisposeBroker();
-    }
-
-    private async Task DisposeBroker()
+    protected override async Task DisposeResourcesAsync()
     {
         if (channel is not null)
         {

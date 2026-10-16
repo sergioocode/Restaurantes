@@ -5,6 +5,7 @@ using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Restaurantes.Messaging.RabbitMq;
 using Restaurantes.Reporting.Contracts.Events;
+using Restaurantes.ServiceDefaults;
 
 namespace Restaurantes.Reporting.Api.Realtime;
 
@@ -12,7 +13,7 @@ public sealed class ReportingSignalRWorker(
     IHubContext<ReportingHub> hub,
     IOptions<RabbitMqOptions> options,
     ILogger<ReportingSignalRWorker> log
-) : BackgroundService
+) : AsyncDisposingBackgroundService
 {
     private IConnection? connection;
     private IChannel? channel;
@@ -48,7 +49,7 @@ public sealed class ReportingSignalRWorker(
             catch (Exception e)
             {
                 log.LogError(e, "Reporting SignalR disconnected; retrying.");
-                await DisposeBroker();
+                await DisposeResourcesAsync();
                 await Task.Delay(5000, ct);
             }
         }
@@ -110,13 +111,7 @@ public sealed class ReportingSignalRWorker(
         }
     }
 
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        await base.StopAsync(cancellationToken);
-        await DisposeBroker();
-    }
-
-    private async Task DisposeBroker()
+    protected override async Task DisposeResourcesAsync()
     {
         if (channel is not null)
         {

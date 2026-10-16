@@ -7,6 +7,7 @@ using Restaurantes.Messaging.RabbitMq;
 using Restaurantes.Orders.Api.Security;
 using Restaurantes.Orders.Contracts.Events;
 using Restaurantes.Security;
+using Restaurantes.ServiceDefaults;
 
 namespace Restaurantes.Orders.Api.Realtime;
 
@@ -15,7 +16,7 @@ public sealed class KdsSignalRWorker(
     IHubContext<OrdersHub, IKdsClient> ordersHubContext,
     IOptions<RabbitMqOptions> options,
     ILogger<KdsSignalRWorker> logger
-) : BackgroundService
+) : AsyncDisposingBackgroundService
 {
     private IConnection? _connection;
     private IChannel? _channel;
@@ -38,7 +39,7 @@ public sealed class KdsSignalRWorker(
                     exception,
                     "KDS SignalR consumer disconnected. Retrying in five seconds."
                 );
-                await DisposeBrokerResourcesAsync();
+                await DisposeResourcesAsync();
                 await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
             }
         }
@@ -145,13 +146,7 @@ public sealed class KdsSignalRWorker(
         }
     }
 
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        await base.StopAsync(cancellationToken);
-        await DisposeBrokerResourcesAsync();
-    }
-
-    private async Task DisposeBrokerResourcesAsync()
+    protected override async Task DisposeResourcesAsync()
     {
         if (_channel is not null)
         {

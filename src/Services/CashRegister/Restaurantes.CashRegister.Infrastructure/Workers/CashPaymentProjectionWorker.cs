@@ -10,6 +10,7 @@ using Restaurantes.CashRegister.Application;
 using Restaurantes.CashRegister.Infrastructure.Persistence;
 using Restaurantes.Messaging.RabbitMq;
 using Restaurantes.Payments.Contracts.Events;
+using Restaurantes.ServiceDefaults;
 
 namespace Restaurantes.CashRegister.Infrastructure.Workers;
 
@@ -17,7 +18,7 @@ public sealed class CashPaymentProjectionWorker(
     IServiceScopeFactory scopes,
     IOptions<RabbitMqOptions> options,
     ILogger<CashPaymentProjectionWorker> log
-) : BackgroundService
+) : AsyncDisposingBackgroundService
 {
     private IConnection? connection;
     private IChannel? channel;
@@ -54,7 +55,7 @@ public sealed class CashPaymentProjectionWorker(
             catch (Exception ex)
             {
                 log.LogError(ex, "CashRegister consumer disconnected; retrying.");
-                await DisposeBroker();
+                await DisposeResourcesAsync();
                 await Task.Delay(5000, ct);
             }
         }
@@ -136,13 +137,7 @@ public sealed class CashPaymentProjectionWorker(
         throw new NotSupportedException(ea.BasicProperties.Type);
     }
 
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        await base.StopAsync(cancellationToken);
-        await DisposeBroker();
-    }
-
-    private async Task DisposeBroker()
+    protected override async Task DisposeResourcesAsync()
     {
         if (channel is not null)
         {
