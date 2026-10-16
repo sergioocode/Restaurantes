@@ -535,35 +535,27 @@ public partial class Home
         List<ManagementOrderResponse> orders
     )
     {
-        int offset = 0;
-        while (true)
-        {
-            List<ManagementOrderResponse> page = await Api.ManagementOrdersAsync(
-                restaurantId,
-                historyDate,
-                offset
-            );
-            orders.AddRange(page);
-            if (page.Count < 100)
-            {
-                return;
-            }
-
-            offset += page.Count;
-        }
+        orders.AddRange(
+            await LoadPagesAsync(offset =>
+                Api.ManagementOrdersAsync(restaurantId, historyDate, offset)
+            )
+        );
     }
 
-    private async Task<List<SaleResponse>> LoadRestaurantSalesAsync(Guid restaurantId)
+    private Task<List<SaleResponse>> LoadRestaurantSalesAsync(Guid restaurantId) =>
+        LoadPagesAsync(offset => Api.SalesAsync(restaurantId, historyDate, offset));
+
+    private static async Task<List<T>> LoadPagesAsync<T>(Func<int, Task<List<T>>> loadPage)
     {
-        List<SaleResponse> sales = [];
+        List<T> items = [];
         int offset = 0;
         while (true)
         {
-            List<SaleResponse> page = await Api.SalesAsync(restaurantId, historyDate, offset);
-            sales.AddRange(page);
+            List<T> page = await loadPage(offset);
+            items.AddRange(page);
             if (page.Count < 100)
             {
-                return sales;
+                return items;
             }
 
             offset += page.Count;

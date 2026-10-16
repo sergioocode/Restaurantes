@@ -77,31 +77,24 @@ public sealed class OrderRealtimeClient(HttpClient http, PosApi api) : IAsyncDis
             : Task.CompletedTask;
     }
 
-    private async Task NotifyAsync(OrderRealtimeNotification notification)
+    private Task NotifyAsync(OrderRealtimeNotification notification)
     {
-        Func<OrderRealtimeNotification, Task>? handlers = OrderUpdated;
-        if (notification.RestaurantId != restaurantId || handlers is null)
-        {
-            return;
-        }
-        foreach (Delegate handler in handlers.GetInvocationList())
-        {
-            await ((Func<OrderRealtimeNotification, Task>)handler)(notification);
-        }
+        return notification.RestaurantId == restaurantId
+            ? Restaurantes.Clients.Shared.Operations.AsyncEventDispatcher.InvokeAsync(
+                OrderUpdated,
+                notification
+            )
+            : Task.CompletedTask;
     }
 
-    private async Task NotifyDiningTableUpdatedAsync(Guid changedRestaurantId)
+    private Task NotifyDiningTableUpdatedAsync(Guid changedRestaurantId)
     {
-        Func<Guid, Task>? handlers = DiningTableUpdated;
-        if (changedRestaurantId != restaurantId || handlers is null)
-        {
-            return;
-        }
-
-        foreach (Delegate handler in handlers.GetInvocationList())
-        {
-            await ((Func<Guid, Task>)handler)(changedRestaurantId);
-        }
+        return changedRestaurantId == restaurantId
+            ? Restaurantes.Clients.Shared.Operations.AsyncEventDispatcher.InvokeAsync(
+                DiningTableUpdated,
+                changedRestaurantId
+            )
+            : Task.CompletedTask;
     }
 
     public ValueTask DisposeAsync()
