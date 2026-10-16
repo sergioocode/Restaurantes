@@ -36,6 +36,25 @@ public sealed class OrderKitchenLineLifecycleTests
     }
 
     [Fact]
+    public void Order_line_rejects_values_above_their_maximum_lengths_and_quantity()
+    {
+        OrderLineDraft valid = Draft();
+
+        Assert.Throws<ArgumentException>(() =>
+            CreateSingleLineOrder(valid with { ProductName = new string('P', 161) })
+        );
+        Assert.Throws<ArgumentException>(() =>
+            CreateSingleLineOrder(valid with { CategoryName = new string('C', 121) })
+        );
+        Assert.Throws<ArgumentException>(() =>
+            CreateSingleLineOrder(valid with { PreparationStationName = new string('S', 81) })
+        );
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            CreateSingleLineOrder(valid with { Quantity = 101 })
+        );
+    }
+
+    [Fact]
     public void Controlled_station_tracks_and_dispatches_each_line_independently()
     {
         DateTime submittedAt = DateTime.Parse("2026-10-09T10:00:00Z");
