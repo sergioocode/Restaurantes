@@ -70,7 +70,7 @@
                 <div class="tables-toolbar">
                     <button class="quick-mode" @onclick="BeginTakeaway" disabled="@(!CashRegisterOpen)">Nuevo para llevar</button>
                     <button class="ghost" @onclick="ShowPickupOrders" disabled="@busy">Recogidas (@pickupOrders.Count)</button>
-                    @foreach (var zone in DiningZones)
+                    @foreach (var zone in DiningZones())
                     {
                         <button class="@ZoneClass(zone.Key.ZoneId)" @onclick="() => SelectZone(zone.Key.ZoneId)">
                             @zone.Key.ZoneName <small>@zone.Count(table => table.Status == "Available")</small>
@@ -107,7 +107,7 @@
                 {
                     <div class="tables-content">
                         <div class="table-grid dining-table-grid">
-                            @foreach (TableResponse table in FilteredTables)
+                            @foreach (TableResponse table in FilteredTables())
                             {
                                 TableSessionOrderSnapshot? sessionOrderSnapshot = TableSessionSnapshot(table);
                                 <button class="table-card dining-location @table.Status.ToLowerInvariant()"
@@ -159,10 +159,10 @@
                                 </button>
                             }
                         </div>
-                        @if (FilteredTables.Count == 0 && !busy) { <p class="empty">No hay ubicaciones para este filtro.</p> }
+                        @if (FilteredTables().Count == 0 && !busy) { <p class="empty">No hay ubicaciones para este filtro.</p> }
                     </div>
                 }
-                else if (DiningZones.Count == 0 && !busy)
+                else if (DiningZones().Count == 0 && !busy)
                 {
                     <div class="tables-content"><p class="empty">No hay sectores configurados para este local.</p></div>
                 }
@@ -202,7 +202,7 @@
 
                     <div class="category-tabs">
                         <button class="@CategoryClass(null)" @onclick="() => SelectCategory(null)">Todo</button>
-                        @foreach (string itemCategory in Categories)
+                        @foreach (string itemCategory in Categories())
                         {
                             <button class="@CategoryClass(itemCategory)" @onclick="() => SelectCategory(itemCategory)">@itemCategory</button>
                         }
@@ -210,15 +210,15 @@
 
                     <div class="format-tabs" aria-label="Formato">
                         <button class="@(selectedFormat is null ? "filter active" : "filter")" @onclick="() => selectedFormat = null">@(category is null ? "Carta" : FormatLabel(DefaultFormatForCategory(category)))</button>
-                        @foreach (string format in AvailableFormats)
+                        @foreach (string format in AvailableFormats())
                         {
                             <button class="@(selectedFormat == format ? "filter active" : "filter")" @onclick="() => selectedFormat = format">@FormatLabel(format)</button>
                         }
                     </div>
 
                     <div class="product-grid">
-                        @if (VisibleMenu.Count == 0) { <p class="empty">No hay productos en este formato.</p> }
-                        @foreach (MenuItemResponse item in VisibleMenu)
+                        @if (VisibleMenu().Count == 0) { <p class="empty">No hay productos en este formato.</p> }
+                        @foreach (MenuItemResponse item in VisibleMenu())
                         {
                             <button class="product-tile" @onclick="() => SelectProduct(item.ProductId)">
                                 <span class="product-tile-category">@item.CategoryName</span>

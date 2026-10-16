@@ -197,22 +197,26 @@ public partial class Home
 
     private List<
         IGrouping<(Guid ZoneId, string ZoneName, int ZoneSortOrder), TableResponse>
-    > DiningZones =>
+    > DiningZones() =>
         tables
             .GroupBy(x => (x.ZoneId, x.ZoneName, x.ZoneSortOrder))
             .OrderBy(x => x.Key.ZoneSortOrder)
             .ThenBy(x => x.Key.ZoneName)
             .ToList();
-    private List<TableResponse> TablesInSelectedZone =>
+
+    private List<TableResponse> TablesInSelectedZone() =>
         selectedZoneId is Guid zoneId
             ? tables.Where(x => x.ZoneId == zoneId && x.IsActive).ToList()
             : [];
-    private List<TableResponse> FilteredTables =>
-        TablesInSelectedZone
+
+    private List<TableResponse> FilteredTables() =>
+        TablesInSelectedZone()
             .Where(x => tableFilter == "All" || x.Status == tableFilter)
             .OrderBy(x => x.Code)
             .ToList();
-    private List<string> Categories => menu.Select(x => x.CategoryName).Distinct().Order().ToList();
+
+    private List<string> Categories() =>
+        menu.Select(x => x.CategoryName).Distinct().Order().ToList();
 
     private static IReadOnlyList<MenuItemFormatPrice> PricesFor(MenuItemResponse item) =>
         item.Formats is { Count: > 0 }
@@ -259,7 +263,7 @@ public partial class Home
     private string FormatFor(MenuItemResponse item) =>
         selectedFormat ?? DefaultFormatForCategory(item.CategoryName);
 
-    private List<string> AvailableFormats =>
+    private List<string> AvailableFormats() =>
         menu.Where(x => x.IsAvailable && (category is null || x.CategoryName == category))
             .SelectMany(PricesFor)
             .Select(x => x.Format)
@@ -267,7 +271,8 @@ public partial class Home
             .Distinct()
             .Order()
             .ToList();
-    private List<MenuItemResponse> VisibleMenu =>
+
+    private List<MenuItemResponse> VisibleMenu() =>
         menu.Where(x =>
                 x.IsAvailable
                 && (category is null || x.CategoryName == category)
