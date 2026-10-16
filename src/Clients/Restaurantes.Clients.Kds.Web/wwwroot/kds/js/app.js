@@ -18,7 +18,6 @@ const logoutButton = document.querySelector('#logout');
 const restaurantSelect = document.querySelector('#restaurantId');
 const stationSelect = document.querySelector('#stationCode');
 const status = document.querySelector('#connectionStatus');
-const assignedUserName = document.querySelector('#assignedUserName');
 const eventText = document.querySelector('#event');
 const ordersElement = document.querySelector('#orders');
 const orderPollingIntervalMilliseconds = 30_000;
@@ -187,17 +186,12 @@ function addOption(select, value, text, statusText = text) {
   select.append(option);
 }
 
-function updateRestaurantIdentity() {
-  assignedUserName.textContent = login?.user?.displayName || login?.user?.username || '';
-}
-
 async function loadStationsAndConnect() {
   const restaurantId = selectedRestaurantId;
   if (!restaurantId) return;
   realtime.disconnect();
   closeHistory();
   clearOrdersView('Cargando pedidos…');
-  updateRestaurantIdentity();
   stationSelect.disabled = true;
   stationSelect.replaceChildren();
   setStatus(false, 'Cargando estaciones…');
@@ -280,7 +274,6 @@ async function activateLogin(loginResponse) {
     : restaurantAccesses[0].restaurantId;
   restaurantSelect.value = selectedRestaurantId;
   restaurantSelect.disabled = restaurantAccesses.length <= 1;
-  updateRestaurantIdentity();
   await loadStationsAndConnect();
 }
 
@@ -351,7 +344,6 @@ function logout() {
   refreshButton.disabled = true;
   restaurantSelect.replaceChildren();
   restaurantSelect.disabled = true;
-  assignedUserName.textContent = '';
   eventText.textContent = '';
   clearOrdersView('Accede para cargar el monitor.');
   historyButton.classList.add('hidden');

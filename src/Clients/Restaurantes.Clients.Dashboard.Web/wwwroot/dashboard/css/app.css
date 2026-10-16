@@ -347,9 +347,6 @@ ul {
     text-align: center;
 }
 
-.filter-summary { display: grid; gap: 3px; min-width: 160px; color: #aebdcc; font-size: 12px; }
-.filter-summary strong { color: #fff; font-size: 14px; }
-
 .section-header {
     display: flex;
     align-items: center;
