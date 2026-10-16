@@ -920,28 +920,7 @@ public partial class Home
 
     private void PressPaymentKey(string key)
     {
-        string next = paymentKeypadText;
-        next =
-            key == "Borrar" ? "0"
-            : key == ","
-                ? paymentKeypadStartNew ? "0,"
-                    : next.Contains(',') ? next
-                    : next + ","
-            : paymentKeypadStartNew ? key
-            : next == "0" ? key
-            : next + key;
-
-        if (
-            next.Length > 10
-            || next.Contains(',') && next[(next.IndexOf(',') + 1)..].Length > 2
-            || !decimal.TryParse(
-                next.Replace(',', '.'),
-                System.Globalization.NumberStyles.AllowDecimalPoint,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out decimal amount
-            )
-            || amount > 1_000_000m
-        )
+        if (!TryBuildPaymentKeypadValue(key, out string next, out decimal amount))
         {
             return;
         }
@@ -958,6 +937,34 @@ public partial class Home
             CurrentTipAmount = amount;
             tipAmountManuallyEdited = true;
         }
+    }
+
+    private bool TryBuildPaymentKeypadValue(string key, out string next, out decimal amount)
+    {
+        next = key switch
+        {
+            "Borrar" => "0",
+            "," when paymentKeypadStartNew => "0,",
+            "," when paymentKeypadText.Contains(',') => paymentKeypadText,
+            "," => paymentKeypadText + ",",
+            _ when paymentKeypadStartNew => key,
+            _ when paymentKeypadText == "0" => key,
+            _ => paymentKeypadText + key,
+        };
+
+        if (next.Length > 10 || next.Contains(',') && next[(next.IndexOf(',') + 1)..].Length > 2)
+        {
+            amount = default;
+            return false;
+        }
+
+        return decimal.TryParse(
+                next.Replace(',', '.'),
+                System.Globalization.NumberStyles.AllowDecimalPoint,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out amount
+            )
+            && amount <= 1_000_000m;
     }
 
     private void SelectTip(int percentage)
