@@ -79,26 +79,28 @@ public sealed class OrderRealtimeClient(HttpClient http, PosApi api) : IAsyncDis
 
     private async Task NotifyAsync(OrderRealtimeNotification notification)
     {
-        if (notification.RestaurantId != restaurantId || OrderUpdated is null)
+        Func<OrderRealtimeNotification, Task>? handlers = OrderUpdated;
+        if (notification.RestaurantId != restaurantId || handlers is null)
         {
             return;
         }
-        foreach (Func<OrderRealtimeNotification, Task> handler in OrderUpdated.GetInvocationList())
+        foreach (Delegate handler in handlers.GetInvocationList())
         {
-            await handler(notification);
+            await ((Func<OrderRealtimeNotification, Task>)handler)(notification);
         }
     }
 
     private async Task NotifyDiningTableUpdatedAsync(Guid changedRestaurantId)
     {
-        if (changedRestaurantId != restaurantId || DiningTableUpdated is null)
+        Func<Guid, Task>? handlers = DiningTableUpdated;
+        if (changedRestaurantId != restaurantId || handlers is null)
         {
             return;
         }
 
-        foreach (Func<Guid, Task> handler in DiningTableUpdated.GetInvocationList())
+        foreach (Delegate handler in handlers.GetInvocationList())
         {
-            await handler(changedRestaurantId);
+            await ((Func<Guid, Task>)handler)(changedRestaurantId);
         }
     }
 
