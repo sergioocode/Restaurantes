@@ -91,5 +91,13 @@ public abstract class RestaurantOrderRealtimeClient<TNotification>(
             changedRestaurantId
         );
 
-    public ValueTask DisposeAsync() => connection?.DisposeAsync() ?? ValueTask.CompletedTask;
+    public async ValueTask DisposeAsync()
+    {
+        if (connection is not null)
+        {
+            await connection.DisposeAsync();
+        }
+
+        GC.SuppressFinalize(this);
+    }
 }
