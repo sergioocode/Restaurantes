@@ -77,7 +77,8 @@ function load() {
     if (dashboardLoadPromise) return dashboardLoadPromise;
 
     const drain = async () => {
-        while (dashboardRefreshPending && access) {
+        while (dashboardRefreshPending) {
+            if (!access) break;
             dashboardRefreshPending = false;
             await loadOnce();
         }
