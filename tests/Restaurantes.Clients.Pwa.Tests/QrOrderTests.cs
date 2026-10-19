@@ -27,10 +27,14 @@ using PosBillOrder = Restaurantes.Clients.Pos.Pwa.Models.SessionBillOrderRespons
 using PosCashRegister = Restaurantes.Clients.Pos.Pwa.Models.CashRegisterResponse;
 using PosCatalogRealtime = Restaurantes.Clients.Pos.Pwa.Realtime.CatalogRealtimeClient;
 using PosHome = Restaurantes.Clients.Pos.Pwa.Pages.Home;
+using PosLogin = Restaurantes.Clients.Pos.Pwa.Models.LoginResponse;
+using PosLoginUser = Restaurantes.Clients.Pos.Pwa.Models.LoginUser;
 using PosOrder = Restaurantes.Clients.Pos.Pwa.Models.OrderResponse;
 using PosOrderDetail = Restaurantes.Clients.Pos.Pwa.Models.OrderDetailResponse;
 using PosOrderLine = Restaurantes.Clients.Pos.Pwa.Models.OrderLineDetailResponse;
 using PosOrderRealtime = Restaurantes.Clients.Pos.Pwa.Realtime.OrderRealtimeClient;
+using PosPaymentStatus = Restaurantes.Clients.Pos.Pwa.Models.OrderPaymentStatusResponse;
+using PosRestaurant = Restaurantes.Clients.Pos.Pwa.Models.RestaurantResponse;
 
 namespace Restaurantes.Clients.Pwa.Tests;
 
@@ -567,6 +571,302 @@ public sealed class QrOrderTests : BunitContext
         Assert.Equal("PARA LLEVAR", orderBody.RootElement.GetProperty("tableLabel").GetString());
         Assert.Equal("Takeaway", orderBody.RootElement.GetProperty("serviceMode").GetString());
         Assert.Equal("OnAccount", orderBody.RootElement.GetProperty("paymentTiming").GetString());
+    }
+
+    [Fact]
+    public async Task Pos_pickup_dialog_moves_from_open_payment_to_paid_waiting_for_kitchen()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        Guid orderId = Guid.NewGuid();
+        Guid lineId = Guid.NewGuid();
+        PosOrder pickup = new(
+            orderId,
+            restaurantId,
+            null,
+            null,
+            "Cliente",
+            "Takeaway",
+            "Immediate",
+            "Submitted",
+            12m,
+            DateTime.UtcNow
+        );
+        PosOrderLine line = new(
+            lineId,
+            "Producto",
+            12m,
+            1,
+            12m,
+            "KITCHEN",
+            "Cocina",
+            "Active",
+            null,
+            ""
+        );
+        PosOrderDetail detail = new(orderId, restaurantId, "Submitted", 12m, [line], []);
+        string paymentStatus = "Open";
+        HttpClient http = new(
+            new ReplyHandler(request =>
+            {
+                string path = request.RequestUri!.AbsolutePath;
+                if (path == $"/api/orders/{orderId}" && request.Method == HttpMethod.Get)
+                    return JsonResponse(detail);
+                if (path == $"/api/payments/restaurants/{restaurantId}/order-statuses")
+                    return JsonResponse(new[] { new PosPaymentStatus(orderId, paymentStatus) });
+                if (path == $"/api/payments/orders/{orderId}/capture")
+                {
+                    paymentStatus = "Paid";
+                    return JsonResponse(new { });
+                }
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            })
+        )
+        {
+            BaseAddress = new Uri("https://test.local"),
+        };
+        PosApi api = new(http);
+        Services.AddSingleton(api);
+        Services.AddSingleton(new PosOrderRealtime(http, api));
+        Services.AddSingleton(new PosCatalogRealtime(http, api));
+        Services.AddSingleton<IJSRuntime, ConfirmingJsRuntime>();
+        IRenderedComponent<PosHome> cut = Render<PosHome>();
+        SetField(
+            cut.Instance,
+            "login",
+            new PosLogin(
+                "token",
+                DateTime.UtcNow.AddHours(1),
+                new PosLoginUser(Guid.NewGuid(), "cajero", "Cajero"),
+                []
+            )
+        );
+        SetField(cut.Instance, "initializing", false);
+        SetField(cut.Instance, "restaurantId", restaurantId);
+        SetField(
+            cut.Instance,
+            "restaurants",
+            new List<PosRestaurant> { new(restaurantId, "CENTRO", "Centro", "Calle Mayor", true) }
+        );
+        SetField(
+            cut.Instance,
+            "cashRegister",
+            new PosCashRegister(
+                Guid.NewGuid(),
+                restaurantId,
+                DateOnly.FromDateTime(DateTime.UtcNow),
+                "Open",
+                0m,
+                0m,
+                0m,
+                0m,
+                0m,
+                0m,
+                0m,
+                null,
+                null,
+                null,
+                DateTime.UtcNow,
+                "Tester",
+                null,
+                null,
+                [],
+                [],
+                [],
+                []
+            )
+        );
+        MethodInfo open = typeof(PosHome).GetMethod(
+            "OpenPickup",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        )!;
+
+        await cut.InvokeAsync(() => cut.Instance.SetParametersAsync(ParameterView.Empty));
+        await cut.InvokeAsync(() => (Task)open.Invoke(cut.Instance, [pickup])!);
+        await cut.InvokeAsync(() => cut.Instance.SetParametersAsync(ParameterView.Empty));
+
+        Assert.Contains("Producto", cut.Markup);
+        Assert.Contains("Cobrar pedido", cut.Markup);
+        Assert.Contains("Cancelar", cut.Markup);
+        cut.FindAll("button")
+            .Single(button => button.TextContent.Contains("Cobrar pedido"))
+            .Click();
+
+        Assert.Equal("Paid", GetField(cut.Instance, "pickupPaymentStatus"));
+        Assert.Contains("Pedido pagado. Se podrá entregar", cut.Markup);
+        Assert.DoesNotContain("Entregar al cliente", cut.Markup);
+    }
+
+    [Fact]
+    public async Task Pos_pickup_line_cancellation_updates_order_and_payment_status()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        Guid orderId = Guid.NewGuid();
+        Guid lineId = Guid.NewGuid();
+        PosOrder pickup = new(
+            orderId,
+            restaurantId,
+            null,
+            null,
+            "Cliente",
+            "Takeaway",
+            "Immediate",
+            "Submitted",
+            12m,
+            DateTime.UtcNow
+        );
+        PosOrderDetail cancelled = new(orderId, restaurantId, "Submitted", 0m, [], []);
+        List<string> requests = [];
+        string? cancellationBody = null;
+        HttpClient http = new(
+            new ReplyHandler(request =>
+            {
+                string path = request.RequestUri!.AbsolutePath;
+                requests.Add(path);
+                if (path == $"/api/orders/{orderId}/lines/{lineId}/cancel")
+                {
+                    cancellationBody = request
+                        .Content!.ReadAsStringAsync()
+                        .GetAwaiter()
+                        .GetResult();
+                    return JsonResponse(cancelled);
+                }
+                return path == $"/api/payments/restaurants/{restaurantId}/order-statuses"
+                    ? JsonResponse(new[] { new PosPaymentStatus(orderId, "Open") })
+                    : new HttpResponseMessage(HttpStatusCode.NotFound);
+            })
+        )
+        {
+            BaseAddress = new Uri("https://test.local"),
+        };
+        PosApi api = new(http);
+        Services.AddSingleton(api);
+        Services.AddSingleton(new PosOrderRealtime(http, api));
+        Services.AddSingleton(new PosCatalogRealtime(http, api));
+        Services.AddSingleton<IJSRuntime, ConfirmingJsRuntime>();
+
+        IRenderedComponent<PosHome> cut = Render<PosHome>();
+        SetField(cut.Instance, "restaurantId", restaurantId);
+        SetField(cut.Instance, "selectedPickup", pickup);
+        SetField(cut.Instance, "pickupPaymentStatus", "Open");
+        PosOrderLine line = new(
+            lineId,
+            "Producto",
+            12m,
+            1,
+            12m,
+            "KITCHEN",
+            "Cocina",
+            "Active",
+            null,
+            ""
+        )
+        {
+            KitchenStatus = "Pending",
+        };
+        MethodInfo cancel = typeof(PosHome).GetMethod(
+            "CancelPickupLine",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        )!;
+
+        await cut.InvokeAsync(() => (Task)cancel.Invoke(cut.Instance, [line])!);
+
+        Assert.Contains($"/api/orders/{orderId}/lines/{lineId}/cancel", requests);
+        using JsonDocument body = JsonDocument.Parse(cancellationBody!);
+        Assert.Equal("Motivo de prueba", body.RootElement.GetProperty("reason").GetString());
+        Assert.Equal(0m, ((PosOrder)GetField(cut.Instance, "selectedPickup")!).Total);
+        Assert.Equal("Open", GetField(cut.Instance, "pickupPaymentStatus"));
+        Assert.Contains("cancelado", (string)GetField(cut.Instance, "message")!);
+    }
+
+    [Fact]
+    public async Task Pos_pickup_capture_requires_open_register_and_refreshes_paid_status()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        Guid orderId = Guid.NewGuid();
+        PosOrder pickup = new(
+            orderId,
+            restaurantId,
+            null,
+            null,
+            "Cliente",
+            "Takeaway",
+            "Immediate",
+            "Ready",
+            12m,
+            DateTime.UtcNow
+        );
+        List<string> requests = [];
+        string? captureBody = null;
+        HttpClient http = new(
+            new ReplyHandler(request =>
+            {
+                string path = request.RequestUri!.AbsolutePath;
+                requests.Add(path);
+                if (path == $"/api/payments/orders/{orderId}/capture")
+                {
+                    captureBody = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+                    return JsonResponse(new { });
+                }
+                return path == $"/api/payments/restaurants/{restaurantId}/order-statuses"
+                    ? JsonResponse(new[] { new PosPaymentStatus(orderId, "Paid") })
+                    : new HttpResponseMessage(HttpStatusCode.NotFound);
+            })
+        )
+        {
+            BaseAddress = new Uri("https://test.local"),
+        };
+        PosApi api = new(http);
+        Services.AddSingleton(api);
+        Services.AddSingleton(new PosOrderRealtime(http, api));
+        Services.AddSingleton(new PosCatalogRealtime(http, api));
+        Services.AddSingleton<IJSRuntime, ConfirmingJsRuntime>();
+
+        IRenderedComponent<PosHome> cut = Render<PosHome>();
+        SetField(cut.Instance, "restaurantId", restaurantId);
+        SetField(cut.Instance, "selectedPickup", pickup);
+        SetField(cut.Instance, "pickupPaymentStatus", "Open");
+        MethodInfo capture = typeof(PosHome).GetMethod(
+            "CapturePickup",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        )!;
+
+        await cut.InvokeAsync(() => (Task)capture.Invoke(cut.Instance, null)!);
+        Assert.DoesNotContain($"/api/payments/orders/{orderId}/capture", requests);
+        Assert.Contains("abrir la caja", (string)GetField(cut.Instance, "message")!);
+
+        PosCashRegister register = new(
+            Guid.NewGuid(),
+            restaurantId,
+            DateOnly.FromDateTime(DateTime.UtcNow),
+            "Open",
+            0m,
+            0m,
+            0m,
+            0m,
+            0m,
+            0m,
+            0m,
+            null,
+            null,
+            null,
+            DateTime.UtcNow,
+            "Tester",
+            null,
+            null,
+            [],
+            [],
+            [],
+            []
+        );
+        SetField(cut.Instance, "cashRegister", register);
+        SetField(cut.Instance, "paymentMethod", "Cash");
+        await cut.InvokeAsync(() => (Task)capture.Invoke(cut.Instance, null)!);
+
+        Assert.Contains($"/api/payments/orders/{orderId}/capture", requests);
+        using JsonDocument body = JsonDocument.Parse(captureBody!);
+        Assert.Equal("Cash", body.RootElement.GetProperty("method").GetString());
+        Assert.Equal("Paid", GetField(cut.Instance, "pickupPaymentStatus"));
+        Assert.Contains("Cobro registrado", (string)GetField(cut.Instance, "message")!);
     }
 
     private static void SetField(object component, string name, object value)
