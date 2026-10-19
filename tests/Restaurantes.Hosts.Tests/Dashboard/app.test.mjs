@@ -110,3 +110,113 @@ test('dashboard order renderer displays each payment method and all service labe
   assert.match(takeaway, /Para llevar · Sin nombre/u);
   assert.match(takeaway, /Cash/u);
 });
+
+async function loadDashboard(session, deadLetters = []) {
+  const elements = new Map();
+  const requests = [];
+  const getElementById = id => {
+    if (!elements.has(id)) elements.set(id, { ...createElement(), hidden: false, value: '', innerHTML: '', textContent: '' });
+    return elements.get(id);
+  };
+  const order = {
+    orderId: 'order-12345678', restaurantId: 'restaurant-1', serviceMode: 'DineIn',
+    tableLabel: 'Mesa 1', source: 'Pos', orderStatus: 'Completed', paymentStatus: 'Paid',
+    paymentMethods: ['Cash', 'Card'], total: 20,
+    lines: [{ quantity: 1, productName: 'Tortilla', categoryName: 'Tapas',
+      preparationStationCode: 'GRILL', kitchenStatus: 'Ready' }],
+  };
+  const daily = {
+    totalSales: 20, completedSales: 1, averageTicket: 20,
+    topProducts: [{ name: '<Tortilla>', quantity: 1, sales: 20 }],
+    restaurantRanking: [{ restaurantId: 'restaurant-1', tickets: 1, sales: 20 }],
+    channels: [{ source: 'Pos', tickets: 1, sales: 20 }],
+    paymentMethods: [{ method: 'Mixed', tickets: 1, sales: 20 }],
+    operationalOrders: [order],
+  };
+  const json = value => ({ ok: true, json: async () => value });
+  const context = vm.createContext({
+    Date, Headers, Intl, URL, URLSearchParams, console,
+    document: { body: createElement(), getElementById },
+    fetch: async (url, options = {}) => {
+      requests.push({ url: String(url), headers: options.headers });
+      const path = new URL(url).pathname;
+      if (path.endsWith('/provider')) return json({ activeProvider: 'Microsoft', microsoftConfigured: true });
+      if (path.endsWith('/restaurants')) return json([
+        { id: 'restaurant-1', name: 'Centro' },
+        { id: 'restaurant-2', name: 'Norte' },
+      ]);
+      if (path.endsWith('/daily')) return json(daily);
+      if (path.endsWith('/health')) return json([{ service: 'Orders', healthy: true, status: 'OK' }]);
+      if (path.endsWith('/dead-letters')) return json(deadLetters);
+      if (path.endsWith('/negotiate')) return json({ connectionToken: 'connection' });
+      throw new Error('Unexpected dashboard request: ' + url);
+    },
+    history: { replaceState() {} },
+    location: { origin: 'https://dashboard.test', pathname: '/dashboard/', hash: '' },
+    navigator: {},
+    sessionStorage: {
+      getItem: () => JSON.stringify(session),
+      removeItem() {}, setItem() {},
+    },
+    setTimeout: () => 1,
+    clearTimeout() {},
+    WebSocket: class { close() {} },
+    window: {
+      location: { hash: '', pathname: '/dashboard/', assign() {} },
+      setTimeout: () => 1,
+      addEventListener() {},
+    },
+  });
+  const instrumentedSource = appSource.replace(
+    /\}\)\(\);\s*$/u,
+    'globalThis.__dashboardTest = { load, logout };})();'
+  );
+  vm.runInContext(instrumentedSource, context, { filename: fileURLToPath(appUrl) });
+  for (let attempt = 0; attempt < 50 && !getElementById('operations').innerHTML; attempt++) {
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.ok(getElementById('operations').innerHTML, 'dashboard did not load');
+  return { context, getElementById, requests };
+}
+
+test('dashboard loads authorized local data, escapes product names and refreshes filters', async () => {
+  const session = {
+    accessToken: 'token', expiresAtUtc: '2099-01-01T00:00:00Z',
+    user: { displayName: 'Gerente' },
+    restaurants: [{ restaurantId: 'restaurant-1', role: 'Gerente', permissions: ['dashboard.read'] }],
+  };
+  const { context, getElementById, requests } = await loadDashboard(session);
+
+  assert.equal(getElementById('currentUser').textContent, 'Gerente');
+  assert.match(getElementById('products').innerHTML, /&lt;Tortilla&gt;/u);
+  assert.match(getElementById('operations').innerHTML, /Centro/u);
+  assert.match(getElementById('paymentMethods').innerHTML, /Mixto/u);
+  assert.equal(getElementById('deadLetterAlert').hidden, true);
+  assert.equal(getElementById('dashboardContent').hidden, false);
+  assert.ok(requests.some(request => request.headers?.get('Authorization') === 'Bearer token'));
+
+  getElementById('orderLimit').value = '25';
+  await context.__dashboardTest.load();
+  assert.ok(requests.some(request => request.url.includes('orderLimit=25')));
+  context.__dashboardTest.logout();
+  assert.equal(getElementById('loginView').hidden, false);
+});
+
+test('dashboard alerts an administrator about pending dead letters', async () => {
+  const session = {
+    accessToken: 'admin-token', expiresAtUtc: '2099-01-01T00:00:00Z',
+    user: { displayName: 'Admin' }, restaurants: [],
+    allRestaurantsRoles: ['Admin'], allRestaurantsPermissions: ['dashboard.read'],
+  };
+  const { getElementById } = await loadDashboard(session, [
+    { queue: 'orders.dead', available: true, messageCount: 3 },
+    { queue: 'sales.dead', available: false, messageCount: 0 },
+  ]);
+
+  for (let attempt = 0; attempt < 50 && !getElementById('deadLetterAlert').textContent; attempt++) {
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.match(getElementById('deadLetterAlert').textContent, /DLQ 3/u);
+  assert.match(getElementById('deadLetterAlert').title, /orders.dead: 3 pendientes/u);
+  assert.match(getElementById('deadLetterAlert').title, /sales.dead: no disponible/u);
+});
