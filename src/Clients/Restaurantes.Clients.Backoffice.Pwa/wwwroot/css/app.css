@@ -207,6 +207,7 @@ input[type="checkbox"] { width: 18px; height: 18px; min-height: 18px; padding: 0
 @media (max-width: 700px) { .cash-register-report-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }.cash-register-report-movement { grid-template-columns: 1fr auto; gap: 6px; }.cash-register-report-movement-header { display: none; }.cash-register-report-movement > span:nth-child(2) { grid-column: 1; grid-row: 2; font-size: 12px; }.cash-register-report-movement > span:nth-child(3) { grid-column: 1 / -1; grid-row: 3; }.cash-register-report-movement > strong { grid-column: 2; grid-row: 1; } }
 @media print {
   @page { margin: 6mm; }
+  #app:has(.cash-register-close-ticket-overlay) > :not(.cash-register-close-ticket-overlay) { display: none !important; }
   body * { visibility: hidden !important; }
   .cash-register-close-ticket-overlay, .cash-register-close-ticket-overlay * { visibility: visible !important; }
   .cash-register-close-ticket-overlay { position: absolute; inset: 0; display: block; overflow: visible; padding: 0; background: white; }
