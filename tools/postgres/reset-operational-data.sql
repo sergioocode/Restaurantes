@@ -1,5 +1,5 @@
 -- Reinicia los datos operativos locales de desarrollo en las dos instancias PostgreSQL.
--- Conserva Identity, locales, catálogo, mesas, zonas y configuración.
+-- Conserva Identity, locales, mesas, zonas y configuración; reconstruye el catálogo con el seed.
 --
 -- Antes de empezar, detén todos los servicios y workers de la aplicación.
 -- Para limpiar las dos bases y purgar RabbitMQ en una sola operación, desde la raíz
@@ -8,8 +8,8 @@
 --   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 --   .\tools\postgres\reset-operational-data.ps1 -ConfirmReset BORRAR
 -- El orquestador ejecuta este archivo para operational y analytics y después purga
--- las colas de Dining, Orders, Payments, Sales y Reporting, incluidas las retry y DLQ.
--- No purga colas de Catalog ni RestaurantOperations porque sus datos se conservan.
+-- las colas de Catalog, Dining, Orders, Payments, Sales y Reporting, incluidas las retry y DLQ.
+-- No purga colas de RestaurantOperations porque sus datos se conservan.
 -- La parte SQL de este archivo solo limpia PostgreSQL; RabbitMQ requiere Docker CLI.
 --
 -- Ejecuta cada modo contra su instancia indicada. El script verifica tanto el modo
@@ -88,7 +88,25 @@ SELECT :'reset_target' = 'operational' AS reset_operational \gset
             'sales_write.sales',
             'sales_write.delivered_order_markers',
             'sales_write.inbox_messages',
-            'sales_write.outbox_messages'
+            'sales_write.outbox_messages',
+            'catalog_write.categories',
+            'catalog_write.products',
+            'catalog_write.restaurant_menu_items',
+            'catalog_write.restaurant_kitchen_stations',
+            'catalog_write.outbox_messages',
+            'catalog_write.taxes',
+            'catalog_write.allergens',
+            'catalog_write.product_allergens',
+            'catalog_write.product_photos',
+            'catalog_write.product_configurations',
+            'catalog_write.product_option_groups',
+            'catalog_write.product_options',
+            'catalog_write.product_prices',
+            'catalog_write.catalog_menus',
+            'catalog_write.restaurant_product_availability',
+            'catalog_write.catalog_menu_prices',
+            'catalog_write.catalog_menu_entries',
+            'catalog_write.catalog_menu_channels'
         ]) AS expected(table_name)
         WHERE to_regclass(table_name) IS NULL;
 
@@ -123,7 +141,25 @@ SELECT :'reset_target' = 'operational' AS reset_operational \gset
         sales_write.sales,
         sales_write.delivered_order_markers,
         sales_write.inbox_messages,
-        sales_write.outbox_messages
+        sales_write.outbox_messages,
+        catalog_write.categories,
+        catalog_write.products,
+        catalog_write.restaurant_menu_items,
+        catalog_write.restaurant_kitchen_stations,
+        catalog_write.outbox_messages,
+        catalog_write.taxes,
+        catalog_write.allergens,
+        catalog_write.product_allergens,
+        catalog_write.product_photos,
+        catalog_write.product_configurations,
+        catalog_write.product_option_groups,
+        catalog_write.product_options,
+        catalog_write.product_prices,
+        catalog_write.catalog_menus,
+        catalog_write.restaurant_product_availability,
+        catalog_write.catalog_menu_prices,
+        catalog_write.catalog_menu_entries,
+        catalog_write.catalog_menu_channels
     RESTART IDENTITY;
     COMMIT;
 \endif
@@ -144,7 +180,12 @@ SELECT :'reset_target' = 'analytics' AS reset_analytics \gset
             'reporting.order_reporting_facts',
             'reporting.completed_sale_facts',
             'reporting.inbox_messages',
-            'reporting.outbox_messages'
+            'reporting.outbox_messages',
+            'catalog_read.category_views',
+            'catalog_read.product_views',
+            'catalog_read.menu_item_views',
+            'catalog_read.kitchen_station_views',
+            'catalog_read.inbox_messages'
         ]) AS expected(table_name)
         WHERE to_regclass(table_name) IS NULL;
 
@@ -163,9 +204,14 @@ SELECT :'reset_target' = 'analytics' AS reset_analytics \gset
         reporting.order_reporting_facts,
         reporting.completed_sale_facts,
         reporting.inbox_messages,
-        reporting.outbox_messages
+        reporting.outbox_messages,
+        catalog_read.category_views,
+        catalog_read.product_views,
+        catalog_read.menu_item_views,
+        catalog_read.kitchen_station_views,
+        catalog_read.inbox_messages
     RESTART IDENTITY;
     COMMIT;
 \endif
 
-\echo 'Limpieza completada. Identity, catálogo y configuración se conservaron.'
+\echo 'Limpieza completada. Identity y configuración se conservaron; ejecuta el seed para reconstruir el catálogo.'

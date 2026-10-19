@@ -68,6 +68,8 @@ Invoke-Docker -DockerArguments @(
 )
 
 $mainQueues = @(
+    "catalog.read-model",
+    "catalog.orders-integration",
     "dining.table-sessions",
     "orders.kds.read-model",
     "orders.kds.signalr",
@@ -80,6 +82,7 @@ $mainQueues = @(
     "reporting.dashboard.signalr.projection-updated"
 )
 $deadLetterQueues = @(
+    "catalog.dead-letter.messages",
     "dining.dead-letter.messages",
     "orders.kds.read-model.dead-letter",
     "payments.dead-letter.messages",

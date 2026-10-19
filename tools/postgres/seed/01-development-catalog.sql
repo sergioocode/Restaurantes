@@ -1,18 +1,21 @@
--- Carga los datos de desarrollo en restaurants_operational, reemplaza las estaciones
--- KDS de los cinco locales y agrega descuentos de ejemplo si todavía no existen.
+-- Reconstruye el catálogo de desarrollo tras tools/postgres/reset-operational-data.ps1,
+-- reemplaza las estaciones KDS de los cinco locales y agrega descuentos de ejemplo.
 -- No limpia pedidos; para eso usa tools/postgres/reset-operational-data.sql.
 --
 -- Antes de empezar:
 --   1. Asegúrate de que las migraciones de Identity, RestaurantOperations, Catalog, Orders y Dining
 --      estén aplicadas en restaurants_operational.
 --   2. Detén todos los servicios y workers de la aplicación.
---   3. Desde PowerShell en la raíz del repositorio, copia el archivo al contenedor:
+--   3. Ejecuta .\tools\postgres\reset-operational-data.ps1 -ConfirmReset BORRAR
+--      para vaciar los datos operativos y el catálogo en ambas bases y purgar sus colas.
+--   4. Desde PowerShell en la raíz del repositorio, copia el archivo al contenedor:
 --      docker cp .\tools\postgres\seed\01-development-catalog.sql restaurantes-postgres:/tmp/01-development-catalog.sql
---   4. Ejecuta el seed:
+--   5. Ejecuta el seed:
 --      docker exec -i restaurantes-postgres psql -U restaurants -d restaurants_operational -v ON_ERROR_STOP=1 -f /tmp/01-development-catalog.sql
---   5. Arranca de nuevo los servicios y workers para que procesen los eventos del outbox
+--   6. Arranca de nuevo los servicios y workers para que procesen los eventos del outbox
 --      y actualicen las proyecciones de lectura.
 --
+-- El reset elimina también las asociaciones de fotos; los blobs externos no se borran aquí.
 -- Ejecuta únicamente en el entorno local de desarrollo.
 
 \set ON_ERROR_STOP on
@@ -155,7 +158,28 @@ ON CONFLICT ("Id") DO UPDATE SET
     "Rate" = EXCLUDED."Rate",
     "IsActive" = true;
 
--- Keep the seeded product IDs stable so product_photos and their stored blobs remain attached.
+INSERT INTO allergens ("Id", "Code", "Name", "Description", "IsActive") VALUES
+    ('00000000-0000-0000-0000-00000000a001', 'GLU', 'Gluten', 'Cereales con gluten (trigo, centeno, cebada, avena, espelta) y sus derivados', true),
+    ('00000000-0000-0000-0000-00000000a002', 'CRU', 'Crustáceos', 'Gambas, langostinos, cangrejos, cigalas, nécoras y derivados', true),
+    ('00000000-0000-0000-0000-00000000a003', 'HUE', 'Huevos', 'Huevos y productos a base de huevo (mayonesas, masas, empanados)', true),
+    ('00000000-0000-0000-0000-00000000a004', 'PES', 'Pescado', 'Pescado y productos a base de pescado (caldos, salsas, gelatinas)', true),
+    ('00000000-0000-0000-0000-00000000a005', 'CAC', 'Cacahuetes', 'Cacahuetes, mantecas, aceites y productos derivados', true),
+    ('00000000-0000-0000-0000-00000000a006', 'SOJ', 'Soja', 'Soja y productos a base de soja (tofu, salsa de soja, lecitina)', true),
+    ('00000000-0000-0000-0000-00000000a007', 'LAC', 'Lácteos', 'Leche y sus derivados, incluida la lactosa (queso, nata, mantequilla, yogur)', true),
+    ('00000000-0000-0000-0000-00000000a008', 'FRU', 'Frutos secos', 'Frutos de cáscara (almendras, avellanas, nueces, anacardos, pistachos)', true),
+    ('00000000-0000-0000-0000-00000000a009', 'API', 'Apio', 'Apio y productos derivados (hojas, semillas, en polvo)', true),
+    ('00000000-0000-0000-0000-00000000a00a', 'MOS', 'Mostaza', 'Mostaza y productos derivados (semillas, salsas, aderezos)', true),
+    ('00000000-0000-0000-0000-00000000a00b', 'SES', 'Sésamo', 'Granos de sésamo y productos a base de sésamo (tahini, aceites)', true),
+    ('00000000-0000-0000-0000-00000000a00c', 'SUL', 'Sulfitos', 'Dióxido de azufre y sulfitos en concentraciones superiores a 10 mg/kg o 10 mg/l (vinos, vinagres)', true),
+    ('00000000-0000-0000-0000-00000000a00d', 'ALT', 'Altramuces', 'Altramuces y productos a base de altramuces', true),
+    ('00000000-0000-0000-0000-00000000a00e', 'MOL', 'Moluscos', 'Moluscos y productos a base de moluscos (mejillones, calamares, pulpo)', true)
+ON CONFLICT ("Id") DO UPDATE SET
+    "Code" = EXCLUDED."Code",
+    "Name" = EXCLUDED."Name",
+    "Description" = EXCLUDED."Description",
+    "IsActive" = EXCLUDED."IsActive";
+
+-- Los identificadores del seed son estables; un reset previo elimina los registros de fotos.
 WITH inserted AS (
     INSERT INTO categories (
         "Id", "Code", "Name", "DefaultStationCode", "DefaultStationName",
@@ -173,8 +197,7 @@ WITH inserted AS (
         ('a1000000-0000-4000-8000-000000000008', 'VINOS', 'Vinos', 'BEBIDAS', 'Bebidas', true, 1, now(), true, true, true, true),
         ('a1000000-0000-4000-8000-000000000009', 'AGUAS', 'Aguas', 'BEBIDAS', 'Bebidas', true, 1, now(), true, true, true, true),
         ('a1000000-0000-4000-8000-000000000010', 'MERCH', 'Merch', '', '', true, 1, now(), true, false, true, false),
-        ('a1000000-0000-4000-8000-000000000011', 'PROMO', 'Promo', 'ENTRANTES', 'Entrantes', true, 1, now(), true, true, true, true),
-        ('a1000000-0000-4000-8000-000000000012', 'COMBO', 'Combo', 'ENTRANTES', 'Entrantes', true, 1, now(), true, true, true, true)
+        ('a1000000-0000-4000-8000-000000000011', 'PROMO', 'Promo', 'ENTRANTES', 'Entrantes', true, 1, now(), true, true, true, true)
     ON CONFLICT ("Id") DO UPDATE SET
         "Code" = EXCLUDED."Code",
         "Name" = EXCLUDED."Name",
@@ -250,10 +273,7 @@ WITH inserted AS (
         ('b1000000-0000-4000-8000-000000000043', 'MER003', 'Bolsa de tela', 'a1000000-0000-4000-8000-000000000010', true, 1, now()),
         ('b1000000-0000-4000-8000-000000000044', 'PR001', 'Croquetas de la semana', 'a1000000-0000-4000-8000-000000000011', true, 1, now()),
         ('b1000000-0000-4000-8000-000000000045', 'PR002', 'Pasta del día', 'a1000000-0000-4000-8000-000000000011', true, 1, now()),
-        ('b1000000-0000-4000-8000-000000000046', 'PR003', 'Hamburguesa del día', 'a1000000-0000-4000-8000-000000000011', true, 1, now()),
-        ('b1000000-0000-4000-8000-000000000047', 'CO001', 'Combo hamburguesa y refresco', 'a1000000-0000-4000-8000-000000000012', true, 1, now()),
-        ('b1000000-0000-4000-8000-000000000048', 'CO002', 'Combo pasta y agua', 'a1000000-0000-4000-8000-000000000012', true, 1, now()),
-        ('b1000000-0000-4000-8000-000000000049', 'CO003', 'Combo entrante y cerveza', 'a1000000-0000-4000-8000-000000000012', true, 1, now())
+        ('b1000000-0000-4000-8000-000000000046', 'PR003', 'Hamburguesa del día', 'a1000000-0000-4000-8000-000000000011', true, 1, now())
     ON CONFLICT ("Id") DO UPDATE SET
         "Sku" = EXCLUDED."Sku",
         "Name" = EXCLUDED."Name",
@@ -281,7 +301,7 @@ SET "TaxId" = CASE WHEN "CategoryId" = 'a1000000-0000-4000-8000-000000000010'::u
     THEN 'd02602b4-1eca-4350-9b65-1fade1330121'::uuid
     ELSE 'd02602b4-1eca-4350-9b65-1fade1330108'::uuid END
 WHERE "Id" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
-                 AND 'b1000000-0000-4000-8000-000000000049'::uuid;
+                 AND 'b1000000-0000-4000-8000-000000000046'::uuid;
 
 DO $$
 BEGIN
@@ -289,11 +309,11 @@ BEGIN
         SELECT count(*)
         FROM products
         WHERE "Id" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
-                        AND 'b1000000-0000-4000-8000-000000000049'::uuid
+                        AND 'b1000000-0000-4000-8000-000000000046'::uuid
           AND "TaxId" = CASE WHEN "CategoryId" = 'a1000000-0000-4000-8000-000000000010'::uuid
               THEN 'd02602b4-1eca-4350-9b65-1fade1330121'::uuid
               ELSE 'd02602b4-1eca-4350-9b65-1fade1330108'::uuid END
-    ) <> 49 THEN
+    ) <> 46 THEN
         RAISE EXCEPTION 'No se pudo asociar el impuesto requerido a todos los productos del seed.';
     END IF;
 END $$;
@@ -314,7 +334,7 @@ END $$;
 DELETE FROM product_prices p
 WHERE p."ProductId" IN (
     SELECT "Id" FROM products WHERE "Id" BETWEEN
-        'b1000000-0000-4000-8000-000000000001'::uuid AND 'b1000000-0000-4000-8000-000000000049'::uuid
+        'b1000000-0000-4000-8000-000000000001'::uuid AND 'b1000000-0000-4000-8000-000000000046'::uuid
 );
 
 WITH seed_prices("Sku", "BasePrice", "Format", "FormatMultiplier") AS (
@@ -376,10 +396,7 @@ WITH seed_prices("Sku", "BasePrice", "Format", "FormatMultiplier") AS (
         ('PR001', 8.50::numeric, 'TAPA', 0.65::numeric),
         ('PR002', 10.50::numeric, 'PLATO', 1.00::numeric),
         ('PR002', 10.50::numeric, 'MEDIA_RACION', 0.80::numeric),
-        ('PR003', 11.00::numeric, 'PLATO', 1.00::numeric),
-        ('CO001', 15.50::numeric, 'COMBO', 1.00::numeric),
-        ('CO002', 14.00::numeric, 'COMBO', 1.00::numeric),
-        ('CO003', 10.50::numeric, 'COMBO', 1.00::numeric)
+        ('PR003', 11.00::numeric, 'PLATO', 1.00::numeric)
 ), channels("Channel", "Multiplier") AS (
     VALUES
         ('LOCAL', 1.00::numeric),
@@ -407,22 +424,6 @@ WHERE "GroupId" IN (
 DELETE FROM product_option_groups
 WHERE "ParentProductId" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
                              AND 'b1000000-0000-4000-8000-000000000003'::uuid;
-
-INSERT INTO product_configurations ("ProductId", "IsCombo", "AllowsExtras")
-SELECT p."Id", false, false
-FROM products p
-WHERE p."Id" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
-                  AND 'b1000000-0000-4000-8000-000000000003'::uuid
-ON CONFLICT ("ProductId") DO UPDATE
-SET "IsCombo" = EXCLUDED."IsCombo", "AllowsExtras" = EXCLUDED."AllowsExtras";
-
-INSERT INTO product_configurations ("ProductId", "IsCombo", "AllowsExtras")
-SELECT p."Id", true, false
-FROM products p
-WHERE p."Id" BETWEEN 'b1000000-0000-4000-8000-000000000047'::uuid
-                  AND 'b1000000-0000-4000-8000-000000000049'::uuid
-ON CONFLICT ("ProductId") DO UPDATE
-SET "IsCombo" = EXCLUDED."IsCombo", "AllowsExtras" = EXCLUDED."AllowsExtras";
 
 INSERT INTO product_option_groups (
     "Id", "ParentProductId", "Name", "Kind", "MinSelections", "MaxSelections", "SortOrder"
@@ -475,7 +476,7 @@ BEGIN
         FROM product_option_groups group_item
         LEFT JOIN product_options option_item ON option_item."GroupId" = group_item."Id"
         WHERE group_item."ParentProductId" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
-                                                  AND 'b1000000-0000-4000-8000-000000000049'::uuid
+                                                  AND 'b1000000-0000-4000-8000-000000000046'::uuid
           AND group_item."Kind" = 'Extra'
         GROUP BY group_item."ParentProductId", group_item."Id", group_item."MaxSelections"
         HAVING count(option_item."ProductId") > 6 OR group_item."MaxSelections" > 6
@@ -483,43 +484,6 @@ BEGIN
         RAISE EXCEPTION 'Un producto del seed tiene más de seis extras configurados.';
     END IF;
 END $$;
-
--- Cada combo contiene dos componentes fijos, modelados como grupos de elección de una opción.
-WITH combo_groups("Id", "ParentProductId", "Name", "SortOrder") AS (
-    VALUES
-        ('c1000000-0000-4000-8000-000000000004'::uuid, 'b1000000-0000-4000-8000-000000000047'::uuid, 'Principal', 0),
-        ('c1000000-0000-4000-8000-000000000005'::uuid, 'b1000000-0000-4000-8000-000000000047'::uuid, 'Bebida', 1),
-        ('c1000000-0000-4000-8000-000000000006'::uuid, 'b1000000-0000-4000-8000-000000000048'::uuid, 'Principal', 0),
-        ('c1000000-0000-4000-8000-000000000007'::uuid, 'b1000000-0000-4000-8000-000000000048'::uuid, 'Bebida', 1),
-        ('c1000000-0000-4000-8000-000000000008'::uuid, 'b1000000-0000-4000-8000-000000000049'::uuid, 'Entrante', 0),
-        ('c1000000-0000-4000-8000-000000000009'::uuid, 'b1000000-0000-4000-8000-000000000049'::uuid, 'Bebida', 1)
-)
-INSERT INTO product_option_groups (
-    "Id", "ParentProductId", "Name", "Kind", "MinSelections", "MaxSelections", "SortOrder"
-)
-SELECT "Id", "ParentProductId", "Name", 'Choice', 1, 1, "SortOrder"
-FROM combo_groups
-ON CONFLICT ("Id") DO UPDATE SET
-    "ParentProductId" = EXCLUDED."ParentProductId",
-    "Name" = EXCLUDED."Name",
-    "Kind" = EXCLUDED."Kind",
-    "MinSelections" = EXCLUDED."MinSelections",
-    "MaxSelections" = EXCLUDED."MaxSelections",
-    "SortOrder" = EXCLUDED."SortOrder";
-
-WITH combo_options("GroupId", "ProductId") AS (
-    VALUES
-        ('c1000000-0000-4000-8000-000000000004'::uuid, 'b1000000-0000-4000-8000-000000000008'::uuid),
-        ('c1000000-0000-4000-8000-000000000005'::uuid, 'b1000000-0000-4000-8000-000000000005'::uuid),
-        ('c1000000-0000-4000-8000-000000000006'::uuid, 'b1000000-0000-4000-8000-000000000001'::uuid),
-        ('c1000000-0000-4000-8000-000000000007'::uuid, 'b1000000-0000-4000-8000-000000000004'::uuid),
-        ('c1000000-0000-4000-8000-000000000008'::uuid, 'b1000000-0000-4000-8000-000000000015'::uuid),
-        ('c1000000-0000-4000-8000-000000000009'::uuid, 'b1000000-0000-4000-8000-000000000006'::uuid)
-)
-INSERT INTO product_options ("GroupId", "ProductId", "SortOrder")
-SELECT "GroupId", "ProductId", 0 FROM combo_options
-ON CONFLICT ("GroupId", "ProductId") DO UPDATE
-SET "SortOrder" = EXCLUDED."SortOrder";
 
 UPDATE catalog_menus
 SET "IsActive" = false
@@ -540,14 +504,14 @@ SET "Name" = EXCLUDED."Name", "IsActive" = EXCLUDED."IsActive";
 DELETE FROM catalog_menu_prices
 WHERE "MenuId" = '11111111-1111-4111-8111-111111111111'::uuid
   AND "ProductId" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
-                       AND 'b1000000-0000-4000-8000-000000000049'::uuid;
+                       AND 'b1000000-0000-4000-8000-000000000046'::uuid;
 
 INSERT INTO catalog_menu_prices ("MenuId", "ProductId", "Channel", "Format", "Amount")
 SELECT '11111111-1111-4111-8111-111111111111'::uuid, p."ProductId", p."Channel", p."Format", p."Amount"
 FROM product_prices p
 WHERE p."RestaurantId" = '00000000-0000-0000-0000-000000000000'::uuid
   AND p."ProductId" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
-                         AND 'b1000000-0000-4000-8000-000000000049'::uuid
+                         AND 'b1000000-0000-4000-8000-000000000046'::uuid
 ON CONFLICT ("MenuId", "ProductId", "Channel", "Format") DO UPDATE
 SET "Amount" = EXCLUDED."Amount";
 
@@ -563,13 +527,13 @@ CROSS JOIN LATERAL (
       AND price."RestaurantId" = '00000000-0000-0000-0000-000000000000'::uuid
       AND price."Channel" = 'LOCAL'
     ORDER BY CASE price."Format"
-        WHEN 'PLATO' THEN 0 WHEN 'UNIDAD' THEN 0 WHEN 'COMBO' THEN 0
+        WHEN 'PLATO' THEN 0 WHEN 'UNIDAD' THEN 0
         WHEN 'COPA' THEN 0 WHEN 'RACION' THEN 0 ELSE 1 END,
         price."Format"
     LIMIT 1
 ) default_price
 WHERE p."Id" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
-                  AND 'b1000000-0000-4000-8000-000000000049'::uuid
+                  AND 'b1000000-0000-4000-8000-000000000046'::uuid
 AND NOT EXISTS (
     SELECT 1 FROM catalog_menu_entries e
     WHERE e."MenuId" = '11111111-1111-4111-8111-111111111111'::uuid
@@ -587,7 +551,7 @@ CROSS JOIN LATERAL (
       AND price."RestaurantId" = '00000000-0000-0000-0000-000000000000'::uuid
       AND price."Channel" = 'LOCAL'
     ORDER BY CASE price."Format"
-        WHEN 'PLATO' THEN 0 WHEN 'UNIDAD' THEN 0 WHEN 'COMBO' THEN 0
+        WHEN 'PLATO' THEN 0 WHEN 'UNIDAD' THEN 0
         WHEN 'COPA' THEN 0 WHEN 'RACION' THEN 0 ELSE 1 END,
         price."Format"
     LIMIT 1
@@ -595,7 +559,7 @@ CROSS JOIN LATERAL (
 WHERE e."MenuId" = '11111111-1111-4111-8111-111111111111'::uuid
   AND e."ProductId" = p."Id"
   AND p."Id" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
-                  AND 'b1000000-0000-4000-8000-000000000049'::uuid;
+                  AND 'b1000000-0000-4000-8000-000000000046'::uuid;
 
 DO $$
 BEGIN
@@ -604,7 +568,7 @@ BEGIN
         FROM product_prices price
         WHERE price."RestaurantId" = '00000000-0000-0000-0000-000000000000'::uuid
           AND price."ProductId" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
-                                     AND 'b1000000-0000-4000-8000-000000000049'::uuid
+                                     AND 'b1000000-0000-4000-8000-000000000046'::uuid
         GROUP BY price."ProductId", price."Channel"
         HAVING count(DISTINCT price."Format") > 3
     ) THEN
@@ -616,7 +580,7 @@ BEGIN
         FROM catalog_menu_entries entry
         WHERE entry."MenuId" = '11111111-1111-4111-8111-111111111111'::uuid
           AND entry."ProductId" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
-                                     AND 'b1000000-0000-4000-8000-000000000049'::uuid
+                                     AND 'b1000000-0000-4000-8000-000000000046'::uuid
           AND NOT EXISTS (
               SELECT 1
               FROM catalog_menu_prices price
@@ -644,7 +608,7 @@ SELECT local."RestaurantId", product."Id", true
 FROM seeded_locales local
 CROSS JOIN products product
 WHERE product."Id" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
-                       AND 'b1000000-0000-4000-8000-000000000049'::uuid
+                       AND 'b1000000-0000-4000-8000-000000000046'::uuid
 ON CONFLICT ("RestaurantId", "ProductId") DO UPDATE
 SET "IsAvailable" = EXCLUDED."IsAvailable";
 
@@ -657,7 +621,7 @@ FROM (
 ) local
 CROSS JOIN products product
 WHERE product."Id" BETWEEN 'b1000000-0000-4000-8000-000000000038'::uuid
-                       AND 'b1000000-0000-4000-8000-000000000049'::uuid
+                       AND 'b1000000-0000-4000-8000-000000000046'::uuid
 ON CONFLICT ("RestaurantId", "ProductId") DO NOTHING;
 
 DELETE FROM product_allergens
@@ -682,10 +646,10 @@ WHERE "Rank" <= 3
 ON CONFLICT ("ProductId", "AllergenId") DO UPDATE
 SET "AllergenId" = EXCLUDED."AllergenId";
 
--- Las promociones heredan los alérgenos del plato anunciado; los combos, de sus componentes.
+-- Las promociones heredan los alérgenos del plato anunciado.
 DELETE FROM product_allergens
 WHERE "ProductId" BETWEEN 'b1000000-0000-4000-8000-000000000044'::uuid
-                       AND 'b1000000-0000-4000-8000-000000000049'::uuid;
+                       AND 'b1000000-0000-4000-8000-000000000046'::uuid;
 
 WITH promoted("ProductId", "SourceProductId") AS (
     VALUES
@@ -696,13 +660,6 @@ WITH promoted("ProductId", "SourceProductId") AS (
     SELECT promoted."ProductId", allergen."AllergenId"
     FROM promoted
     JOIN product_allergens allergen ON allergen."ProductId" = promoted."SourceProductId"
-    UNION
-    SELECT group_item."ParentProductId", allergen."AllergenId"
-    FROM product_option_groups group_item
-    JOIN product_options option_item ON option_item."GroupId" = group_item."Id"
-    JOIN product_allergens allergen ON allergen."ProductId" = option_item."ProductId"
-    WHERE group_item."ParentProductId" BETWEEN 'b1000000-0000-4000-8000-000000000047'::uuid
-                                           AND 'b1000000-0000-4000-8000-000000000049'::uuid
 )
 INSERT INTO product_allergens ("ProductId", "AllergenId")
 SELECT "ProductId", "AllergenId" FROM inherited
@@ -734,7 +691,7 @@ WITH restaurants("RestaurantId") AS (
         AND pp."Channel" = 'LOCAL'
         AND pp."Format" = entry."DefaultFormat"
     WHERE p."Id" BETWEEN 'b1000000-0000-4000-8000-000000000001'::uuid
-                      AND 'b1000000-0000-4000-8000-000000000049'::uuid
+                      AND 'b1000000-0000-4000-8000-000000000046'::uuid
     ON CONFLICT ("RestaurantId", "ProductId") DO UPDATE SET
         "Price" = EXCLUDED."Price",
         "IsAvailable" = EXCLUDED."IsAvailable",
