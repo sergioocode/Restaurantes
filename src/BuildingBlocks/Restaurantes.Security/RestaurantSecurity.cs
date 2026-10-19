@@ -42,6 +42,7 @@ public static class RestaurantPermissions
     public const string PaymentsCaptureCard = "payments.capture.card";
     public const string PaymentsRefund = "payments.refund";
     public const string CashRegisterManage = "cash-register.manage";
+    public const string CashRegisterRead = "cash-register.read";
     public const string CatalogManage = "catalog.manage";
     public const string CatalogGlobalManage = "catalog.global.manage";
     public const string KdsUse = "kds.use";
@@ -72,6 +73,7 @@ public static class RestaurantPermissions
                 PaymentsCapture,
                 PaymentsRefund,
                 CashRegisterManage,
+                CashRegisterRead,
                 CatalogManage,
                 CatalogGlobalManage,
                 KdsUse,
@@ -87,6 +89,7 @@ public static class RestaurantPermissions
                 OrdersRead,
                 OrdersReportRead,
                 DashboardRead,
+                CashRegisterRead,
                 FinancialReportsRead,
                 PaymentsRefund,
                 MarketingReportsRead,
@@ -98,6 +101,7 @@ public static class RestaurantPermissions
                 OrdersRead,
                 OrdersReportRead,
                 DashboardRead,
+                CashRegisterRead,
                 FinancialReportsRead,
                 PaymentsRefund,
             ],

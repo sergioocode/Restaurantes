@@ -29,9 +29,110 @@ public sealed class CashRegisterService(
         return session is null ? new(CashRegisterOutcome.NoContent) : Ok(ToResponse(session));
     }
 
-    public async Task<CashRegisterResult> History(Guid restaurantId, CancellationToken ct)
+    public async Task<CashRegisterResult> History(
+        Guid restaurantId,
+        DateOnly? businessDate,
+        CancellationToken ct
+    )
     {
-        return Ok((await store.GetHistoryAsync(restaurantId, 100, ct)).Select(ToResponse));
+        return Ok(
+            (await store.GetHistoryAsync(restaurantId, businessDate, ct)).Select(session =>
+                ToResponse(session, includeAllMovements: businessDate.HasValue)
+            )
+        );
+    }
+
+    public async Task<CashRegisterResult> CreateMovement(
+        Guid restaurantId,
+        Guid sessionId,
+        CreateCashMovementRequest request,
+        CashRegisterUser user,
+        CancellationToken ct
+    )
+    {
+        CashMovementType? type = request.Type?.Trim().ToLowerInvariant() switch
+        {
+            "income" => CashMovementType.Income,
+            "expense" => CashMovementType.Expense,
+            _ => null,
+        };
+        if (type is null)
+        {
+            return Validation("type", "Selecciona ingreso o egreso.");
+        }
+
+        string? method = request.Method?.Trim() switch
+        {
+            "Cash" => "Cash",
+            "Card" => "Card",
+            "Transfer" => "Transfer",
+            _ => null,
+        };
+        if (method is null)
+        {
+            return Validation("method", "Selecciona efectivo, tarjeta o transferencia.");
+        }
+
+        string category = request.Category?.Trim() ?? string.Empty;
+        string description = request.Description?.Trim() ?? string.Empty;
+        if (category.Length is 0 or > 80)
+        {
+            return Validation(
+                "category",
+                "La categoría es obligatoria y admite hasta 80 caracteres."
+            );
+        }
+        if (description.Length is 0 or > 160)
+        {
+            return Validation(
+                "description",
+                "El detalle es obligatorio y admite hasta 160 caracteres."
+            );
+        }
+        if (request.Amount is <= 0 or > 100000)
+        {
+            return Validation("amount", "El importe debe ser mayor que 0 y no superar 100.000 €.");
+        }
+
+        CashRegisterSession? session = await store.GetSessionAsync(restaurantId, sessionId, ct);
+        if (session is null)
+        {
+            return new(CashRegisterOutcome.NotFound);
+        }
+        if (session.Status != CashRegisterStatus.Open)
+        {
+            return Conflict("Solo se pueden registrar movimientos en una caja abierta.");
+        }
+
+        if (
+            type == CashMovementType.Expense
+            && method == "Cash"
+            && ExpectedByMethod(session).GetValueOrDefault(method) < request.Amount
+        )
+        {
+            return Validation("amount", "El egreso supera el efectivo disponible en la caja.");
+        }
+
+        DateTime now = time.GetUtcNow().UtcDateTime;
+        store.AddMovement(
+            new CashMovement
+            {
+                Id = Guid.NewGuid(),
+                CashRegisterSessionId = session.Id,
+                Session = session,
+                Type = type.Value,
+                Method = method,
+                Amount = request.Amount,
+                Category = category,
+                Reference = description,
+                RecordedByUserId = user.Id,
+                RecordedByName = user.Name,
+                OccurredAtUtc = now,
+            }
+        );
+        session.Version++;
+        await store.SaveChangesAsync(ct);
+        return Ok(ToResponse(session));
     }
 
     public async Task<CashRegisterResult> Open(
@@ -96,7 +197,14 @@ public sealed class CashRegisterService(
 
         if (
             request.ReconciledByMethod.Any(x =>
-                string.IsNullOrWhiteSpace(x.Key) || x.Value is < 0 or > 1000000
+                string.IsNullOrWhiteSpace(x.Key)
+                || x.Value
+                    < (
+                        string.Equals(x.Key.Trim(), "Cash", StringComparison.OrdinalIgnoreCase)
+                            ? 0
+                            : -1000000
+                    )
+                || x.Value > 1000000
             )
         )
         {
@@ -204,20 +312,37 @@ public sealed class CashRegisterService(
             .Movements.GroupBy(x => x.Method, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(
                 x => x.Key,
-                x => x.Sum(movement => movement.Amount),
+                x =>
+                    x.Sum(movement =>
+                        movement.Type switch
+                        {
+                            CashMovementType.Income => movement.Amount,
+                            CashMovementType.Expense => -movement.Amount,
+                            _ => movement.Amount,
+                        }
+                    ),
                 StringComparer.OrdinalIgnoreCase
             );
         totals["Cash"] = totals.GetValueOrDefault("Cash") + session.OpeningFloat;
         return totals;
     }
 
-    private static CashRegisterResponse ToResponse(CashRegisterSession session)
+    private static CashRegisterResponse ToResponse(
+        CashRegisterSession session,
+        bool includeAllMovements = false
+    )
     {
         decimal totalSales = session
             .Movements.Where(x => x.Type == CashMovementType.Sale)
             .Sum(x => x.Amount);
         decimal cashSales = session
             .Movements.Where(x => x.Method == "Cash" && x.Type == CashMovementType.Sale)
+            .Sum(x => x.Amount);
+        decimal otherIncomeTotal = session
+            .Movements.Where(x => x.Type == CashMovementType.Income)
+            .Sum(x => x.Amount);
+        decimal otherExpenseTotal = session
+            .Movements.Where(x => x.Type == CashMovementType.Expense)
             .Sum(x => x.Amount);
         PaymentMethodTotal[] methods = session
             .Movements.Where(x => x.Type == CashMovementType.Sale)
@@ -226,6 +351,14 @@ public sealed class CashRegisterService(
             .Select(g => new PaymentMethodTotal(g.Key, g.Sum(x => x.Amount)))
             .ToArray();
         Dictionary<string, decimal> expected = ExpectedByMethod(session);
+        IEnumerable<CashMovement> sales = session.Movements.Where(x =>
+            x.Type == CashMovementType.Sale
+        );
+        if (!includeAllMovements)
+        {
+            sales = sales.OrderByDescending(x => x.OccurredAtUtc).Take(100);
+        }
+
         return new(
             session.Id,
             session.RestaurantId,
@@ -234,6 +367,8 @@ public sealed class CashRegisterService(
             session.OpeningFloat,
             totalSales,
             cashSales,
+            otherIncomeTotal,
+            otherExpenseTotal,
             expected.GetValueOrDefault("Cash"),
             expected.Values.Sum(),
             session.ReconciledTotalAtClose,
@@ -258,16 +393,21 @@ public sealed class CashRegisterService(
                 ))
                 .ToArray(),
             session
-                .Movements.Where(x => x.Type == CashMovementType.Sale)
+                .Movements.Where(x => x.Type is CashMovementType.Income or CashMovementType.Expense)
+                .Concat(sales)
                 .OrderByDescending(x => x.OccurredAtUtc)
-                .Take(100)
                 .Select(x => new CashMovementResponse(
                     x.Id,
                     x.Type.ToString(),
                     x.Method,
                     x.Amount,
                     x.Reference,
-                    x.OccurredAtUtc
+                    x.OccurredAtUtc,
+                    x.Category,
+                    x.RecordedByName ?? string.Empty,
+                    x.OrderId,
+                    x.PaymentId,
+                    x.SaleId
                 ))
                 .ToArray()
         );

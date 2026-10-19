@@ -23,16 +23,26 @@ public sealed class CashRegisterReadController(CashRegisterService service) : Co
     }
 
     [HttpGet("history")]
-    public Task<IActionResult> History(Guid restaurantId, CancellationToken ct)
+    public Task<IActionResult> History(
+        Guid restaurantId,
+        [FromQuery] DateOnly? date,
+        CancellationToken ct
+    )
     {
-        return CanManage(restaurantId)
-            ? Execute(() => service.History(restaurantId, ct))
+        return CanRead(restaurantId)
+            ? Execute(() => service.History(restaurantId, date, ct))
             : Task.FromResult<IActionResult>(Forbid());
     }
 
     private bool CanManage(Guid restaurantId)
     {
         return User.CanAccessRestaurant(restaurantId, RestaurantPermissions.CashRegisterManage);
+    }
+
+    private bool CanRead(Guid restaurantId)
+    {
+        return CanManage(restaurantId)
+            || User.CanAccessRestaurant(restaurantId, RestaurantPermissions.CashRegisterRead);
     }
 
     private async Task<IActionResult> Execute(Func<Task<CashRegisterResult>> operation)

@@ -7,6 +7,49 @@ namespace Restaurantes.CashRegister.Api.Tests;
 public sealed class CashRegisterServiceTests
 {
     [Fact]
+    public async Task History_filters_cash_sessions_by_business_date()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        DateOnly selectedDate = new(2026, 10, 19);
+        TestStore store = new();
+        store.AddSession(
+            new CashRegisterSession
+            {
+                Id = Guid.NewGuid(),
+                RestaurantId = restaurantId,
+                BusinessDate = selectedDate,
+                Status = CashRegisterStatus.Closed,
+            }
+        );
+        store.AddSession(
+            new CashRegisterSession
+            {
+                Id = Guid.NewGuid(),
+                RestaurantId = restaurantId,
+                BusinessDate = selectedDate.AddDays(-1),
+                Status = CashRegisterStatus.Closed,
+            }
+        );
+        CashRegisterService service = new(
+            store,
+            new TestIncompleteOrdersChecker(),
+            TimeProvider.System,
+            TimeZoneInfo.Utc
+        );
+
+        CashRegisterResult result = await service.History(
+            restaurantId,
+            selectedDate,
+            CancellationToken.None
+        );
+
+        IEnumerable<CashRegisterResponse> sessions = Assert.IsAssignableFrom<
+            IEnumerable<CashRegisterResponse>
+        >(result.Value);
+        Assert.Equal(selectedDate, Assert.Single(sessions).BusinessDate);
+    }
+
+    [Fact]
     public async Task Card_overpayment_records_card_tender_and_cash_change_without_inflating_sales()
     {
         Guid restaurantId = Guid.NewGuid();
@@ -59,6 +102,166 @@ public sealed class CashRegisterServiceTests
         Assert.Equal(11.90m, current.TotalSales);
         Assert.Equal(11.90m, current.ExpectedTotal - current.OpeningFloat);
         Assert.Equal(11.90m, current.ExpectedCash);
+    }
+
+    [Fact]
+    public async Task Manual_income_and_expense_update_the_session_balance_and_keep_audit_details()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        CashRegisterSession session = new()
+        {
+            Id = Guid.NewGuid(),
+            RestaurantId = restaurantId,
+            Status = CashRegisterStatus.Open,
+            OpeningFloat = 20m,
+        };
+        session.Movements.Add(
+            new CashMovement
+            {
+                Id = Guid.NewGuid(),
+                CashRegisterSessionId = session.Id,
+                Type = CashMovementType.Sale,
+                Method = "Cash",
+                Amount = 10m,
+            }
+        );
+        TestStore store = new();
+        store.AddSession(session);
+        TestTimeProvider time = new(new DateTimeOffset(2026, 10, 19, 17, 45, 12, TimeSpan.Zero));
+        CashRegisterService service = new(
+            store,
+            new TestIncompleteOrdersChecker(),
+            time,
+            TimeZoneInfo.Utc
+        );
+        CashRegisterUser user = new(Guid.NewGuid(), "Cajera");
+
+        CashRegisterResult expense = await service.CreateMovement(
+            restaurantId,
+            session.Id,
+            new CreateCashMovementRequest(
+                "Expense",
+                "Cash",
+                25m,
+                "Pago a proveedor",
+                "Proveedor A"
+            ),
+            user,
+            CancellationToken.None
+        );
+        CashRegisterResult income = await service.CreateMovement(
+            restaurantId,
+            session.Id,
+            new CreateCashMovementRequest(
+                "Income",
+                "Cash",
+                2m,
+                "Aportación de caja",
+                "Cambio inicial"
+            ),
+            user,
+            CancellationToken.None
+        );
+
+        Assert.Equal(CashRegisterOutcome.Ok, expense.Outcome);
+        CashRegisterResponse current = Assert.IsType<CashRegisterResponse>(income.Value);
+        Assert.Equal(10m, current.TotalSales);
+        Assert.Equal(2m, current.OtherIncomeTotal);
+        Assert.Equal(25m, current.OtherExpenseTotal);
+        Assert.Equal(7m, current.ExpectedCash);
+        Assert.Equal(7m, current.ExpectedTotal);
+        CashMovementResponse savedExpense = Assert.Single(
+            current.Movements.Where(movement => movement.Type == "Expense")
+        );
+        Assert.Equal("Proveedor A", savedExpense.Reference);
+        Assert.Equal("Pago a proveedor", savedExpense.Category);
+        Assert.Equal("Cajera", savedExpense.RecordedByName);
+        Assert.Equal(time.UtcNow.UtcDateTime, savedExpense.OccurredAtUtc);
+    }
+
+    [Fact]
+    public async Task Manual_expense_cannot_exceed_the_expected_method_balance()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        CashRegisterSession session = new()
+        {
+            Id = Guid.NewGuid(),
+            RestaurantId = restaurantId,
+            Status = CashRegisterStatus.Open,
+            OpeningFloat = 10m,
+        };
+        TestStore store = new();
+        store.AddSession(session);
+        CashRegisterService service = new(
+            store,
+            new TestIncompleteOrdersChecker(),
+            TimeProvider.System,
+            TimeZoneInfo.Utc
+        );
+
+        CashRegisterResult result = await service.CreateMovement(
+            restaurantId,
+            session.Id,
+            new CreateCashMovementRequest("Expense", "Cash", 11m, "Gastos varios", "Compra"),
+            new CashRegisterUser(Guid.NewGuid(), "Cajera"),
+            CancellationToken.None
+        );
+
+        Assert.Equal(CashRegisterOutcome.Validation, result.Outcome);
+        Assert.Empty(session.Movements);
+    }
+
+    [Fact]
+    public async Task Transfer_expense_is_reconciled_as_a_negative_net_movement()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        TestStore store = new();
+        CashRegisterService service = new(
+            store,
+            new TestIncompleteOrdersChecker(),
+            TimeProvider.System,
+            TimeZoneInfo.Utc
+        );
+        CashRegisterUser user = new(Guid.NewGuid(), "Manager");
+        CashRegisterResponse opened = Assert.IsType<CashRegisterResponse>(
+            (
+                await service.Open(
+                    restaurantId,
+                    new OpenCashRegisterRequest(0),
+                    user,
+                    CancellationToken.None
+                )
+            ).Value
+        );
+
+        CashRegisterResult expense = await service.CreateMovement(
+            restaurantId,
+            opened.Id,
+            new CreateCashMovementRequest("Expense", "Transfer", 30m, "Reparación", "Técnico"),
+            user,
+            CancellationToken.None
+        );
+        CashRegisterResponse withExpense = Assert.IsType<CashRegisterResponse>(expense.Value);
+        Assert.Equal(
+            -30m,
+            withExpense.ExpectedByMethod.Single(item => item.Method == "Transfer").Expected
+        );
+
+        CashRegisterResult closed = await service.Close(
+            restaurantId,
+            opened.Id,
+            new CloseCashRegisterRequest(new() { ["Cash"] = 0, ["Transfer"] = -30 }),
+            user,
+            "Bearer test-token",
+            CancellationToken.None
+        );
+
+        CashRegisterResponse completed = Assert.IsType<CashRegisterResponse>(closed.Value);
+        Assert.Equal("Closed", completed.Status);
+        Assert.Equal(
+            -30m,
+            completed.Reconciliations.Single(item => item.Method == "Transfer").Expected
+        );
     }
 
     [Fact]
@@ -338,12 +541,17 @@ public sealed class CashRegisterServiceTests
 
         public Task<List<CashRegisterSession>> GetHistoryAsync(
             Guid restaurantId,
-            int take,
+            DateOnly? businessDate,
             CancellationToken ct
         )
         {
             return Task.FromResult(
-                sessions.Where(x => x.RestaurantId == restaurantId).Take(take).ToList()
+                sessions
+                    .Where(x =>
+                        x.RestaurantId == restaurantId
+                        && (businessDate is null || x.BusinessDate == businessDate)
+                    )
+                    .ToList()
             );
         }
 

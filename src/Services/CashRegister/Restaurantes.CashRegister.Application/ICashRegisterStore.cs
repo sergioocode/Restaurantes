@@ -8,7 +8,7 @@ public interface ICashRegisterStore
     Task<CashRegisterSession?> GetCurrentAsync(Guid restaurantId, CancellationToken ct);
     Task<List<CashRegisterSession>> GetHistoryAsync(
         Guid restaurantId,
-        int take,
+        DateOnly? businessDate,
         CancellationToken ct
     );
     Task<bool> HasOpenSessionAsync(Guid restaurantId, CancellationToken ct);

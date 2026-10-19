@@ -6,7 +6,12 @@ public sealed record CashMovementResponse(
     string Method,
     decimal Amount,
     string Reference,
-    DateTime OccurredAtUtc
+    DateTime OccurredAtUtc,
+    string Category = "",
+    string RecordedByName = "",
+    Guid? OrderId = null,
+    Guid? PaymentId = null,
+    Guid? SaleId = null
 );
 
 public sealed record PaymentMethodTotal(string Method, decimal Sales);
@@ -28,6 +33,8 @@ public sealed record CashRegisterResponse(
     decimal OpeningFloat,
     decimal TotalSales,
     decimal CashSales,
+    decimal OtherIncomeTotal,
+    decimal OtherExpenseTotal,
     decimal ExpectedCash,
     decimal ExpectedTotal,
     decimal? ReconciledTotal,

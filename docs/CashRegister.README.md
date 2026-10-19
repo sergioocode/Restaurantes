@@ -130,33 +130,41 @@ flowchart LR
 
 ### `CashMovement`
 
-Representa un movimiento financiero proyectado desde Payments.
+Representa un movimiento financiero de la sesión, ya sea proyectado desde Payments o registrado manualmente en el TPV.
 
 Campos relevantes:
 
 - `Id`;
 - `CashRegisterSessionId`;
-- `PaymentId`;
-- `OrderId`;
+- `PaymentId` (nulo en apuntes manuales);
+- `OrderId` (nulo en apuntes manuales);
 - `Type`;
 - `Method`;
 - `Amount`;
+- `Category`;
 - `Reference`;
+- `RecordedByUserId` y `RecordedByName` (para apuntes manuales);
 - `OccurredAtUtc`.
 
 Tipos actuales:
 
 ```text
 Sale
-Refund
+CardTender
+CashChange
+Income
+Expense
 ```
 
-El importe se almacena siempre como valor positivo. El signo operativo se obtiene a partir del tipo:
+Los ingresos y egresos manuales solo se permiten con una caja abierta. `Amount` conserva el importe positivo introducido; el signo para calcular el saldo depende del tipo:
 
 ```text
-Sale   -> +Amount
-Refund -> -Amount
+Sale, CardTender, Income -> +Amount
+CashChange               -> Amount se guarda negativo
+Expense                  -> -Amount
 ```
+
+Un egreso en efectivo no puede superar el efectivo esperado en el cajón. Los medios no monetarios admiten un neto negativo al registrar pagos salientes. Cada apunte conserva categoría, detalle, usuario y hora para su consulta en el TPV y el ticket de cierre.
 
 ### `CashRegisterReconciliation`
 
@@ -617,6 +625,7 @@ Ruta base:
 | `GET` | `/current` | JWT + `cash-register.manage` | Obtener la caja abierta actual. |
 | `GET` | `/history` | JWT + `cash-register.manage` | Obtener hasta 100 sesiones recientes. |
 | `POST` | `/open` | JWT + `cash-register.manage` | Abrir una caja. |
+| `POST` | `/sessions/{sessionId}/movements` | JWT + `cash-register.manage` | Registrar un ingreso o egreso manual de la sesión abierta. |
 | `POST` | `/sessions/{sessionId}/close` | JWT + `cash-register.manage` | Cerrar y conciliar una caja. |
 
 La API utiliza Controllers; no utiliza Minimal APIs para las operaciones de negocio.

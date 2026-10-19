@@ -35,19 +35,34 @@ namespace Restaurantes.CashRegister.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CashRegisterSessionId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
                     b.Property<string>("Method")
                         .IsRequired()
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
 
+                    b.Property<Guid?>("OrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PaymentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("RecordedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RecordedByName")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<Guid?>("SaleId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("OccurredAtUtc")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("OrderId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("PaymentId")
-                        .HasColumnType("uuid");
 
                     b.Property<string>("Reference")
                         .IsRequired()
@@ -63,6 +78,8 @@ namespace Restaurantes.CashRegister.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("PaymentId", "Type")
                         .IsUnique();
+
+                    b.HasIndex("SaleId");
 
                     b.ToTable("cash_movements", (string)null);
                 });

@@ -34,10 +34,13 @@ public sealed class CashRegisterDbContext(DbContextOptions<CashRegisterDbContext
         movement.ToTable("cash_movements");
         movement.HasKey(x => x.Id);
         movement.HasIndex(x => new { x.PaymentId, x.Type }).IsUnique();
+        movement.HasIndex(x => x.SaleId);
         movement.Property(x => x.Type).HasConversion<int>();
         movement.Property(x => x.Amount).HasPrecision(12, 2);
         movement.Property(x => x.Method).HasMaxLength(40).IsRequired();
+        movement.Property(x => x.Category).HasMaxLength(80).IsRequired();
         movement.Property(x => x.Reference).HasMaxLength(160);
+        movement.Property(x => x.RecordedByName).HasMaxLength(120);
         movement
             .HasOne(x => x.Session)
             .WithMany(x => x.Movements)

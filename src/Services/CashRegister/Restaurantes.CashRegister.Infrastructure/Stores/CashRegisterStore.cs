@@ -32,18 +32,24 @@ public sealed class CashRegisterStore(CashRegisterDbContext db) : ICashRegisterS
 
     public Task<List<CashRegisterSession>> GetHistoryAsync(
         Guid restaurantId,
-        int take,
+        DateOnly? businessDate,
         CancellationToken ct
     )
     {
-        return db
+        IQueryable<CashRegisterSession> query = db
             .Sessions.AsNoTracking()
             .Include(x => x.Movements)
             .Include(x => x.Reconciliations)
-            .Where(x => x.RestaurantId == restaurantId)
-            .OrderByDescending(x => x.OpenedAtUtc)
-            .Take(take)
-            .ToListAsync(ct);
+            .Where(x => x.RestaurantId == restaurantId);
+        if (businessDate is DateOnly date)
+        {
+            query = query.Where(x => x.BusinessDate == date);
+        }
+
+        IOrderedQueryable<CashRegisterSession> ordered = query.OrderByDescending(x =>
+            x.OpenedAtUtc
+        );
+        return businessDate is null ? ordered.Take(100).ToListAsync(ct) : ordered.ToListAsync(ct);
     }
 
     public Task<bool> HasOpenSessionAsync(Guid restaurantId, CancellationToken ct)

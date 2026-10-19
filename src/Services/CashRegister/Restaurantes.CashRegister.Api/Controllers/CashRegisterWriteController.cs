@@ -50,6 +50,22 @@ public sealed class CashRegisterWriteController(
             : Task.FromResult<IActionResult>(Forbid());
     }
 
+    [HttpPost("sessions/{sessionId:guid}/movements")]
+    public Task<IActionResult> CreateMovement(
+        Guid restaurantId,
+        Guid sessionId,
+        CreateCashMovementRequest request,
+        CancellationToken ct
+    )
+    {
+        return CanManage(restaurantId)
+            ? ExecuteTransactional(
+                () => service.CreateMovement(restaurantId, sessionId, request, CurrentUser(), ct),
+                ct
+            )
+            : Task.FromResult<IActionResult>(Forbid());
+    }
+
     private async Task<IActionResult> ExecuteTransactional(
         Func<Task<CashRegisterResult>> operation,
         CancellationToken ct

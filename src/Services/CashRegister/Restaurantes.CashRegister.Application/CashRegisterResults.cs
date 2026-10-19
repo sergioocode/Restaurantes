@@ -31,5 +31,6 @@ public sealed record PaymentProjection(
     DateTime OccurredAtUtc,
     Guid? CashRegisterSessionId = null,
     decimal TenderedAmount = 0,
-    decimal ChangeAmount = 0
+    decimal ChangeAmount = 0,
+    Guid? SaleId = null
 );
