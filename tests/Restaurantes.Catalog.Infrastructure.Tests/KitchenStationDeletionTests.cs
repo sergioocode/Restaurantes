@@ -188,6 +188,164 @@ public sealed class KitchenStationLifecycleTests
         Assert.False(deactivated.IsActive);
     }
 
+    [Fact]
+    public async Task Primary_and_ticket_field_updates_keep_station_rules_and_publish_current_state()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        await using CatalogWriteDbContext db = CreateDb();
+        Guid restaurantId = Guid.NewGuid();
+        RestaurantKitchenStation station = RestaurantKitchenStation.Create(
+            restaurantId,
+            "PARRILLA",
+            "Parrilla",
+            new(false, true, 3),
+            DateTime.UtcNow
+        );
+        db.KitchenStations.Add(station);
+        await db.SaveChangesAsync(ct);
+        CatalogCommandService service = new(new CatalogWriteStore(db), TimeProvider.System);
+
+        KitchenStationResponse? primary = await service.SetStationPrimaryAsync(
+            restaurantId,
+            station.Id,
+            true,
+            ct
+        );
+        Assert.NotNull(primary);
+        Assert.True(primary.IsPrimary);
+        Assert.False(primary.RequiresPrimaryDispatch);
+        Assert.Equal(0, primary.Priority);
+
+        KitchenStationResponse? secondary = await service.SetStationPrimaryAsync(
+            restaurantId,
+            station.Id,
+            false,
+            ct
+        );
+        Assert.NotNull(secondary);
+        Assert.False(secondary.IsPrimary);
+        Assert.Equal(1, secondary.Priority);
+
+        KitchenStationResponse? dispatch = await service.SetStationRequiresPrimaryDispatchAsync(
+            restaurantId,
+            station.Id,
+            true,
+            ct
+        );
+        Assert.NotNull(dispatch);
+        Assert.True(dispatch.RequiresPrimaryDispatch);
+
+        KitchenStationResponse? printing = await service.SetStationPrintTicketAsync(
+            restaurantId,
+            station.Id,
+            true,
+            ct
+        );
+        Assert.NotNull(printing);
+        Assert.True(printing.PrintTicket);
+        Assert.Equal(5, printing.Version);
+        KitchenStationChanged latest = JsonSerializer.Deserialize<KitchenStationChanged>(
+            (await db.OutboxMessages.ToListAsync(ct))[^1].Payload
+        )!;
+        Assert.True(latest.PrintTicket);
+
+        KitchenStationResponse? renamed = await service.UpdateStationAsync(
+            restaurantId,
+            station.Id,
+            new UpdateKitchenStationRequest
+            {
+                Name = "Parrilla grande",
+                IsActive = true,
+                Priority = 2,
+                RequiresPrimaryDispatch = true,
+            },
+            ct
+        );
+        Assert.NotNull(renamed);
+        Assert.True(renamed.PrintTicket);
+        Assert.Equal(2, renamed.Priority);
+    }
+
+    [Fact]
+    public async Task Station_updates_reject_conflicting_primary_and_unknown_station()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        await using CatalogWriteDbContext db = CreateDb();
+        Guid restaurantId = Guid.NewGuid();
+        RestaurantKitchenStation primary = RestaurantKitchenStation.Create(
+            restaurantId,
+            "MAIN",
+            "Principal",
+            new(true, false, 0),
+            DateTime.UtcNow
+        );
+        RestaurantKitchenStation secondary = RestaurantKitchenStation.Create(
+            restaurantId,
+            "BAR",
+            "Barra",
+            new(false, false, 1),
+            DateTime.UtcNow
+        );
+        db.KitchenStations.AddRange(primary, secondary);
+        await db.SaveChangesAsync(ct);
+        CatalogCommandService service = new(new CatalogWriteStore(db), TimeProvider.System);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.UpdateStationAsync(
+                restaurantId,
+                secondary.Id,
+                new UpdateKitchenStationRequest
+                {
+                    Name = "Barra",
+                    IsActive = true,
+                    IsPrimary = true,
+                },
+                ct
+            )
+        );
+        Assert.False(secondary.IsPrimary);
+        Assert.Null(
+            await service.SetStationPrintTicketAsync(restaurantId, Guid.NewGuid(), true, ct)
+        );
+        Assert.Null(
+            await service.UpdateStationAsync(
+                restaurantId,
+                Guid.NewGuid(),
+                new UpdateKitchenStationRequest { Name = "Inexistente" },
+                ct
+            )
+        );
+    }
+
+    [Fact]
+    public void Primary_station_cannot_dispatch_itself_or_change_priority()
+    {
+        RestaurantKitchenStation station = RestaurantKitchenStation.Create(
+            Guid.NewGuid(),
+            "MAIN",
+            "Principal",
+            new(true, true, 9),
+            DateTime.UtcNow
+        );
+
+        Assert.True(station.IsPrimary);
+        Assert.False(station.RequiresPrimaryDispatch);
+        Assert.Equal(0, station.Priority);
+        Assert.Throws<InvalidOperationException>(() => station.SetPriority(2, DateTime.UtcNow));
+        Assert.Throws<InvalidOperationException>(() =>
+            station.SetRequiresPrimaryDispatch(true, DateTime.UtcNow)
+        );
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            RestaurantKitchenStation.Create(
+                Guid.NewGuid(),
+                "BAR",
+                "Barra",
+                new(false, false, 0),
+                DateTime.UtcNow
+            )
+        );
+    }
+
     private static CatalogWriteDbContext CreateDb() =>
         new(
             new DbContextOptionsBuilder<CatalogWriteDbContext>()
