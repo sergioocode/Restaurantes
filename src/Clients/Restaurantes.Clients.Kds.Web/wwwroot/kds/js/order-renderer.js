@@ -39,117 +39,134 @@ export class OrderRenderer {
     }
 
     for (const order of orders) {
-      const article = document.createElement('article');
-      article.className = 'order';
-      article.dataset.status = order.status;
-
-      const title = document.createElement('h2');
-      const titleContent = document.createElement('span');
-      titleContent.className = 'order-title-content';
-      const destination = document.createElement('span');
-      destination.textContent = orderDestinationLabel(order);
-      const shortId = document.createElement('small');
-      shortId.className = 'order-short-id';
-      shortId.textContent = order.id.slice(0, 8);
-      shortId.title = order.id;
-      titleContent.append(destination, shortId);
-
-      const headerMeta = document.createElement('span');
-      headerMeta.className = 'order-header-meta';
-      const sourceBadge = document.createElement('span');
-      sourceBadge.className = 'station';
-      sourceBadge.textContent = 'Origen: ' + order.source;
-      headerMeta.append(sourceBadge, this.renderKitchenClock(order, this.options.getStationCode()));
-
-      const collapsed = this.collapsedOrders.has(order.id);
-      const toggleButton = document.createElement('button');
-      toggleButton.className = 'order-collapse secondary';
-      toggleButton.type = 'button';
-      toggleButton.textContent = collapsed ? '+' : '−';
-      toggleButton.setAttribute('aria-expanded', String(!collapsed));
-      toggleButton.setAttribute('aria-label', collapsed ? 'Expandir tarjeta' : 'Contraer tarjeta');
-      toggleButton.title = collapsed ? 'Mostrar pedido' : 'Recoger tarjeta';
-      title.append(titleContent, headerMeta, toggleButton);
-
-      const age = document.createElement('small');
-      age.className = 'order-age';
-      age.textContent = order.status === 'Ready' && order.readyAtUtc
-        ? elapsedLabel(order.readyAtUtc)
-        : '';
-
-      if (Number.isInteger(order.guestCount) && order.guestCount > 0) {
-        const guests = document.createElement('span');
-        guests.className = 'station guest-count';
-        const guestIcon = document.createElement('span');
-        guestIcon.className = 'guest-icon';
-        guestIcon.textContent = '👥';
-        const guestNumber = document.createElement('span');
-        guestNumber.textContent = order.guestCount;
-        guests.append(guestIcon, guestNumber);
-        guests.title = order.guestCount + ' comensales';
-        guests.setAttribute('aria-label', guests.title);
-        headerMeta.append(guests);
-      }
-
-      const stations = document.createElement('div');
-      stations.className = 'stations';
-      const selectedStationCode = this.options.getStationCode();
-      const isPrimary = selectedStationCode === this.options.getPrimaryStationCode();
-      if (!isPrimary) {
-        for (const station of order.stations) {
-          if (station.code === selectedStationCode) continue;
-          const stationBadge = document.createElement('span');
-          stationBadge.className = 'station';
-          stationBadge.textContent = station.name + ': ' + station.status;
-          stations.append(stationBadge);
-        }
-      }
-
-      const controlledCodes = new Set(order.stations
-        .filter(station => station.requiresPrimaryDispatch)
-        .map(station => station.code));
-      const lines = document.createElement('ul');
-      lines.className = 'product-lines';
-      for (const line of order.lines) {
-        if (isPrimary && controlledCodes.has(line.preparationStationCode)) continue;
-        lines.append(this.renderProductLine(order, line, false, false, !isPrimary));
-      }
-
-      const body = document.createElement('div');
-      body.className = 'order-body';
-      body.hidden = collapsed;
-      toggleButton.addEventListener('click', () => {
-        if (body.hidden) this.collapsedOrders.delete(order.id);
-        else this.collapsedOrders.add(order.id);
-        body.hidden = !body.hidden;
-        toggleButton.textContent = body.hidden ? '+' : '−';
-        toggleButton.setAttribute('aria-expanded', String(!body.hidden));
-        toggleButton.setAttribute('aria-label', body.hidden ? 'Expandir tarjeta' : 'Contraer tarjeta');
-        toggleButton.title = body.hidden ? 'Mostrar pedido' : 'Recoger tarjeta';
-      });
-
-      article.append(title);
-      if (age.textContent) body.append(age);
-      if (!isPrimary) body.append(stations);
-      body.append(lines);
-      if (isPrimary) {
-        body.append(this.renderChefPasses(order));
-      }
-
-      const canRecover = this.options.canRecover(order);
-      if (canRecover) {
-        const actions = document.createElement('div');
-        actions.className = 'actions';
-        const deliverButton = document.createElement('button');
-        deliverButton.textContent = 'Entregado · resolver incidencia';
-        deliverButton.disabled = isPending;
-        deliverButton.addEventListener('click', () => this.options.onRecover(order, deliverButton));
-        actions.append(deliverButton);
-        body.append(actions);
-      }
-      article.append(body);
-      this.element.append(article);
+      this.element.append(this.renderOrder(order));
     }
+  }
+
+  renderOrder(order) {
+    const article = document.createElement('article');
+    article.className = 'order';
+    article.dataset.status = order.status;
+    const collapsed = this.collapsedOrders.has(order.id);
+    const { title, toggleButton } = this.renderOrderHeader(order, collapsed);
+    article.append(title, this.renderOrderBody(order, collapsed, toggleButton));
+    return article;
+  }
+
+  renderOrderHeader(order, collapsed) {
+    const title = document.createElement('h2');
+    const titleContent = document.createElement('span');
+    titleContent.className = 'order-title-content';
+    const destination = document.createElement('span');
+    destination.textContent = orderDestinationLabel(order);
+    const shortId = document.createElement('small');
+    shortId.className = 'order-short-id';
+    shortId.textContent = order.id.slice(0, 8);
+    shortId.title = order.id;
+    titleContent.append(destination, shortId);
+
+    const headerMeta = document.createElement('span');
+    headerMeta.className = 'order-header-meta';
+    const sourceBadge = document.createElement('span');
+    sourceBadge.className = 'station';
+    sourceBadge.textContent = 'Origen: ' + order.source;
+    headerMeta.append(sourceBadge, this.renderKitchenClock(order, this.options.getStationCode()));
+    this.appendGuestCount(headerMeta, order.guestCount);
+
+    const toggleButton = document.createElement('button');
+    toggleButton.className = 'order-collapse secondary';
+    toggleButton.type = 'button';
+    this.updateToggleButton(toggleButton, collapsed);
+    title.append(titleContent, headerMeta, toggleButton);
+    return { title, toggleButton };
+  }
+
+  appendGuestCount(headerMeta, guestCount) {
+    if (!Number.isInteger(guestCount) || guestCount <= 0) return;
+    const guests = document.createElement('span');
+    guests.className = 'station guest-count';
+    const guestIcon = document.createElement('span');
+    guestIcon.className = 'guest-icon';
+    guestIcon.textContent = '👥';
+    const guestNumber = document.createElement('span');
+    guestNumber.textContent = guestCount;
+    guests.append(guestIcon, guestNumber);
+    guests.title = guestCount + ' comensales';
+    guests.setAttribute('aria-label', guests.title);
+    headerMeta.append(guests);
+  }
+
+  renderOrderBody(order, collapsed, toggleButton) {
+    const body = document.createElement('div');
+    body.className = 'order-body';
+    body.hidden = collapsed;
+    toggleButton.addEventListener('click', () => this.toggleOrder(order.id, body, toggleButton));
+
+    const age = document.createElement('small');
+    age.className = 'order-age';
+    age.textContent = order.status === 'Ready' && order.readyAtUtc
+      ? elapsedLabel(order.readyAtUtc)
+      : '';
+    if (age.textContent) body.append(age);
+
+    const selectedStationCode = this.options.getStationCode();
+    const isPrimary = selectedStationCode === this.options.getPrimaryStationCode();
+    if (!isPrimary) body.append(this.renderOtherStations(order, selectedStationCode));
+    body.append(this.renderOrderLines(order, isPrimary));
+    if (isPrimary) body.append(this.renderChefPasses(order));
+    if (this.options.canRecover(order)) body.append(this.renderRecoveryAction(order));
+    return body;
+  }
+
+  toggleOrder(orderId, body, toggleButton) {
+    if (body.hidden) this.collapsedOrders.delete(orderId);
+    else this.collapsedOrders.add(orderId);
+    body.hidden = !body.hidden;
+    this.updateToggleButton(toggleButton, body.hidden);
+  }
+
+  updateToggleButton(toggleButton, collapsed) {
+    toggleButton.textContent = collapsed ? '+' : '−';
+    toggleButton.setAttribute('aria-expanded', String(!collapsed));
+    toggleButton.setAttribute('aria-label', collapsed ? 'Expandir tarjeta' : 'Contraer tarjeta');
+    toggleButton.title = collapsed ? 'Mostrar pedido' : 'Recoger tarjeta';
+  }
+
+  renderOtherStations(order, selectedStationCode) {
+    const stations = document.createElement('div');
+    stations.className = 'stations';
+    for (const station of order.stations) {
+      if (station.code === selectedStationCode) continue;
+      const stationBadge = document.createElement('span');
+      stationBadge.className = 'station';
+      stationBadge.textContent = station.name + ': ' + station.status;
+      stations.append(stationBadge);
+    }
+    return stations;
+  }
+
+  renderOrderLines(order, isPrimary) {
+    const controlledCodes = new Set(order.stations
+      .filter(station => station.requiresPrimaryDispatch)
+      .map(station => station.code));
+    const lines = document.createElement('ul');
+    lines.className = 'product-lines';
+    for (const line of order.lines) {
+      if (isPrimary && controlledCodes.has(line.preparationStationCode)) continue;
+      lines.append(this.renderProductLine(order, line, false, false, !isPrimary));
+    }
+    return lines;
+  }
+
+  renderRecoveryAction(order) {
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    const deliverButton = document.createElement('button');
+    deliverButton.textContent = 'Entregado · resolver incidencia';
+    deliverButton.disabled = this.options.isOrderPending(order.id);
+    deliverButton.addEventListener('click', () => this.options.onRecover(order, deliverButton));
+    actions.append(deliverButton);
+    return actions;
   }
 
   showEmpty(message) {
