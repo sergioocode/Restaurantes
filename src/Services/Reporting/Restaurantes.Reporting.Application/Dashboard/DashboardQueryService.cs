@@ -65,52 +65,11 @@ public sealed class DashboardQueryService(
             .Select(g => new SalesChannel(g.Key, g.Count(), g.Sum(x => x.Total)))
             .OrderByDescending(x => x.Sales)
             .ToList();
-        List<SalesPaymentMethod> paymentMethods = sales
-            .SelectMany(sale =>
-                sale.PaymentMethods.Count > 0
-                    ? sale.PaymentMethods
-                    :
-                    [
-                        new SalesPaymentMethod(
-                            sale.PaymentMethod == "Mixed"
-                                ? "UnavailableBreakdown"
-                                : sale.PaymentMethod,
-                            1,
-                            sale.Total
-                        ),
-                    ]
-            )
-            .GroupBy(x => string.IsNullOrWhiteSpace(x.Method) ? "Unknown" : x.Method)
-            .Select(g => new SalesPaymentMethod(g.Key, g.Sum(x => x.Tickets), g.Sum(x => x.Sales)))
-            .OrderByDescending(x => x.Sales)
-            .ToList();
-        Dictionary<Guid, IReadOnlyList<string>> salePaymentMethodsByOrder = [];
-        foreach (CompletedSale sale in sales)
-        {
-            IReadOnlyList<string> methods =
-                sale.PaymentMethods.Count > 0
-                    ? sale.PaymentMethods.Select(payment => payment.Method).Distinct().ToList()
-                    : [sale.PaymentMethod == "Mixed" ? "UnavailableBreakdown" : sale.PaymentMethod];
-            foreach (Guid orderId in sale.OrderIds)
-            {
-                salePaymentMethodsByOrder[orderId] = methods;
-            }
-        }
-        List<OperationalOrder> operationalOrders = snapshot
-            .OperationalOrders.Select(order =>
-                order with
-                {
-                    PaymentMethods =
-                        salePaymentMethodsByOrder.TryGetValue(
-                            order.OrderId,
-                            out IReadOnlyList<string>? methods
-                        )
-                            ? methods
-                        : string.IsNullOrWhiteSpace(order.PaymentMethod) ? []
-                        : [order.PaymentMethod],
-                }
-            )
-            .ToList();
+        List<SalesPaymentMethod> paymentMethods = SummarizePaymentMethods(sales);
+        List<OperationalOrder> operationalOrders = EnrichOperationalOrders(
+            snapshot.OperationalOrders,
+            sales
+        );
         decimal total = sales.Sum(x => x.Total);
         return new(
             date,
@@ -125,6 +84,83 @@ public sealed class DashboardQueryService(
             time.GetUtcNow().UtcDateTime
         );
     }
+
+    private static List<SalesPaymentMethod> SummarizePaymentMethods(
+        IEnumerable<CompletedSale> sales
+    ) =>
+        sales
+            .SelectMany(PaymentMethodsForSale)
+            .GroupBy(payment =>
+                string.IsNullOrWhiteSpace(payment.Method) ? "Unknown" : payment.Method
+            )
+            .Select(group => new SalesPaymentMethod(
+                group.Key,
+                group.Sum(payment => payment.Tickets),
+                group.Sum(payment => payment.Sales)
+            ))
+            .OrderByDescending(payment => payment.Sales)
+            .ToList();
+
+    private static IEnumerable<SalesPaymentMethod> PaymentMethodsForSale(CompletedSale sale)
+    {
+        if (sale.PaymentMethods.Count > 0)
+        {
+            return sale.PaymentMethods;
+        }
+
+        return [new SalesPaymentMethod(FallbackPaymentMethod(sale.PaymentMethod), 1, sale.Total)];
+    }
+
+    private static List<OperationalOrder> EnrichOperationalOrders(
+        IReadOnlyList<OperationalOrder> orders,
+        IEnumerable<CompletedSale> sales
+    )
+    {
+        Dictionary<Guid, List<string>> methodsByOrder = [];
+        foreach (CompletedSale sale in sales)
+        {
+            List<string> methods = SalePaymentMethodNames(sale);
+            foreach (Guid orderId in sale.OrderIds)
+            {
+                methodsByOrder[orderId] = methods;
+            }
+        }
+
+        return orders
+            .Select(order =>
+                order with
+                {
+                    PaymentMethods = OrderPaymentMethodNames(order, methodsByOrder),
+                }
+            )
+            .ToList();
+    }
+
+    private static List<string> SalePaymentMethodNames(CompletedSale sale)
+    {
+        if (sale.PaymentMethods.Count > 0)
+        {
+            return sale.PaymentMethods.Select(payment => payment.Method).Distinct().ToList();
+        }
+
+        return [FallbackPaymentMethod(sale.PaymentMethod)];
+    }
+
+    private static List<string> OrderPaymentMethodNames(
+        OperationalOrder order,
+        Dictionary<Guid, List<string>> methodsByOrder
+    )
+    {
+        if (methodsByOrder.TryGetValue(order.OrderId, out List<string>? methods))
+        {
+            return methods;
+        }
+
+        return string.IsNullOrWhiteSpace(order.PaymentMethod) ? [] : [order.PaymentMethod];
+    }
+
+    private static string FallbackPaymentMethod(string method) =>
+        method == "Mixed" ? "UnavailableBreakdown" : method;
 
     private static string FormatLabel(string format) =>
         format switch

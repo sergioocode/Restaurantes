@@ -13,7 +13,8 @@ try {
     & node --test --experimental-test-coverage `
         --test-reporter=spec --test-reporter-destination=stdout `
         --test-reporter=lcov "--test-reporter-destination=$reportPath" `
-        'tests/Restaurantes.Hosts.Tests/Kds/*.test.mjs'
+        'tests/Restaurantes.Hosts.Tests/Kds/*.test.mjs' `
+        'tests/Restaurantes.Hosts.Tests/Dashboard/*.test.mjs'
     if ($LASTEXITCODE -ne 0) {
         throw "Las pruebas de KDS fallaron con código $LASTEXITCODE."
     }
