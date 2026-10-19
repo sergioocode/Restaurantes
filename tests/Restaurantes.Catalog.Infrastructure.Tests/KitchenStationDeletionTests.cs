@@ -14,6 +14,102 @@ namespace Restaurantes.Catalog.Infrastructure.Tests;
 public sealed class KitchenStationLifecycleTests
 {
     [Fact]
+    public async Task Create_station_persists_printing_configuration_and_emits_it()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        await using CatalogWriteDbContext db = CreateDb();
+        Guid restaurantId = Guid.NewGuid();
+        CatalogCommandService service = new(new CatalogWriteStore(db), TimeProvider.System);
+
+        KitchenStationResponse? created = await service.CreateStationAsync(
+            restaurantId,
+            new CreateKitchenStationRequest
+            {
+                Code = "  bebidas ",
+                Name = "Bebidas",
+                IsPrimary = false,
+                RequiresPrimaryDispatch = true,
+                PrintTicket = true,
+                Priority = 4,
+            },
+            ct
+        );
+
+        Assert.NotNull(created);
+        Assert.Equal("BEBIDAS", created.Code);
+        Assert.False(created.IsPrimary);
+        Assert.True(created.RequiresPrimaryDispatch);
+        Assert.True(created.PrintTicket);
+        Assert.Equal(4, created.Priority);
+        KitchenStationChanged emitted = JsonSerializer.Deserialize<KitchenStationChanged>(
+            Assert.Single(await db.OutboxMessages.ToListAsync(ct)).Payload
+        )!;
+        Assert.True(emitted.PrintTicket);
+    }
+
+    [Fact]
+    public async Task Create_station_returns_null_for_a_duplicate_code()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        await using CatalogWriteDbContext db = CreateDb();
+        Guid restaurantId = Guid.NewGuid();
+        RestaurantKitchenStation existing = RestaurantKitchenStation.Create(
+            restaurantId,
+            "BEBIDAS",
+            "Bebidas",
+            new(false, false, 1),
+            DateTime.UtcNow
+        );
+        db.KitchenStations.Add(existing);
+        await db.SaveChangesAsync(ct);
+        CatalogCommandService service = new(new CatalogWriteStore(db), TimeProvider.System);
+
+        KitchenStationResponse? created = await service.CreateStationAsync(
+            restaurantId,
+            new CreateKitchenStationRequest { Code = " bebidas ", Name = "Barra" },
+            ct
+        );
+
+        Assert.Null(created);
+        Assert.Empty(await db.OutboxMessages.ToListAsync(ct));
+    }
+
+    [Fact]
+    public async Task Create_station_rejects_a_second_active_primary_station()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        await using CatalogWriteDbContext db = CreateDb();
+        Guid restaurantId = Guid.NewGuid();
+        db.KitchenStations.Add(
+            RestaurantKitchenStation.Create(
+                restaurantId,
+                "COCINA",
+                "Cocina",
+                new(true, false, 0),
+                DateTime.UtcNow
+            )
+        );
+        await db.SaveChangesAsync(ct);
+        CatalogCommandService service = new(new CatalogWriteStore(db), TimeProvider.System);
+
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () =>
+                service.CreateStationAsync(
+                    restaurantId,
+                    new CreateKitchenStationRequest
+                    {
+                        Code = "PARRILLA",
+                        Name = "Parrilla",
+                        IsPrimary = true,
+                    },
+                    ct
+                )
+        );
+
+        Assert.Contains("Only one active primary KDS", exception.Message);
+    }
+
+    [Fact]
     public async Task Deactivate_station_keeps_it_and_publishes_inactive_state()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
@@ -23,9 +119,7 @@ public sealed class KitchenStationLifecycleTests
             restaurantId,
             "BEBIDAS",
             "Bebidas",
-            false,
-            false,
-            1,
+            new(false, false, 1),
             DateTime.UtcNow
         );
         db.KitchenStations.Add(station);
@@ -60,9 +154,7 @@ public sealed class KitchenStationLifecycleTests
             restaurantId,
             "BEBIDAS",
             "Bebidas",
-            false,
-            true,
-            3,
+            new(false, true, 3),
             DateTime.UtcNow
         );
         db.KitchenStations.Add(station);

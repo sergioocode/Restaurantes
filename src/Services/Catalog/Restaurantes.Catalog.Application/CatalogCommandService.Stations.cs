@@ -24,11 +24,13 @@ public sealed partial class CatalogCommandService
             restaurantId,
             code,
             request.Name,
-            request.IsPrimary,
-            request.RequiresPrimaryDispatch,
-            request.Priority,
-            now,
-            request.PrintTicket
+            new(
+                request.IsPrimary,
+                request.RequiresPrimaryDispatch,
+                request.Priority,
+                request.PrintTicket
+            ),
+            now
         );
         if (item.IsPrimary && await store.HasOtherActivePrimaryStationAsync(restaurantId, null, ct))
         {

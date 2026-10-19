@@ -2,17 +2,21 @@
 
 public sealed class RestaurantKitchenStation
 {
+    public readonly record struct Configuration(
+        bool IsPrimary,
+        bool RequiresPrimaryDispatch,
+        int Priority,
+        bool PrintTicket = false
+    );
+
     private RestaurantKitchenStation() { }
 
     private RestaurantKitchenStation(
         Guid restaurantId,
         string code,
         string name,
-        bool isPrimary,
-        bool requiresPrimaryDispatch,
-        int priority,
-        DateTime now,
-        bool printTicket
+        Configuration configuration,
+        DateTime now
     )
     {
         if (restaurantId == Guid.Empty)
@@ -24,8 +28,12 @@ public sealed class RestaurantKitchenStation
         RestaurantId = restaurantId;
         Code = Category.CodeValue(code, 40);
         Name = Category.Required(name, 80);
-        ConfigureDispatch(isPrimary, requiresPrimaryDispatch, priority);
-        PrintTicket = printTicket;
+        ConfigureDispatch(
+            configuration.IsPrimary,
+            configuration.RequiresPrimaryDispatch,
+            configuration.Priority
+        );
+        PrintTicket = configuration.PrintTicket;
         IsActive = true;
         Version = 1;
         UpdatedAtUtc = now;
@@ -47,23 +55,11 @@ public sealed class RestaurantKitchenStation
         Guid restaurantId,
         string code,
         string name,
-        bool isPrimary,
-        bool requiresPrimaryDispatch,
-        int priority,
-        DateTime now,
-        bool printTicket = false
+        Configuration configuration,
+        DateTime now
     )
     {
-        return new(
-            restaurantId,
-            code,
-            name,
-            isPrimary,
-            requiresPrimaryDispatch,
-            priority,
-            now,
-            printTicket
-        );
+        return new(restaurantId, code, name, configuration, now);
     }
 
     public void Update(

@@ -1,6 +1,7 @@
 import { KdsApiClient } from './api-client.js';
 import { orderDestinationLabel, OrderRenderer, productFormatLabel } from './order-renderer.js';
 import { KdsRealtimeClient } from './realtime-client.js';
+import { renderKitchenTicket } from './ticket-renderer.js';
 
 const sessionKey = 'restaurantes.kds.login';
 const restaurantKey = 'restaurantes.kds.restaurant';
@@ -181,73 +182,11 @@ async function showTicketAfterStationCompletion(order, path) {
     const lineId = decodeURIComponent(path.split('/').at(-2) || '');
     const line = order.lines.find(item => item.id === lineId);
     if (!line) return;
-    renderKitchenTicket(order, line, selectedStation, path.endsWith('/dispatch'));
+    renderKitchenTicket(ticketContent, order, line, selectedStation, path.endsWith('/dispatch'));
     if (!ticketDialog.open) ticketDialog.showModal();
   } catch (error) {
     console.warn('No se pudo mostrar el ticket KDS.', error);
   }
-}
-
-function renderKitchenTicket(order, line, station, dispatched) {
-  ticketContent.replaceChildren();
-  const title = document.createElement('h2');
-  title.id = 'ticketTitle';
-  title.textContent = station.name;
-  const destination = document.createElement('p');
-  const tableParts = (order.tableLabel || order.customerName || 'Pedido')
-    .split(/\s+-\s+/, 2);
-  destination.textContent = tableParts.length === 2
-    ? 'Mesa: ' + tableParts[0] + ' · Zona: ' + tableParts[1]
-    : 'Destino: ' + tableParts[0];
-  const separator = document.createElement('hr');
-  const product = document.createElement('strong');
-  product.className = 'ticket-product';
-  product.textContent = line.quantity + ' × ' + line.productName
-    + (line.format ? ' · ' + line.format.replaceAll('_', ' ').toLowerCase() : '');
-  ticketContent.append(title, destination, separator, product);
-  if (line.notes?.trim()) {
-    const notes = document.createElement('p');
-    notes.className = 'ticket-notes';
-    notes.textContent = line.notes.trim();
-    ticketContent.append(notes);
-  }
-  const arrival = document.createElement('p');
-  arrival.textContent = 'Llega: ' + formatTicketTime(
-    line.preparationStartedAtUtc || order.submittedAtUtc
-  );
-  const pass = document.createElement('p');
-  pass.textContent = 'Pase: ' + formatTicketTime(
-    dispatched ? line.dispatchedAtUtc : line.readyAtUtc
-  );
-  ticketContent.append(arrival, pass);
-  if (station.isPrimary && line.preparationStartedAtUtc && line.readyAtUtc) {
-    const previousStation = order.stations.find(item =>
-      item.code === line.preparationStationCode && item.code !== station.code
-    );
-    if (previousStation) {
-      const previousTime = document.createElement('p');
-      previousTime.textContent = 'Tiempo en ' + previousStation.name + ': '
-        + formatTicketDuration(line.preparationStartedAtUtc, line.readyAtUtc);
-      ticketContent.append(previousTime);
-    }
-  }
-}
-
-function formatTicketTime(value) {
-  if (!value) return '--:--';
-  return new Intl.DateTimeFormat('es-ES', {
-    hour: '2-digit', minute: '2-digit', second: '2-digit'
-  })
-    .format(new Date(value));
-}
-
-function formatTicketDuration(start, end) {
-  const totalSeconds = Math.max(0, Math.floor(
-    (new Date(end).getTime() - new Date(start).getTime()) / 1000
-  ));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return minutes + ':' + String(seconds).padStart(2, '0');
 }
 
 async function recoverDelivery(order, button) {
