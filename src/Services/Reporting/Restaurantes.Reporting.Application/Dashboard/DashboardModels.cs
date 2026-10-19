@@ -54,7 +54,8 @@ public sealed record OperationalOrder(
     decimal Total,
     DateTime UpdatedAtUtc,
     IReadOnlyList<OperationalStation> Stations,
-    IReadOnlyList<OperationalLine> Lines
+    IReadOnlyList<OperationalLine> Lines,
+    IReadOnlyList<string> PaymentMethods
 );
 
 public sealed record OperationalStation(string Code, string Name, string Status);

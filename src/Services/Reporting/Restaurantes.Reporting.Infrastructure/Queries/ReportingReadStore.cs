@@ -121,7 +121,8 @@ public sealed class ReportingReadStore(ReportingReadDbContext db) : IReportingRe
             fact.Total,
             fact.UpdatedAtUtc,
             stations,
-            lines
+            lines,
+            []
         );
     }
 

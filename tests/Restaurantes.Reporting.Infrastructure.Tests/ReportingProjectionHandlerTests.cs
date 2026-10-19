@@ -258,6 +258,7 @@ public sealed class ReportingProjectionHandlerTests
             x => x.Method == "Card" && x.Tickets == 1 && x.Sales == 6m
         );
         OperationalOrder operationalOrder = Assert.Single(dashboard.OperationalOrders);
+        Assert.Equal(["Cash", "Card"], operationalOrder.PaymentMethods);
         OperationalLine operationalLine = Assert.Single(operationalOrder.Lines);
         Assert.Equal("Dispatched", operationalLine.KitchenStatus);
     }

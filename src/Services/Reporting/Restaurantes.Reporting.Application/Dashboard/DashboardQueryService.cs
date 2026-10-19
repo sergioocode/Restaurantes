@@ -84,6 +84,33 @@ public sealed class DashboardQueryService(
             .Select(g => new SalesPaymentMethod(g.Key, g.Sum(x => x.Tickets), g.Sum(x => x.Sales)))
             .OrderByDescending(x => x.Sales)
             .ToList();
+        Dictionary<Guid, IReadOnlyList<string>> salePaymentMethodsByOrder = [];
+        foreach (CompletedSale sale in sales)
+        {
+            IReadOnlyList<string> methods =
+                sale.PaymentMethods.Count > 0
+                    ? sale.PaymentMethods.Select(payment => payment.Method).Distinct().ToList()
+                    : [sale.PaymentMethod == "Mixed" ? "UnavailableBreakdown" : sale.PaymentMethod];
+            foreach (Guid orderId in sale.OrderIds)
+            {
+                salePaymentMethodsByOrder[orderId] = methods;
+            }
+        }
+        List<OperationalOrder> operationalOrders = snapshot
+            .OperationalOrders.Select(order =>
+                order with
+                {
+                    PaymentMethods =
+                        salePaymentMethodsByOrder.TryGetValue(
+                            order.OrderId,
+                            out IReadOnlyList<string>? methods
+                        )
+                            ? methods
+                        : string.IsNullOrWhiteSpace(order.PaymentMethod) ? []
+                        : [order.PaymentMethod],
+                }
+            )
+            .ToList();
         decimal total = sales.Sum(x => x.Total);
         return new(
             date,
@@ -94,7 +121,7 @@ public sealed class DashboardQueryService(
             restaurants,
             channels,
             paymentMethods,
-            snapshot.OperationalOrders,
+            operationalOrders,
             time.GetUtcNow().UtcDateTime
         );
     }

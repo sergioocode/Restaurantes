@@ -201,7 +201,8 @@ function renderOrder(o) {
         return `<li class="operation-line">${marker}${l.quantity} × ${escapeHtml(l.productName)} <small>${escapeHtml(l.categoryName)} · ${escapeHtml(l.preparationStationCode)}</small></li>`;
     }).join('');
     const label = o.serviceMode === 'DineIn' ? o.tableLabel : o.serviceMode === 'Bar' ? (o.tableLabel || 'Barra') : ('Para llevar · ' + (o.customerName || 'Sin nombre'));
-    return `<article class="order"><div class="order-head"><strong>${escapeHtml(label)}</strong><small>${short(o.orderId)}</small></div><div class="badges">${badge(o.serviceMode)}${badge(o.source)}${badge(o.orderStatus)}${badge(o.paymentStatus)}${o.paymentMethod ? badge(o.paymentMethod) : ''}</div><ul>${lines}</ul><strong>${money.format(o.total)}</strong></article>`
+    const methods = o.paymentMethods?.length ? o.paymentMethods : (o.paymentMethod ? [o.paymentMethod] : []);
+    return `<article class="order"><div class="order-head"><strong>${escapeHtml(label)}</strong><small>${short(o.orderId)}</small></div><div class="badges">${badge(o.serviceMode)}${badge(o.source)}${badge(o.orderStatus)}${badge(o.paymentStatus)}${methods.map(badge).join('')}</div><ul>${lines}</ul><strong>${money.format(o.total)}</strong></article>`
 }
 
 function lineStatusMarker(status) {
