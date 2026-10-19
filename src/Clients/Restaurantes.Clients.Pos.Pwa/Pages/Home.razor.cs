@@ -14,6 +14,7 @@ public partial class Home
     private bool guestCountDialogOpen;
     private bool guestCountSessionOpenedHere;
     private const string SessionKey = "restaurantes.pos.login";
+    private const string CashMovementIncomeType = "Income";
     private string? message;
     private bool busy;
     private bool success;
@@ -1730,7 +1731,8 @@ public partial class Home
         cashMovementsOpen = false;
     }
 
-    private Task PrintCashCloseTicket() => Js.InvokeVoidAsync("window.print").AsTask();
+    private Task PrintCashCloseTicket() =>
+        Js.InvokeVoidAsync("window.print", CancellationToken.None).AsTask();
 
     private void PressOpeningFloatKey(string key)
     {
@@ -1741,30 +1743,25 @@ public partial class Home
         }
         else if (key == ",")
         {
-            next =
-                openingFloatKeypadStartNew ? "0,"
-                : next.Contains(',') ? next
-                : next + ",";
+            if (openingFloatKeypadStartNew)
+            {
+                next = "0,";
+            }
+            else if (!next.Contains(','))
+            {
+                next += ",";
+            }
+        }
+        else if (openingFloatKeypadStartNew || next == "0")
+        {
+            next = key;
         }
         else
         {
-            next =
-                openingFloatKeypadStartNew ? key
-                : next == "0" ? key
-                : next + key;
+            next += key;
         }
 
-        if (
-            next.Length > 10
-            || next.Contains(',') && next[(next.IndexOf(',') + 1)..].Length > 2
-            || !decimal.TryParse(
-                next.Replace(',', '.'),
-                System.Globalization.NumberStyles.AllowDecimalPoint,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out decimal amount
-            )
-            || amount > 1_000_000m
-        )
+        if (!TryParseOpeningFloat(next, out decimal amount))
         {
             return;
         }
@@ -1772,6 +1769,23 @@ public partial class Home
         openingFloatKeypadText = next;
         openingFloatKeypadStartNew = key == "Borrar";
         openingFloat = amount;
+    }
+
+    private static bool TryParseOpeningFloat(string text, out decimal amount)
+    {
+        amount = 0;
+        if (text.Length > 10 || text.Contains(',') && text[(text.IndexOf(',') + 1)..].Length > 2)
+        {
+            return false;
+        }
+
+        return decimal.TryParse(
+                text.Replace(',', '.'),
+                System.Globalization.NumberStyles.AllowDecimalPoint,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out amount
+            )
+            && amount <= 1_000_000m;
     }
 
     private void OpenCashMovements()
@@ -1787,9 +1801,9 @@ public partial class Home
 
     private void SelectCashMovementType(string type)
     {
-        cashMovementType = type == "Income" ? "Income" : "Expense";
+        cashMovementType = type == CashMovementIncomeType ? CashMovementIncomeType : "Expense";
         cashMovementCategory =
-            cashMovementType == "Income" ? "Aportación de caja" : "Pago a proveedor";
+            cashMovementType == CashMovementIncomeType ? "Aportación de caja" : "Pago a proveedor";
     }
 
     private async Task CreateCashMovement()
@@ -1812,7 +1826,7 @@ public partial class Home
                 PrepareReconciliation();
                 success = true;
                 message =
-                    cashMovementType == "Income"
+                    cashMovementType == CashMovementIncomeType
                         ? $"Ingreso de {cashMovementAmount:0.00} € registrado."
                         : $"Egreso de {cashMovementAmount:0.00} € registrado.";
                 cashMovementDescription = string.Empty;

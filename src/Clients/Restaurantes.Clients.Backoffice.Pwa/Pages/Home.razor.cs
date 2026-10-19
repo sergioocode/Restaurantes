@@ -13,6 +13,10 @@ public partial class Home
 
     private const string SessionKey = "restaurantes.backoffice.login";
     private const string OrdersReportReadPermission = "orders.report.read";
+    private const string ReportsGroup = "group-reports";
+    private const string DailyOrdersReport = "daily-orders-report";
+    private const string CashRegistersReport = "cash-registers-report";
+    private const string AdminRole = "Admin";
     private string module = "catalog-design";
     private string[] selectedNavigationNodes = [];
     private List<NavigationNode> navigationNodes = [];
@@ -107,17 +111,17 @@ public partial class Home
         List<NavigationNode> reportChildren = [];
         if (HasAnyLocalPermission(OrdersReportReadPermission))
         {
-            reportChildren.Add(new("daily-orders-report", "Pedidos por día", "group-reports"));
+            reportChildren.Add(new(DailyOrdersReport, "Pedidos por día", ReportsGroup));
         }
         if (CashRegisterReportRestaurants().Count > 0)
         {
-            reportChildren.Add(new("cash-registers-report", "Cajas por día", "group-reports"));
+            reportChildren.Add(new(CashRegistersReport, "Cajas por día", ReportsGroup));
         }
         if (HasLocalPermission("reports.marketing.read"))
         {
-            reportChildren.Add(new("kitchen-times-report", "Tiempos de cocina", "group-reports"));
+            reportChildren.Add(new("kitchen-times-report", "Tiempos de cocina", ReportsGroup));
         }
-        AddGroup(nodes, "group-reports", "Informes", reportChildren);
+        AddGroup(nodes, ReportsGroup, "Informes", reportChildren);
 
         List<NavigationNode> configurationChildren = [];
         if (CanViewCompanySettings)
@@ -146,7 +150,7 @@ public partial class Home
 
     private static readonly string[] Roles = ["Manager", "Camarero", "Kds"];
 
-    internal bool IsAdmin => login?.AllRestaurantsRoles?.Contains("Admin") == true;
+    internal bool IsAdmin => login?.AllRestaurantsRoles?.Contains(AdminRole) == true;
     internal bool IsCurrentRestaurantManager =>
         !IsAdmin
         && CurrentRoleFor(restaurantId) == "Manager"
@@ -237,8 +241,8 @@ public partial class Home
     internal List<RestaurantResponse> ContextRestaurants() =>
         module switch
         {
-            "daily-orders-report" => ReportRestaurants(),
-            "cash-registers-report" => CashRegisterReportRestaurants(),
+            DailyOrdersReport => ReportRestaurants(),
+            CashRegistersReport => CashRegisterReportRestaurants(),
             _ => SelectableRestaurants(),
         };
 
@@ -260,7 +264,7 @@ public partial class Home
         {
             "tables" or "zones" => "OPERACIÓN DEL LOCAL",
             "orders" => "OPERACIÓN DEL LOCAL",
-            "daily-orders-report" or "cash-registers-report" => "INFORMES",
+            DailyOrdersReport or CashRegistersReport => "INFORMES",
             "restaurants" => "CADENA",
             "companies" => "CADENA",
             "categories" or "products" or "taxes" or "allergens" => "CATÁLOGO GLOBAL",
@@ -277,8 +281,8 @@ public partial class Home
             "companies" => "Empresas",
             "stations" => "Estaciones Kitchen Display System",
             "orders" => "Pedidos",
-            "daily-orders-report" => "Pedidos por día",
-            "cash-registers-report" => "Cajas por día",
+            DailyOrdersReport => "Pedidos por día",
+            CashRegistersReport => "Cajas por día",
             "categories" => "Categorías",
             "products" => "Carta Global",
             "taxes" => "Impuestos",
@@ -290,14 +294,14 @@ public partial class Home
 
     private bool HasMultiRestaurantReportAccess =>
         login?.AllRestaurantsRoles?.Any(role =>
-            role is "Admin" or "Gerente" or "Contabilidad" or "Marketing"
+            role is AdminRole or "Gerente" or "Contabilidad" or "Marketing"
         ) == true;
     private bool HasMultiRestaurantCashRegisterAccess =>
-        login?.AllRestaurantsRoles?.Any(role => role is "Admin" or "Gerente" or "Contabilidad")
+        login?.AllRestaurantsRoles?.Any(role => role is AdminRole or "Gerente" or "Contabilidad")
         == true;
     private bool ShowRestaurantContextSelector =>
-        (module == "daily-orders-report" && HasMultiRestaurantReportAccess)
-        || (module == "cash-registers-report" && HasMultiRestaurantCashRegisterAccess)
+        (module == DailyOrdersReport && HasMultiRestaurantReportAccess)
+        || (module == CashRegistersReport && HasMultiRestaurantCashRegisterAccess)
         || (IsAdmin && module is ("users" or "categories" or "tables" or "zones"));
 
     private string? RefreshLabel =>
@@ -305,9 +309,8 @@ public partial class Home
         {
             "catalog-design" when IsCurrentRestaurantManager => "Recargar",
             "orders" when OrderRestaurants().Count > 0 => "Consultar pedidos",
-            "daily-orders-report" when ReportRestaurants().Count > 0 => "Consultar pedidos",
-            "cash-registers-report" when CashRegisterReportRestaurants().Count > 0 =>
-                "Consultar cajas",
+            DailyOrdersReport when ReportRestaurants().Count > 0 => "Consultar pedidos",
+            CashRegistersReport when CashRegisterReportRestaurants().Count > 0 => "Consultar cajas",
             "stations" when IsCurrentRestaurantManager => "Actualizar estaciones",
             "tables" when HasLocalPermission("tables.manage") => "Actualizar mesas",
             "zones" when HasLocalPermission("tables.manage") => "Actualizar zonas",
@@ -359,11 +362,11 @@ public partial class Home
             return;
         }
         SetModule(selected);
-        if (selected is "orders" or "daily-orders-report")
+        if (selected is "orders" or DailyOrdersReport)
         {
             await RefreshOrders();
         }
-        else if (selected == "cash-registers-report")
+        else if (selected == CashRegistersReport)
         {
             await RefreshCashRegisterReport();
         }
@@ -506,11 +509,11 @@ public partial class Home
             }
             navigationNodes = BuildNavigationNodes();
         });
-        if (module is "orders" or "daily-orders-report")
+        if (module is "orders" or DailyOrdersReport)
         {
             await RefreshOrders();
         }
-        else if (module == "cash-registers-report")
+        else if (module == CashRegistersReport)
         {
             await RefreshCashRegisterReport();
         }
@@ -533,8 +536,8 @@ public partial class Home
         {
             "catalog-design" => Run(RefreshProductsCore),
             "stations" => Run(RefreshStationsCore),
-            "orders" or "daily-orders-report" => RefreshOrders(),
-            "cash-registers-report" => RefreshCashRegisterReport(),
+            "orders" or DailyOrdersReport => RefreshOrders(),
+            CashRegistersReport => RefreshCashRegisterReport(),
             "tables" => Run(RefreshTablesCore),
             "zones" => Run(RefreshTablesCore),
             "categories" => Run(RefreshCategoriesCore),
@@ -557,14 +560,14 @@ public partial class Home
         return Run(async () =>
         {
             IEnumerable<RestaurantResponse> allowed = (
-                module == "daily-orders-report" ? ReportRestaurants() : OrderRestaurants()
+                module == DailyOrdersReport ? ReportRestaurants() : OrderRestaurants()
             ).Where(restaurant => restaurant.Id == restaurantId);
             List<ManagementOrderResponse> result = [];
             List<SaleResponse> sales = [];
             foreach (RestaurantResponse restaurant in allowed)
             {
                 await AppendRestaurantOrdersAsync(restaurant.Id, result);
-                if (module == "daily-orders-report")
+                if (module == DailyOrdersReport)
                 {
                     sales.AddRange(await LoadRestaurantSalesAsync(restaurant.Id));
                 }
@@ -578,24 +581,29 @@ public partial class Home
     {
         return Run(async () =>
         {
-            IEnumerable<RestaurantResponse> allowed = CashRegisterReportRestaurants()
-                .Where(restaurant => restaurant.Id == restaurantId);
+            IEnumerable<Guid> allowed = CashRegisterReportRestaurants()
+                .Where(restaurant => restaurant.Id == restaurantId)
+                .Select(restaurant => restaurant.Id);
             List<CashRegisterReportResponse> result = [];
             List<SaleResponse> sales = [];
             List<ManagementOrderResponse> orders = [];
-            foreach (RestaurantResponse restaurant in allowed)
+            foreach (Guid allowedRestaurantId in allowed)
             {
                 result.AddRange(
-                    await Api.CashRegistersByDayAsync(restaurant.Id, cashRegisterReportDate)
+                    await Api.CashRegistersByDayAsync(allowedRestaurantId, cashRegisterReportDate)
                 );
                 sales.AddRange(
                     await LoadPagesAsync(offset =>
-                        Api.SalesAsync(restaurant.Id, cashRegisterReportDate, offset)
+                        Api.SalesAsync(allowedRestaurantId, cashRegisterReportDate, offset)
                     )
                 );
                 orders.AddRange(
                     await LoadPagesAsync(offset =>
-                        Api.ManagementOrdersAsync(restaurant.Id, cashRegisterReportDate, offset)
+                        Api.ManagementOrdersAsync(
+                            allowedRestaurantId,
+                            cashRegisterReportDate,
+                            offset
+                        )
                     )
                 );
             }
@@ -1532,7 +1540,7 @@ public partial class Home
     {
         return role switch
         {
-            "Admin" => "Administrador",
+            AdminRole => "Administrador",
             "Gerente" => "Gerencia",
             "Contabilidad" => "Contabilidad",
             "Marketing" => "Marketing",

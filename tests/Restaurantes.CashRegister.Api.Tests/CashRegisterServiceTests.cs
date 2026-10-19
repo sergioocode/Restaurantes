@@ -7,6 +7,58 @@ namespace Restaurantes.CashRegister.Api.Tests;
 public sealed class CashRegisterServiceTests
 {
     [Fact]
+    public async Task IsOpen_returns_false_when_restaurant_has_no_open_session()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        CashRegisterService service = new(
+            new TestStore(),
+            new TestIncompleteOrdersChecker(),
+            TimeProvider.System,
+            TimeZoneInfo.Utc
+        );
+
+        CashRegisterResult result = await service.IsOpen(restaurantId, CancellationToken.None);
+
+        CashRegisterAvailabilityResponse availability =
+            Assert.IsType<CashRegisterAvailabilityResponse>(result.Value);
+        Assert.Equal(CashRegisterOutcome.Ok, result.Outcome);
+        Assert.False(availability.IsOpen);
+        Assert.Null(availability.SessionId);
+    }
+
+    [Fact]
+    public async Task IsOpen_returns_open_session_and_its_business_date()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        DateOnly businessDate = new(2026, 10, 19);
+        Guid sessionId = Guid.NewGuid();
+        TestStore store = new();
+        store.AddSession(
+            new CashRegisterSession
+            {
+                Id = sessionId,
+                RestaurantId = restaurantId,
+                BusinessDate = businessDate,
+                Status = CashRegisterStatus.Open,
+            }
+        );
+        CashRegisterService service = new(
+            store,
+            new TestIncompleteOrdersChecker(),
+            TimeProvider.System,
+            TimeZoneInfo.Utc
+        );
+
+        CashRegisterResult result = await service.IsOpen(restaurantId, CancellationToken.None);
+
+        CashRegisterAvailabilityResponse availability =
+            Assert.IsType<CashRegisterAvailabilityResponse>(result.Value);
+        Assert.True(availability.IsOpen);
+        Assert.Equal(sessionId, availability.SessionId);
+        Assert.Equal(businessDate, availability.BusinessDate);
+    }
+
+    [Fact]
     public async Task History_filters_cash_sessions_by_business_date()
     {
         Guid restaurantId = Guid.NewGuid();
@@ -43,9 +95,9 @@ public sealed class CashRegisterServiceTests
             CancellationToken.None
         );
 
-        IEnumerable<CashRegisterResponse> sessions = Assert.IsAssignableFrom<
+        IEnumerable<CashRegisterResponse> sessions = Assert.IsType<
             IEnumerable<CashRegisterResponse>
-        >(result.Value);
+        >(result.Value, exactMatch: false);
         Assert.Equal(selectedDate, Assert.Single(sessions).BusinessDate);
     }
 
@@ -102,6 +154,114 @@ public sealed class CashRegisterServiceTests
         Assert.Equal(11.90m, current.TotalSales);
         Assert.Equal(11.90m, current.ExpectedTotal - current.OpeningFloat);
         Assert.Equal(11.90m, current.ExpectedCash);
+    }
+
+    [Fact]
+    public async Task Projection_resolves_session_from_reference_when_session_id_is_missing()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        Guid sessionId = Guid.NewGuid();
+        CashRegisterSession session = new()
+        {
+            Id = sessionId,
+            RestaurantId = restaurantId,
+            Status = CashRegisterStatus.Open,
+        };
+        TestStore store = new();
+        store.AddSession(session);
+        CashPaymentProjectionService projection = new(store, TimeProvider.System);
+        PaymentProjection payment = new(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            restaurantId,
+            12m,
+            "Cash",
+            $"cashregister:{sessionId};source=pos",
+            DateTime.UtcNow
+        );
+
+        await projection.Project(payment, CancellationToken.None);
+
+        Assert.Equal(sessionId, Assert.Single(session.Movements).CashRegisterSessionId);
+    }
+
+    [Fact]
+    public async Task Projection_rejects_payment_when_no_session_matches_reference()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        TestStore store = new();
+        CashPaymentProjectionService projection = new(store, TimeProvider.System);
+        PaymentProjection payment = new(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            restaurantId,
+            12m,
+            "Cash",
+            "cashregister:not-a-guid",
+            DateTime.UtcNow
+        );
+
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () =>
+                projection.Project(payment, CancellationToken.None)
+        );
+
+        Assert.Contains(payment.PaymentId.ToString(), exception.Message);
+        Assert.Empty(store.Sessions);
+    }
+
+    [Fact]
+    public async Task Late_projection_updates_closed_session_reconciliation()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        CashRegisterSession session = new()
+        {
+            Id = Guid.NewGuid(),
+            RestaurantId = restaurantId,
+            Status = CashRegisterStatus.Closed,
+            OpeningFloat = 30m,
+            ExpectedTotalAtClose = 40m,
+            ReconciledTotalAtClose = 42m,
+            ExpectedCashAtClose = 40m,
+            DifferenceAtClose = 2m,
+            Version = 3,
+        };
+        session.Reconciliations.Add(
+            new CashRegisterReconciliation
+            {
+                Id = Guid.NewGuid(),
+                CashRegisterSessionId = session.Id,
+                Method = "Cash",
+                ExpectedAmount = 40m,
+                ReconciledAmount = 41m,
+                Difference = 1m,
+            }
+        );
+        TestStore store = new();
+        store.AddSession(session);
+        CashPaymentProjectionService projection = new(store, TimeProvider.System);
+        PaymentProjection payment = new(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            restaurantId,
+            5m,
+            "Cash",
+            $"CASHREGISTER:{session.Id}",
+            DateTime.UtcNow
+        );
+
+        await projection.Project(payment, CancellationToken.None);
+
+        CashRegisterReconciliation reconciliation = Assert.Single(session.Reconciliations);
+        Assert.Equal(45m, reconciliation.ExpectedAmount);
+        Assert.Equal(-4m, reconciliation.Difference);
+        Assert.Equal(45m, session.ExpectedTotalAtClose);
+        Assert.Equal(-3m, session.DifferenceAtClose);
+        Assert.Equal(45m, session.ExpectedCashAtClose);
+        Assert.Equal(4, session.Version);
     }
 
     [Fact]
@@ -171,7 +331,8 @@ public sealed class CashRegisterServiceTests
         Assert.Equal(7m, current.ExpectedCash);
         Assert.Equal(7m, current.ExpectedTotal);
         CashMovementResponse savedExpense = Assert.Single(
-            current.Movements.Where(movement => movement.Type == "Expense")
+            current.Movements,
+            movement => movement.Type == "Expense"
         );
         Assert.Equal("Proveedor A", savedExpense.Reference);
         Assert.Equal("Pago a proveedor", savedExpense.Category);

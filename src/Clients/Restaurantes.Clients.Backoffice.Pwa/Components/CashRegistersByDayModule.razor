@@ -120,7 +120,7 @@ else
 
 @code {
     [Parameter, EditorRequired]
-    public Restaurantes.Clients.Backoffice.Pwa.Pages.Home Host { get; set; } = default!;
+    public required Restaurantes.Clients.Backoffice.Pwa.Pages.Home Host { get; set; }
 
     private static string MovementLabel(string type) =>
         type switch

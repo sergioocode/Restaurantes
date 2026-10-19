@@ -19,4 +19,21 @@ public sealed class CashRegisterReadControllerTests
 
         Assert.IsType<ForbidResult>(result);
     }
+
+    [Fact]
+    public async Task History_forbids_user_without_cash_register_permission()
+    {
+        CashRegisterReadController controller = new(null!)
+        {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
+        };
+
+        IActionResult result = await controller.History(
+            Guid.NewGuid(),
+            null,
+            CancellationToken.None
+        );
+
+        Assert.IsType<ForbidResult>(result);
+    }
 }

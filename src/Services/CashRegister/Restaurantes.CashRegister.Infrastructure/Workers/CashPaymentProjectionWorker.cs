@@ -138,11 +138,20 @@ public sealed class CashPaymentProjectionWorker(
         throw new NotSupportedException(ea.BasicProperties.Type);
     }
 
-    private static Guid GetSaleId(PaymentCaptured payment) =>
-        payment.SaleGroupId is Guid groupId && groupId != Guid.Empty ? groupId
-        : payment.PaymentTransactionId is Guid transactionId && transactionId != Guid.Empty
-            ? transactionId
-        : payment.PaymentId;
+    private static Guid GetSaleId(PaymentCaptured payment)
+    {
+        if (payment.SaleGroupId is Guid groupId && groupId != Guid.Empty)
+        {
+            return groupId;
+        }
+
+        if (payment.PaymentTransactionId is Guid transactionId && transactionId != Guid.Empty)
+        {
+            return transactionId;
+        }
+
+        return payment.PaymentId;
+    }
 
     protected override async Task DisposeResourcesAsync()
     {

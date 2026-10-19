@@ -1373,10 +1373,6 @@ input, select {
     flex: 0 0 auto;
     white-space: nowrap;
     text-align: right;
-}
-
-.cash-close-ticket-preview .cash-metrics strong,
-.cash-close-ticket-preview .cash-difference strong {
     font-size: inherit;
 }
 
