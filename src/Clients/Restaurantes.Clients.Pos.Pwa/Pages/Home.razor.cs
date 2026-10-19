@@ -186,12 +186,21 @@ public partial class Home
     private CancellationTokenSource? kitchenClockRefresh;
     private CashRegisterResponse? cashRegister;
     private bool cashPanelOpen;
+    private bool cashCloseTicketOpen;
+    private bool cashMovementsOpen;
     private decimal openingFloat;
+    private string openingFloatKeypadText = string.Empty;
+    private bool openingFloatKeypadStartNew = true;
+    private string cashMovementType = "Expense";
+    private string cashMovementCategory = "Pago a proveedor";
+    private string cashMovementDescription = string.Empty;
+    private decimal cashMovementAmount;
     private Dictionary<string, decimal> reconciliationAmounts = new(
         StringComparer.OrdinalIgnoreCase
     );
 
-    private bool CashRegisterOpen => cashRegister?.Status == "Open";
+    private bool CashCloseTicketVisible => cashCloseTicketOpen || cashRegister?.Status == "Closed";
+    private bool CashRegisterOpen => !cashCloseTicketOpen && cashRegister?.Status == "Open";
     private decimal ReconciliationDifference =>
         reconciliationAmounts.Values.Sum() - (cashRegister?.ExpectedTotal ?? 0);
 
@@ -468,6 +477,7 @@ public partial class Home
         }
 
         restaurantId = value;
+        cashRegister = null;
         selectedZoneId = null;
         pickupView = false;
         selectedPickup = null;
@@ -479,7 +489,14 @@ public partial class Home
     private async Task LoadOperationalData()
     {
         SetTables(await Api.TablesAsync(restaurantId));
-        cashRegister = await Api.CurrentCashRegisterAsync(restaurantId);
+        CashRegisterResponse? currentCashRegister = await Api.CurrentCashRegisterAsync(
+            restaurantId
+        );
+        if (cashRegister?.Status != "Closed")
+        {
+            cashRegister = currentCashRegister;
+        }
+
         PrepareReconciliation();
         await LoadPickupOrdersCore();
         await LoadVisibleTableSessionOrdersAsync();
@@ -1694,13 +1711,115 @@ public partial class Home
     private async Task OpenCashRegisterPanel()
     {
         cashPanelOpen = true;
+        cashCloseTicketOpen = false;
+        cashMovementsOpen = false;
         await RefreshCashRegister();
         PrepareReconciliation();
     }
 
     private void CloseCashRegisterPanel()
     {
+        if (cashCloseTicketOpen)
+        {
+            message = null;
+            success = false;
+        }
+
         cashPanelOpen = false;
+        cashCloseTicketOpen = false;
+        cashMovementsOpen = false;
+    }
+
+    private Task PrintCashCloseTicket() => Js.InvokeVoidAsync("window.print").AsTask();
+
+    private void PressOpeningFloatKey(string key)
+    {
+        string next = openingFloatKeypadText;
+        if (key == "Borrar")
+        {
+            next = "0";
+        }
+        else if (key == ",")
+        {
+            next =
+                openingFloatKeypadStartNew ? "0,"
+                : next.Contains(',') ? next
+                : next + ",";
+        }
+        else
+        {
+            next =
+                openingFloatKeypadStartNew ? key
+                : next == "0" ? key
+                : next + key;
+        }
+
+        if (
+            next.Length > 10
+            || next.Contains(',') && next[(next.IndexOf(',') + 1)..].Length > 2
+            || !decimal.TryParse(
+                next.Replace(',', '.'),
+                System.Globalization.NumberStyles.AllowDecimalPoint,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out decimal amount
+            )
+            || amount > 1_000_000m
+        )
+        {
+            return;
+        }
+
+        openingFloatKeypadText = next;
+        openingFloatKeypadStartNew = key == "Borrar";
+        openingFloat = amount;
+    }
+
+    private void OpenCashMovements()
+    {
+        cashMovementsOpen = true;
+        cashMovementType = "Expense";
+        cashMovementCategory = "Pago a proveedor";
+        cashMovementDescription = string.Empty;
+        cashMovementAmount = 0;
+    }
+
+    private void CloseCashMovements() => cashMovementsOpen = false;
+
+    private void SelectCashMovementType(string type)
+    {
+        cashMovementType = type == "Income" ? "Income" : "Expense";
+        cashMovementCategory =
+            cashMovementType == "Income" ? "Aportación de caja" : "Pago a proveedor";
+    }
+
+    private async Task CreateCashMovement()
+    {
+        if (cashRegister is null || !CashRegisterOpen)
+            return;
+
+        await Run(
+            async () =>
+            {
+                cashRegister = await Api.CreateCashMovementAsync(
+                    restaurantId,
+                    cashRegister.Id,
+                    cashMovementType,
+                    "Cash",
+                    cashMovementAmount,
+                    cashMovementCategory,
+                    cashMovementDescription
+                );
+                PrepareReconciliation();
+                success = true;
+                message =
+                    cashMovementType == "Income"
+                        ? $"Ingreso de {cashMovementAmount:0.00} € registrado."
+                        : $"Egreso de {cashMovementAmount:0.00} € registrado.";
+                cashMovementDescription = string.Empty;
+                cashMovementAmount = 0;
+            },
+            false
+        );
     }
 
     private async Task RefreshCashRegister()
@@ -1720,10 +1839,17 @@ public partial class Home
         await Run(
             async () =>
             {
-                cashRegister = await Api.OpenCashRegisterAsync(restaurantId, openingFloat);
+                decimal openingAmount = openingFloat;
+                cashRegister = await Api.OpenCashRegisterAsync(restaurantId, openingAmount);
                 PrepareReconciliation();
+                openingFloat = 0;
+                openingFloatKeypadText = string.Empty;
+                openingFloatKeypadStartNew = true;
+                cashPanelOpen = false;
+                cashCloseTicketOpen = false;
+                cashMovementsOpen = false;
                 success = true;
-                message = $"Caja diaria abierta con {openingFloat:0.00} € de fondo.";
+                message = $"Caja diaria abierta con {openingAmount:0.00} € de fondo.";
             },
             false
         );
@@ -1755,6 +1881,9 @@ public partial class Home
                     cashRegister.Id,
                     reconciliationAmounts
                 );
+                cashPanelOpen = false;
+                cashCloseTicketOpen = true;
+                cashMovementsOpen = false;
                 success = true;
                 message = $"Caja cerrada. Descuadre: {cashRegister.Difference:+0.00;-0.00;0.00} €.";
             },
@@ -2123,7 +2252,14 @@ public partial class Home
                     SetTables(await Api.TablesAsync(restaurantId));
                     await LoadPickupOrdersCore();
                     await LoadVisibleTableSessionOrdersAsync();
-                    cashRegister = await Api.CurrentCashRegisterAsync(restaurantId);
+                    CashRegisterResponse? currentCashRegister = await Api.CurrentCashRegisterAsync(
+                        restaurantId
+                    );
+                    if (cashRegister?.Status != "Closed")
+                    {
+                        cashRegister = currentCashRegister;
+                    }
+
                     PrepareReconciliation();
                     StateHasChanged();
                 });

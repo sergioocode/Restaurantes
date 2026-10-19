@@ -6,5 +6,7 @@ public sealed record CashMovementResponse(
     string Method,
     decimal Amount,
     string Reference,
-    DateTime OccurredAtUtc
+    DateTime OccurredAtUtc,
+    string Category = "",
+    string RecordedByName = ""
 );

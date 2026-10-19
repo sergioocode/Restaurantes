@@ -45,4 +45,32 @@ public sealed partial class PosApi
         using HttpResponseMessage response = await http.SendAsync(request);
         return await ReadAsync<CashRegisterResponse>(response);
     }
+
+    public async Task<CashRegisterResponse> CreateCashMovementAsync(
+        Guid restaurantId,
+        Guid sessionId,
+        string type,
+        string method,
+        decimal amount,
+        string category,
+        string description
+    )
+    {
+        using HttpRequestMessage request = Authorized(
+            HttpMethod.Post,
+            $"/api/cash-register/restaurants/{restaurantId}/sessions/{sessionId}/movements"
+        );
+        request.Content = JsonContent.Create(
+            new
+            {
+                type,
+                method,
+                amount,
+                category,
+                description,
+            }
+        );
+        using HttpResponseMessage response = await http.SendAsync(request);
+        return await ReadAsync<CashRegisterResponse>(response);
+    }
 }

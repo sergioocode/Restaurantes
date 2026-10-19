@@ -8,6 +8,8 @@ public sealed record CashRegisterResponse(
     decimal OpeningFloat,
     decimal TotalSales,
     decimal CashSales,
+    decimal OtherIncomeTotal,
+    decimal OtherExpenseTotal,
     decimal ExpectedCash,
     decimal ExpectedTotal,
     decimal? ReconciledTotal,

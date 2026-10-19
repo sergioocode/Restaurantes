@@ -1254,6 +1254,11 @@ input, select {
     font-size: 16px;
 }
 
+.cash-opening-keypad {
+    max-width: 340px;
+    margin: 14px auto;
+}
+
 .payment-keypad .payment-exact {
     grid-column: 1 / -1;
     min-height: 48px;
@@ -1323,17 +1328,90 @@ input, select {
     width: min(720px, 100%);
 }
 
+.cash-opening-card {
+    width: min(420px, 100%);
+}
+
+.cash-close-ticket-preview {
+    width: min(420px, 100%);
+    max-height: calc(100vh - 36px);
+    padding: 12px;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    color: #17201c;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 10pt;
+}
+
+.cash-close-ticket-preview .bill-title h2 {
+    font-size: 13px;
+}
+
+.cash-close-ticket-preview .cash-metrics {
+    display: block;
+    margin: 8px 0;
+}
+
+.cash-close-ticket-preview .cash-metrics div {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 5px 0;
+    border: 0;
+    border-bottom: 1px dashed #414943;
+    border-radius: 0;
+    background: transparent;
+}
+
+.cash-close-ticket-preview .cash-metrics span {
+    min-width: 0;
+}
+
+.cash-close-ticket-preview .cash-metrics strong,
+.cash-close-ticket-preview .cash-difference strong {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    text-align: right;
+}
+
+.cash-close-ticket-preview .cash-metrics strong,
+.cash-close-ticket-preview .cash-difference strong {
+    font-size: inherit;
+}
+
+.cash-close-ticket-preview .cash-difference {
+    margin: 8px 0;
+    padding: 7px 0;
+}
+
+.cash-close-ticket-preview .cash-movement-row {
+    padding: 6px 0;
+    border: 0;
+    border-bottom: 1px dashed #414943;
+    border-radius: 0;
+}
+
+.cash-close-ticket-preview .cash-close-details {
+    font-size: 10pt;
+}
+
 .cash-separator {
     border: 0;
     border-top: 1px solid #d5dad5;
-    margin: 20px 0;
 }
 
 .cash-metrics {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 10px;
     margin: 16px 0;
+}
+
+@media (min-width: 651px) and (max-width: 1000px) {
+    .cash-metrics {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
 }
 
     .cash-metrics div {
@@ -1356,9 +1434,101 @@ input, select {
     }
 
 .cash-opening-info {
-    margin: 8px 0 0;
+    margin: 0;
     color: #667068;
     font-size: 13px;
+}
+
+.cash-opening-summary {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.cash-opening-summary .cash-metrics {
+    flex: 0 0 min(320px, 50%);
+    grid-template-columns: 1fr;
+}
+
+.cash-movement-form {
+    display: grid;
+    gap: 12px;
+    margin: 16px 0 24px;
+}
+
+.cash-movement-form label {
+    display: grid;
+    gap: 6px;
+}
+
+.cash-movement-fields {
+    display: grid;
+    grid-template-columns: minmax(90px, 1fr) minmax(0, 4fr);
+    gap: 12px;
+}
+
+.cash-movement-choice {
+    display: grid;
+    gap: 6px;
+}
+
+.cash-movement-choice > strong {
+    color: #4d5851;
+    font-size: 13px;
+    font-weight: 850;
+}
+
+.cash-movement-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.cash-movement-options .filter {
+    min-height: 52px;
+    padding: 10px 12px;
+    font-size: 14px;
+}
+
+.cash-register-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.cash-register-actions button {
+    min-height: 52px;
+    padding: 10px 8px;
+}
+
+.cash-movement-list {
+    display: grid;
+    gap: 8px;
+    margin: 12px 0 20px;
+}
+
+.cash-movement-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid var(--modal-key-border);
+    border-radius: 12px;
+}
+
+.cash-movement-row > div {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+}
+
+.cash-movement-row small {
+    color: #667068;
+}
+
+.cash-movement-row > strong {
+    white-space: nowrap;
 }
 
 .cash-difference {
@@ -1514,7 +1684,17 @@ input, select {
     }
 
     .cash-metrics {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .cash-opening-summary {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 0;
+    }
+
+    .cash-opening-summary .cash-metrics {
+        flex-basis: auto;
     }
 }
 
@@ -1986,6 +2166,10 @@ input, select {
     }
 
 @media print {
+    @page {
+        margin: 0;
+    }
+
     body * {
         visibility: hidden !important;
     }
@@ -2010,11 +2194,59 @@ input, select {
 
     .cash-register-card {
         position: absolute;
-        inset: 0 auto auto 0;
-        width: 100%;
+        inset: 0 auto auto 50%;
+        transform: translateX(-50%);
+        width: 72mm;
         max-height: none;
         padding: 0;
+        border: 0;
+        border-radius: 0;
         box-shadow: none;
+        background: #fff;
+        color: #17201c;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 10pt;
+    }
+
+    .cash-register-card .bill-title h2 {
+        font-size: 13px;
+    }
+
+    .cash-register-card .cash-metrics {
+        display: block;
+        margin: 8px 0;
+    }
+
+    .cash-register-card .cash-metrics div {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 5px 0;
+        border: 0;
+        border-bottom: 1px dashed #414943;
+        border-radius: 0;
+        background: transparent;
+    }
+
+    .cash-register-card .cash-metrics strong,
+    .cash-register-card .cash-difference strong {
+        font-size: inherit;
+    }
+
+    .cash-register-card .cash-difference {
+        margin: 8px 0;
+        padding: 7px 0;
+    }
+
+    .cash-register-card .cash-movement-row {
+        padding: 6px 0;
+        border: 0;
+        border-bottom: 1px dashed #414943;
+        border-radius: 0;
+    }
+
+    .cash-register-card .cash-close-details {
+        font-size: 10pt;
     }
 
     .account-preview-backdrop, .sales-ticket-backdrop {
