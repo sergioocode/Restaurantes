@@ -33,7 +33,11 @@ public partial class Home
     internal List<ManagementOrderResponse> historyOrders = [];
     internal List<SaleResponse> historySales = [];
     internal DateOnly historyDate = DateOnly.FromDateTime(DateTime.Today);
+    internal List<CashRegisterReportResponse> dailyCashRegisters = [];
+    internal List<SaleResponse> dailyCashRegisterSales = [];
+    internal DateOnly cashRegisterReportDate = DateOnly.FromDateTime(DateTime.Today);
     internal SaleResponse? selectedSale;
+    internal CashRegisterReportResponse? selectedCashRegisterCloseTicket;
     internal List<RestaurantResponse> restaurants = [];
     internal List<CompanyResponse> companies = [];
     internal List<TableResponse> tables = [];
@@ -104,6 +108,10 @@ public partial class Home
         if (HasAnyLocalPermission(OrdersReportReadPermission))
         {
             reportChildren.Add(new("daily-orders-report", "Pedidos por día", "group-reports"));
+        }
+        if (CashRegisterReportRestaurants().Count > 0)
+        {
+            reportChildren.Add(new("cash-registers-report", "Cajas por día", "group-reports"));
         }
         if (HasLocalPermission("reports.marketing.read"))
         {
@@ -211,8 +219,28 @@ public partial class Home
             )
             .ToList();
 
+    internal List<RestaurantResponse> CashRegisterReportRestaurants() =>
+        restaurants
+            .Where(restaurant =>
+                login?.AllRestaurantsPermissions?.Contains("cash-register.read") == true
+                || login?.AllRestaurantsPermissions?.Contains("cash-register.manage") == true
+                || login?.Restaurants.Any(access =>
+                    access.RestaurantId == restaurant.Id
+                    && (
+                        access.Permissions.Contains("cash-register.read")
+                        || access.Permissions.Contains("cash-register.manage")
+                    )
+                ) == true
+            )
+            .ToList();
+
     internal List<RestaurantResponse> ContextRestaurants() =>
-        module == "daily-orders-report" ? ReportRestaurants() : SelectableRestaurants();
+        module switch
+        {
+            "daily-orders-report" => ReportRestaurants(),
+            "cash-registers-report" => CashRegisterReportRestaurants(),
+            _ => SelectableRestaurants(),
+        };
 
     internal RestaurantResponse? CurrentRestaurant =>
         restaurants.FirstOrDefault(x => x.Id == restaurantId);
@@ -232,7 +260,7 @@ public partial class Home
         {
             "tables" or "zones" => "OPERACIÓN DEL LOCAL",
             "orders" => "OPERACIÓN DEL LOCAL",
-            "daily-orders-report" => "INFORMES",
+            "daily-orders-report" or "cash-registers-report" => "INFORMES",
             "restaurants" => "CADENA",
             "companies" => "CADENA",
             "categories" or "products" or "taxes" or "allergens" => "CATÁLOGO GLOBAL",
@@ -250,6 +278,7 @@ public partial class Home
             "stations" => "Estaciones Kitchen Display System",
             "orders" => "Pedidos",
             "daily-orders-report" => "Pedidos por día",
+            "cash-registers-report" => "Cajas por día",
             "categories" => "Categorías",
             "products" => "Carta Global",
             "taxes" => "Impuestos",
@@ -263,8 +292,12 @@ public partial class Home
         login?.AllRestaurantsRoles?.Any(role =>
             role is "Admin" or "Gerente" or "Contabilidad" or "Marketing"
         ) == true;
+    private bool HasMultiRestaurantCashRegisterAccess =>
+        login?.AllRestaurantsRoles?.Any(role => role is "Admin" or "Gerente" or "Contabilidad")
+        == true;
     private bool ShowRestaurantContextSelector =>
         (module == "daily-orders-report" && HasMultiRestaurantReportAccess)
+        || (module == "cash-registers-report" && HasMultiRestaurantCashRegisterAccess)
         || (IsAdmin && module is ("users" or "categories" or "tables" or "zones"));
 
     private string? RefreshLabel =>
@@ -273,6 +306,8 @@ public partial class Home
             "catalog-design" when IsCurrentRestaurantManager => "Recargar",
             "orders" when OrderRestaurants().Count > 0 => "Consultar pedidos",
             "daily-orders-report" when ReportRestaurants().Count > 0 => "Consultar pedidos",
+            "cash-registers-report" when CashRegisterReportRestaurants().Count > 0 =>
+                "Consultar cajas",
             "stations" when IsCurrentRestaurantManager => "Actualizar estaciones",
             "tables" when HasLocalPermission("tables.manage") => "Actualizar mesas",
             "zones" when HasLocalPermission("tables.manage") => "Actualizar zonas",
@@ -327,6 +362,10 @@ public partial class Home
         if (selected is "orders" or "daily-orders-report")
         {
             await RefreshOrders();
+        }
+        else if (selected == "cash-registers-report")
+        {
+            await RefreshCashRegisterReport();
         }
     }
 
@@ -471,6 +510,10 @@ public partial class Home
         {
             await RefreshOrders();
         }
+        else if (module == "cash-registers-report")
+        {
+            await RefreshCashRegisterReport();
+        }
     }
 
     internal bool HasAnyLocalPermission(string permission)
@@ -491,6 +534,7 @@ public partial class Home
             "catalog-design" => Run(RefreshProductsCore),
             "stations" => Run(RefreshStationsCore),
             "orders" or "daily-orders-report" => RefreshOrders(),
+            "cash-registers-report" => RefreshCashRegisterReport(),
             "tables" => Run(RefreshTablesCore),
             "zones" => Run(RefreshTablesCore),
             "categories" => Run(RefreshCategoriesCore),
@@ -529,6 +573,59 @@ public partial class Home
             historySales = sales;
         });
     }
+
+    internal Task RefreshCashRegisterReport()
+    {
+        return Run(async () =>
+        {
+            IEnumerable<RestaurantResponse> allowed = CashRegisterReportRestaurants()
+                .Where(restaurant => restaurant.Id == restaurantId);
+            List<CashRegisterReportResponse> result = [];
+            List<SaleResponse> sales = [];
+            List<ManagementOrderResponse> orders = [];
+            foreach (RestaurantResponse restaurant in allowed)
+            {
+                result.AddRange(
+                    await Api.CashRegistersByDayAsync(restaurant.Id, cashRegisterReportDate)
+                );
+                sales.AddRange(
+                    await LoadPagesAsync(offset =>
+                        Api.SalesAsync(restaurant.Id, cashRegisterReportDate, offset)
+                    )
+                );
+                orders.AddRange(
+                    await LoadPagesAsync(offset =>
+                        Api.ManagementOrdersAsync(restaurant.Id, cashRegisterReportDate, offset)
+                    )
+                );
+            }
+
+            dailyCashRegisters = result
+                .OrderByDescending(register => register.OpenedAtUtc)
+                .ToList();
+            dailyCashRegisterSales = sales;
+            historyOrders = orders;
+        });
+    }
+
+    internal SaleResponse? SaleForCashMovement(
+        CashRegisterReportResponse register,
+        CashMovementReportResponse movement
+    ) =>
+        movement.SaleId is Guid saleId
+            ? dailyCashRegisterSales.FirstOrDefault(sale => sale.Id == saleId)
+                ?? SaleForCashMovementOrder(register, movement)
+            : SaleForCashMovementOrder(register, movement);
+
+    private SaleResponse? SaleForCashMovementOrder(
+        CashRegisterReportResponse register,
+        CashMovementReportResponse movement
+    ) =>
+        movement.OrderId is Guid orderId
+            ? dailyCashRegisterSales.FirstOrDefault(sale =>
+                sale.RestaurantId == register.RestaurantId && sale.OrderIds.Contains(orderId)
+            )
+            : null;
 
     private async Task AppendRestaurantOrdersAsync(
         Guid restaurantId,
@@ -586,6 +683,19 @@ public partial class Home
     {
         return Js.InvokeVoidAsync("window.print").AsTask();
     }
+
+    internal Task ShowCashRegisterCloseTicket(CashRegisterReportResponse register)
+    {
+        return InvokeAsync(() =>
+        {
+            selectedCashRegisterCloseTicket = register;
+            StateHasChanged();
+        });
+    }
+
+    internal void CloseCashRegisterCloseTicket() => selectedCashRegisterCloseTicket = null;
+
+    internal Task PrintCashRegisterCloseTicket() => Js.InvokeVoidAsync("window.print").AsTask();
 
     internal static string PaymentMethodLabel(string method)
     {

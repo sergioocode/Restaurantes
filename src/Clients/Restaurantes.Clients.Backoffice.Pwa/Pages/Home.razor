@@ -80,7 +80,7 @@ else
                             {
                                 <RestaurantContextSelector Host="this" />
                             }
-                            @if (module == "daily-orders-report" && !ShowRestaurantContextSelector)
+                            @if ((module is "daily-orders-report" or "cash-registers-report") && !ShowRestaurantContextSelector)
                             {
                                 <div class="restaurant-context">
                                     <label>
@@ -126,6 +126,17 @@ else
                     @if (ReportRestaurants().Count > 0)
                     {
                         <DailySalesModule Host="this" />
+                    }
+                    else
+                    {
+                        <NoAccessPanel />
+                    }
+                }
+                else if (module == "cash-registers-report")
+                {
+                    @if (CashRegisterReportRestaurants().Count > 0)
+                    {
+                        <CashRegistersByDayModule Host="this" />
                     }
                     else
                     {
@@ -187,6 +198,73 @@ else
     {
         <div class="toast @(ok ? "ok" : "error")">@message</div>
     }
+}
+@if (selectedCashRegisterCloseTicket is CashRegisterReportResponse closeTicket)
+{
+    <div class="cash-register-close-ticket-overlay" @onclick="CloseCashRegisterCloseTicket">
+        <article class="cash-register-close-ticket-preview" role="dialog" aria-modal="true" aria-labelledby="cash-register-close-ticket-title" @onclick:stopPropagation>
+            <header class="cash-register-close-ticket-header">
+                <div>
+                    <p class="eyebrow">TICKET DE CIERRE DE CAJA</p>
+                    <h2 id="cash-register-close-ticket-title">Arqueo cerrado</h2>
+                </div>
+                <div class="cash-register-close-ticket-actions">
+                    <button class="primary report-icon-button" @onclick="PrintCashRegisterCloseTicket" aria-label="Imprimir ticket de cierre" title="Imprimir ticket de cierre">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                            <path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                            <path d="M6 14h12v7H6zM18 12h.01" />
+                        </svg>
+                    </button>
+                    <button class="ghost report-icon-button" @onclick="CloseCashRegisterCloseTicket" aria-label="Salir del ticket de cierre" title="Salir">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                            <path d="m18 6-12 12M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            </header>
+
+            <div class="cash-register-close-ticket-opening">
+                <span>Fondo inicial</span>
+                <strong>@closeTicket.OpeningFloat.ToString("N2") €</strong>
+            </div>
+            <hr class="cash-register-close-ticket-separator" />
+            <h3>Ventas del turno</h3>
+            <div class="cash-register-close-ticket-metrics">
+                <div><span>Ventas totales</span><strong>@closeTicket.TotalSales.ToString("N2") €</strong></div>
+                <div><span>Ingresos adicionales</span><strong>@closeTicket.OtherIncomeTotal.ToString("N2") €</strong></div>
+                <div><span>Egresos</span><strong>@closeTicket.OtherExpenseTotal.ToString("N2") €</strong></div>
+                <div><span>Total esperado</span><strong>@closeTicket.ExpectedTotal.ToString("N2") €</strong></div>
+                @foreach (CashRegisterPaymentMethodTotal method in closeTicket.PaymentMethods)
+                {
+                    <div><span>@PaymentMethodLabel(method.Method)</span><strong>@method.Sales.ToString("N2") €</strong></div>
+                }
+            </div>
+
+            <h3>Ingresos y egresos del turno</h3>
+            <div class="cash-register-close-ticket-movements">
+                @foreach (CashMovementReportResponse movement in closeTicket.Movements.Where(item => item.Type is "Income" or "Expense").OrderBy(item => item.OccurredAtUtc))
+                {
+                    <div class="cash-register-close-ticket-row">
+                        <div><strong>@(movement.Category == "Aportación de caja" ? movement.Reference : $"{movement.Category} · {movement.Reference}")</strong><small>@(movement.Type == "Income" ? "Ingreso" : "Egreso") · @PaymentMethodLabel(movement.Method) · @movement.OccurredAtUtc.ToLocalTime().ToString("dd/MM HH:mm") · @movement.RecordedByName</small></div>
+                        <strong class="@(movement.Type == "Income" ? null : "cash-register-negative")">@(movement.Type == "Income" ? "+" : "−")@movement.Amount.ToString("N2") €</strong>
+                    </div>
+                }
+            </div>
+
+            @foreach (CashRegisterPaymentMethodReconciliation item in closeTicket.Reconciliations)
+            {
+                <div class="cash-register-close-ticket-difference"><span>@PaymentMethodLabel(item.Method): conciliado @item.Reconciled.ToString("N2") € / esperado @item.Expected.ToString("N2") €</span><strong class="@(item.Difference == 0 ? null : "cash-register-negative")">@item.Difference.ToString("+0.00;-0.00;0.00") €</strong></div>
+            }
+            <div class="cash-register-close-ticket-difference"><span>Descuadre total</span><strong class="@(closeTicket.Difference == 0 ? null : "cash-register-negative")">@(closeTicket.Difference?.ToString("+0.00;-0.00;0.00") ?? "—") @(closeTicket.Difference is null ? "" : "€")</strong></div>
+
+            <div class="cash-register-close-ticket-details">
+                <p>Local: @RestaurantName(closeTicket.RestaurantId)</p>
+                <p>Fecha de caja: @closeTicket.BusinessDate.ToString("dd/MM/yyyy")</p>
+                <p>Abierta: @closeTicket.OpenedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @closeTicket.OpenedByName</p>
+                <p>Cerrada: @closeTicket.ClosedAtUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @closeTicket.ClosedByName</p>
+            </div>
+        </article>
+    </div>
 }
 @if (selectedSale is SaleResponse sale)
 {

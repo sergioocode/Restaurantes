@@ -1,0 +1,181 @@
+@using Restaurantes.Clients.Backoffice.Pwa.Models
+
+<div class="order-filters">
+    <label>Fecha operativa
+        <input type="date" @bind="Host.cashRegisterReportDate" />
+    </label>
+</div>
+
+@if (Host.dailyCashRegisters.Count == 0 && !Host.busy)
+{
+    <p class="muted">No hay cajas registradas para esta fecha y este local.</p>
+}
+else
+{
+    <div class="cash-register-report-list">
+        @foreach (CashRegisterReportResponse register in Host.dailyCashRegisters)
+        {
+            <article class="cash-register-report-card">
+                <header class="cash-register-report-header">
+                    <div>
+                        <strong>Caja · @register.Id.ToString("N")[..8]</strong>
+                        <small>Apertura @register.OpenedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @register.OpenedByName</small>
+                        @if (register.ClosedAtUtc is DateTime closedAt)
+                        {
+                            <small>Cierre @closedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @register.ClosedByName</small>
+                        }
+                    </div>
+                    <div class="cash-register-report-header-actions">
+                        <span class="cash-register-state @(register.Status == "Open" ? "open" : "closed")">
+                            @(register.Status == "Open" ? "Abierta" : "Cerrada")
+                        </span>
+                        @if (register.Status == "Closed")
+                        {
+                            <button class="secondary report-icon-button" @onclick="() => Host.ShowCashRegisterCloseTicket(register)" aria-label="Ver ticket de cierre" title="Ver ticket de cierre">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                                    <path d="M5 2h14v20l-4-2-3 2-3-2-4 2z" />
+                                    <path d="M8 7h8M8 11h8M8 15h5" />
+                                </svg>
+                            </button>
+                        }
+                    </div>
+                </header>
+
+                <dl class="cash-register-report-metrics">
+                    <div><dt>Fondo inicial</dt><dd>@register.OpeningFloat.ToString("N2") €</dd></div>
+                    <div><dt>Ventas</dt><dd>@SignedAmount(register.TotalSales)</dd></div>
+                    <div><dt>Ingresos</dt><dd>@SignedAmount(register.OtherIncomeTotal)</dd></div>
+                    <div><dt>Gastos</dt><dd class="@(register.OtherExpenseTotal > 0 ? "cash-register-negative" : null)">@ExpenseAmount(register.OtherExpenseTotal)</dd></div>
+                    <div><dt>Total esperado</dt><dd>@register.ExpectedTotal.ToString("N2") €</dd></div>
+                    <div><dt>Total conciliado</dt><dd>@(register.ReconciledTotal?.ToString("N2") ?? "—") @(register.ReconciledTotal is null ? "" : "€")</dd></div>
+                    <div><dt>Diferencia</dt><dd class="@(register.Difference is < 0 ? "cash-register-negative" : null)">@(register.Difference is decimal difference ? SignedAmount(difference) : "—")</dd></div>
+                </dl>
+
+                <details class="cash-register-report-details">
+                    <summary>Conciliación</summary>
+                    @if (register.Reconciliations.Count > 0)
+                    {
+                        <div class="cash-register-report-methods">
+                            @foreach (CashRegisterPaymentMethodReconciliation reconciliation in register.Reconciliations)
+                            {
+                                <div><strong>@reconciliation.Method</strong><span>Esperado @reconciliation.Expected.ToString("N2") €</span><span>Contado @reconciliation.Reconciled.ToString("N2") €</span><span>Diferencia @reconciliation.Difference.ToString("N2") €</span></div>
+                            }
+                        </div>
+                    }
+                </details>
+
+                @if (register.Movements.Any(movement => movement.Type is "Income" or "Expense"))
+                {
+                    <details class="cash-register-report-details">
+                        <summary>Ingresos y egresos registrados (@register.Movements.Count(movement => movement.Type is "Income" or "Expense"))</summary>
+                        <div class="cash-register-report-movements">
+                            <div class="cash-register-report-movement cash-register-report-movement-header">
+                                <strong>Movimiento</strong>
+                                <strong>ID movimiento</strong>
+                                <strong>Detalle</strong>
+                                <strong>Importe</strong>
+                            </div>
+                            @foreach (CashMovementReportResponse movement in register.Movements.Where(item => item.Type is "Income" or "Expense").OrderByDescending(item => item.OccurredAtUtc))
+                            {
+                                <div class="cash-register-report-movement">
+                                    <span>@MovementDescription(movement, null)</span>
+                                    <span>@ReferenceLabel(null, movement)</span>
+                                    <span>@movement.Category · @movement.Reference</span>
+                                    <strong>@((movement.Type == "Expense" ? -movement.Amount : movement.Amount).ToString("N2")) €</strong>
+                                </div>
+                            }
+                        </div>
+                    </details>
+                }
+
+                @if (register.Movements.Any(movement => movement.Type == "Sale"))
+                {
+                    <details class="cash-register-report-details">
+                        <summary>Tickets</summary>
+                        <div class="cash-register-report-movements">
+                            <div class="cash-register-report-movement cash-register-report-movement-header">
+                                <strong>Movimiento</strong>
+                                <strong>ID ticket / pago</strong>
+                                <strong>Forma de pago</strong>
+                                <strong>Importe</strong>
+                            </div>
+                            @foreach (CashMovementReportResponse movement in register.Movements.Where(item => item.Type == "Sale").OrderByDescending(item => item.OccurredAtUtc))
+                            {
+                                SaleResponse? sale = Host.SaleForCashMovement(register, movement);
+                                ManagementOrderResponse? context = sale is null ? null : Host.SaleOrderContext(sale);
+                                <div class="cash-register-report-movement">
+                                    <span>@MovementDescription(movement, context)</span>
+                                    <span>@ReferenceLabel(sale, movement)</span>
+                                    <span>@PaymentMethodLabel(movement.Method)</span>
+                                    <strong>@movement.Amount.ToString("N2") €</strong>
+                                </div>
+                            }
+                        </div>
+                    </details>
+                }
+            </article>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Restaurantes.Clients.Backoffice.Pwa.Pages.Home Host { get; set; } = default!;
+
+    private static string MovementLabel(string type) =>
+        type switch
+        {
+            "Income" => "Ingreso",
+            "Expense" => "Egreso",
+            "Sale" => "Venta",
+            "CashChange" => "Cambio en efectivo",
+            "CardTender" => "Cobro con tarjeta",
+            _ => type,
+        };
+
+    private static string ShortId(Guid id) => id.ToString("N")[..8];
+
+    private static string SignedAmount(decimal amount) =>
+        amount > 0 ? $"+{amount:N2} €" : $"{amount:N2} €";
+
+    private static string ExpenseAmount(decimal amount) =>
+        amount == 0 ? SignedAmount(amount) : $"-{Math.Abs(amount):N2} €";
+
+    private static string MovementDescription(
+        CashMovementReportResponse movement,
+        ManagementOrderResponse? context
+    )
+    {
+        string description = $"{MovementLabel(movement.Type)} · {movement.OccurredAtUtc.ToLocalTime():HH:mm}";
+        if (context is not null)
+        {
+            description += $" · {(string.IsNullOrEmpty(context.TableLabel) ? context.CustomerName : context.TableLabel)}";
+        }
+        return description;
+    }
+
+    private static string ReferenceLabel(SaleResponse? sale, CashMovementReportResponse movement)
+    {
+        Guid? ticketId = sale?.Id ?? movement.SaleId;
+        if (ticketId is Guid id)
+        {
+            string payment = movement.PaymentId is Guid paymentId
+                ? $" · Pago {ShortId(paymentId)}"
+                : string.Empty;
+            return $"Ticket {ShortId(id)}{payment}";
+        }
+
+        return movement.PaymentId is Guid fallbackPaymentId
+            ? $"Pago {ShortId(fallbackPaymentId)}"
+            : $"Movimiento {ShortId(movement.Id)}";
+    }
+
+    private static string PaymentMethodLabel(string method) =>
+        method switch
+        {
+            "Card" => "Tarjeta / datáfono",
+            "Cash" => "Efectivo",
+            "Transfer" => "Transferencia",
+            _ => method,
+        };
+}
