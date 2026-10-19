@@ -8,7 +8,8 @@ else
             <label class="station-priority-field">Prioridad<input type="number" min="0" max="99" @bind="Host.stationDraft.Priority" disabled="@Host.stationDraft.IsPrimary" /></label>
             <label class="availability"><input type="checkbox" @bind="Host.stationDraft.IsPrimary" /> KDS principal</label>
             <label class="availability"><input type="checkbox" @bind="Host.stationDraft.RequiresPrimaryDispatch" disabled="@Host.stationDraft.IsPrimary" /> Requiere despacho del principal</label>
-            <button class="primary" disabled="@Host.busy">Agregar</button>
+            <label class="availability"><input type="checkbox" @bind="Host.stationDraft.PrintTicket" /> Imprime ticket</label>
+            <button class="primary" disabled="@Host.busy">Agregar KDS</button>
         </form>
     </details>
     <div class="maintenance-list">
@@ -36,6 +37,7 @@ else
                 </div>
                 <label class="availability"><input type="checkbox" checked="@item.IsPrimary" @onchange='args => Toggle(item, "IsPrimary", args)' disabled="@Host.busy" /> Principal</label>
                 <label class="availability"><input type="checkbox" checked="@item.RequiresPrimaryDispatch" @onchange='args => Toggle(item, "RequiresPrimaryDispatch", args)' disabled="@(Host.busy || item.IsPrimary)" /> Despacha principal</label>
+                <label class="availability"><input type="checkbox" checked="@item.PrintTicket" @onchange='args => Toggle(item, "PrintTicket", args)' disabled="@Host.busy" /> Imprime ticket</label>
                 <label class="availability"><input type="checkbox" checked="@item.IsActive" @onchange='args => Toggle(item, "IsActive", args)' disabled="@Host.busy" /> Activa</label>
             </article>
         }

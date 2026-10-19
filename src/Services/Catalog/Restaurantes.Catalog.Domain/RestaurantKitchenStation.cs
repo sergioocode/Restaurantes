@@ -11,7 +11,8 @@ public sealed class RestaurantKitchenStation
         bool isPrimary,
         bool requiresPrimaryDispatch,
         int priority,
-        DateTime now
+        DateTime now,
+        bool printTicket
     )
     {
         if (restaurantId == Guid.Empty)
@@ -24,6 +25,7 @@ public sealed class RestaurantKitchenStation
         Code = Category.CodeValue(code, 40);
         Name = Category.Required(name, 80);
         ConfigureDispatch(isPrimary, requiresPrimaryDispatch, priority);
+        PrintTicket = printTicket;
         IsActive = true;
         Version = 1;
         UpdatedAtUtc = now;
@@ -35,6 +37,7 @@ public sealed class RestaurantKitchenStation
     public string Name { get; private set; } = "";
     public bool IsPrimary { get; private set; }
     public bool RequiresPrimaryDispatch { get; private set; }
+    public bool PrintTicket { get; private set; }
     public int Priority { get; private set; }
     public bool IsActive { get; private set; }
     public int Version { get; private set; }
@@ -47,10 +50,20 @@ public sealed class RestaurantKitchenStation
         bool isPrimary,
         bool requiresPrimaryDispatch,
         int priority,
-        DateTime now
+        DateTime now,
+        bool printTicket = false
     )
     {
-        return new(restaurantId, code, name, isPrimary, requiresPrimaryDispatch, priority, now);
+        return new(
+            restaurantId,
+            code,
+            name,
+            isPrimary,
+            requiresPrimaryDispatch,
+            priority,
+            now,
+            printTicket
+        );
     }
 
     public void Update(
@@ -59,11 +72,13 @@ public sealed class RestaurantKitchenStation
         bool isPrimary,
         bool requiresPrimaryDispatch,
         int priority,
-        DateTime now
+        DateTime now,
+        bool printTicket = false
     )
     {
         Name = Category.Required(name, 80);
         ConfigureDispatch(isPrimary, requiresPrimaryDispatch, priority);
+        PrintTicket = printTicket;
         IsActive = isActive;
         Version++;
         UpdatedAtUtc = now;
@@ -110,6 +125,12 @@ public sealed class RestaurantKitchenStation
         }
 
         RequiresPrimaryDispatch = requiresDispatch;
+        Touch(now);
+    }
+
+    public void SetPrintTicket(bool printTicket, DateTime now)
+    {
+        PrintTicket = printTicket;
         Touch(now);
     }
 

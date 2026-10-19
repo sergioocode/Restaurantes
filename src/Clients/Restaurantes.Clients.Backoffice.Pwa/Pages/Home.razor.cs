@@ -617,7 +617,46 @@ public partial class Home
 
     private async Task RefreshStationsCore()
     {
-        stations = await Api.StationsAsync(restaurantId);
+        Dictionary<Guid, KitchenStationResponse> current = stations.ToDictionary(item => item.Id);
+        List<KitchenStationResponse> refreshed = [];
+        for (int attempt = 0; attempt < 8; attempt++)
+        {
+            refreshed = await Api.StationsAsync(restaurantId);
+            Dictionary<Guid, KitchenStationResponse> refreshedById = refreshed.ToDictionary(item =>
+                item.Id
+            );
+            bool projectionCaughtUp = current.All(pair =>
+                refreshedById.TryGetValue(pair.Key, out KitchenStationResponse? latest)
+                && latest.Version >= pair.Value.Version
+            );
+            if (projectionCaughtUp)
+            {
+                stations = refreshed;
+                return;
+            }
+
+            if (attempt < 7)
+            {
+                await Task.Delay(250);
+            }
+        }
+
+        Dictionary<Guid, KitchenStationResponse> latestStations = refreshed.ToDictionary(item =>
+            item.Id
+        );
+        foreach (KitchenStationResponse known in current.Values)
+        {
+            if (
+                !latestStations.TryGetValue(known.Id, out KitchenStationResponse? latest)
+                || known.Version > latest.Version
+            )
+            {
+                latestStations[known.Id] = known;
+            }
+        }
+        stations = latestStations.Values.ToList();
+        message =
+            "La proyección aún no refleja el último cambio; se conserva la versión más reciente disponible.";
     }
 
     private async Task RefreshTablesCore()
@@ -769,6 +808,9 @@ public partial class Home
             case nameof(KitchenStationResponse.RequiresPrimaryDispatch):
                 update.RequiresPrimaryDispatch = selected;
                 break;
+            case nameof(KitchenStationResponse.PrintTicket):
+                update.PrintTicket = selected;
+                break;
             case nameof(KitchenStationResponse.IsActive):
                 update.IsActive = selected;
                 break;
@@ -806,6 +848,7 @@ public partial class Home
             Name = source.Name,
             IsPrimary = source.IsPrimary,
             RequiresPrimaryDispatch = source.RequiresPrimaryDispatch,
+            PrintTicket = source.PrintTicket,
             Priority = source.Priority,
             IsActive = source.IsActive,
             Version = source.Version,
@@ -817,6 +860,7 @@ public partial class Home
         target.Name = source.Name;
         target.IsPrimary = source.IsPrimary;
         target.RequiresPrimaryDispatch = source.RequiresPrimaryDispatch;
+        target.PrintTicket = source.PrintTicket;
         target.Priority = source.Priority;
         target.IsActive = source.IsActive;
         target.Version = source.Version;

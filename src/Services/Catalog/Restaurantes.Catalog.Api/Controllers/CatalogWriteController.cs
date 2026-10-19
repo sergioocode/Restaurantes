@@ -310,6 +310,18 @@ public sealed class CatalogWriteController(
                 )
         );
 
+    [HttpPut("restaurants/{restaurantId:guid}/stations/{stationId:guid}/print-ticket")]
+    public Task<ActionResult<KitchenStationResponse>> SetStationPrintTicket(
+        Guid restaurantId,
+        Guid stationId,
+        [FromBody] bool printTicket,
+        CancellationToken ct
+    ) =>
+        SaveStationChangeAsync(
+            restaurantId,
+            () => service.SetStationPrintTicketAsync(restaurantId, stationId, printTicket, ct)
+        );
+
     private async Task<ActionResult<KitchenStationResponse>> SaveStationChangeAsync(
         Guid restaurantId,
         Func<Task<KitchenStationResponse?>> change

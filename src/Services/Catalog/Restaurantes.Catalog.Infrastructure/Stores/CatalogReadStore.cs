@@ -283,6 +283,7 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
                 x.Name,
                 x.IsPrimary,
                 x.RequiresPrimaryDispatch,
+                x.PrintTicket,
                 x.Priority,
                 x.IsActive,
                 x.Version,

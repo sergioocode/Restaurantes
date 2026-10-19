@@ -27,7 +27,8 @@ public sealed partial class CatalogCommandService
             request.IsPrimary,
             request.RequiresPrimaryDispatch,
             request.Priority,
-            now
+            now,
+            request.PrintTicket
         );
         if (item.IsPrimary && await store.HasOtherActivePrimaryStationAsync(restaurantId, null, ct))
         {
@@ -69,7 +70,8 @@ public sealed partial class CatalogCommandService
             request.IsPrimary,
             request.RequiresPrimaryDispatch,
             request.Priority,
-            now
+            now,
+            request.PrintTicket ?? item.PrintTicket
         );
         await SaveStationAsync(item, now, ct);
         return ToResponse(item);
@@ -129,6 +131,19 @@ public sealed partial class CatalogCommandService
             ct
         );
 
+    public Task<KitchenStationResponse?> SetStationPrintTicketAsync(
+        Guid restaurantId,
+        Guid stationId,
+        bool printTicket,
+        CancellationToken ct
+    ) =>
+        ChangeStationAsync(
+            restaurantId,
+            stationId,
+            (item, now) => item.SetPrintTicket(printTicket, now),
+            ct
+        );
+
     private async Task<KitchenStationResponse?> ChangeStationAsync(
         Guid restaurantId,
         Guid stationId,
@@ -175,7 +190,8 @@ public sealed partial class CatalogCommandService
             item.Priority,
             item.IsActive,
             item.Version,
-            now
+            now,
+            item.PrintTicket
         );
         await store.SaveWithEventAsync(item, message, ct);
     }
@@ -189,6 +205,7 @@ public sealed partial class CatalogCommandService
             item.Name,
             item.IsPrimary,
             item.RequiresPrimaryDispatch,
+            item.PrintTicket,
             item.Priority,
             item.IsActive,
             item.Version,

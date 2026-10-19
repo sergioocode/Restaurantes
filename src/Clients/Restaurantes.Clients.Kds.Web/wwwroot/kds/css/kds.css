@@ -111,6 +111,16 @@ small { color: var(--muted); }
 .history-order small { color: var(--muted); }
 .history-order p { margin: 0; }
 
+.ticket-dialog { width: min(420px, calc(100vw - 32px)); max-width: 100%; padding: 0; border: 0; border-radius: 12px; color: #202a24; box-shadow: 0 20px 60px #0005; }
+.ticket-dialog::backdrop { background: #111827aa; }
+.kitchen-ticket { padding: 24px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.kitchen-ticket h2 { margin: 0 0 8px; text-align: center; font-size: 1.15rem; }
+.kitchen-ticket p { margin: 6px 0; }
+.kitchen-ticket hr { margin: 14px 0; border: 0; border-top: 1px dashed #64736a; }
+.ticket-product { display: block; margin: 14px 0; font-size: 1.1rem; }
+.ticket-notes { white-space: pre-wrap; }
+.ticket-actions { display: flex; justify-content: center; padding: 0 24px 20px; }
+
 .product-lines { display: grid; gap: 9px; padding-left: 0; }
 .product-line { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
 .product-description { min-width: 0; }

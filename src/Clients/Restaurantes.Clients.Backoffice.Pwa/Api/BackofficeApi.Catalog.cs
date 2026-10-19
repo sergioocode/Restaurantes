@@ -68,6 +68,11 @@ public sealed partial class BackofficeApi
                 "requires-primary-dispatch",
                 selected
             ),
+            nameof(KitchenStationResponse.PrintTicket) => SetStationFieldAsync(
+                item,
+                "print-ticket",
+                selected
+            ),
             _ => throw new ArgumentOutOfRangeException(nameof(field)),
         };
 

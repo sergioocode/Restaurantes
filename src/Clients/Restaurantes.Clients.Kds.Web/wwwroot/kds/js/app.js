@@ -14,6 +14,9 @@ const refreshButton = document.querySelector('#refresh');
 const historyButton = document.querySelector('#historyButton');
 const historyPanel = document.querySelector('#historyPanel');
 const historyList = document.querySelector('#historyList');
+const ticketDialog = document.querySelector('#ticketDialog');
+const ticketContent = document.querySelector('#ticketContent');
+const closeTicketButton = document.querySelector('#closeTicket');
 const logoutButton = document.querySelector('#logout');
 const restaurantSelect = document.querySelector('#restaurantId');
 const stationSelect = document.querySelector('#stationCode');
@@ -28,6 +31,7 @@ let login;
 let selectedRestaurantId = '';
 let restaurantAccesses = [];
 let primaryStationCode = '';
+let stationConfigurations = [];
 const pendingOrders = new Map();
 let renderedOrders = [];
 let renderedView = '';
@@ -144,6 +148,7 @@ async function advanceOrder(order, action, actionButton) {
   try {
     const updatedOrder = await api.sendOrderCommand(order.id, action.path);
     pending.minimumVersion = Math.max(order.version + 1, updatedOrder.version);
+    await showTicketAfterStationCompletion(updatedOrder, action.path);
     eventText.textContent = 'Comando aceptado; actualizando el pedido…';
   } catch (error) {
     if (error.status === 409) {
@@ -160,6 +165,89 @@ async function advanceOrder(order, action, actionButton) {
     if (!pendingOrders.has(order.id)) renderer.render(renderedOrders);
     eventText.textContent += ' No se pudo actualizar el monitor: ' + error.message;
   }
+}
+
+async function showTicketAfterStationCompletion(order, path) {
+  if (!path.endsWith('/ready') && !path.endsWith('/dispatch')) return;
+  const restaurantId = selectedRestaurantId;
+  const selectedCode = stationSelect.value;
+  try {
+    stationConfigurations = await api.getStations(restaurantId);
+    if (restaurantId !== selectedRestaurantId || selectedCode !== stationSelect.value) return;
+    const selectedStation = stationConfigurations.find(station =>
+      selectedCode === primaryStationCode ? station.isPrimary : station.code === selectedCode
+    );
+    if (!selectedStation?.printTicket) return;
+    const lineId = decodeURIComponent(path.split('/').at(-2) || '');
+    const line = order.lines.find(item => item.id === lineId);
+    if (!line) return;
+    renderKitchenTicket(order, line, selectedStation, path.endsWith('/dispatch'));
+    if (!ticketDialog.open) ticketDialog.showModal();
+  } catch (error) {
+    console.warn('No se pudo mostrar el ticket KDS.', error);
+  }
+}
+
+function renderKitchenTicket(order, line, station, dispatched) {
+  ticketContent.replaceChildren();
+  const title = document.createElement('h2');
+  title.id = 'ticketTitle';
+  title.textContent = station.name;
+  const destination = document.createElement('p');
+  const tableParts = (order.tableLabel || order.customerName || 'Pedido')
+    .split(/\s+-\s+/, 2);
+  destination.textContent = tableParts.length === 2
+    ? 'Mesa: ' + tableParts[0] + ' · Zona: ' + tableParts[1]
+    : 'Destino: ' + tableParts[0];
+  const separator = document.createElement('hr');
+  const product = document.createElement('strong');
+  product.className = 'ticket-product';
+  product.textContent = line.quantity + ' × ' + line.productName
+    + (line.format ? ' · ' + line.format.replaceAll('_', ' ').toLowerCase() : '');
+  ticketContent.append(title, destination, separator, product);
+  if (line.notes?.trim()) {
+    const notes = document.createElement('p');
+    notes.className = 'ticket-notes';
+    notes.textContent = line.notes.trim();
+    ticketContent.append(notes);
+  }
+  const arrival = document.createElement('p');
+  arrival.textContent = 'Llega: ' + formatTicketTime(
+    line.preparationStartedAtUtc || order.submittedAtUtc
+  );
+  const pass = document.createElement('p');
+  pass.textContent = 'Pase: ' + formatTicketTime(
+    dispatched ? line.dispatchedAtUtc : line.readyAtUtc
+  );
+  ticketContent.append(arrival, pass);
+  if (station.isPrimary && line.preparationStartedAtUtc && line.readyAtUtc) {
+    const previousStation = order.stations.find(item =>
+      item.code === line.preparationStationCode && item.code !== station.code
+    );
+    if (previousStation) {
+      const previousTime = document.createElement('p');
+      previousTime.textContent = 'Tiempo en ' + previousStation.name + ': '
+        + formatTicketDuration(line.preparationStartedAtUtc, line.readyAtUtc);
+      ticketContent.append(previousTime);
+    }
+  }
+}
+
+function formatTicketTime(value) {
+  if (!value) return '--:--';
+  return new Intl.DateTimeFormat('es-ES', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit'
+  })
+    .format(new Date(value));
+}
+
+function formatTicketDuration(start, end) {
+  const totalSeconds = Math.max(0, Math.floor(
+    (new Date(end).getTime() - new Date(start).getTime()) / 1000
+  ));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes + ':' + String(seconds).padStart(2, '0');
 }
 
 async function recoverDelivery(order, button) {
@@ -198,6 +286,7 @@ async function loadStationsAndConnect() {
   try {
     const stations = await api.getStations(restaurantId);
     if (restaurantId !== selectedRestaurantId) return;
+    stationConfigurations = stations;
     const activeStations = stations
       .filter(item => item.isActive)
       .sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name));
@@ -382,6 +471,10 @@ historyButton.addEventListener('click', () => {
   else openHistory().catch(error => { eventText.textContent = error.message; });
 });
 logoutButton.addEventListener('click', logout);
+closeTicketButton.addEventListener('click', () => ticketDialog.close());
+ticketDialog.addEventListener('click', event => {
+  if (event.target === ticketDialog) ticketDialog.close();
+});
 restaurantSelect.addEventListener('change', () => {
   const restaurantId = restaurantSelect.value;
   if (!restaurantAccesses.some(access => access.restaurantId === restaurantId)) return;

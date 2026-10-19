@@ -54,14 +54,15 @@ input[type="checkbox"] { width: 18px; height: 18px; min-height: 18px; padding: 0
 .product-name-editor label { min-width: 0; flex: 1; }
 .product-name-save { display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; padding: 0; }
 .product-tax-select:disabled { opacity: .55; }
-.maintenance-row.station-row { grid-template-columns: 100px minmax(240px, 1fr) 150px repeat(3, max-content); }
+.maintenance-row.station-row { grid-template-columns: 100px minmax(240px, 400px) 150px repeat(4, max-content); }
 .station-field-editor { display: flex !important; align-items: end; gap: 8px !important; min-width: 0; }
 .station-field-editor label { min-width: 0; flex: 1; }
-.station-create-form { grid-template-columns: minmax(130px, .8fr) minmax(240px, 1.5fr) max-content max-content max-content minmax(140px, .8fr); }
+.station-create-form { grid-template-columns: minmax(150px, 190px) minmax(180px, 320px) max-content max-content max-content max-content max-content; }
 .station-create-form .station-priority-field { display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; }
 .station-create-form .station-priority-field input { width: 90px; }
 .station-create-form .availability { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
-@media (max-width: 1050px) { .station-create-form { grid-template-columns: minmax(110px, .8fr) minmax(180px, 1.4fr) max-content max-content max-content minmax(120px, .8fr); } }
+@media (max-width: 1050px) { .station-create-form { grid-template-columns: minmax(110px, 160px) minmax(160px, 1fr) max-content max-content; } }
+@media (max-width: 700px) { .station-create-form { grid-template-columns: 1fr; } }
 @media (max-width: 1050px) { .maintenance-row.station-row { grid-template-columns: 140px minmax(200px, 1fr) 150px; }.maintenance-row.station-row > .availability { grid-column: auto; } }
 @media (max-width: 700px) { .maintenance-row.station-row { grid-template-columns: 1fr; } }
 .product-category-group { display: grid; gap: 10px; }.product-category-group > h2 { margin: 16px 0 0; font-size: 1.1rem; }

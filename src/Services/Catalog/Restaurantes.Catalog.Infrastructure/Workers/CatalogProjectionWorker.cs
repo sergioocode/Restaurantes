@@ -262,6 +262,7 @@ public sealed class CatalogProjectionWorker(
                                 Name = e.Name,
                                 IsPrimary = e.IsPrimary,
                                 RequiresPrimaryDispatch = e.RequiresPrimaryDispatch,
+                                PrintTicket = e.PrintTicket,
                                 Priority = e.Priority,
                                 IsActive = e.IsActive,
                                 Version = e.Version,
@@ -274,6 +275,7 @@ public sealed class CatalogProjectionWorker(
                         x.Name = e.Name;
                         x.IsPrimary = e.IsPrimary;
                         x.RequiresPrimaryDispatch = e.RequiresPrimaryDispatch;
+                        x.PrintTicket = e.PrintTicket;
                         x.Priority = e.Priority;
                         x.IsActive = e.IsActive;
                         x.Version = e.Version;

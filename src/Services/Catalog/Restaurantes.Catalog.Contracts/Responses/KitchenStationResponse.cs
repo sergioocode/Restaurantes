@@ -7,6 +7,7 @@ public sealed record KitchenStationResponse(
     string Name,
     bool IsPrimary,
     bool RequiresPrimaryDispatch,
+    bool PrintTicket,
     int Priority,
     bool IsActive,
     int Version,

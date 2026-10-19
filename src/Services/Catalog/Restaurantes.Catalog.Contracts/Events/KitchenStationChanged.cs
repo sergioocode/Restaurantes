@@ -11,5 +11,6 @@ public sealed record KitchenStationChanged(
     bool IsActive,
     int Version,
     DateTime OccurredAtUtc,
+    bool PrintTicket = false,
     bool IsDeleted = false
 );
