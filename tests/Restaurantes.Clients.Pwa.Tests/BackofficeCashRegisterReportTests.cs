@@ -237,15 +237,58 @@ public sealed class BackofficeCashRegisterReportTests : BunitContext
             82m,
             82m,
             82m,
-            0m,
+            -1m,
             DateTime.UtcNow.AddHours(-1),
             "TPV Centro",
             DateTime.UtcNow,
             "TPV Centro",
-            [new CashRegisterPaymentMethodTotal("Cash", 25m)],
-            [new CashRegisterPaymentMethodExpected("Cash", 82m)],
-            [new CashRegisterPaymentMethodReconciliation("Cash", 82m, 82m, 0m)],
-            []
+            [
+                new CashRegisterPaymentMethodTotal("Cash", 25m),
+                new CashRegisterPaymentMethodTotal("Card", 15m),
+            ],
+            [
+                new CashRegisterPaymentMethodExpected("Cash", 82m),
+                new CashRegisterPaymentMethodExpected("Card", 15m),
+            ],
+            [
+                new CashRegisterPaymentMethodReconciliation("Cash", 82m, 82m, 0m),
+                new CashRegisterPaymentMethodReconciliation("Card", 15m, 14m, -1m),
+            ],
+            [
+                new(
+                    Guid.NewGuid(),
+                    "Income",
+                    "Cash",
+                    40m,
+                    "Factura #42",
+                    DateTime.UtcNow.AddMinutes(-2),
+                    "Aportación de caja",
+                    "Cajero",
+                    null
+                ),
+                new(
+                    Guid.NewGuid(),
+                    "Expense",
+                    "Cash",
+                    3m,
+                    "Material",
+                    DateTime.UtcNow.AddMinutes(-1),
+                    "Pago a proveedor",
+                    "Cajero",
+                    null
+                ),
+                new(
+                    Guid.NewGuid(),
+                    "Sale",
+                    "Card",
+                    15m,
+                    string.Empty,
+                    DateTime.UtcNow,
+                    string.Empty,
+                    "Cajero",
+                    null
+                ),
+            ]
         );
 
         await cut.InvokeAsync(async () =>
@@ -260,8 +303,167 @@ public sealed class BackofficeCashRegisterReportTests : BunitContext
         Assert.Contains("cash-register-close-ticket-preview", cut.Markup);
         Assert.Contains("Arqueo cerrado", cut.Markup);
         Assert.Contains("55,00 €", cut.Markup);
+        Assert.Contains("Factura #42", cut.Markup);
+        Assert.DoesNotContain("Aportación de caja", cut.Markup);
+        Assert.Contains("Pago a proveedor · Material", cut.Markup);
+        Assert.Contains("Tarjeta / datáfono", cut.Markup);
+        Assert.Contains("cash-register-negative", cut.Markup);
         await cut.Find("button[aria-label='Salir del ticket de cierre']").ClickAsync();
         Assert.DoesNotContain("cash-register-close-ticket-preview", cut.Markup);
+    }
+
+    [Fact]
+    public async Task Sale_ticket_renders_company_snapshot_and_order_fallback_details()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        Services.AddSingleton(
+            new BackofficeApi(
+                new HttpClient(new RecordingBackofficeHandler())
+                {
+                    BaseAddress = new Uri("https://test.local"),
+                }
+            )
+        );
+        Services.AddSingleton(
+            new Restaurantes.Clients.Backoffice.Pwa.Security.SessionAuthenticationStateProvider()
+        );
+        IRenderedComponent<BackofficeHome> cut = Render<BackofficeHome>();
+        cut.WaitForState(() => !GetField<bool>(cut.Instance, "initializing"));
+        SetField(
+            cut.Instance,
+            "restaurants",
+            new List<RestaurantResponse>
+            {
+                new()
+                {
+                    Id = restaurantId,
+                    Name = "Local Centro",
+                    Address = "Calle Mayor 1",
+                    IsActive = true,
+                    Company = new RestaurantCompanyResponse
+                    {
+                        LegalName = "Restaurantes SL",
+                        TaxId = "B12345678",
+                        FiscalAddress = "Calle Fiscal 2",
+                        Phone = "910000000",
+                        Email = "caja@example.test",
+                    },
+                },
+            }
+        );
+        SaleResponse frozenSale = new(
+            Guid.NewGuid(),
+            restaurantId,
+            "Pos",
+            "Mixed",
+            7m,
+            "Completed",
+            1,
+            DateTime.UtcNow,
+            [],
+            [
+                new SaleLineSnapshot(
+                    Guid.NewGuid(),
+                    "Café",
+                    3.5m,
+                    2,
+                    "Bebidas",
+                    "BAR",
+                    "Grande",
+                    3m,
+                    [new SaleLineExtraSnapshot(Guid.NewGuid(), "Leche", 0.5m, 1)]
+                ),
+            ],
+            1m,
+            [new SalePaymentBreakdown("Card", 1, 8m)],
+            "Promoción",
+            10m,
+            0.5m
+        );
+
+        await ShowSaleTicket(cut, frozenSale);
+
+        Assert.Contains("Restaurantes SL", cut.Markup);
+        Assert.Contains("B12345678", cut.Markup);
+        Assert.Contains("910000000", cut.Markup);
+        Assert.Contains("caja@example.test", cut.Markup);
+        Assert.Contains("Café", cut.Markup);
+        Assert.Contains("Leche", cut.Markup);
+        Assert.Contains("Descuento (10 %)", cut.Markup);
+        Assert.Contains("Medio de pago · Tarjeta / datáfono", cut.Markup);
+        Assert.Contains("Propina", cut.Markup);
+
+        Guid orderId = Guid.NewGuid();
+        SetField(
+            cut.Instance,
+            "restaurants",
+            new List<RestaurantResponse>
+            {
+                new()
+                {
+                    Id = restaurantId,
+                    Name = "Local Centro",
+                    Address = "Calle Mayor 1",
+                    IsActive = true,
+                },
+            }
+        );
+        SetField(
+            cut.Instance,
+            "historyOrders",
+            new List<ManagementOrderResponse>
+            {
+                new(
+                    orderId,
+                    restaurantId,
+                    "Mesa 4",
+                    "Cliente",
+                    "Pos",
+                    "Completed",
+                    12m,
+                    DateTime.UtcNow,
+                    DateTimeOffset.Now,
+                    "Cash",
+                    null,
+                    [
+                        new ManagementOrderLineResponse(
+                            "Tostada",
+                            2,
+                            6m,
+                            "Delivered",
+                            "Media",
+                            5m,
+                            [new ManagementOrderExtraResponse(Guid.NewGuid(), "Tomate", 1m, 1)]
+                        ),
+                        new ManagementOrderLineResponse("Cancelado", 1, 9m, "Cancelled"),
+                    ],
+                    3
+                ),
+            }
+        );
+        SaleResponse legacySale = frozenSale with
+        {
+            Id = Guid.NewGuid(),
+            PaymentMethod = "Mixed",
+            OrderIds = [orderId],
+            Lines = [],
+            PaymentMethods = null,
+            DiscountAmount = 0m,
+            TipTotal = 0m,
+        };
+
+        await ShowSaleTicket(cut, legacySale);
+
+        Assert.Contains("Calle Mayor 1", cut.Markup);
+        Assert.Contains("Mesa 4", cut.Markup);
+        Assert.Contains("Comensales: 3", cut.Markup);
+        Assert.Contains("Tostada", cut.Markup);
+        Assert.Contains("Tomate", cut.Markup);
+        Assert.DoesNotContain("Cancelado", cut.Markup);
+        Assert.Contains("Sin desglose disponible", cut.Markup);
+        Assert.DoesNotContain("Propina", cut.Markup);
+        await cut.Find("button[aria-label='Cerrar ticket de venta']").ClickAsync();
+        Assert.DoesNotContain("sales-receipt", cut.Markup);
     }
 
     [Fact]
@@ -456,6 +658,18 @@ public sealed class BackofficeCashRegisterReportTests : BunitContext
             .GetType()
             .GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!
             .SetValue(component, value);
+
+    private static async Task ShowSaleTicket(
+        IRenderedComponent<BackofficeHome> cut,
+        SaleResponse sale
+    )
+    {
+        MethodInfo show = typeof(BackofficeHome).GetMethod(
+            "ShowSaleTicket",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        )!;
+        await cut.InvokeAsync(async () => await (Task)show.Invoke(cut.Instance, [sale])!);
+    }
 
     private static T GetField<T>(object component, string name) =>
         (T)
