@@ -19,5 +19,7 @@
     <ProjectReference Include="..\..\src\Clients\Restaurantes.Clients.Dashboard.Web\Restaurantes.Clients.Dashboard.Web.csproj" />
     <ProjectReference Include="..\..\src\Clients\Restaurantes.Clients.Kds.Web\Restaurantes.Clients.Kds.Web.csproj" />
     <ProjectReference Include="..\..\src\Services\Integrations\Restaurantes.Integrations.Api\Restaurantes.Integrations.Api.csproj" />
+    <ProjectReference Include="..\..\src\Services\Dining\Restaurantes.Dining.Application\Restaurantes.Dining.Application.csproj" />
+    <ProjectReference Include="..\..\src\Services\RestaurantOperations\Restaurantes.RestaurantOperations.Application\Restaurantes.RestaurantOperations.Application.csproj" />
   </ItemGroup>
 </Project>
