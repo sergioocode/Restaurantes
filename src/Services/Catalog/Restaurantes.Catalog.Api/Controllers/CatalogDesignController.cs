@@ -17,10 +17,14 @@ public sealed class CatalogDesignController(
     CatalogNotifications notifications
 ) : ControllerBase
 {
+    private const string LocalChannel = "LOCAL";
+    private const string PortionFormat = "RACION";
+    private const string ChoiceGroupKind = "Choice";
+    private const string ExtraGroupKind = "Extra";
     private static readonly HashSet<string> Formats =
     [
         "PLATO",
-        "RACION",
+        PortionFormat,
         "TAPA",
         "MEDIA_RACION",
         "UNIDAD",
@@ -30,7 +34,7 @@ public sealed class CatalogDesignController(
         "EXTRA",
         "COMBO",
     ];
-    private static readonly HashSet<string> Channels = ["LOCAL", "DELIVERY", "GLOVO", "UBER"];
+    private static readonly HashSet<string> Channels = [LocalChannel, "DELIVERY", "GLOVO", "UBER"];
 
     private bool CanManageGlobal() =>
         User.HasAnyRestaurantPermission(RestaurantPermissions.CatalogGlobalManage);
@@ -219,32 +223,32 @@ public sealed class CatalogDesignController(
             return Forbid();
         if (!await db.Products.AnyAsync(x => x.Id == productId, ct))
             return NotFound();
-        if (input.IsCombo && !input.Groups.Any(g => g.Kind == "Choice"))
-            return BadRequest("Un combo necesita al menos un grupo de elección.");
-        if (
-            (!input.IsCombo && input.AllowsExtras)
-            || (input.IsCombo && !input.AllowsExtras && input.Groups.Any(g => g.Kind == "Extra"))
-        )
-            return BadRequest("Activa 'Permite extras' para añadir extras a un combo.");
-        if (
-            input.Groups.Any(g =>
-                !ValidName(g.Name)
-                || g.Kind is not ("Choice" or "Extra")
-                || g.MinSelections < 0
-                || g.MaxSelections < 1
-                || g.MinSelections > g.MaxSelections
-                || g.MaxSelections > g.ProductIds.Distinct().Count()
-                || g.ProductIds.Contains(productId)
-                || (g.Kind == "Choice" && (g.MinSelections != 1 || g.MaxSelections != 1))
-                || (!input.IsCombo && g.Kind == "Choice")
-            )
-        )
-            return BadRequest("Configuración de grupos inválida.");
+        string? validationError = await ValidateDefinitionAsync(productId, input, ct);
+        if (validationError is not null)
+            return BadRequest(validationError);
+
+        await PersistDefinitionAsync(productId, input, ct);
+        return NoContent();
+    }
+
+    private async Task<string?> ValidateDefinitionAsync(
+        Guid productId,
+        DefinitionInput input,
+        CancellationToken ct
+    )
+    {
+        if (input.IsCombo && !input.Groups.Any(g => g.Kind == ChoiceGroupKind))
+            return "Un combo necesita al menos un grupo de elección.";
+        if (HasInvalidExtraConfiguration(input))
+            return "Activa 'Permite extras' para añadir extras a un combo.";
+        if (input.Groups.Any(group => !IsValidDefinitionGroup(productId, input.IsCombo, group)))
+            return "Configuración de grupos inválida.";
+
         Guid[] optionIds = input.Groups.SelectMany(g => g.ProductIds).Distinct().ToArray();
         if (await db.Products.CountAsync(x => optionIds.Contains(x.Id), ct) != optionIds.Length)
-            return BadRequest("Alguna opción no existe.");
+            return "Alguna opción no existe.";
         Guid[] extraIds = input
-            .Groups.Where(x => x.Kind == "Extra")
+            .Groups.Where(x => x.Kind == ExtraGroupKind)
             .SelectMany(x => x.ProductIds)
             .Distinct()
             .ToArray();
@@ -257,20 +261,54 @@ public sealed class CatalogDesignController(
                 ct
             ) != extraIds.Length
         )
-            return BadRequest("Todos los extras necesitan un impuesto.");
+            return "Todos los extras necesitan un impuesto.";
         if (
             await db.Prices.CountAsync(
                 x =>
                     extraIds.Contains(x.ProductId)
                     && x.RestaurantId == Guid.Empty
-                    && x.Channel == "LOCAL"
-                    && x.Format == "RACION",
+                    && x.Channel == LocalChannel
+                    && x.Format == PortionFormat,
                 ct
             ) != extraIds.Length
         )
-            return BadRequest(
-                "Todos los extras necesitan un precio predeterminado de formato RACION."
+            return "Todos los extras necesitan un precio predeterminado de formato RACION.";
+
+        return null;
+    }
+
+    private static bool HasInvalidExtraConfiguration(DefinitionInput input)
+    {
+        return (!input.IsCombo && input.AllowsExtras)
+            || (
+                input.IsCombo
+                && !input.AllowsExtras
+                && input.Groups.Any(group => group.Kind == ExtraGroupKind)
             );
+    }
+
+    private static bool IsValidDefinitionGroup(Guid productId, bool isCombo, GroupInput group)
+    {
+        return ValidName(group.Name)
+            && group.Kind is ChoiceGroupKind or ExtraGroupKind
+            && group.MinSelections >= 0
+            && group.MaxSelections >= 1
+            && group.MinSelections <= group.MaxSelections
+            && group.MaxSelections <= group.ProductIds.Distinct().Count()
+            && !group.ProductIds.Contains(productId)
+            && (
+                group.Kind != ChoiceGroupKind
+                || group.MinSelections == 1 && group.MaxSelections == 1
+            )
+            && (isCombo || group.Kind != ChoiceGroupKind);
+    }
+
+    private async Task PersistDefinitionAsync(
+        Guid productId,
+        DefinitionInput input,
+        CancellationToken ct
+    )
+    {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         ProductConfiguration? configuration = await db.ProductConfigurations.FindAsync(
             [productId],
@@ -330,7 +368,6 @@ public sealed class CatalogDesignController(
         await db.SaveChangesAsync(ct);
         await synchronizer.SyncAffectedMenus(Guid.Empty, ct);
         await transaction.CommitAsync(ct);
-        return NoContent();
     }
 
     [HttpPut("products/{productId:guid}/prices/{restaurantId:guid}")]
@@ -349,17 +386,33 @@ public sealed class CatalogDesignController(
             .Products.Where(p => p.Id == productId)
             .Join(db.Categories, p => p.CategoryId, c => c.Id, (p, c) => c.Code)
             .AnyAsync(code => code == "EXTRAS" || code == "EXTRA", ct);
-        if (
-            input.Any(x =>
-                !Channels.Contains(x.Channel)
-                || !Formats.Contains(x.Format)
-                || (isExtra && x.Format != "RACION")
-                || x.Amount < 0
-                || x.Amount > 9999999999m
-            )
-            || input.Select(x => (x.Channel, x.Format)).Distinct().Count() != input.Count
-        )
+        if (HasInvalidPrices(input, isExtra))
             return BadRequest("Precios, formatos o canales inválidos o duplicados.");
+
+        await PersistPricesAsync(productId, restaurantId, input, ct);
+        return NoContent();
+    }
+
+    private static bool HasInvalidPrices(List<PriceInput> input, bool isExtra)
+    {
+        return input.Any(price =>
+                !Channels.Contains(price.Channel)
+                || !Formats.Contains(price.Format)
+                || (isExtra && price.Format != PortionFormat)
+                || price.Amount < 0
+                || price.Amount > 9999999999m
+            )
+            || input.Select(price => (price.Channel, price.Format)).Distinct().Count()
+                != input.Count;
+    }
+
+    private async Task PersistPricesAsync(
+        Guid productId,
+        Guid restaurantId,
+        List<PriceInput> input,
+        CancellationToken ct
+    )
+    {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await db
             .Prices.Where(x => x.ProductId == productId && x.RestaurantId == restaurantId)
@@ -374,6 +427,19 @@ public sealed class CatalogDesignController(
                 Amount = x.Amount,
             })
         );
+        await UpdateDefaultMenuAsync(productId, input, ct);
+        await db.SaveChangesAsync(ct);
+        await synchronizer.SyncAffectedMenus(Guid.Empty, ct);
+        await transaction.CommitAsync(ct);
+        await notifications.MenuChanged(Guid.Empty);
+    }
+
+    private async Task UpdateDefaultMenuAsync(
+        Guid productId,
+        List<PriceInput> input,
+        CancellationToken ct
+    )
+    {
         CatalogMenu? defaultMenu = await db.CatalogMenus.FirstOrDefaultAsync(
             x => x.RestaurantId == Guid.Empty,
             ct
@@ -405,13 +471,9 @@ public sealed class CatalogDesignController(
             ct
         );
         string? initialFormat = input
-            .Where(x => x.Channel == "LOCAL")
-            .OrderBy(x =>
-                x.Format == "PLATO" ? 0
-                : x.Format == "RACION" ? 1
-                : 2
-            )
-            .Select(x => x.Format)
+            .Where(price => price.Channel == LocalChannel)
+            .OrderBy(price => GetInitialFormatPriority(price.Format))
+            .Select(price => price.Format)
             .FirstOrDefault();
         if (initialFormat is not null)
         {
@@ -428,17 +490,24 @@ public sealed class CatalogDesignController(
                 };
                 db.CatalogMenuEntries.Add(defaultEntry);
             }
-            if (!input.Any(x => x.Channel == "LOCAL" && x.Format == defaultEntry.DefaultFormat))
+            if (
+                !input.Any(price =>
+                    price.Channel == LocalChannel && price.Format == defaultEntry.DefaultFormat
+                )
+            )
                 defaultEntry.DefaultFormat = initialFormat;
         }
         else if (defaultEntry is not null)
             db.CatalogMenuEntries.Remove(defaultEntry);
-        await db.SaveChangesAsync(ct);
-        await synchronizer.SyncAffectedMenus(Guid.Empty, ct);
-        await transaction.CommitAsync(ct);
-        await notifications.MenuChanged(Guid.Empty);
-        return NoContent();
     }
+
+    private static int GetInitialFormatPriority(string format) =>
+        format switch
+        {
+            "PLATO" => 0,
+            PortionFormat => 1,
+            _ => 2,
+        };
 
     [HttpPut("restaurants/{restaurantId:guid}/products/{productId:guid}/availability")]
     public async Task<IActionResult> SetLocalAvailability(

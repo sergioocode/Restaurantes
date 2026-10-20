@@ -60,6 +60,22 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
         if (menu is null)
             return [];
 
+        MenuProjectionData data = await LoadMenuProjectionDataAsync(
+            restaurantId,
+            menu.Id,
+            channel,
+            ct
+        );
+        return BuildMenuItems(data);
+    }
+
+    private async Task<MenuProjectionData> LoadMenuProjectionDataAsync(
+        Guid restaurantId,
+        Guid menuId,
+        CatalogClientChannel channel,
+        CancellationToken ct
+    )
+    {
         Guid[] enabledProductIds = await writeDb
             .RestaurantProductAvailabilities.AsNoTracking()
             .Where(x => x.RestaurantId == restaurantId && x.IsAvailable)
@@ -67,13 +83,13 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
             .ToArrayAsync(ct);
         CatalogMenuEntry[] entries = await writeDb
             .CatalogMenuEntries.AsNoTracking()
-            .Where(x => x.MenuId == menu.Id && enabledProductIds.Contains(x.ProductId))
+            .Where(x => x.MenuId == menuId && enabledProductIds.Contains(x.ProductId))
             .OrderBy(x => x.SortOrder)
             .ToArrayAsync(ct);
         Guid[] ids = entries.Select(x => x.ProductId).ToArray();
         CatalogMenuPrice[] prices = await writeDb
             .CatalogMenuPrices.AsNoTracking()
-            .Where(x => x.MenuId == menu.Id && x.Channel == "LOCAL" && ids.Contains(x.ProductId))
+            .Where(x => x.MenuId == menuId && x.Channel == "LOCAL" && ids.Contains(x.ProductId))
             .ToArrayAsync(ct);
         var photos = await writeDb
             .ProductPhotos.AsNoTracking()
@@ -136,15 +152,40 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
                 : await writeDb
                     .CatalogMenuPrices.AsNoTracking()
                     .Where(x =>
-                        x.MenuId == menu.Id
+                        x.MenuId == menuId
                         && x.Channel == "LOCAL"
                         && x.Format == "RACION"
                         && extraIds.Contains(x.ProductId)
                     )
                     .ToArrayAsync(ct);
         var extraPriceByProduct = extraPrices.ToDictionary(x => x.ProductId, x => x.Amount);
-        Dictionary<Guid, ProductExtraGroup[]> extraGroupsByParent = groups
-            .GroupBy(x => x.ParentProductId)
+        Dictionary<Guid, ProductExtraGroup[]> extraGroupsByParent = BuildExtraGroups(
+            groups,
+            options,
+            extraProducts,
+            extraPriceByProduct
+        );
+        return new MenuProjectionData(
+            restaurantId,
+            entries,
+            prices,
+            products,
+            categories,
+            stations,
+            photos,
+            extraGroupsByParent
+        );
+    }
+
+    private static Dictionary<Guid, ProductExtraGroup[]> BuildExtraGroups(
+        ProductOptionGroup[] groups,
+        ProductOption[] options,
+        Dictionary<Guid, ProductReadModel> extraProducts,
+        Dictionary<Guid, decimal> extraPriceByProduct
+    )
+    {
+        return groups
+            .GroupBy(group => group.ParentProductId)
             .ToDictionary(
                 parent => parent.Key,
                 parent =>
@@ -152,12 +193,10 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
                         .Select(group =>
                         {
                             ProductExtraOption[] groupOptions = options
-                                .Where(x => x.GroupId == group.Id)
-                                .OrderBy(x => x.SortOrder)
-                                .Where(option =>
-                                    extraProducts.ContainsKey(option.ProductId)
-                                    && extraPriceByProduct.ContainsKey(option.ProductId)
-                                )
+                                .Where(option => option.GroupId == group.Id)
+                                .Where(option => extraProducts.ContainsKey(option.ProductId))
+                                .Where(option => extraPriceByProduct.ContainsKey(option.ProductId))
+                                .OrderBy(option => option.SortOrder)
                                 .Select(option =>
                                 {
                                     ProductReadModel extra = extraProducts[option.ProductId];
@@ -180,57 +219,80 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
                         .Where(group => group.Options.Count > 0)
                         .ToArray()
             );
+    }
+
+    private static List<MenuItemResponse> BuildMenuItems(MenuProjectionData data)
+    {
         List<MenuItemResponse> result = [];
-        foreach (CatalogMenuEntry entry in entries)
+        foreach (CatalogMenuEntry entry in data.Entries)
         {
             if (
-                !products.TryGetValue(entry.ProductId, out var product)
-                || !categories.TryGetValue(product.CategoryId, out var category)
+                !data.Products.TryGetValue(entry.ProductId, out ProductReadModel? product)
+                || !data.Categories.TryGetValue(product.CategoryId, out CategoryReadModel? category)
             )
                 continue;
-            CatalogMenuPrice? price = prices.FirstOrDefault(x =>
+            CatalogMenuPrice? price = data.Prices.FirstOrDefault(x =>
                 x.ProductId == entry.ProductId && x.Format == entry.DefaultFormat
             );
             if (price is null)
                 continue;
-            stations.TryGetValue(entry.ProductId, out var station);
-            photos.TryGetValue(entry.ProductId, out var photo);
-            string photoRoot = photo is null ? "" : $"/api/catalog/products/{product.Id}/photos/";
-            string photoVersion = photo is null ? "" : $"?v={photo.Revision}";
-            result.Add(
-                new MenuItemResponse(
-                    restaurantId,
-                    product.Id,
-                    product.Sku,
-                    product.Name,
-                    category.Id,
-                    category.Code,
-                    category.Name,
-                    price.Amount,
-                    true,
-                    category.RequiresKds
-                        ? station?.PreparationStationCode ?? category.DefaultStationCode
-                        : "",
-                    category.RequiresKds
-                        ? station?.PreparationStationName ?? category.DefaultStationName
-                        : "",
-                    product.Version,
-                    product.UpdatedAtUtc,
-                    entry.DefaultFormat,
-                    photo is null ? "" : $"{photoRoot}thumbnail{photoVersion}",
-                    photo is null ? "" : $"{photoRoot}card{photoVersion}",
-                    photo is null ? "" : $"{photoRoot}detail{photoVersion}",
-                    extraGroupsByParent.GetValueOrDefault(product.Id, []),
-                    prices
-                        .Where(x => x.ProductId == product.Id)
-                        .Select(x => new MenuItemFormatPrice(x.Format, x.Amount))
-                        .ToArray(),
-                    category.RequiresKds
-                )
-            );
+            result.Add(CreateMenuItemResponse(data, entry, product, category, price));
         }
         return result;
     }
+
+    private static MenuItemResponse CreateMenuItemResponse(
+        MenuProjectionData data,
+        CatalogMenuEntry entry,
+        ProductReadModel product,
+        CategoryReadModel category,
+        CatalogMenuPrice price
+    )
+    {
+        data.Stations.TryGetValue(entry.ProductId, out MenuItemReadModel? station);
+        data.Photos.TryGetValue(entry.ProductId, out ProductPhoto? photo);
+        string photoRoot = photo is null ? "" : $"/api/catalog/products/{product.Id}/photos/";
+        string photoVersion = photo is null ? "" : $"?v={photo.Revision}";
+        return new MenuItemResponse(
+            data.RestaurantId,
+            product.Id,
+            product.Sku,
+            product.Name,
+            category.Id,
+            category.Code,
+            category.Name,
+            price.Amount,
+            true,
+            category.RequiresKds
+                ? station?.PreparationStationCode ?? category.DefaultStationCode
+                : "",
+            category.RequiresKds
+                ? station?.PreparationStationName ?? category.DefaultStationName
+                : "",
+            product.Version,
+            product.UpdatedAtUtc,
+            entry.DefaultFormat,
+            photo is null ? "" : $"{photoRoot}thumbnail{photoVersion}",
+            photo is null ? "" : $"{photoRoot}card{photoVersion}",
+            photo is null ? "" : $"{photoRoot}detail{photoVersion}",
+            data.ExtraGroupsByParent.GetValueOrDefault(product.Id, []),
+            data.Prices.Where(itemPrice => itemPrice.ProductId == product.Id)
+                .Select(itemPrice => new MenuItemFormatPrice(itemPrice.Format, itemPrice.Amount))
+                .ToArray(),
+            category.RequiresKds
+        );
+    }
+
+    private sealed record MenuProjectionData(
+        Guid RestaurantId,
+        CatalogMenuEntry[] Entries,
+        CatalogMenuPrice[] Prices,
+        Dictionary<Guid, ProductReadModel> Products,
+        Dictionary<Guid, CategoryReadModel> Categories,
+        Dictionary<Guid, MenuItemReadModel> Stations,
+        Dictionary<Guid, ProductPhoto> Photos,
+        Dictionary<Guid, ProductExtraGroup[]> ExtraGroupsByParent
+    );
 
     public async Task<IReadOnlyList<MenuItemResponse>> ListMenuConfigurationAsync(
         Guid restaurantId,
