@@ -187,6 +187,169 @@ public sealed class SaleCommandServiceTests
         Assert.Single(store.Sales);
     }
 
+    [Fact]
+    public async Task Refund_marks_the_matching_sale_order_unpaid_and_is_idempotent()
+    {
+        Guid orderId = Guid.NewGuid();
+        SaleOrder order = new()
+        {
+            OrderId = orderId,
+            IsPaid = true,
+            Amount = 12m,
+        };
+        Sale sale = new() { Orders = [order] };
+        InMemorySaleStore store = new();
+        store.Sales.Add(sale);
+        SaleCommandService service = new(store, TimeProvider.System);
+        Guid messageId = Guid.NewGuid();
+        PaymentRefunded refund = new(
+            Guid.NewGuid(),
+            orderId,
+            Guid.NewGuid(),
+            12m,
+            "Card",
+            "DineIn",
+            "Pos",
+            "Customer request",
+            DateTime.UtcNow
+        );
+
+        await service.ProcessAsync(messageId, refund, TestContext.Current.CancellationToken);
+        await service.ProcessAsync(messageId, refund, TestContext.Current.CancellationToken);
+
+        Assert.False(order.IsPaid);
+        Assert.Equal("Pending", sale.Status);
+    }
+
+    [Fact]
+    public async Task Delivered_event_updates_existing_order_and_filters_cancelled_lines()
+    {
+        Guid orderId = Guid.NewGuid();
+        DateTime deliveredAt = DateTime.UtcNow;
+        SaleOrder order = new() { OrderId = orderId };
+        InMemorySaleStore store = new();
+        store.Sales.Add(new Sale { Orders = [order] });
+        SaleCommandService service = new(store, TimeProvider.System);
+        Restaurantes.Orders.Contracts.Events.OrderDelivered delivered = new(
+            orderId,
+            Guid.NewGuid(),
+            null,
+            null,
+            null,
+            "",
+            "",
+            "DineIn",
+            "Pos",
+            "AtCheckout",
+            1,
+            deliveredAt,
+            deliveredAt,
+            deliveredAt,
+            deliveredAt,
+            deliveredAt,
+            [
+                new Restaurantes.Orders.Contracts.Events.OrderLineSnapshot(
+                    Guid.NewGuid(),
+                    Guid.NewGuid(),
+                    "Soup",
+                    5m,
+                    2,
+                    "",
+                    null,
+                    "",
+                    "",
+                    "",
+                    Extras:
+                    [
+                        new Restaurantes.Orders.Contracts.Events.OrderLineExtraSnapshot(
+                            Guid.NewGuid(),
+                            "Bread",
+                            1m,
+                            1,
+                            0.1m
+                        ),
+                    ]
+                ),
+                new Restaurantes.Orders.Contracts.Events.OrderLineSnapshot(
+                    Guid.NewGuid(),
+                    Guid.NewGuid(),
+                    "Cancelled soup",
+                    9m,
+                    1,
+                    "",
+                    null,
+                    "",
+                    "",
+                    "",
+                    Status: "Cancelled"
+                ),
+            ],
+            []
+        );
+
+        await service.ProcessAsync(
+            Guid.NewGuid(),
+            delivered,
+            TestContext.Current.CancellationToken
+        );
+
+        Assert.True(order.IsDelivered);
+        Assert.Equal(deliveredAt, order.DeliveredAtUtc);
+        SaleLineSnapshot snapshot = Assert.Single(
+            System.Text.Json.JsonSerializer.Deserialize<List<SaleLineSnapshot>>(order.LinesJson)!
+        );
+        Assert.Equal("Soup", snapshot.ProductName);
+        Assert.Equal("Bread", Assert.Single(snapshot.Extras!).ProductName);
+    }
+
+    [Fact]
+    public async Task Payments_for_one_sale_reject_different_business_dates()
+    {
+        InMemorySaleStore store = new();
+        SaleCommandService service = new(store, TimeProvider.System);
+        Guid orderId = Guid.NewGuid();
+        Guid restaurantId = Guid.NewGuid();
+        Guid accountId = Guid.NewGuid();
+        PaymentCaptured firstPayment = Captured(
+            orderId,
+            restaurantId,
+            accountId,
+            3m,
+            3m,
+            false,
+            "Cash"
+        ) with
+        {
+            BusinessDate = new DateOnly(2026, 10, 20),
+        };
+        PaymentCaptured secondPayment = Captured(
+            orderId,
+            restaurantId,
+            accountId,
+            7m,
+            10m,
+            true,
+            "Cash"
+        ) with
+        {
+            BusinessDate = new DateOnly(2026, 10, 21),
+        };
+
+        await service.ProcessAsync(
+            Guid.NewGuid(),
+            firstPayment,
+            TestContext.Current.CancellationToken
+        );
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.ProcessAsync(
+                Guid.NewGuid(),
+                secondPayment,
+                TestContext.Current.CancellationToken
+            )
+        );
+    }
+
     private static PaymentCaptured Captured(
         Guid orderId,
         Guid restaurantId,
