@@ -8,11 +8,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.4" />
     <PackageReference Include="coverlet.MTP" Version="10.1.0" PrivateAssets="all" />
     <PackageReference Include="xunit.v3.mtp-v2" Version="4.0.1" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\Orders\Restaurantes.Orders.Domain\Restaurantes.Orders.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Services\Orders\Restaurantes.Orders.Infrastructure\Restaurantes.Orders.Infrastructure.csproj" />
   </ItemGroup>
 </Project>
