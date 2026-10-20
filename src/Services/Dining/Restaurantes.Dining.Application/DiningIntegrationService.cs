@@ -326,105 +326,119 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
         string status
     )
     {
-        Guid orderId;
-        DateTime occurredAtUtc;
-        if (status == "Paid")
+        PaymentUpdate? payment = ReadPaymentUpdate(body, status);
+        if (payment is null)
         {
-            PaymentCaptured e =
-                JsonSerializer.Deserialize<PaymentCaptured>(body.Span)
-                ?? throw new JsonException("PaymentCaptured is empty.");
-            if (e.ServiceMode == "Takeaway")
-            {
-                return;
-            }
-            orderId = e.OrderId;
-            occurredAtUtc = e.CapturedAtUtc;
-        }
-        else
-        {
-            PaymentRefunded e =
-                JsonSerializer.Deserialize<PaymentRefunded>(body.Span)
-                ?? throw new JsonException("PaymentRefunded is empty.");
-            if (e.ServiceMode == "Takeaway")
-            {
-                return;
-            }
-            orderId = e.OrderId;
-            occurredAtUtc = e.RefundedAtUtc;
-        }
-
-        DiningSessionOrder? order = await db.FindOrderAsync(orderId);
-        if (order is not null)
-        {
-            PaymentCaptured? capture =
-                status == "Paid" ? JsonSerializer.Deserialize<PaymentCaptured>(body.Span) : null;
-            DiningSession? session = await db.FindSessionWithOrdersAsync(
-                order.DiningSessionId,
-                CancellationToken.None
-            );
-            decimal chargeableAmount = session?.ChargeableAmount(order) ?? order.Amount;
-            decimal amountPaid =
-                status == "Paid"
-                    ? capture?.AmountPaid is > 0
-                        ? capture.AmountPaid
-                        : order.Amount
-                    : 0;
-            order.AmountPaid = amountPaid;
-            order.TipPaid =
-                status == "Paid"
-                    ? capture is { TipAmountPaid: > 0 }
-                        ? capture.TipAmountPaid
-                        : order.TipPaid + (capture?.TipAmount ?? 0)
-                    : 0;
-            order.PaymentStatus =
-                status == "Refunded" ? status
-                : order.AmountPaid >= chargeableAmount ? "Paid"
-                : "PartiallyPaid";
-            order.UpdatedAtUtc = occurredAtUtc;
             return;
         }
-        DiningPendingPayment? pending = await db.FindPendingPaymentAsync(orderId);
+
+        DiningSessionOrder? order = await db.FindOrderAsync(payment.OrderId);
+        if (order is not null)
+        {
+            await ApplyPaymentToOrderAsync(db, order, payment);
+            return;
+        }
+
+        await ApplyPaymentToPendingAsync(db, payment);
+    }
+
+    private static PaymentUpdate? ReadPaymentUpdate(ReadOnlyMemory<byte> body, string status)
+    {
+        if (status == "Paid")
+        {
+            PaymentCaptured capture =
+                JsonSerializer.Deserialize<PaymentCaptured>(body.Span)
+                ?? throw new JsonException("PaymentCaptured is empty.");
+            return capture.ServiceMode == "Takeaway"
+                ? null
+                : new PaymentUpdate(status, capture.OrderId, capture.CapturedAtUtc, capture);
+        }
+
+        PaymentRefunded refund =
+            JsonSerializer.Deserialize<PaymentRefunded>(body.Span)
+            ?? throw new JsonException("PaymentRefunded is empty.");
+        return refund.ServiceMode == "Takeaway"
+            ? null
+            : new PaymentUpdate(status, refund.OrderId, refund.RefundedAtUtc, null);
+    }
+
+    private static async Task ApplyPaymentToOrderAsync(
+        IDiningStore db,
+        DiningSessionOrder order,
+        PaymentUpdate payment
+    )
+    {
+        DiningSession? session = await db.FindSessionWithOrdersAsync(
+            order.DiningSessionId,
+            CancellationToken.None
+        );
+        decimal chargeableAmount = session?.ChargeableAmount(order) ?? order.Amount;
+        order.AmountPaid = payment.Status == "Paid" ? PaidAmount(payment.Capture, order.Amount) : 0;
+        order.TipPaid =
+            payment.Status == "Paid" ? CumulativeTip(payment.Capture, order.TipPaid) : 0;
+        order.PaymentStatus =
+            payment.Status == "Refunded" ? payment.Status
+            : order.AmountPaid >= chargeableAmount ? "Paid"
+            : "PartiallyPaid";
+        order.UpdatedAtUtc = payment.OccurredAtUtc;
+    }
+
+    private static async Task ApplyPaymentToPendingAsync(IDiningStore db, PaymentUpdate payment)
+    {
+        DiningPendingPayment? pending = await db.FindPendingPaymentAsync(payment.OrderId);
         if (pending is null)
         {
-            db.Add(
-                new DiningPendingPayment
-                {
-                    OrderId = orderId,
-                    Status = status,
-                    AmountPaid =
-                        status == "Paid"
-                            ? JsonSerializer.Deserialize<PaymentCaptured>(body.Span)?.AmountPaid
-                                ?? 0
-                            : 0,
-                    TipPaid = status == "Paid" ? ReadCumulativeTip(body) : 0,
-                    UpdatedAtUtc = occurredAtUtc,
-                }
-            );
+            db.Add(CreatePendingPayment(payment));
+            return;
+        }
+
+        UpdatePendingPayment(pending, payment);
+    }
+
+    private static DiningPendingPayment CreatePendingPayment(PaymentUpdate payment)
+    {
+        return new DiningPendingPayment
+        {
+            OrderId = payment.OrderId,
+            Status = payment.Status,
+            AmountPaid = payment.Status == "Paid" ? payment.Capture?.AmountPaid ?? 0 : 0,
+            TipPaid = payment.Status == "Paid" ? CumulativeTip(payment.Capture, 0) : 0,
+            UpdatedAtUtc = payment.OccurredAtUtc,
+        };
+    }
+
+    private static void UpdatePendingPayment(DiningPendingPayment pending, PaymentUpdate payment)
+    {
+        pending.Status = payment.Status;
+        if (payment.Status == "Paid")
+        {
+            pending.AmountPaid = payment.Capture?.AmountPaid ?? 0;
+            pending.TipPaid = CumulativeTip(payment.Capture, pending.TipPaid);
         }
         else
         {
-            pending.Status = status;
-            if (status == "Paid")
-            {
-                pending.AmountPaid =
-                    JsonSerializer.Deserialize<PaymentCaptured>(body.Span)?.AmountPaid ?? 0;
-                PaymentCaptured? capture = JsonSerializer.Deserialize<PaymentCaptured>(body.Span);
-                pending.TipPaid = capture is { TipAmountPaid: > 0 }
-                    ? capture.TipAmountPaid
-                    : pending.TipPaid + (capture?.TipAmount ?? 0);
-            }
-            else
-            {
-                pending.AmountPaid = 0;
-                pending.TipPaid = 0;
-            }
-            pending.UpdatedAtUtc = occurredAtUtc;
+            pending.AmountPaid = 0;
+            pending.TipPaid = 0;
         }
+        pending.UpdatedAtUtc = payment.OccurredAtUtc;
     }
 
-    private static decimal ReadCumulativeTip(ReadOnlyMemory<byte> body)
+    private static decimal PaidAmount(PaymentCaptured? capture, decimal fallbackAmount)
     {
-        PaymentCaptured? capture = JsonSerializer.Deserialize<PaymentCaptured>(body.Span);
-        return capture is { TipAmountPaid: > 0 } ? capture.TipAmountPaid : capture?.TipAmount ?? 0;
+        return capture?.AmountPaid is > 0 ? capture.AmountPaid : fallbackAmount;
     }
+
+    private static decimal CumulativeTip(PaymentCaptured? capture, decimal previousTip)
+    {
+        return capture is { TipAmountPaid: > 0 }
+            ? capture.TipAmountPaid
+            : previousTip + (capture?.TipAmount ?? 0);
+    }
+
+    private sealed record PaymentUpdate(
+        string Status,
+        Guid OrderId,
+        DateTime OccurredAtUtc,
+        PaymentCaptured? Capture
+    );
 }

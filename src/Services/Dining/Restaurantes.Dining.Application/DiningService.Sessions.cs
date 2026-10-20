@@ -216,6 +216,22 @@ public sealed partial class DiningService
             return DiningResults.Forbid();
         }
 
+        DiningResult? releaseValidation = ValidateSessionRelease(session, allOrdersCancelled);
+        if (releaseValidation is not null)
+        {
+            return releaseValidation;
+        }
+
+        session.Close(time.GetUtcNow().UtcDateTime);
+        await db.SaveChangesAsync(ct);
+        return DiningResults.Ok(SessionResponse(session));
+    }
+
+    private static DiningResult? ValidateSessionRelease(
+        DiningSession session,
+        bool allOrdersCancelled
+    )
+    {
         if (session.Status != "Open")
         {
             return DiningResults.Conflict(new { detail = "The dining session is already closed." });
@@ -275,9 +291,7 @@ public sealed partial class DiningService
             );
         }
 
-        session.Close(time.GetUtcNow().UtcDateTime);
-        await db.SaveChangesAsync(ct);
-        return DiningResults.Ok(SessionResponse(session));
+        return null;
     }
 
     public async Task<DiningResult> CancelSession(
