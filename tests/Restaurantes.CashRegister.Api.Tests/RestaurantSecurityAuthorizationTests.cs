@@ -111,6 +111,48 @@ public sealed class RestaurantSecurityAuthorizationTests
         Assert.Empty(RestaurantPermissions.ForRole("Unknown"));
     }
 
+    [Theory]
+    [InlineData(
+        "Gerente",
+        RestaurantPermissions.CashRegisterRead,
+        RestaurantPermissions.CashRegisterManage
+    )]
+    [InlineData(
+        "Contabilidad",
+        RestaurantPermissions.FinancialReportsRead,
+        RestaurantPermissions.CashRegisterManage
+    )]
+    [InlineData(
+        "Marketing",
+        RestaurantPermissions.MarketingReportsRead,
+        RestaurantPermissions.CashRegisterManage
+    )]
+    [InlineData(
+        "Manager",
+        RestaurantPermissions.CashRegisterManage,
+        RestaurantPermissions.IdentityManage
+    )]
+    [InlineData(
+        "Camarero",
+        RestaurantPermissions.PaymentsCaptureCard,
+        RestaurantPermissions.CashRegisterManage
+    )]
+    [InlineData("Kds", RestaurantPermissions.KdsUse, RestaurantPermissions.CashRegisterRead)]
+    public void Roles_grant_their_operational_permission_without_cash_or_identity_escalation(
+        string role,
+        string granted,
+        string denied
+    )
+    {
+        Guid restaurantId = Guid.NewGuid();
+        ClaimsPrincipal user = Principal(new Claim(ClaimTypes.Role, role));
+
+        Assert.Contains(granted, RestaurantPermissions.ForRole(role));
+        Assert.True(user.CanAccessRestaurant(restaurantId, granted));
+        Assert.DoesNotContain(denied, RestaurantPermissions.ForRole(role));
+        Assert.False(user.CanAccessRestaurant(restaurantId, denied));
+    }
+
     private static ClaimsPrincipal Principal(params Claim[] claims) =>
         new(new ClaimsIdentity(claims, "test"));
 }

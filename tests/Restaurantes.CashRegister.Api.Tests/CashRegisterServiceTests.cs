@@ -6,6 +6,256 @@ namespace Restaurantes.CashRegister.Api.Tests;
 
 public sealed class CashRegisterServiceTests
 {
+    [Theory]
+    [InlineData("unknown", "Cash", 1, "Caja", "Detalle", "type")]
+    [InlineData("Income", "Crypto", 1, "Caja", "Detalle", "method")]
+    [InlineData("Income", "Cash", 1, " ", "Detalle", "category")]
+    [InlineData("Income", "Cash", 1, "x", " ", "description")]
+    [InlineData("Income", "Cash", 0, "Caja", "Detalle", "amount")]
+    [InlineData("Income", "Cash", 100001, "Caja", "Detalle", "amount")]
+    public async Task Create_movement_validates_input_before_loading_the_session(
+        string type,
+        string method,
+        decimal amount,
+        string category,
+        string description,
+        string expectedField
+    )
+    {
+        Guid restaurantId = Guid.NewGuid();
+        TestStore store = new();
+        CashRegisterService service = new(
+            store,
+            new TestIncompleteOrdersChecker(),
+            TimeProvider.System,
+            TimeZoneInfo.Utc
+        );
+
+        CashRegisterResult result = await service.CreateMovement(
+            restaurantId,
+            Guid.NewGuid(),
+            new CreateCashMovementRequest(type, method, amount, category, description),
+            new CashRegisterUser(Guid.NewGuid(), "Cajera"),
+            CancellationToken.None
+        );
+
+        Assert.Equal(CashRegisterOutcome.Validation, result.Outcome);
+        Assert.Contains(expectedField, result.Errors!.Keys);
+        Assert.Empty(store.Sessions);
+    }
+
+    [Fact]
+    public async Task Create_movement_rejects_category_and_description_over_their_limits()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        CashRegisterService service = new(
+            new TestStore(),
+            new TestIncompleteOrdersChecker(),
+            TimeProvider.System,
+            TimeZoneInfo.Utc
+        );
+
+        CashRegisterResult categoryResult = await service.CreateMovement(
+            restaurantId,
+            Guid.NewGuid(),
+            new CreateCashMovementRequest("Income", "Cash", 1, new string('c', 81), "Detalle"),
+            new CashRegisterUser(Guid.NewGuid(), "Cajera"),
+            CancellationToken.None
+        );
+        CashRegisterResult descriptionResult = await service.CreateMovement(
+            restaurantId,
+            Guid.NewGuid(),
+            new CreateCashMovementRequest("Income", "Cash", 1, "Caja", new string('d', 161)),
+            new CashRegisterUser(Guid.NewGuid(), "Cajera"),
+            CancellationToken.None
+        );
+
+        Assert.Contains("category", categoryResult.Errors!.Keys);
+        Assert.Contains("description", descriptionResult.Errors!.Keys);
+    }
+
+    [Theory]
+    [InlineData(CashRegisterStatus.Closed, CashRegisterOutcome.Conflict)]
+    [InlineData(CashRegisterStatus.Open, CashRegisterOutcome.NotFound)]
+    public async Task Create_movement_requires_an_open_session_for_the_restaurant(
+        CashRegisterStatus status,
+        CashRegisterOutcome expectedOutcome
+    )
+    {
+        Guid restaurantId = Guid.NewGuid();
+        TestStore store = new();
+        if (status == CashRegisterStatus.Closed)
+        {
+            store.AddSession(
+                new CashRegisterSession
+                {
+                    Id = Guid.NewGuid(),
+                    RestaurantId = restaurantId,
+                    Status = status,
+                }
+            );
+        }
+        CashRegisterService service = new(
+            store,
+            new TestIncompleteOrdersChecker(),
+            TimeProvider.System,
+            TimeZoneInfo.Utc
+        );
+
+        CashRegisterResult result = await service.CreateMovement(
+            restaurantId,
+            status == CashRegisterStatus.Closed ? store.Sessions.Single().Id : Guid.NewGuid(),
+            new CreateCashMovementRequest("Income", "Cash", 1, "Caja", "Detalle"),
+            new CashRegisterUser(Guid.NewGuid(), "Cajera"),
+            CancellationToken.None
+        );
+
+        Assert.Equal(expectedOutcome, result.Outcome);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(100001)]
+    public async Task Open_rejects_opening_float_outside_the_supported_range(decimal openingFloat)
+    {
+        TestStore store = new();
+        CashRegisterService service = new(
+            store,
+            new TestIncompleteOrdersChecker(),
+            TimeProvider.System,
+            TimeZoneInfo.Utc
+        );
+
+        CashRegisterResult result = await service.Open(
+            Guid.NewGuid(),
+            new OpenCashRegisterRequest(openingFloat),
+            new CashRegisterUser(Guid.NewGuid(), "Manager"),
+            CancellationToken.None
+        );
+
+        Assert.Equal(CashRegisterOutcome.Validation, result.Outcome);
+        Assert.Empty(store.Sessions);
+    }
+
+    [Fact]
+    public async Task Open_translates_a_duplicate_constraint_into_a_conflict()
+    {
+        TestStore store = new()
+        {
+            SaveException = new CashRegisterDuplicateException(new InvalidOperationException()),
+        };
+        CashRegisterService service = new(
+            store,
+            new TestIncompleteOrdersChecker(),
+            TimeProvider.System,
+            TimeZoneInfo.Utc
+        );
+
+        CashRegisterResult result = await service.Open(
+            Guid.NewGuid(),
+            new OpenCashRegisterRequest(0),
+            new CashRegisterUser(Guid.NewGuid(), "Manager"),
+            CancellationToken.None
+        );
+
+        Assert.Equal(CashRegisterOutcome.Conflict, result.Outcome);
+        Assert.Single(store.Sessions);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Close_requires_at_least_one_reconciliation(bool useNull)
+    {
+        CashRegisterService service = new(
+            new TestStore(),
+            new TestIncompleteOrdersChecker(),
+            TimeProvider.System,
+            TimeZoneInfo.Utc
+        );
+
+        CashRegisterResult result = await service.Close(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            new CloseCashRegisterRequest(useNull ? null! : []),
+            new CashRegisterUser(Guid.NewGuid(), "Manager"),
+            "Bearer test-token",
+            CancellationToken.None
+        );
+
+        Assert.Equal(CashRegisterOutcome.Validation, result.Outcome);
+    }
+
+    [Theory]
+    [InlineData(" ", 0)]
+    [InlineData("Cash", -1)]
+    [InlineData("Card", 1000001)]
+    public async Task Close_rejects_invalid_reconciliation_entries(string method, decimal amount)
+    {
+        CashRegisterService service = new(
+            new TestStore(),
+            new TestIncompleteOrdersChecker(),
+            TimeProvider.System,
+            TimeZoneInfo.Utc
+        );
+
+        CashRegisterResult result = await service.Close(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            new CloseCashRegisterRequest(new Dictionary<string, decimal> { [method] = amount }),
+            new CashRegisterUser(Guid.NewGuid(), "Manager"),
+            "Bearer test-token",
+            CancellationToken.None
+        );
+
+        Assert.Equal(CashRegisterOutcome.Validation, result.Outcome);
+        Assert.Contains("reconciledByMethod", result.Errors!.Keys);
+    }
+
+    [Fact]
+    public async Task Close_requires_reconciliation_for_every_expected_payment_method()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        CashRegisterSession session = new()
+        {
+            Id = Guid.NewGuid(),
+            RestaurantId = restaurantId,
+            Status = CashRegisterStatus.Open,
+            OpeningFloat = 20m,
+        };
+        session.Movements.Add(
+            new CashMovement
+            {
+                Id = Guid.NewGuid(),
+                CashRegisterSessionId = session.Id,
+                Type = CashMovementType.Sale,
+                Method = "Card",
+                Amount = 10m,
+            }
+        );
+        TestStore store = new();
+        store.AddSession(session);
+        CashRegisterService service = new(
+            store,
+            new TestIncompleteOrdersChecker(),
+            TimeProvider.System,
+            TimeZoneInfo.Utc
+        );
+
+        CashRegisterResult result = await service.Close(
+            restaurantId,
+            session.Id,
+            new CloseCashRegisterRequest(new Dictionary<string, decimal> { ["Cash"] = 20m }),
+            new CashRegisterUser(Guid.NewGuid(), "Manager"),
+            "Bearer test-token",
+            CancellationToken.None
+        );
+
+        Assert.Equal(CashRegisterOutcome.Validation, result.Outcome);
+        Assert.Equal(CashRegisterStatus.Open, session.Status);
+        Assert.Empty(session.Reconciliations);
+    }
+
     [Fact]
     public async Task IsOpen_returns_false_when_restaurant_has_no_open_session()
     {
@@ -682,6 +932,7 @@ public sealed class CashRegisterServiceTests
         private readonly HashSet<Guid> processedMessages = [];
 
         public IReadOnlyList<CashRegisterSession> Sessions => sessions;
+        public Exception? SaveException { get; set; }
 
         public Task<CashRegisterSession?> GetOpenSessionAsync(
             Guid restaurantId,
@@ -770,6 +1021,11 @@ public sealed class CashRegisterServiceTests
 
         public Task SaveChangesAsync(CancellationToken ct = default)
         {
+            if (SaveException is not null)
+            {
+                throw SaveException;
+            }
+
             return Task.CompletedTask;
         }
     }
