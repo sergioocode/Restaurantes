@@ -8,7 +8,7 @@
 
 <PageTitle>TPV · Restaurantes</PageTitle>
 
-<main class="pos-shell @(login is not null && selectedTable is null && !takeawayOpen ? "locations-shell" : login is not null ? "order-shell" : "")">
+<main class="pos-shell @ShellClass">
     @if (initializing)
     {
         <section class="login-card session-check-card" aria-live="polite">
@@ -762,7 +762,7 @@
             <div class="modal-backdrop @(cashCloseTicketOpen ? "sales-ticket-backdrop" : "")" @onclick="CloseCashRegisterPanel">
                 <section class="bill-card cash-register-card @(cashRegister is null ? "cash-opening-card" : "") @(cashCloseTicketOpen ? "cash-close-ticket-preview" : "")" role="dialog" aria-modal="true" aria-labelledby="cash-register-title" @onclick:stopPropagation>
                     <div class="bill-title">
-                        <div><p class="eyebrow">@(CashCloseTicketVisible ? "TICKET DE CIERRE DE CAJA" : "CAJA · DÍA OPERATIVO")</p><h2 id="cash-register-title">@(CashCloseTicketVisible ? "Arqueo cerrado" : CashRegisterOpen ? "Turno abierto" : "Abrir turno")</h2></div>
+                        <div><p class="eyebrow">@(CashCloseTicketVisible ? "TICKET DE CIERRE DE CAJA" : "CAJA · DÍA OPERATIVO")</p><h2 id="cash-register-title">@CashRegisterHeading</h2></div>
                         @if (CashCloseTicketVisible)
                         {
                             <div class="bill-title-actions cash-close-ticket-actions">

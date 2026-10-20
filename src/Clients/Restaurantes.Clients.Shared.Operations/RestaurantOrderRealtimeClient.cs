@@ -6,7 +6,8 @@ public abstract class RestaurantOrderRealtimeClient<TNotification>(
     HttpClient http,
     Func<string?> accessToken,
     string groupName,
-    Func<TNotification, Guid> notificationRestaurantId
+    Func<TNotification, Guid> notificationRestaurantId,
+    Func<HttpMessageHandler>? messageHandlerFactory = null
 ) : IAsyncDisposable
 {
     private HubConnection? connection;
@@ -27,7 +28,20 @@ public abstract class RestaurantOrderRealtimeClient<TNotification>(
             connection = new HubConnectionBuilder()
                 .WithUrl(
                     new Uri(http.BaseAddress!, "/hubs/orders"),
-                    options => options.AccessTokenProvider = () => Task.FromResult(accessToken())
+                    options =>
+                    {
+                        options.AccessTokenProvider = () => Task.FromResult(accessToken());
+                        if (messageHandlerFactory is not null)
+                        {
+                            options.HttpMessageHandlerFactory = _ => messageHandlerFactory();
+                            options.Transports = Microsoft
+                                .AspNetCore
+                                .Http
+                                .Connections
+                                .HttpTransportType
+                                .LongPolling;
+                        }
+                    }
                 )
                 .WithAutomaticReconnect([
                     TimeSpan.Zero,

@@ -4,7 +4,11 @@ using Restaurantes.Clients.Shared.Operations;
 
 namespace Restaurantes.Clients.Pos.Pwa.Realtime;
 
-public sealed class CatalogRealtimeClient(HttpClient http, PosApi api) : IAsyncDisposable
+public sealed class CatalogRealtimeClient(
+    HttpClient http,
+    PosApi api,
+    Func<HttpMessageHandler>? messageHandlerFactory = null
+) : IAsyncDisposable
 {
     private HubConnection? connection;
     private Guid restaurantId;
@@ -22,8 +26,20 @@ public sealed class CatalogRealtimeClient(HttpClient http, PosApi api) : IAsyncD
                 .WithUrl(
                     new Uri(http.BaseAddress!, "/hubs/catalog"),
                     options =>
+                    {
                         options.AccessTokenProvider = () =>
-                            Task.FromResult<string?>(api.AccessToken)
+                            Task.FromResult<string?>(api.AccessToken);
+                        if (messageHandlerFactory is not null)
+                        {
+                            options.HttpMessageHandlerFactory = _ => messageHandlerFactory();
+                            options.Transports = Microsoft
+                                .AspNetCore
+                                .Http
+                                .Connections
+                                .HttpTransportType
+                                .LongPolling;
+                        }
+                    }
                 )
                 .WithAutomaticReconnect([
                     TimeSpan.Zero,

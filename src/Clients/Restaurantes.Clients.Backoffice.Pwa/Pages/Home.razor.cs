@@ -495,10 +495,11 @@ public partial class Home
 
     internal async Task RestaurantChanged(ChangeEventArgs args)
     {
-        if (!Guid.TryParse(args.Value?.ToString(), out restaurantId))
+        if (!Guid.TryParse(args.Value?.ToString(), out Guid selectedRestaurantId))
         {
             return;
         }
+        restaurantId = selectedRestaurantId;
 
         await Run(async () =>
         {

@@ -9,6 +9,14 @@ namespace Restaurantes.Clients.Pos.Pwa.Pages;
 
 public partial class Home
 {
+    private const string ProjectionPendingStatus = "ProjectionPending";
+    private const string DefaultProductFormat = "PLATO";
+    private const string CancelledStatus = "Cancelled";
+    private const string ChargeKeypadTarget = "Charge";
+    private const string TransferPaymentMethod = "Transfer";
+    private const string OccupiedTableStatus = "Occupied";
+    private const string ReadyOrderStatus = "Ready";
+    private const string DispatchedOrderStatus = "Dispatched";
     private int? guestCount;
     private int guestCountDraft = 2;
     private bool guestCountDialogOpen;
@@ -36,7 +44,7 @@ public partial class Home
     private OrderResponse? selectedPickup;
     private OrderDetailResponse? pickupDetail;
     private Dictionary<Guid, string> pickupPaymentStatuses = [];
-    private string pickupPaymentStatus = "ProjectionPending";
+    private string pickupPaymentStatus = ProjectionPendingStatus;
     private Guid pickupPaymentKey;
     private bool pickupBillOpen;
     private TableResponse? selectedTable;
@@ -51,7 +59,7 @@ public partial class Home
     private Dictionary<(Guid GroupId, Guid ProductId), int> extraSelections = [];
     private string? category;
     private string? selectedFormat;
-    private string extraDialogFormat = "PLATO";
+    private string extraDialogFormat = DefaultProductFormat;
     private decimal extraDialogPrice;
     private SessionBillResponse? bill;
     private bool discountDialogOpen;
@@ -63,7 +71,7 @@ public partial class Home
     private SaleResponse? salesTicket;
     private DateTime accountPreviewCreatedAt;
     private decimal BillConsumptionTotal =>
-        bill?.Orders.Where(order => order.OrderStatus != "Cancelled").Sum(order => order.Amount)
+        bill?.Orders.Where(order => order.OrderStatus != CancelledStatus).Sum(order => order.Amount)
         ?? 0;
     private IReadOnlyList<TaxBreakdownLine> BillTaxBreakdown
     {
@@ -75,7 +83,7 @@ public partial class Home
             bool hasUnratedLines = false;
             foreach (
                 SessionBillOrderResponse order in bill.Orders.Where(x =>
-                    x.OrderStatus != "Cancelled"
+                    x.OrderStatus != CancelledStatus
                 )
             )
             {
@@ -85,7 +93,9 @@ public partial class Home
                     continue;
                 }
                 foreach (
-                    OrderLineDetailResponse line in detail.Lines.Where(x => x.Status != "Cancelled")
+                    OrderLineDetailResponse line in detail.Lines.Where(x =>
+                        x.Status != CancelledStatus
+                    )
                 )
                 {
                     AddTaxableAmount(
@@ -111,7 +121,7 @@ public partial class Home
         }
     }
     private bool paymentDialogOpen;
-    private string keypadTarget = "Charge";
+    private string keypadTarget = ChargeKeypadTarget;
     private string keypadText = string.Empty;
     private bool keypadStartNew = true;
     private decimal? lastChangeAmount;
@@ -135,10 +145,10 @@ public partial class Home
     private decimal RemainingAfterPayment => PaymentPreview.Remaining;
     private bool IsChargeAmountValid =>
         bill is not null
-        && (paymentMethod is "Cash" or "Card" or "Transfer")
+        && (paymentMethod is "Cash" or "Card" or TransferPaymentMethod)
         && currentChargeAmount > 0
         && AmountReceived <= 1_000_000m
-        && (paymentMethod != "Transfer" || currentChargeAmount == bill.Outstanding);
+        && (paymentMethod != TransferPaymentMethod || currentChargeAmount == bill.Outstanding);
     private Guid checkoutKey;
     private Dictionary<Guid, OrderDetailResponse> billOrders = [];
 
@@ -202,6 +212,20 @@ public partial class Home
 
     private bool CashCloseTicketVisible => cashCloseTicketOpen || cashRegister?.Status == "Closed";
     private bool CashRegisterOpen => !cashCloseTicketOpen && cashRegister?.Status == "Open";
+    private string ShellClass =>
+        (login is not null, selectedTable is null && !takeawayOpen) switch
+        {
+            (false, _) => "",
+            (true, true) => "locations-shell",
+            _ => "order-shell",
+        };
+    private string CashRegisterHeading =>
+        (CashCloseTicketVisible, CashRegisterOpen) switch
+        {
+            (true, _) => "Arqueo cerrado",
+            (false, true) => "Turno abierto",
+            _ => "Abrir turno",
+        };
     private decimal ReconciliationDifference =>
         reconciliationAmounts.Values.Sum() - (cashRegister?.ExpectedTotal ?? 0);
 
@@ -259,15 +283,24 @@ public partial class Home
                 "agua",
                 "infusi",
             }.Any(term => categoryIdentity.Contains(term, StringComparison.OrdinalIgnoreCase));
-        string[] preferred =
-            isBeer ? ["COPA", "UNIDAD", "TERCIO", "VASO"]
-            : isDrink ? ["UNIDAD", "COPA", "VASO", "TERCIO"]
-            : ["PLATO"];
+        string[] preferred;
+        if (isBeer)
+        {
+            preferred = ["COPA", "UNIDAD", "TERCIO", "VASO"];
+        }
+        else if (isDrink)
+        {
+            preferred = ["UNIDAD", "COPA", "VASO", "TERCIO"];
+        }
+        else
+        {
+            preferred = [DefaultProductFormat];
+        }
         return preferred.FirstOrDefault(format =>
                 items.Any(item => PricesFor(item).Any(price => price.Format == format))
             )
             ?? items.FirstOrDefault()?.DefaultFormat
-            ?? "PLATO";
+            ?? DefaultProductFormat;
     }
 
     private string FormatFor(MenuItemResponse item) =>
@@ -298,7 +331,7 @@ public partial class Home
     private static string FormatLabel(string format) =>
         format switch
         {
-            "PLATO" => "Plato",
+            DefaultProductFormat => "Plato",
             "RACION" => "Ración",
             "MEDIA_RACION" => "Media ración",
             "TAPA" => "Tapa",
@@ -532,7 +565,7 @@ public partial class Home
             .Where(snapshot =>
                 refreshedTables.Any(table =>
                     table.Id == snapshot.Key
-                    && table.Status == "Occupied"
+                    && table.Status == OccupiedTableStatus
                     && table.ActiveSessionId == snapshot.Value.SessionId
                 )
             )
@@ -560,7 +593,7 @@ public partial class Home
         TableResponse[] occupiedTables = tables
             .Where(table =>
                 table.ZoneId == zoneId
-                && table.Status == "Occupied"
+                && table.Status == OccupiedTableStatus
                 && table.ActiveSessionId.HasValue
             )
             .ToArray();
@@ -673,7 +706,7 @@ public partial class Home
         {
             selectedPickup = updated;
             pickupPaymentStatus =
-                pickupPaymentStatuses.GetValueOrDefault(updated.Id) ?? "ProjectionPending";
+                pickupPaymentStatuses.GetValueOrDefault(updated.Id) ?? ProjectionPendingStatus;
             await RefreshPickup();
         }
     }
@@ -682,7 +715,7 @@ public partial class Home
     {
         await Run(async () =>
         {
-            if (!CashRegisterOpen && table.Status != "Occupied")
+            if (!CashRegisterOpen && table.Status != OccupiedTableStatus)
             {
                 message = "Debes abrir la caja antes de ocupar una mesa.";
                 return;
@@ -849,7 +882,7 @@ public partial class Home
             ? product
             : menu.First(x => x.ProductId == line.ProductId);
 
-    private decimal UnitPrice(PosCartLine line)
+    private static decimal UnitPrice(PosCartLine line)
     {
         return line.ExpectedUnitPrice;
     }
@@ -972,7 +1005,7 @@ public partial class Home
     private void CloseExtras()
     {
         extraDialogProduct = null;
-        extraDialogFormat = "PLATO";
+        extraDialogFormat = DefaultProductFormat;
         extraDialogPrice = 0;
         editingExtraLineId = null;
         extraSelections = [];
@@ -1040,7 +1073,7 @@ public partial class Home
         selectedPickup = pickup;
         pickupDetail = null;
         pickupPaymentStatus =
-            pickupPaymentStatuses.GetValueOrDefault(pickup.Id) ?? "ProjectionPending";
+            pickupPaymentStatuses.GetValueOrDefault(pickup.Id) ?? ProjectionPendingStatus;
         pickupPaymentKey = Guid.Empty;
         paymentMethod = "Card";
         paymentReference = string.Empty;
@@ -1062,7 +1095,7 @@ public partial class Home
             restaurantId,
             pickup.Id
         );
-        pickupPaymentStatus = statuses.FirstOrDefault()?.Status ?? "ProjectionPending";
+        pickupPaymentStatus = statuses.FirstOrDefault()?.Status ?? ProjectionPendingStatus;
         pickupPaymentStatuses[pickup.Id] = pickupPaymentStatus;
         selectedPickup = pickup with { Status = detail.Status, Total = detail.Total };
     }
@@ -1123,7 +1156,7 @@ public partial class Home
                 pickupDetail = detail;
                 pickupPaymentStatus =
                     (await Api.PaymentStatusesAsync(restaurantId, orderId)).FirstOrDefault()?.Status
-                    ?? "ProjectionPending";
+                    ?? ProjectionPendingStatus;
                 pickupPaymentStatuses[orderId] = pickupPaymentStatus;
                 selectedPickup = pickup with { Status = detail.Status, Total = detail.Total };
                 success = true;
@@ -1159,7 +1192,7 @@ public partial class Home
                 );
                 pickupPaymentStatus =
                     (await Api.PaymentStatusesAsync(restaurantId, orderId)).FirstOrDefault()?.Status
-                    ?? "ProjectionPending";
+                    ?? ProjectionPendingStatus;
                 pickupPaymentStatuses[orderId] = pickupPaymentStatus;
                 success = true;
                 message = $"Cobro registrado para {selectedPickup?.CustomerName}.";
@@ -1268,7 +1301,7 @@ public partial class Home
                 bill.Orders.Select(order => Api.OrderAsync(order.OrderId))
             );
             billOrders = details.ToDictionary(order => order.Id);
-            if (paymentDialogOpen && paymentMethod == "Transfer")
+            if (paymentDialogOpen && paymentMethod == TransferPaymentMethod)
             {
                 currentChargeAmount = bill.Outstanding;
             }
@@ -1449,7 +1482,7 @@ public partial class Home
         paymentReference = string.Empty;
         SyncPaymentAmounts();
         paymentDialogOpen = true;
-        SelectKeypadTarget("Charge");
+        SelectKeypadTarget(ChargeKeypadTarget);
     }
 
     private void ClosePaymentDialog()
@@ -1462,7 +1495,7 @@ public partial class Home
 
     private void SelectKeypadTarget(string target)
     {
-        if (paymentMethod == "Transfer" && target == "Charge")
+        if (paymentMethod == TransferPaymentMethod && target == ChargeKeypadTarget)
         {
             return;
         }
@@ -1481,51 +1514,23 @@ public partial class Home
         }
         currentChargeAmount = bill.Outstanding;
         SyncPaymentAmounts();
-        SelectKeypadTarget("Charge");
+        SelectKeypadTarget(ChargeKeypadTarget);
     }
 
     private void PressPaymentKey(string key)
     {
-        if (paymentMethod == "Transfer" && keypadTarget == "Charge")
+        if (paymentMethod == TransferPaymentMethod && keypadTarget == ChargeKeypadTarget)
         {
             return;
         }
-        string next = keypadText;
-        if (key == "Borrar")
-        {
-            next = "0";
-        }
-        else if (key == ",")
-        {
-            next =
-                keypadStartNew ? "0,"
-                : next.Contains(',') ? next
-                : next + ",";
-        }
-        else
-        {
-            next =
-                keypadStartNew ? key
-                : next == "0" ? key
-                : next + key;
-        }
-        if (
-            next.Length > 10
-            || next.Contains(',') && next[(next.IndexOf(',') + 1)..].Length > 2
-            || !decimal.TryParse(
-                next.Replace(',', '.'),
-                System.Globalization.NumberStyles.AllowDecimalPoint,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out decimal amount
-            )
-            || amount > 1_000_000m
-        )
+        if (!TryBuildPaymentKeypadValue(key, out string next, out decimal amount))
         {
             return;
         }
+
         keypadStartNew = false;
         keypadText = next;
-        if (keypadTarget == "Charge")
+        if (keypadTarget == ChargeKeypadTarget)
         {
             currentChargeAmount = amount;
             SyncPaymentAmounts();
@@ -1535,6 +1540,34 @@ public partial class Home
             tipAmount = amount;
             tipAmountManuallyEdited = true;
         }
+    }
+
+    private bool TryBuildPaymentKeypadValue(string key, out string next, out decimal amount)
+    {
+        next = key switch
+        {
+            "Borrar" => "0",
+            "," when keypadStartNew => "0,",
+            "," when keypadText.Contains(',') => keypadText,
+            "," => keypadText + ",",
+            _ when keypadStartNew => key,
+            _ when keypadText == "0" => key,
+            _ => keypadText + key,
+        };
+
+        if (next.Length > 10 || next.Contains(',') && next[(next.IndexOf(',') + 1)..].Length > 2)
+        {
+            amount = default;
+            return false;
+        }
+
+        return decimal.TryParse(
+                next.Replace(',', '.'),
+                System.Globalization.NumberStyles.AllowDecimalPoint,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out amount
+            )
+            && amount <= 1_000_000m;
     }
 
     private async Task CheckoutSession()
@@ -1602,7 +1635,7 @@ public partial class Home
         List<PosApi.CheckoutOrderAllocation> allocations = [];
         foreach (
             SessionBillOrderResponse order in bill.Orders.Where(order =>
-                order.OrderStatus != "Cancelled"
+                order.OrderStatus != CancelledStatus
             )
         )
         {
@@ -1634,24 +1667,24 @@ public partial class Home
 
     private void SetPaymentMethod(string method)
     {
-        if (paymentMethod == "Transfer" && method != "Transfer")
+        if (paymentMethod == TransferPaymentMethod && method != TransferPaymentMethod)
         {
             currentChargeAmount = 0;
         }
         paymentMethod = method;
-        if (method == "Transfer" && bill is not null)
+        if (method == TransferPaymentMethod && bill is not null)
         {
             currentChargeAmount = bill.Outstanding;
         }
         SyncPaymentAmounts();
-        if (method == "Transfer")
+        if (method == TransferPaymentMethod)
         {
-            keypadTarget = "Charge";
+            keypadTarget = ChargeKeypadTarget;
             keypadStartNew = true;
         }
         else
         {
-            SelectKeypadTarget("Charge");
+            SelectKeypadTarget(ChargeKeypadTarget);
         }
     }
 
@@ -1932,15 +1965,15 @@ public partial class Home
 
     private static string StatusLabel(string status)
     {
-        return status == "Occupied" ? "Ocupada" : "Disponible";
+        return status == OccupiedTableStatus ? "Ocupada" : "Disponible";
     }
 
     private static string KitchenLineStatusLabel(string status) =>
         status switch
         {
             "InPreparation" => "Preparando",
-            "Ready" => "Esperando despacho del chef",
-            "Dispatched" => "Despachado",
+            ReadyOrderStatus => "Esperando despacho del chef",
+            DispatchedOrderStatus => "Despachado",
             _ => "Pendiente",
         };
 
@@ -1948,8 +1981,8 @@ public partial class Home
         status switch
         {
             "InPreparation" => "🍴",
-            "Ready" => "⏳",
-            "Dispatched" => "✔",
+            ReadyOrderStatus => "⏳",
+            DispatchedOrderStatus => "✔",
             _ => "⏳",
         };
 
@@ -1957,8 +1990,8 @@ public partial class Home
         status switch
         {
             "InPreparation" => "preparing",
-            "Ready" => "awaiting-dispatch",
-            "Dispatched" => "dispatched",
+            ReadyOrderStatus => "awaiting-dispatch",
+            DispatchedOrderStatus => "dispatched",
             _ => "pending",
         };
 
@@ -2010,22 +2043,27 @@ public partial class Home
     {
         if (
             order.SubmittedAtUtc is not DateTime start
-            || order.Status is "Cancelled" or "Delivered"
+            || order.Status is CancelledStatus or "Delivered"
         )
         {
             return null;
         }
 
         OrderStationProgressResponse[] stations = (order.Stations ?? [])
-            .Where(station => station.Status != "Cancelled")
+            .Where(station => station.Status != CancelledStatus)
             .ToArray();
         if (stations.Length == 0)
         {
             return null;
         }
 
-        bool completed = stations.All(station => station.Status is "Ready" or "Dispatched");
-        if (order.Status == "Ready" && stations.All(station => station.Status == "Dispatched"))
+        bool completed = stations.All(station =>
+            station.Status is ReadyOrderStatus or DispatchedOrderStatus
+        );
+        if (
+            order.Status == ReadyOrderStatus
+            && stations.All(station => station.Status == DispatchedOrderStatus)
+        )
         {
             return null;
         }
@@ -2066,7 +2104,7 @@ public partial class Home
         {
             "Cash" => "Efectivo",
             "Card" => "Tarjeta / datáfono",
-            "Transfer" => "Transferencia",
+            TransferPaymentMethod => "Transferencia",
             "Online" => "Pago online",
             "Cheque" => "Cheque",
             _ => method,
@@ -2171,38 +2209,7 @@ public partial class Home
         try
         {
             await Task.Delay(400, cancellationToken);
-            await InvokeAsync(async () =>
-            {
-                SetTables(await Api.TablesAsync(restaurantId));
-                await LoadPickupOrdersCore();
-                await LoadVisibleTableSessionOrdersAsync();
-                if (session is not null)
-                {
-                    TableResponse? current = tables.FirstOrDefault(x => x.Id == session.TableId);
-                    if (current?.ActiveSessionId == session.Id)
-                    {
-                        if (guestCountDialogOpen)
-                        {
-                            guestCountTable = current;
-                        }
-                        else
-                        {
-                            selectedTable = current;
-                        }
-                        session = await Api.ActiveSessionAsync(current.Id);
-                        hasSessionOrders = session.Orders.Count > 0;
-                        if (billOpen)
-                        {
-                            await LoadBill();
-                        }
-                    }
-                    else
-                    {
-                        BackToTables();
-                    }
-                }
-                StateHasChanged();
-            });
+            await InvokeAsync(RefreshOperationalDataAfterOrderEventAsync);
         }
         catch (OperationCanceledException) { }
         catch (Exception exception)
@@ -2212,6 +2219,46 @@ public partial class Home
                 message = $"No se pudo actualizar el TPV en tiempo real: {exception.Message}";
                 StateHasChanged();
             });
+        }
+    }
+
+    private async Task RefreshOperationalDataAfterOrderEventAsync()
+    {
+        SetTables(await Api.TablesAsync(restaurantId));
+        await LoadPickupOrdersCore();
+        await LoadVisibleTableSessionOrdersAsync();
+        if (session is not null)
+        {
+            await RefreshActiveSessionAfterOrderEventAsync();
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task RefreshActiveSessionAfterOrderEventAsync()
+    {
+        DiningSessionResponse currentSession = session!;
+        TableResponse? current = tables.FirstOrDefault(x => x.Id == currentSession.TableId);
+        if (current?.ActiveSessionId != currentSession.Id)
+        {
+            BackToTables();
+            return;
+        }
+
+        if (guestCountDialogOpen)
+        {
+            guestCountTable = current;
+        }
+        else
+        {
+            selectedTable = current;
+        }
+
+        session = await Api.ActiveSessionAsync(current.Id);
+        hasSessionOrders = session.Orders.Count > 0;
+        if (billOpen)
+        {
+            await LoadBill();
         }
     }
 
