@@ -1,9 +1,10 @@
 ﻿using System.Collections.Concurrent;
-using System.Net;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Restaurantes.Clients.Commander.Pwa.Api;
 using Restaurantes.Clients.Pos.Pwa.Api;
 using Xunit;
@@ -19,10 +20,11 @@ public sealed class OrderRealtimeConnectionTests
     public async Task Pos_connection_joins_switches_and_leaves_restaurant_groups()
     {
         await using WebApplication app = await StartHubAsync();
-        HubCalls calls = app.Services.GetRequiredService<HubCalls>();
-        using HttpClient http = new() { BaseAddress = new Uri(app.Urls.Single()) };
+        TestServer server = app.GetTestServer();
+        HubCalls calls = server.Services.GetRequiredService<HubCalls>();
+        using HttpClient http = server.CreateClient();
         PosApi api = new(http);
-        await using PosRealtime client = new(http, api);
+        await using PosRealtime client = new(http, api, server.CreateHandler);
         Guid firstRestaurantId = Guid.NewGuid();
         Guid secondRestaurantId = Guid.NewGuid();
         TaskCompletionSource<Guid> receivedOrder = new(
@@ -40,7 +42,7 @@ public sealed class OrderRealtimeConnectionTests
 
         api.AccessToken = "test-token";
         await client.ConnectAsync(firstRestaurantId);
-        await app
+        await server
             .Services.GetRequiredService<IHubContext<RecordingOrderHub>>()
             .Clients.All.SendAsync(
                 "OrderUpdated",
@@ -82,10 +84,11 @@ public sealed class OrderRealtimeConnectionTests
     public async Task Commander_connection_uses_its_own_group_names()
     {
         await using WebApplication app = await StartHubAsync();
-        HubCalls calls = app.Services.GetRequiredService<HubCalls>();
-        using HttpClient http = new() { BaseAddress = new Uri(app.Urls.Single()) };
+        TestServer server = app.GetTestServer();
+        HubCalls calls = server.Services.GetRequiredService<HubCalls>();
+        using HttpClient http = server.CreateClient();
         CommanderApi api = new(http) { AccessToken = "test-token" };
-        await using CommanderRealtime client = new(http, api);
+        await using CommanderRealtime client = new(http, api, server.CreateHandler);
         Guid restaurantId = Guid.NewGuid();
 
         await client.ConnectAsync(restaurantId);
@@ -97,7 +100,8 @@ public sealed class OrderRealtimeConnectionTests
     private static async Task<WebApplication> StartHubAsync()
     {
         WebApplicationBuilder builder = WebApplication.CreateBuilder();
-        builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, 0));
+        builder.WebHost.UseTestServer();
+        builder.Logging.ClearProviders();
         builder.Services.AddSignalR();
         builder.Services.AddSingleton<HubCalls>();
         WebApplication app = builder.Build();

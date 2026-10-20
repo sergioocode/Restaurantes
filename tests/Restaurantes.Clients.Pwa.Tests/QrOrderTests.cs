@@ -15,6 +15,7 @@ using CommanderApi = Restaurantes.Clients.Commander.Pwa.Api.CommanderApi;
 using CommanderBill = Restaurantes.Clients.Commander.Pwa.Models.SessionBillResponse;
 using CommanderBillOrder = Restaurantes.Clients.Commander.Pwa.Models.SessionBillOrderResponse;
 using CommanderHome = Restaurantes.Clients.Commander.Pwa.Pages.Home;
+using CommanderLogin = Restaurantes.Clients.Commander.Pwa.Models.LoginResponse;
 using CommanderMenuItem = Restaurantes.Clients.Commander.Pwa.Models.MenuItemResponse;
 using CommanderOrder = Restaurantes.Clients.Commander.Pwa.Models.OrderResponse;
 using CommanderOrderDetail = Restaurantes.Clients.Commander.Pwa.Models.OrderDetailResponse;
@@ -269,6 +270,610 @@ public sealed class QrOrderTests : BunitContext
         Assert.False((bool)hasSessionOrders.GetValue(cut.Instance)!);
         Assert.Null(GetField(cut.Instance, "selectedTable"));
         Assert.Equal(Guid.Empty, (Guid)GetField(cut.Instance, "sessionId")!);
+    }
+
+    [Fact]
+    public async Task Commander_requires_guest_count_before_loading_the_menu_for_a_new_session()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        Guid tableId = Guid.NewGuid();
+        Guid sessionId = Guid.NewGuid();
+        CommanderTable table = new(
+            tableId,
+            restaurantId,
+            "T1",
+            "Mesa 1",
+            true,
+            "Free",
+            null,
+            Guid.NewGuid(),
+            "Sala",
+            1
+        );
+        List<string> requests = [];
+        HttpClient http = new(
+            new ReplyHandler(request =>
+            {
+                string path = request.RequestUri!.AbsolutePath;
+                requests.Add($"{request.Method} {request.RequestUri.PathAndQuery}");
+                if (
+                    request.Method == HttpMethod.Post
+                    && path == $"/api/dining/tables/{tableId}/sessions"
+                )
+                {
+                    return JsonResponse(
+                        new CommanderSession(
+                            sessionId,
+                            restaurantId,
+                            tableId,
+                            "Open",
+                            RequestGuestCount: true
+                        )
+                    );
+                }
+
+                if (
+                    request.Method == HttpMethod.Put
+                    && path == $"/api/dining/sessions/{sessionId}/guests"
+                )
+                {
+                    return JsonResponse(
+                        new CommanderSession(
+                            sessionId,
+                            restaurantId,
+                            tableId,
+                            "Open",
+                            RequestGuestCount: true,
+                            GuestCount: 4
+                        )
+                    );
+                }
+
+                return
+                    request.Method == HttpMethod.Get
+                    && path == $"/api/catalog/restaurants/{restaurantId}/menu"
+                    ? JsonResponse(Array.Empty<CommanderMenuItem>())
+                    : new HttpResponseMessage(HttpStatusCode.NotFound);
+            })
+        )
+        {
+            BaseAddress = new Uri("https://test.local"),
+        };
+        CommanderApi api = new(http);
+        Services.AddSingleton(api);
+        Services.AddSingleton(new CommanderOrderRealtime(http, api));
+        Services.AddSingleton<IJSRuntime, EmptyJsRuntime>();
+
+        IRenderedComponent<CommanderHome> cut = Render<CommanderHome>();
+        SetField(cut.Instance, "restaurantId", restaurantId);
+        MethodInfo selectTable = typeof(CommanderHome).GetMethod(
+            "SelectTable",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        )!;
+        MethodInfo acceptGuestCount = typeof(CommanderHome).GetMethod(
+            "AcceptGuestCount",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        )!;
+
+        await cut.InvokeAsync(() => (Task)selectTable.Invoke(cut.Instance, [table])!);
+
+        Assert.True((bool)GetField(cut.Instance, "guestCountDialogOpen")!);
+        Assert.Null(GetField(cut.Instance, "selectedTable"));
+        Assert.DoesNotContain(
+            requests,
+            request => request.Contains("/menu", StringComparison.Ordinal)
+        );
+
+        SetField(cut.Instance, "guestCountDraft", 0);
+        await cut.InvokeAsync(() => (Task)acceptGuestCount.Invoke(cut.Instance, null)!);
+        Assert.DoesNotContain(
+            requests,
+            request => request.Contains("/guests", StringComparison.Ordinal)
+        );
+        Assert.True((bool)GetField(cut.Instance, "guestCountDialogOpen")!);
+
+        SetField(cut.Instance, "guestCountDraft", 4);
+        await cut.InvokeAsync(() => (Task)acceptGuestCount.Invoke(cut.Instance, null)!);
+
+        Assert.Equal(4, GetField(cut.Instance, "guestCount"));
+        Assert.Equal(table, GetField(cut.Instance, "selectedTable"));
+        Assert.False((bool)GetField(cut.Instance, "guestCountDialogOpen")!);
+        Assert.Contains($"PUT /api/dining/sessions/{sessionId}/guests", requests);
+        Assert.Contains(
+            $"GET /api/catalog/restaurants/{restaurantId}/menu?channel=Commander",
+            requests
+        );
+    }
+
+    [Fact]
+    public async Task Commander_cancels_a_new_session_when_guest_count_is_abandoned()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        Guid tableId = Guid.NewGuid();
+        Guid sessionId = Guid.NewGuid();
+        CommanderTable table = new(
+            tableId,
+            restaurantId,
+            "T1",
+            "Mesa 1",
+            true,
+            "Free",
+            null,
+            Guid.NewGuid(),
+            "Sala",
+            1
+        );
+        List<string> requests = [];
+        HttpClient http = new(
+            new ReplyHandler(request =>
+            {
+                string path = request.RequestUri!.PathAndQuery;
+                requests.Add($"{request.Method} {path}");
+                return path == $"/api/dining/tables/{tableId}/sessions"
+                        ? JsonResponse(
+                            new CommanderSession(
+                                sessionId,
+                                restaurantId,
+                                tableId,
+                                "Open",
+                                RequestGuestCount: true
+                            )
+                        )
+                    : path == $"/api/dining/sessions/{sessionId}/cancel"
+                        ? JsonResponse(
+                            new CommanderSession(sessionId, restaurantId, tableId, "Cancelled")
+                        )
+                    : path == $"/api/dining/restaurants/{restaurantId}/tables"
+                        ? JsonResponse(new[] { table })
+                    : path == $"/api/orders/commander?restaurantId={restaurantId}"
+                        ? JsonResponse(Array.Empty<CommanderOrder>())
+                    : new HttpResponseMessage(HttpStatusCode.NotFound);
+            })
+        )
+        {
+            BaseAddress = new Uri("https://test.local"),
+        };
+        CommanderApi api = new(http);
+        Services.AddSingleton(api);
+        Services.AddSingleton(new CommanderOrderRealtime(http, api));
+        Services.AddSingleton<IJSRuntime, EmptyJsRuntime>();
+
+        IRenderedComponent<CommanderHome> cut = Render<CommanderHome>();
+        SetField(cut.Instance, "restaurantId", restaurantId);
+        MethodInfo selectTable = typeof(CommanderHome).GetMethod(
+            "SelectTable",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        )!;
+        MethodInfo cancelGuestCount = typeof(CommanderHome).GetMethod(
+            "CancelGuestCount",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        )!;
+
+        await cut.InvokeAsync(() => (Task)selectTable.Invoke(cut.Instance, [table])!);
+        await cut.InvokeAsync(() => (Task)cancelGuestCount.Invoke(cut.Instance, null)!);
+
+        Assert.Contains($"POST /api/dining/sessions/{sessionId}/cancel", requests);
+        Assert.Contains($"GET /api/dining/restaurants/{restaurantId}/tables", requests);
+        Assert.Null(GetField(cut.Instance, "selectedTable"));
+        Assert.Null(GetField(cut.Instance, "diningSession"));
+        Assert.False((bool)GetField(cut.Instance, "guestCountDialogOpen")!);
+    }
+
+    [Fact]
+    public async Task Commander_ignores_unavailable_restaurants_and_loads_the_selected_restaurant()
+    {
+        Guid firstRestaurantId = Guid.NewGuid();
+        Guid selectedRestaurantId = Guid.NewGuid();
+        Guid unauthorizedRestaurantId = Guid.NewGuid();
+        List<string> requests = [];
+        HttpClient http = new(
+            new ReplyHandler(request =>
+            {
+                string path = request.RequestUri!.PathAndQuery;
+                requests.Add(path);
+                return path == $"/api/dining/restaurants/{selectedRestaurantId}/tables"
+                        ? JsonResponse(Array.Empty<CommanderTable>())
+                    : path == $"/api/orders/commander?restaurantId={selectedRestaurantId}"
+                        ? JsonResponse(Array.Empty<CommanderOrder>())
+                    : new HttpResponseMessage(HttpStatusCode.NotFound);
+            })
+        )
+        {
+            BaseAddress = new Uri("https://test.local"),
+        };
+        CommanderApi api = new(http);
+        Services.AddSingleton(api);
+        Services.AddSingleton(new CommanderOrderRealtime(http, api));
+        Services.AddSingleton<IJSRuntime, EmptyJsRuntime>();
+
+        IRenderedComponent<CommanderHome> cut = Render<CommanderHome>();
+        requests.Clear();
+        SetField(cut.Instance, "restaurantId", firstRestaurantId);
+        SetField(
+            cut.Instance,
+            "restaurants",
+            new List<Restaurantes.Clients.Commander.Pwa.Models.RestaurantResponse>
+            {
+                new(firstRestaurantId, "A", "Primero", "", true),
+                new(selectedRestaurantId, "B", "Segundo", "", true),
+            }
+        );
+        MethodInfo restaurantChanged = typeof(CommanderHome).GetMethod(
+            "RestaurantChanged",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        )!;
+
+        await cut.InvokeAsync(() =>
+            (Task)
+                restaurantChanged.Invoke(
+                    cut.Instance,
+                    [new ChangeEventArgs { Value = unauthorizedRestaurantId }]
+                )!
+        );
+
+        Assert.Equal(firstRestaurantId, GetField(cut.Instance, "restaurantId"));
+        Assert.Empty(requests);
+
+        await cut.InvokeAsync(() =>
+            (Task)
+                restaurantChanged.Invoke(
+                    cut.Instance,
+                    [new ChangeEventArgs { Value = selectedRestaurantId }]
+                )!
+        );
+
+        Assert.Equal(selectedRestaurantId, GetField(cut.Instance, "restaurantId"));
+        Assert.Contains($"/api/dining/restaurants/{selectedRestaurantId}/tables", requests);
+        Assert.Contains($"/api/orders/commander?restaurantId={selectedRestaurantId}", requests);
+        Assert.DoesNotContain(
+            requests,
+            request => request.Contains(firstRestaurantId.ToString(), StringComparison.Ordinal)
+        );
+    }
+
+    [Fact]
+    public void Commander_cart_quantity_changes_respect_product_and_quantity_boundaries()
+    {
+        Guid productId = Guid.NewGuid();
+        Guid unknownProductId = Guid.NewGuid();
+        CommanderMenuItem product = new(
+            Guid.NewGuid(),
+            productId,
+            "P1",
+            "Producto",
+            Guid.NewGuid(),
+            "FOOD",
+            "Comida",
+            5m,
+            true,
+            "KITCHEN",
+            "Cocina"
+        );
+        CommanderHome home = new();
+        SetField(home, "menu", new List<CommanderMenuItem> { product });
+        MethodInfo changeQuantity = typeof(CommanderHome).GetMethod(
+            "ChangeQuantity",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        )!;
+        PropertyInfo itemCount = typeof(CommanderHome).GetProperty(
+            "ItemCount",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        )!;
+
+        changeQuantity.Invoke(home, [unknownProductId, 1]);
+        Assert.Equal(0, (int)itemCount.GetValue(home)!);
+
+        changeQuantity.Invoke(home, [productId, -1]);
+        Assert.Equal(0, (int)itemCount.GetValue(home)!);
+
+        changeQuantity.Invoke(home, [productId, 1]);
+        changeQuantity.Invoke(home, [productId, 200]);
+        Assert.Equal(99, (int)itemCount.GetValue(home)!);
+
+        changeQuantity.Invoke(home, [productId, -200]);
+        Assert.Equal(0, (int)itemCount.GetValue(home)!);
+    }
+
+    [Fact]
+    public async Task Commander_loads_the_first_accessible_restaurant_when_the_current_one_is_unavailable()
+    {
+        Guid currentRestaurantId = Guid.NewGuid();
+        Guid accessibleRestaurantId = Guid.NewGuid();
+        HttpClient http = new(
+            new ReplyHandler(request =>
+            {
+                string path = request.RequestUri!.AbsolutePath;
+                if (path == "/api/restaurant-operations/restaurants/accessible/commander")
+                {
+                    return JsonResponse(
+                        new[]
+                        {
+                            new Restaurantes.Clients.Commander.Pwa.Models.RestaurantResponse(
+                                accessibleRestaurantId,
+                                "LOCAL",
+                                "Local accesible",
+                                "",
+                                true
+                            ),
+                        }
+                    );
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            })
+        )
+        {
+            BaseAddress = new Uri("https://test.local"),
+        };
+        CommanderApi api = new(http);
+        Services.AddSingleton(api);
+        Services.AddSingleton(new CommanderOrderRealtime(http, api));
+        Services.AddSingleton<IJSRuntime, EmptyJsRuntime>();
+
+        IRenderedComponent<CommanderHome> cut = Render<CommanderHome>();
+        SetField(cut.Instance, "restaurantId", currentRestaurantId);
+        MethodInfo loadRestaurants = typeof(CommanderHome).GetMethod(
+            "LoadRestaurants",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        )!;
+
+        await cut.InvokeAsync(() => (Task)loadRestaurants.Invoke(cut.Instance, null)!);
+
+        Assert.Equal(accessibleRestaurantId, GetField(cut.Instance, "restaurantId"));
+        Assert.Single(
+            (List<Restaurantes.Clients.Commander.Pwa.Models.RestaurantResponse>)
+                GetField(cut.Instance, "restaurants")!
+        );
+    }
+
+    [Fact]
+    public async Task Commander_rejects_loading_when_no_restaurant_is_accessible()
+    {
+        HttpClient http = new(
+            new ReplyHandler(request =>
+                request.RequestUri!.AbsolutePath
+                == "/api/restaurant-operations/restaurants/accessible/commander"
+                    ? JsonResponse(
+                        Array.Empty<Restaurantes.Clients.Commander.Pwa.Models.RestaurantResponse>()
+                    )
+                    : new HttpResponseMessage(HttpStatusCode.NotFound)
+            )
+        )
+        {
+            BaseAddress = new Uri("https://test.local"),
+        };
+        CommanderApi api = new(http);
+        Services.AddSingleton(api);
+        Services.AddSingleton(new CommanderOrderRealtime(http, api));
+        Services.AddSingleton<IJSRuntime, EmptyJsRuntime>();
+
+        IRenderedComponent<CommanderHome> cut = Render<CommanderHome>();
+        MethodInfo loadRestaurants = typeof(CommanderHome).GetMethod(
+            "LoadRestaurants",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        )!;
+
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            async () =>
+                await cut.InvokeAsync(() => (Task)loadRestaurants.Invoke(cut.Instance, null)!)
+        );
+
+        Assert.Contains("no tiene permisos", exception.Message);
+    }
+
+    [Fact]
+    public async Task Commander_releases_a_paid_session_only_for_its_own_commander_order()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        Guid sessionId = Guid.NewGuid();
+        Guid userId = Guid.NewGuid();
+        Guid orderId = Guid.NewGuid();
+        List<string> requests = [];
+        HttpClient http = new(
+            new ReplyHandler(request =>
+            {
+                string path = request.RequestUri!.PathAndQuery;
+                requests.Add($"{request.Method} {path}");
+                return path == $"/api/dining/sessions/{sessionId}/close"
+                        ? JsonResponse(
+                            new CommanderSession(sessionId, restaurantId, Guid.NewGuid(), "Closed")
+                        )
+                    : path == $"/api/dining/restaurants/{restaurantId}/tables"
+                        ? JsonResponse(Array.Empty<CommanderTable>())
+                    : path == $"/api/orders/commander?restaurantId={restaurantId}"
+                        ? JsonResponse(Array.Empty<CommanderOrder>())
+                    : new HttpResponseMessage(HttpStatusCode.NotFound);
+            })
+        )
+        {
+            BaseAddress = new Uri("https://test.local"),
+        };
+        CommanderApi api = new(http);
+        Services.AddSingleton(api);
+        Services.AddSingleton(new CommanderOrderRealtime(http, api));
+        Services.AddSingleton<IJSRuntime, EmptyJsRuntime>();
+
+        IRenderedComponent<CommanderHome> cut = Render<CommanderHome>();
+        SetField(cut.Instance, "restaurantId", restaurantId);
+        SetField(
+            cut.Instance,
+            "login",
+            new CommanderLogin(
+                "token",
+                DateTime.UtcNow.AddHours(1),
+                new(userId, "user", "Usuario"),
+                []
+            )
+        );
+        SetField(cut.Instance, "sessionId", sessionId);
+        SetField(
+            cut.Instance,
+            "diningSession",
+            new CommanderSession(sessionId, restaurantId, Guid.NewGuid(), "Open")
+        );
+        SetField(
+            cut.Instance,
+            "bill",
+            new CommanderBill(
+                sessionId,
+                restaurantId,
+                Guid.NewGuid(),
+                "Open",
+                20m,
+                0m,
+                [
+                    new CommanderBillOrder(
+                        orderId,
+                        "Submitted",
+                        "Paid",
+                        20m,
+                        20m,
+                        DateTime.UtcNow,
+                        Source: "Comandero",
+                        CreatedByUserId: userId
+                    ),
+                ],
+                CanRelease: true
+            )
+        );
+        MethodInfo releasePaidSession = typeof(CommanderHome).GetMethod(
+            "ReleasePaidSession",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        )!;
+
+        await cut.InvokeAsync(() => (Task)releasePaidSession.Invoke(cut.Instance, null)!);
+
+        Assert.Contains($"POST /api/dining/sessions/{sessionId}/close", requests);
+        Assert.Contains($"GET /api/dining/restaurants/{restaurantId}/tables", requests);
+        Assert.True((bool)GetField(cut.Instance, "success")!);
+        Assert.Equal("Mesa liberada.", GetField(cut.Instance, "message"));
+        Assert.Null(GetField(cut.Instance, "diningSession"));
+    }
+
+    [Fact]
+    public void Commander_checkout_allocations_cover_only_own_unpaid_orders_in_order()
+    {
+        Guid userId = Guid.NewGuid();
+        Guid firstOrderId = Guid.NewGuid();
+        Guid secondOrderId = Guid.NewGuid();
+        Guid otherOrderId = Guid.NewGuid();
+        CommanderHome home = new();
+        SetField(
+            home,
+            "login",
+            new CommanderLogin(
+                "token",
+                DateTime.UtcNow.AddHours(1),
+                new(userId, "user", "Usuario"),
+                []
+            )
+        );
+        SetField(
+            home,
+            "bill",
+            new CommanderBill(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                "Open",
+                55m,
+                35m,
+                [
+                    new(
+                        firstOrderId,
+                        "Submitted",
+                        "Partial",
+                        12m,
+                        2m,
+                        DateTime.UtcNow,
+                        Source: "Comandero",
+                        CreatedByUserId: userId
+                    ),
+                    new(
+                        otherOrderId,
+                        "Submitted",
+                        "Unpaid",
+                        10m,
+                        0m,
+                        DateTime.UtcNow,
+                        Source: "Pos",
+                        CreatedByUserId: userId
+                    ),
+                    new(
+                        secondOrderId,
+                        "Submitted",
+                        "Unpaid",
+                        30m,
+                        5m,
+                        DateTime.UtcNow,
+                        Source: "Comandero",
+                        CreatedByUserId: userId
+                    ),
+                    new(
+                        Guid.NewGuid(),
+                        "Cancelled",
+                        "Unpaid",
+                        8m,
+                        0m,
+                        DateTime.UtcNow,
+                        Source: "Comandero",
+                        CreatedByUserId: userId
+                    ),
+                ]
+            )
+        );
+        SetField(home, "currentChargeAmount", 20m);
+        MethodInfo getCurrentAllocations = typeof(CommanderHome).GetMethod(
+            "GetCurrentAllocations",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        )!;
+
+        List<CommanderApi.CheckoutOrderAllocation> allocations =
+            (List<CommanderApi.CheckoutOrderAllocation>)getCurrentAllocations.Invoke(home, null)!;
+
+        Assert.Collection(
+            allocations,
+            allocation =>
+            {
+                Assert.Equal(firstOrderId, allocation.OrderId);
+                Assert.Equal(10m, allocation.Amount);
+            },
+            allocation =>
+            {
+                Assert.Equal(secondOrderId, allocation.OrderId);
+                Assert.Equal(10m, allocation.Amount);
+            }
+        );
+    }
+
+    [Fact]
+    public void Commander_payment_keypad_enforces_precision_and_amount_limits()
+    {
+        CommanderHome home = new();
+        SetField(home, "paymentKeypadStartNew", true);
+        MethodInfo buildPaymentValue = typeof(CommanderHome).GetMethod(
+            "TryBuildPaymentKeypadValue",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        )!;
+        object?[] arguments = ["1", null, 0m];
+
+        Assert.True((bool)buildPaymentValue.Invoke(home, arguments)!);
+        Assert.Equal("1", arguments[1]);
+        Assert.Equal(1m, arguments[2]);
+
+        SetField(home, "paymentKeypadStartNew", false);
+        SetField(home, "paymentKeypadText", "12,34");
+        arguments = ["5", null, 0m];
+        Assert.False((bool)buildPaymentValue.Invoke(home, arguments)!);
+
+        SetField(home, "paymentKeypadText", "1000000");
+        arguments = ["1", null, 0m];
+        Assert.False((bool)buildPaymentValue.Invoke(home, arguments)!);
+
+        arguments = ["Borrar", null, 0m];
+        Assert.True((bool)buildPaymentValue.Invoke(home, arguments)!);
+        Assert.Equal("0", arguments[1]);
+        Assert.Equal(0m, arguments[2]);
     }
 
     [Fact]

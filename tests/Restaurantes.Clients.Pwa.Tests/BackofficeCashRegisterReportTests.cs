@@ -653,6 +653,87 @@ public sealed class BackofficeCashRegisterReportTests : BunitContext
         Assert.Contains("cash-register-negative", cut.Markup);
     }
 
+    [Fact]
+    public void Empty_daily_report_shows_its_empty_state()
+    {
+        BackofficeHome host = new();
+        SetField(host, "dailyCashRegisters", new List<CashRegisterReportResponse>());
+        SetField(host, "busy", false);
+
+        IRenderedComponent<CashRegistersByDayModule> cut = Render<CashRegistersByDayModule>(
+            parameters => parameters.Add(component => component.Host, host)
+        );
+
+        Assert.Contains("No hay cajas registradas para esta fecha y este local.", cut.Markup);
+        Assert.Empty(cut.FindAll(".cash-register-report-card"));
+    }
+
+    [Fact]
+    public void Open_register_without_reconciliation_hides_close_ticket_and_movement_sections()
+    {
+        CashRegisterReportResponse register = new(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            DateOnly.FromDateTime(DateTime.Today),
+            "Open",
+            100m,
+            0m,
+            0m,
+            0m,
+            0m,
+            100m,
+            100m,
+            null,
+            null,
+            null,
+            DateTime.UtcNow,
+            "TPV Centro",
+            null,
+            null,
+            [],
+            [],
+            [],
+            [
+                new(
+                    Guid.NewGuid(),
+                    "CashChange",
+                    "Cash",
+                    5m,
+                    "Cambio",
+                    DateTime.UtcNow,
+                    "",
+                    "TPV Centro",
+                    null
+                ),
+                new(
+                    Guid.NewGuid(),
+                    "CardTender",
+                    "Card",
+                    5m,
+                    "Cobro",
+                    DateTime.UtcNow,
+                    "",
+                    "TPV Centro",
+                    null
+                ),
+            ]
+        );
+        BackofficeHome host = new();
+        SetField(host, "dailyCashRegisters", new List<CashRegisterReportResponse> { register });
+
+        IRenderedComponent<CashRegistersByDayModule> cut = Render<CashRegistersByDayModule>(
+            parameters => parameters.Add(component => component.Host, host)
+        );
+
+        Assert.Contains("Abierta", cut.Markup);
+        Assert.Contains("—", cut.Markup);
+        Assert.Empty(cut.FindAll("button[aria-label='Ver ticket de cierre']"));
+        Assert.Empty(cut.FindAll(".cash-register-report-details .cash-register-report-methods"));
+        Assert.Empty(cut.FindAll(".cash-register-report-movements"));
+        Assert.DoesNotContain("Ingresos y egresos registrados", cut.Markup);
+        Assert.DoesNotContain("Tickets", cut.Markup);
+    }
+
     private static void SetField(object component, string name, object value) =>
         component
             .GetType()
