@@ -17,11 +17,4 @@ public sealed class SalesReadController(ISaleReadStore store) : ControllerBase
     {
         return Ok(await store.ListAsync(restaurantId, date, offset, cancellationToken));
     }
-
-    [HttpGet("{id:guid}")]
-    public async Task<ActionResult<SaleResponse>> Find(Guid id, CancellationToken cancellationToken)
-    {
-        SaleResponse? sale = await store.FindAsync(id, cancellationToken);
-        return sale is null ? NotFound() : Ok(sale);
-    }
 }

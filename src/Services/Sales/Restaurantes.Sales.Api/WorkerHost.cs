@@ -16,6 +16,7 @@ internal static class WorkerHost
         services.AddSalesReadInfrastructure(configuration);
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<SaleCommandService>();
+        services.AddScoped<SaleTicketQueryService>();
         services
             .AddOptions<RabbitMqOptions>()
             .Bind(configuration.GetSection(RabbitMqOptions.SectionName))
