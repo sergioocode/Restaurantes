@@ -220,7 +220,7 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
     {
         if (type == typeof(OrderCreated).FullName)
         {
-            OrderCreated e = JsonSerializer.Deserialize<OrderCreated>(body)!;
+            OrderCreated e = DeserializeRequired<OrderCreated>(body);
             return new(
                 e.OrderId,
                 e.RestaurantId,
@@ -240,7 +240,7 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
         }
         if (type == typeof(OrderLineCancelled).FullName)
         {
-            OrderLineCancelled e = JsonSerializer.Deserialize<OrderLineCancelled>(body)!;
+            OrderLineCancelled e = DeserializeRequired<OrderLineCancelled>(body);
             return new(
                 e.OrderId,
                 e.RestaurantId,
@@ -260,7 +260,7 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
         }
         if (type == typeof(OrderCancelled).FullName)
         {
-            OrderCancelled e = JsonSerializer.Deserialize<OrderCancelled>(body)!;
+            OrderCancelled e = DeserializeRequired<OrderCancelled>(body);
             return new(
                 e.OrderId,
                 e.RestaurantId,
@@ -280,7 +280,7 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
         }
         if (type == typeof(OrderSubmitted).FullName)
         {
-            OrderSubmitted e = JsonSerializer.Deserialize<OrderSubmitted>(body)!;
+            OrderSubmitted e = DeserializeRequired<OrderSubmitted>(body);
             return new(
                 e.OrderId,
                 e.RestaurantId,
@@ -301,7 +301,7 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
         if (type == typeof(KitchenTicketPreparationStarted).FullName)
         {
             KitchenTicketPreparationStarted e =
-                JsonSerializer.Deserialize<KitchenTicketPreparationStarted>(body)!;
+                DeserializeRequired<KitchenTicketPreparationStarted>(body);
             return new(
                 e.OrderId,
                 e.RestaurantId,
@@ -321,7 +321,7 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
         }
         if (type == typeof(KitchenTicketReady).FullName)
         {
-            KitchenTicketReady e = JsonSerializer.Deserialize<KitchenTicketReady>(body)!;
+            KitchenTicketReady e = DeserializeRequired<KitchenTicketReady>(body);
             return new(
                 e.OrderId,
                 e.RestaurantId,
@@ -347,7 +347,7 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
         }
         if (type == typeof(KitchenTicketDispatched).FullName)
         {
-            KitchenTicketDispatched e = JsonSerializer.Deserialize<KitchenTicketDispatched>(body)!;
+            KitchenTicketDispatched e = DeserializeRequired<KitchenTicketDispatched>(body);
             bool completed = e
                 .Stations.Where(x => x.Status != "Cancelled")
                 .All(x => x.Status == "Dispatched");
@@ -370,7 +370,7 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
         }
         if (type == typeof(OrderDelivered).FullName)
         {
-            OrderDelivered e = JsonSerializer.Deserialize<OrderDelivered>(body)!;
+            OrderDelivered e = DeserializeRequired<OrderDelivered>(body);
             return new(
                 e.OrderId,
                 e.RestaurantId,
@@ -390,7 +390,7 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
         }
         if (type == typeof(OrderPreparationStarted).FullName)
         {
-            OrderPreparationStarted e = JsonSerializer.Deserialize<OrderPreparationStarted>(body)!;
+            OrderPreparationStarted e = DeserializeRequired<OrderPreparationStarted>(body);
             return new(
                 e.OrderId,
                 e.RestaurantId,
@@ -410,7 +410,7 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
         }
         if (type == typeof(OrderReady).FullName)
         {
-            OrderReady e = JsonSerializer.Deserialize<OrderReady>(body)!;
+            OrderReady e = DeserializeRequired<OrderReady>(body);
             return new(
                 e.OrderId,
                 e.RestaurantId,
@@ -430,6 +430,10 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
         }
         throw new NotSupportedException(type);
     }
+
+    private static TEvent DeserializeRequired<TEvent>(ReadOnlySpan<byte> body)
+        where TEvent : class =>
+        JsonSerializer.Deserialize<TEvent>(body) ?? throw new JsonException("Empty order event.");
 
     private static void RecognizeSale(OrderReportingFact fact)
     {

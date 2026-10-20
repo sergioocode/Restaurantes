@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Restaurantes.Orders.Contracts.Events;
 using Restaurantes.Payments.Contracts.Events;
@@ -13,6 +13,273 @@ namespace Restaurantes.Reporting.Infrastructure.Tests;
 
 public sealed class ReportingProjectionHandlerTests
 {
+    public enum OrderLifecycleEventKind
+    {
+        Submitted,
+        KitchenPreparationStarted,
+        KitchenTicketDispatched,
+        Delivered,
+        PreparationStarted,
+        Ready,
+        Cancelled,
+        LineCancelled,
+    }
+
+    public static TheoryData<
+        OrderLifecycleEventKind,
+        string,
+        DateTime,
+        bool
+    > OrderLifecycleEvents =>
+        new()
+        {
+            { OrderLifecycleEventKind.Submitted, "Submitted", EventUpdatedAtUtc, false },
+            {
+                OrderLifecycleEventKind.KitchenPreparationStarted,
+                "InPreparation",
+                EventUpdatedAtUtc,
+                false
+            },
+            { OrderLifecycleEventKind.KitchenTicketDispatched, "Ready", EventUpdatedAtUtc, false },
+            { OrderLifecycleEventKind.Delivered, "Delivered", EventUpdatedAtUtc, true },
+            {
+                OrderLifecycleEventKind.PreparationStarted,
+                "InPreparation",
+                EventUpdatedAtUtc,
+                false
+            },
+            { OrderLifecycleEventKind.Ready, "Ready", EventUpdatedAtUtc, false },
+            { OrderLifecycleEventKind.Cancelled, "Cancelled", EventUpdatedAtUtc, false },
+            { OrderLifecycleEventKind.LineCancelled, "Submitted", EventUpdatedAtUtc, false },
+        };
+
+    private static object CreateOrderLifecycleEvent(OrderLifecycleEventKind kind) =>
+        kind switch
+        {
+            OrderLifecycleEventKind.Submitted => new OrderSubmitted(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                null,
+                null,
+                null,
+                "Mesa 1",
+                "Cliente",
+                "DineIn",
+                "Pos",
+                "AfterService",
+                2,
+                EventCreatedAtUtc,
+                EventUpdatedAtUtc,
+                [],
+                []
+            ),
+            OrderLifecycleEventKind.KitchenPreparationStarted =>
+                new KitchenTicketPreparationStarted(
+                    Guid.NewGuid(),
+                    Guid.NewGuid(),
+                    null,
+                    null,
+                    null,
+                    "Mesa 1",
+                    "Cliente",
+                    "DineIn",
+                    "Pos",
+                    "AfterService",
+                    "CARNES",
+                    2,
+                    EventCreatedAtUtc,
+                    EventUpdatedAtUtc.AddMinutes(-1),
+                    EventUpdatedAtUtc,
+                    [],
+                    []
+                ),
+            OrderLifecycleEventKind.KitchenTicketDispatched => new KitchenTicketDispatched(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                null,
+                null,
+                null,
+                "Mesa 1",
+                "Cliente",
+                "DineIn",
+                "Pos",
+                "AfterService",
+                "CARNES",
+                2,
+                EventCreatedAtUtc,
+                EventUpdatedAtUtc.AddMinutes(-2),
+                EventUpdatedAtUtc.AddMinutes(-1),
+                EventUpdatedAtUtc,
+                [],
+                [
+                    new OrderKitchenStationSnapshot(
+                        "CARNES",
+                        "Carnes",
+                        "Dispatched",
+                        true,
+                        1,
+                        EventUpdatedAtUtc.AddMinutes(-1),
+                        EventUpdatedAtUtc,
+                        EventUpdatedAtUtc
+                    ),
+                    new OrderKitchenStationSnapshot(
+                        "BEBIDAS",
+                        "Bebidas",
+                        "Cancelled",
+                        false,
+                        2,
+                        null,
+                        null,
+                        null
+                    ),
+                ]
+            ),
+            OrderLifecycleEventKind.Delivered => new OrderDelivered(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                null,
+                null,
+                null,
+                "Mesa 1",
+                "Cliente",
+                "DineIn",
+                "Pos",
+                "AfterService",
+                2,
+                EventCreatedAtUtc,
+                EventCreatedAtUtc.AddMinutes(1),
+                EventCreatedAtUtc.AddMinutes(2),
+                EventCreatedAtUtc.AddMinutes(3),
+                EventUpdatedAtUtc,
+                [],
+                []
+            ),
+            OrderLifecycleEventKind.PreparationStarted => new OrderPreparationStarted(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                null,
+                null,
+                "Mesa 1",
+                "Cliente",
+                "DineIn",
+                "Pos",
+                "AfterService",
+                2,
+                EventCreatedAtUtc,
+                EventUpdatedAtUtc.AddMinutes(-1),
+                EventUpdatedAtUtc,
+                [],
+                []
+            ),
+            OrderLifecycleEventKind.Ready => new OrderReady(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                null,
+                null,
+                null,
+                "Mesa 1",
+                "Cliente",
+                "DineIn",
+                "Pos",
+                "AfterService",
+                2,
+                EventCreatedAtUtc,
+                EventCreatedAtUtc.AddMinutes(1),
+                EventCreatedAtUtc.AddMinutes(2),
+                EventUpdatedAtUtc,
+                [],
+                []
+            ),
+            OrderLifecycleEventKind.Cancelled => new OrderCancelled(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                null,
+                null,
+                null,
+                "Mesa 1",
+                "Cliente",
+                "DineIn",
+                "Pos",
+                "AfterService",
+                "Cliente canceló",
+                "cajero",
+                2,
+                EventCreatedAtUtc,
+                EventCreatedAtUtc.AddMinutes(1),
+                EventUpdatedAtUtc,
+                [],
+                []
+            ),
+            OrderLifecycleEventKind.LineCancelled => new OrderLineCancelled(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                null,
+                null,
+                null,
+                "Mesa 1",
+                "Cliente",
+                "DineIn",
+                "Pos",
+                "AfterService",
+                Guid.NewGuid(),
+                "CARNES",
+                "Sin stock",
+                "Submitted",
+                0m,
+                2,
+                EventCreatedAtUtc,
+                EventCreatedAtUtc.AddMinutes(1),
+                EventUpdatedAtUtc,
+                [],
+                []
+            ),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+        };
+
+    private static readonly DateTime EventCreatedAtUtc = new(
+        2026,
+        10,
+        20,
+        9,
+        0,
+        0,
+        DateTimeKind.Utc
+    );
+    private static readonly DateTime EventUpdatedAtUtc = EventCreatedAtUtc.AddMinutes(5);
+
+    [Theory]
+    [MemberData(nameof(OrderLifecycleEvents))]
+    public async Task Projects_order_lifecycle_events(
+        OrderLifecycleEventKind eventKind,
+        string expectedStatus,
+        DateTime expectedUpdatedAtUtc,
+        bool expectDeliveredAtUtc
+    )
+    {
+        DbContextOptions<ReportingReadDbContext> options =
+            new DbContextOptionsBuilder<ReportingReadDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .Options;
+        await using ReportingReadDbContext db = new(options);
+        ReportingProjectionHandler handler = new(db, TimeProvider.System);
+
+        await ProjectAsync(handler, Guid.NewGuid(), CreateOrderLifecycleEvent(eventKind));
+
+        OrderReportingFact fact = await db.Orders.SingleAsync(
+            TestContext.Current.CancellationToken
+        );
+        Assert.Equal(expectedStatus, fact.OrderStatus);
+        Assert.Equal(expectedUpdatedAtUtc, fact.UpdatedAtUtc);
+        if (expectDeliveredAtUtc)
+        {
+            Assert.Equal(expectedUpdatedAtUtc, fact.DeliveredAtUtc);
+        }
+        else
+        {
+            Assert.Null(fact.DeliveredAtUtc);
+        }
+    }
+
     [Fact]
     public async Task Kitchen_ticket_ready_uses_ready_line_timestamp_while_station_is_incomplete()
     {
@@ -570,10 +837,11 @@ public sealed class ReportingProjectionHandlerTests
     )
         where T : notnull
     {
+        Type eventType = @event.GetType();
         return handler.ProjectAsync(
             messageId,
-            typeof(T).FullName,
-            JsonSerializer.SerializeToUtf8Bytes(@event),
+            eventType.FullName,
+            JsonSerializer.SerializeToUtf8Bytes(@event, eventType),
             TestContext.Current.CancellationToken
         );
     }
