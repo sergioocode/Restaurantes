@@ -11,7 +11,10 @@ public sealed partial class DiningService
         CancellationToken ct
     )
     {
-        if (!access.CanAccessRestaurant(principal, restaurantId, DiningPermission.TablesRead))
+        if (
+            !access.CanAccessRestaurant(principal, restaurantId, DiningPermission.TablesRead)
+            && !access.CanAccessRestaurant(principal, restaurantId, DiningPermission.KdsZonesRead)
+        )
         {
             return DiningResults.Forbid();
         }

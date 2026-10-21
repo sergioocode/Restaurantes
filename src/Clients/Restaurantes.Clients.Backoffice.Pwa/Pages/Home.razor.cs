@@ -930,6 +930,9 @@ public partial class Home
             case nameof(KitchenStationResponse.PrintTicket):
                 update.PrintTicket = selected;
                 break;
+            case nameof(KitchenStationResponse.ManagesZones):
+                update.ManagesZones = selected;
+                break;
             case nameof(KitchenStationResponse.IsActive):
                 update.IsActive = selected;
                 break;
@@ -968,6 +971,7 @@ public partial class Home
             IsPrimary = source.IsPrimary,
             RequiresPrimaryDispatch = source.RequiresPrimaryDispatch,
             PrintTicket = source.PrintTicket,
+            ManagesZones = source.ManagesZones,
             Priority = source.Priority,
             IsActive = source.IsActive,
             Version = source.Version,
@@ -980,6 +984,7 @@ public partial class Home
         target.IsPrimary = source.IsPrimary;
         target.RequiresPrimaryDispatch = source.RequiresPrimaryDispatch;
         target.PrintTicket = source.PrintTicket;
+        target.ManagesZones = source.ManagesZones;
         target.Priority = source.Priority;
         target.IsActive = source.IsActive;
         target.Version = source.Version;

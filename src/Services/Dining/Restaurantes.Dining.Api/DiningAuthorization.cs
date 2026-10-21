@@ -15,6 +15,7 @@ public sealed class DiningAuthorization : IDiningAuthorization
         string requiredPermission = permission switch
         {
             DiningPermission.TablesRead => RestaurantPermissions.TablesRead,
+            DiningPermission.KdsZonesRead => RestaurantPermissions.KdsUse,
             DiningPermission.TablesManage => RestaurantPermissions.TablesManage,
             DiningPermission.OrdersCreate => RestaurantPermissions.OrdersCreate,
             DiningPermission.TablesRelease => RestaurantPermissions.TablesRelease,

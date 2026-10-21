@@ -6,6 +6,7 @@ public sealed class KitchenOrderReadModel
     public Guid RestaurantId { get; set; }
     public int? GuestCount { get; set; }
     public Guid? TableId { get; set; }
+    public Guid? ZoneId { get; set; }
     public Guid? DiningSessionId { get; set; }
     public string TableLabel { get; set; } = string.Empty;
     public string CustomerName { get; set; } = string.Empty;

@@ -21,6 +21,7 @@ const closeTicketButton = document.querySelector('#closeTicket');
 const logoutButton = document.querySelector('#logout');
 const restaurantSelect = document.querySelector('#restaurantId');
 const stationSelect = document.querySelector('#stationCode');
+const zoneSelect = document.querySelector('#zoneId');
 const status = document.querySelector('#connectionStatus');
 const eventText = document.querySelector('#event');
 const ordersElement = document.querySelector('#orders');
@@ -33,6 +34,7 @@ let selectedRestaurantId = '';
 let restaurantAccesses = [];
 let primaryStationCode = '';
 let stationConfigurations = [];
+let restaurantZones = [];
 const pendingOrders = new Map();
 let renderedOrders = [];
 let renderedView = '';
@@ -68,15 +70,21 @@ async function loadOrders() {
   if (!login || !selectedRestaurantId || !stationSelect.value) return;
   const restaurantId = selectedRestaurantId;
   const stationCode = stationSelect.value;
-  const view = restaurantId + '/' + stationCode;
+  const zoneId = selectedZoneId();
+  if (selectedStationConfiguration()?.managesZones && !zoneId) {
+    clearOrdersView('No hay zonas activas para este local. Configúralas en Backoffice.');
+    return;
+  }
+  const view = restaurantId + '/' + stationCode + '/' + (zoneId ?? 'all');
   if (renderedView !== view) {
     renderedView = view;
     renderedOrders = [];
   }
   const requestNumber = ++ordersRequestNumber;
-  const response = await api.getOrders(restaurantId, stationCode);
+  const response = await api.getOrders(restaurantId, stationCode, zoneId);
   if (!login || requestNumber < lastAppliedRequestNumber
-    || restaurantId !== selectedRestaurantId || stationCode !== stationSelect.value) return;
+    || restaurantId !== selectedRestaurantId || stationCode !== stationSelect.value
+    || zoneId !== selectedZoneId()) return;
   lastAppliedRequestNumber = requestNumber;
 
   const previousOrders = new Map(renderedOrders.map(order => [order.id, order]));
@@ -102,7 +110,8 @@ function closeHistory() {
 
 function updateHistoryVisibility() {
   const selectedStation = stationSelect.options[stationSelect.selectedIndex];
-  const available = Boolean(login && selectedStation);
+  const available = Boolean(login && selectedStation
+    && (!selectedStationConfiguration()?.managesZones || zoneSelect.value));
   historyButton.classList.toggle('hidden', !available);
   historyButton.disabled = false;
   historyButton.title = '';
@@ -123,8 +132,10 @@ async function refreshMonitor() {
   refreshButton.disabled = true;
   eventText.textContent = 'Actualizando monitor…';
   try {
-    await loadOrders();
-    eventText.textContent = 'Monitor actualizado.';
+    if (await loadStationsAndConnect()) {
+      await loadOrders();
+      eventText.textContent = 'Monitor actualizado.';
+    }
   } catch (error) {
     eventText.textContent = error.message;
   } finally {
@@ -213,6 +224,35 @@ function addOption(select, value, text, statusText = text) {
   select.append(option);
 }
 
+function selectedStationConfiguration() {
+  return stationConfigurations.find(station =>
+    stationSelect.value === 'CHEF' ? station.isPrimary : station.code === stationSelect.value
+  );
+}
+
+function selectedZoneId() {
+  return selectedStationConfiguration()?.managesZones ? zoneSelect.value : null;
+}
+
+function configureZoneSelector() {
+  const managesZones = Boolean(selectedStationConfiguration()?.managesZones);
+  zoneSelect.replaceChildren();
+  if (managesZones) {
+    for (const zone of restaurantZones.filter(zone => !zone.deletedAtUtc)
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))) {
+      addOption(zoneSelect, zone.id, zone.name);
+    }
+  }
+  zoneSelect.disabled = !managesZones || zoneSelect.options.length === 0;
+  if (!managesZones) return;
+  const remembered = localStorage.getItem(
+    'restaurantes.kds.zone.' + selectedRestaurantId + '.' + stationSelect.value
+  );
+  if (Array.from(zoneSelect.options).some(option => option.value === remembered)) {
+    zoneSelect.value = remembered;
+  }
+}
+
 async function loadStationsAndConnect() {
   const restaurantId = selectedRestaurantId;
   if (!restaurantId) return;
@@ -225,10 +265,14 @@ async function loadStationsAndConnect() {
   try {
     const stations = await api.getStations(restaurantId);
     if (restaurantId !== selectedRestaurantId) return;
-    stationConfigurations = stations;
     const activeStations = stations
       .filter(item => item.isActive)
       .sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name));
+    const zones = activeStations.some(station => station.managesZones)
+      ? await api.getZones(restaurantId) : [];
+    if (restaurantId !== selectedRestaurantId) return;
+    stationConfigurations = stations;
+    restaurantZones = zones;
     const primary = activeStations.find(item => item.isPrimary);
     primaryStationCode = primary ? 'CHEF' : '';
     if (primary) {
@@ -242,7 +286,7 @@ async function loadStationsAndConnect() {
       clearOrdersView('Este local no tiene estaciones KDS activas. Configúralas en Backoffice.');
       setStatus(false, 'Sin estaciones KDS activas');
       updateHistoryVisibility();
-      return;
+      return false;
     }
     const stationKey = 'restaurantes.kds.station.' + restaurantId;
     const remembered = localStorage.getItem(stationKey);
@@ -250,13 +294,16 @@ async function loadStationsAndConnect() {
       ? remembered
       : (primary ? 'CHEF' : (stationSelect.options[0]?.value || ''));
     stationSelect.disabled = false;
+    configureZoneSelector();
     updateHistoryVisibility();
     eventText.textContent = '';
     connect();
+    return true;
   } catch (error) {
     if (restaurantId !== selectedRestaurantId) return;
     eventText.textContent = error.message;
     setStatus(false, 'No se pudieron cargar las estaciones');
+    return false;
   }
 }
 
@@ -310,7 +357,7 @@ async function openHistory() {
   historyButton.disabled = true;
   historyList.replaceChildren();
   try {
-    const orders = await api.getHistory(selectedRestaurantId, stationSelect.value);
+    const orders = await api.getHistory(selectedRestaurantId, stationSelect.value, selectedZoneId());
     for (const order of orders) {
       const card = document.createElement('article');
       card.className = 'history-order';
@@ -362,6 +409,8 @@ function logout() {
   login = null;
   selectedRestaurantId = '';
   restaurantAccesses = [];
+  restaurantZones = [];
+  stationConfigurations = [];
   pendingOrders.clear();
   api.setAccessToken('');
   realtime.disconnect();
@@ -372,6 +421,8 @@ function logout() {
   refreshButton.disabled = true;
   restaurantSelect.replaceChildren();
   restaurantSelect.disabled = true;
+  zoneSelect.replaceChildren();
+  zoneSelect.disabled = true;
   eventText.textContent = '';
   clearOrdersView('Accede para cargar el monitor.');
   historyButton.classList.add('hidden');
@@ -427,8 +478,18 @@ stationSelect.addEventListener('change', () => {
   localStorage.setItem('restaurantes.kds.station.' + selectedRestaurantId, stationSelect.value);
   eventText.textContent = '';
   clearOrdersView('Cargando pedidos…');
+  configureZoneSelector();
   updateHistoryVisibility();
   connect();
+});
+zoneSelect.addEventListener('change', () => {
+  localStorage.setItem(
+    'restaurantes.kds.zone.' + selectedRestaurantId + '.' + stationSelect.value,
+    zoneSelect.value
+  );
+  closeHistory();
+  clearOrdersView('Cargando pedidos…');
+  loadOrders().catch(error => { eventText.textContent = error.message; });
 });
 
 async function initialize() {

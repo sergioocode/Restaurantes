@@ -8,6 +8,7 @@ public interface IKitchenOrderReadStore
     Task<IReadOnlyList<OrderResponse>> ListAsync(
         Guid restaurantId,
         string? stationCode,
-        CancellationToken ct
+        CancellationToken ct,
+        Guid? zoneId = null
     );
 }

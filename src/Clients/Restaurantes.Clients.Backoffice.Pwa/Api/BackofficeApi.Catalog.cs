@@ -73,6 +73,11 @@ public sealed partial class BackofficeApi
                 "print-ticket",
                 selected
             ),
+            nameof(KitchenStationResponse.ManagesZones) => SetStationFieldAsync(
+                item,
+                "manages-zones",
+                selected
+            ),
             _ => throw new ArgumentOutOfRangeException(nameof(field)),
         };
 

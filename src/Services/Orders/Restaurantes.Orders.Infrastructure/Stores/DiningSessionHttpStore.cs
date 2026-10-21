@@ -5,7 +5,7 @@ namespace Restaurantes.Orders.Infrastructure.Stores;
 
 public sealed class DiningSessionHttpStore(HttpClient client) : IDiningSessionStore
 {
-    public async Task<int?> EnsureOpenAsync(
+    public async Task<DiningSessionValidation> EnsureOpenAsync(
         Guid diningSessionId,
         Guid restaurantId,
         Guid tableId,
@@ -39,16 +39,27 @@ public sealed class DiningSessionHttpStore(HttpClient client) : IDiningSessionSt
         }
         using (response)
         {
-            return response.StatusCode == HttpStatusCode.NoContent
-                ? response.Headers.TryGetValues(
+            if (response.StatusCode != HttpStatusCode.NoContent)
+            {
+                throw new InvalidOperationException(
+                    "The dining session is not open or does not belong to the requested restaurant and table."
+                );
+            }
+            int? guestCount =
+                response.Headers.TryGetValues(
                     "X-Dining-Guest-Count",
                     out IEnumerable<string>? values
                 ) && int.TryParse(values.SingleOrDefault(), out int count)
                     ? count
-                    : null
-                : throw new InvalidOperationException(
-                    "The dining session is not open or does not belong to the requested restaurant and table."
-                );
+                    : null;
+            Guid? zoneId =
+                response.Headers.TryGetValues(
+                    "X-Dining-Zone-Id",
+                    out IEnumerable<string>? zoneValues
+                ) && Guid.TryParse(zoneValues.SingleOrDefault(), out Guid parsedZoneId)
+                    ? parsedZoneId
+                    : null;
+            return new DiningSessionValidation(guestCount, zoneId);
         }
     }
 }

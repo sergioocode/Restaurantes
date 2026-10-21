@@ -18,6 +18,7 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
     {
         ProjectionData data = Deserialize(type, body.Span);
         bool shouldNotify = false;
+        KdsProjectionNotification? lateZoneNotification = null;
         if (
             !await dbContext.InboxMessages.AnyAsync(item => item.Id == messageId, cancellationToken)
         )
@@ -30,6 +31,26 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
             {
                 projection = new KitchenOrderReadModel { Id = data.OrderId };
                 dbContext.KitchenOrders.Add(projection);
+            }
+
+            if (data.ZoneId is Guid zoneId && projection.ZoneId is null)
+            {
+                projection.ZoneId = zoneId;
+                if (projection.Version > data.Version && projection.Status != "Draft")
+                {
+                    OrderKitchenStationResponse[] stations =
+                        JsonSerializer.Deserialize<OrderKitchenStationResponse[]>(
+                            projection.StationsJson
+                        ) ?? [];
+                    lateZoneNotification = new KdsProjectionNotification(
+                        projection.Id,
+                        projection.RestaurantId,
+                        projection.Source,
+                        projection.Status,
+                        projection.Version,
+                        stations.Select(station => station.Code).ToArray()
+                    );
+                }
             }
 
             if (projection.Version < data.Version)
@@ -71,16 +92,19 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
             shouldNotify = true;
         }
 
-        return shouldNotify
-            ? new KdsProjectionNotification(
-                data.OrderId,
-                data.RestaurantId,
-                data.Source,
-                data.Status,
-                data.Version,
-                data.AffectedStationCodes
-            )
-            : null;
+        return lateZoneNotification
+            ?? (
+                shouldNotify
+                    ? new KdsProjectionNotification(
+                        data.OrderId,
+                        data.RestaurantId,
+                        data.Source,
+                        data.Status,
+                        data.Version,
+                        data.AffectedStationCodes
+                    )
+                    : null
+            );
     }
 
     private static ProjectionData Deserialize(string? type, ReadOnlySpan<byte> body)
@@ -110,7 +134,8 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
                 null,
                 value.Lines,
                 value.Stations,
-                []
+                [],
+                value.ZoneId
             );
         }
         if (type == typeof(OrderSubmitted).FullName)
@@ -371,7 +396,8 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
         DateTime? deliveredAtUtc,
         IReadOnlyList<OrderLineSnapshot> lines,
         IReadOnlyList<OrderKitchenStationSnapshot> stations,
-        IReadOnlyList<string> affectedStationCodes
+        IReadOnlyList<string> affectedStationCodes,
+        Guid? zoneId = null
     )
     {
         return new ProjectionData(
@@ -397,7 +423,8 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
             deliveredAtUtc,
             MapLines(lines),
             MapStations(stations),
-            affectedStationCodes
+            affectedStationCodes,
+            zoneId
         );
     }
 
@@ -470,6 +497,7 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
         DateTime? DeliveredAtUtc,
         IReadOnlyList<OrderLineResponse> Lines,
         IReadOnlyList<OrderKitchenStationResponse> Stations,
-        IReadOnlyList<string> AffectedStationCodes
+        IReadOnlyList<string> AffectedStationCodes,
+        Guid? ZoneId
     );
 }

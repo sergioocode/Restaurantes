@@ -6,7 +6,8 @@ public sealed class RestaurantKitchenStation
         bool IsPrimary,
         bool RequiresPrimaryDispatch,
         int Priority,
-        bool PrintTicket = false
+        bool PrintTicket = false,
+        bool ManagesZones = false
     );
 
     private RestaurantKitchenStation() { }
@@ -34,6 +35,7 @@ public sealed class RestaurantKitchenStation
             configuration.Priority
         );
         PrintTicket = configuration.PrintTicket;
+        ManagesZones = configuration.ManagesZones;
         IsActive = true;
         Version = 1;
         UpdatedAtUtc = now;
@@ -46,6 +48,7 @@ public sealed class RestaurantKitchenStation
     public bool IsPrimary { get; private set; }
     public bool RequiresPrimaryDispatch { get; private set; }
     public bool PrintTicket { get; private set; }
+    public bool ManagesZones { get; private set; }
     public int Priority { get; private set; }
     public bool IsActive { get; private set; }
     public int Version { get; private set; }
@@ -69,12 +72,14 @@ public sealed class RestaurantKitchenStation
         bool requiresPrimaryDispatch,
         int priority,
         DateTime now,
-        bool printTicket = false
+        bool printTicket = false,
+        bool managesZones = false
     )
     {
         Name = Category.Required(name, 80);
         ConfigureDispatch(isPrimary, requiresPrimaryDispatch, priority);
         PrintTicket = printTicket;
+        ManagesZones = managesZones;
         IsActive = isActive;
         Version++;
         UpdatedAtUtc = now;
@@ -127,6 +132,12 @@ public sealed class RestaurantKitchenStation
     public void SetPrintTicket(bool printTicket, DateTime now)
     {
         PrintTicket = printTicket;
+        Touch(now);
+    }
+
+    public void SetManagesZones(bool managesZones, DateTime now)
+    {
+        ManagesZones = managesZones;
         Touch(now);
     }
 

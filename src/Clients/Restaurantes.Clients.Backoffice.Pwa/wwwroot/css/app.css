@@ -54,7 +54,7 @@ input[type="checkbox"] { width: 18px; height: 18px; min-height: 18px; padding: 0
 .product-name-editor label { min-width: 0; flex: 1; }
 .product-name-save { display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; padding: 0; }
 .product-tax-select:disabled { opacity: .55; }
-.maintenance-row.station-row { grid-template-columns: 100px minmax(240px, 400px) 150px repeat(4, max-content); }
+.maintenance-row.station-row { grid-template-columns: 100px minmax(240px, 400px) 150px repeat(5, max-content); }
 .station-field-editor { display: flex !important; align-items: end; gap: 8px !important; min-width: 0; }
 .station-field-editor label { min-width: 0; flex: 1; }
 .station-create-form { grid-template-columns: minmax(150px, 190px) minmax(180px, 320px) max-content max-content max-content max-content max-content; }

@@ -20,7 +20,8 @@ public sealed record DiningResult(
     int? GuestCount = null,
     int? ProblemStatusCode = null,
     string? ProblemTitle = null,
-    string? ProblemDetail = null
+    string? ProblemDetail = null,
+    Guid? ZoneId = null
 );
 
 internal static class DiningResults
@@ -35,9 +36,9 @@ internal static class DiningResults
         return new(DiningOutcome.Created, value, location);
     }
 
-    public static DiningResult NoContent(int? guestCount = null)
+    public static DiningResult NoContent(int? guestCount = null, Guid? zoneId = null)
     {
-        return new(DiningOutcome.NoContent, GuestCount: guestCount);
+        return new(DiningOutcome.NoContent, GuestCount: guestCount, ZoneId: zoneId);
     }
 
     public static DiningResult BadRequest(object value)

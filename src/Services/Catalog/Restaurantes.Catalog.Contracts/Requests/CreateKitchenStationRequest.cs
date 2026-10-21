@@ -12,6 +12,7 @@ public sealed class CreateKitchenStationRequest
     public bool IsPrimary { get; init; }
     public bool RequiresPrimaryDispatch { get; init; }
     public bool PrintTicket { get; init; }
+    public bool ManagesZones { get; init; }
 
     [Range(0, 99)]
     public int Priority { get; init; } = 1;

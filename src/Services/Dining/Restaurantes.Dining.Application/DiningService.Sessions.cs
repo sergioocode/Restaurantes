@@ -152,8 +152,9 @@ public sealed partial class DiningService
                 && TokenEquals(session.CustomerAccessToken, customerAccessToken);
         }
 
+        Guid? zoneId = valid ? await db.ReadTableZoneIdAsync(restaurantId, tableId, ct) : null;
         return valid
-            ? DiningResults.NoContent(session!.GuestCount)
+            ? DiningResults.NoContent(session!.GuestCount, zoneId)
             : DiningResults.Conflict(
                 new
                 {

@@ -13,7 +13,8 @@ public sealed class KitchenHistoryQuery(OrderWriteDbContext db, TimeZoneInfo tim
         Guid restaurantId,
         DateOnly businessDate,
         string stationCode,
-        CancellationToken ct
+        CancellationToken ct,
+        Guid? zoneId = null
     )
     {
         OrderKitchenStationConfiguration? configuration = await db
@@ -38,6 +39,10 @@ public sealed class KitchenHistoryQuery(OrderWriteDbContext db, TimeZoneInfo tim
             .Orders.AsNoTracking()
             .Where(order =>
                 order.RestaurantId == restaurantId
+                && (
+                    zoneId == null
+                    || (zoneId == Guid.Empty ? order.ZoneId == null : order.ZoneId == zoneId)
+                )
                 && (
                     order.BusinessDate == businessDate
                     || (

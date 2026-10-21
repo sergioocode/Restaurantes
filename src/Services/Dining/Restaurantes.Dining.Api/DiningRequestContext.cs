@@ -23,6 +23,10 @@ internal static class DiningRequestContext
                 CultureInfo.InvariantCulture
             );
         }
+        if (result.ZoneId is Guid zoneId)
+        {
+            controller.Response.Headers["X-Dining-Zone-Id"] = zoneId.ToString();
+        }
 
         return result.Outcome switch
         {

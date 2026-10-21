@@ -24,24 +24,34 @@ export class KdsApiClient {
     return response.json();
   }
 
-  async getOrders(restaurantId, stationCode) {
+  async getOrders(restaurantId, stationCode, zoneId = null) {
     const query = new URLSearchParams({ restaurantId, stationCode });
+    if (zoneId !== null) query.set('zoneId', zoneId);
     const response = await this.fetch('/api/orders/kds?' + query);
     if (!response.ok) throw new Error('No se pudo consultar el KDS: HTTP ' + response.status);
     const payload = await response.json();
     return Array.isArray(payload) ? payload : [payload];
   }
 
-  async getHistory(restaurantId, stationCode) {
+  async getHistory(restaurantId, stationCode, zoneId = null) {
     const query = new URLSearchParams({ restaurantId, stationCode });
+    if (zoneId !== null) query.set('zoneId', zoneId);
     const response = await this.fetch('/api/orders/kds-history?' + query);
     if (!response.ok) throw new Error('No se pudo cargar el historial: HTTP ' + response.status);
     return response.json();
   }
 
   async getStations(restaurantId) {
-    const response = await this.fetch('/api/catalog/restaurants/' + restaurantId + '/stations');
+    const response = await this.fetch('/api/catalog/restaurants/' + restaurantId + '/stations',
+      { cache: 'no-store' });
     if (!response.ok) throw new Error('No se pudieron cargar las estaciones KDS: HTTP ' + response.status);
+    return response.json();
+  }
+
+  async getZones(restaurantId) {
+    const response = await this.fetch('/api/dining/restaurants/' + restaurantId + '/zones',
+      { cache: 'no-store' });
+    if (!response.ok) throw new Error('No se pudieron cargar las zonas KDS: HTTP ' + response.status);
     return response.json();
   }
 

@@ -7,5 +7,6 @@ public sealed class KitchenStationDraft
     public bool IsPrimary { get; set; }
     public bool RequiresPrimaryDispatch { get; set; }
     public bool PrintTicket { get; set; }
+    public bool ManagesZones { get; set; }
     public int Priority { get; set; } = 1;
 }

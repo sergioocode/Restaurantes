@@ -349,7 +349,8 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
                 x.Priority,
                 x.IsActive,
                 x.Version,
-                x.UpdatedAtUtc
+                x.UpdatedAtUtc,
+                x.ManagesZones
             ))
             .ToListAsync(ct);
     }

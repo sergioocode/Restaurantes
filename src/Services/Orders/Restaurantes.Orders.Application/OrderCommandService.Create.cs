@@ -25,6 +25,7 @@ public sealed partial class OrderCommandService
         }
 
         int? guestCount = null;
+        Guid? zoneId = null;
         if (serviceMode is ServiceMode.DineIn or ServiceMode.Bar)
         {
             if (request.TableId is null || request.DiningSessionId is null)
@@ -34,7 +35,7 @@ public sealed partial class OrderCommandService
                 );
             }
 
-            guestCount = await dining.EnsureOpenAsync(
+            DiningSessionValidation validation = await dining.EnsureOpenAsync(
                 request.DiningSessionId.Value,
                 request.RestaurantId,
                 request.TableId.Value,
@@ -43,6 +44,12 @@ public sealed partial class OrderCommandService
                 customerAccessToken,
                 ct
             );
+            guestCount = validation.GuestCount;
+            zoneId = validation.ZoneId;
+            if (zoneId is null || zoneId == Guid.Empty)
+            {
+                throw new InvalidOperationException("The dining table zone could not be resolved.");
+            }
         }
         Guid[] ids = request.Lines.Select(x => x.ProductId).Distinct().ToArray();
         IReadOnlyDictionary<Guid, OrderCatalogProduct> products = await catalog.FindAsync(
@@ -76,7 +83,8 @@ public sealed partial class OrderCommandService
             request.Lines.Select(line => BuildLineDraft(line, products[line.ProductId], source)),
             now,
             cashSession.SessionId,
-            cashSession.BusinessDate
+            cashSession.BusinessDate,
+            zoneId
         );
         await store.SaveWithEventAsync(
             order,
@@ -95,7 +103,8 @@ public sealed partial class OrderCommandService
                 now,
                 Lines(order),
                 Stations(order),
-                createdByUserId
+                createdByUserId,
+                zoneId
             ),
             ct
         );

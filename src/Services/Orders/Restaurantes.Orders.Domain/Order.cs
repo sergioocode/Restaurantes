@@ -11,6 +11,7 @@ public sealed class Order
     public Guid RestaurantId { get; private set; }
     public int? GuestCount { get; private set; }
     public Guid? TableId { get; private set; }
+    public Guid? ZoneId { get; private set; }
     public Guid? DiningSessionId { get; private set; }
     public string TableLabel { get; private set; } = string.Empty;
     public string CustomerName { get; private set; } = string.Empty;
@@ -42,7 +43,8 @@ public sealed class Order
         IEnumerable<OrderLineDraft> lineDrafts,
         DateTime occurredAtUtc,
         Guid? cashRegisterSessionId = null,
-        DateOnly? businessDate = null
+        DateOnly? businessDate = null,
+        Guid? zoneId = null
     )
     {
         if (restaurantId == Guid.Empty)
@@ -116,6 +118,7 @@ public sealed class Order
             Id = orderId,
             RestaurantId = restaurantId,
             TableId = tableId,
+            ZoneId = zoneId,
             GuestCount = guestCount,
             DiningSessionId = diningSessionId,
             TableLabel = normalizedTableLabel,

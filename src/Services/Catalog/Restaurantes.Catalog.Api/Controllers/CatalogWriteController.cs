@@ -322,6 +322,18 @@ public sealed class CatalogWriteController(
             () => service.SetStationPrintTicketAsync(restaurantId, stationId, printTicket, ct)
         );
 
+    [HttpPut("restaurants/{restaurantId:guid}/stations/{stationId:guid}/manages-zones")]
+    public Task<ActionResult<KitchenStationResponse>> SetStationManagesZones(
+        Guid restaurantId,
+        Guid stationId,
+        [FromBody] bool managesZones,
+        CancellationToken ct
+    ) =>
+        SaveStationChangeAsync(
+            restaurantId,
+            () => service.SetStationManagesZonesAsync(restaurantId, stationId, managesZones, ct)
+        );
+
     private async Task<ActionResult<KitchenStationResponse>> SaveStationChangeAsync(
         Guid restaurantId,
         Func<Task<KitchenStationResponse?>> change

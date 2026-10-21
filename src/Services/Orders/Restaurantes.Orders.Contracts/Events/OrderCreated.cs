@@ -15,5 +15,6 @@ public sealed record OrderCreated(
     DateTime OccurredAtUtc,
     IReadOnlyList<OrderLineSnapshot> Lines,
     IReadOnlyList<OrderKitchenStationSnapshot> Stations,
-    Guid? CreatedByUserId = null
+    Guid? CreatedByUserId = null,
+    Guid? ZoneId = null
 );

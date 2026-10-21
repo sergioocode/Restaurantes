@@ -28,7 +28,8 @@ public sealed partial class CatalogCommandService
                 request.IsPrimary,
                 request.RequiresPrimaryDispatch,
                 request.Priority,
-                request.PrintTicket
+                request.PrintTicket,
+                request.ManagesZones
             ),
             now
         );
@@ -73,7 +74,8 @@ public sealed partial class CatalogCommandService
             request.RequiresPrimaryDispatch,
             request.Priority,
             now,
-            request.PrintTicket ?? item.PrintTicket
+            request.PrintTicket ?? item.PrintTicket,
+            request.ManagesZones ?? item.ManagesZones
         );
         await SaveStationAsync(item, now, ct);
         return ToResponse(item);
@@ -146,6 +148,19 @@ public sealed partial class CatalogCommandService
             ct
         );
 
+    public Task<KitchenStationResponse?> SetStationManagesZonesAsync(
+        Guid restaurantId,
+        Guid stationId,
+        bool managesZones,
+        CancellationToken ct
+    ) =>
+        ChangeStationAsync(
+            restaurantId,
+            stationId,
+            (item, now) => item.SetManagesZones(managesZones, now),
+            ct
+        );
+
     private async Task<KitchenStationResponse?> ChangeStationAsync(
         Guid restaurantId,
         Guid stationId,
@@ -193,7 +208,8 @@ public sealed partial class CatalogCommandService
             item.IsActive,
             item.Version,
             now,
-            item.PrintTicket
+            item.PrintTicket,
+            ManagesZones: item.ManagesZones
         );
         await store.SaveWithEventAsync(item, message, ct);
     }
@@ -211,7 +227,8 @@ public sealed partial class CatalogCommandService
             item.Priority,
             item.IsActive,
             item.Version,
-            item.UpdatedAtUtc
+            item.UpdatedAtUtc,
+            item.ManagesZones
         );
     }
 }

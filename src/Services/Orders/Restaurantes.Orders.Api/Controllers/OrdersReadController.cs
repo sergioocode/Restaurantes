@@ -25,7 +25,8 @@ public sealed class OrdersReadController(
     public async Task<ActionResult<IReadOnlyList<KitchenHistoryResponse>>> KitchenHistory(
         Guid restaurantId,
         string stationCode,
-        CancellationToken ct
+        CancellationToken ct,
+        [FromQuery] Guid? zoneId = null
     )
     {
         if (restaurantId == Guid.Empty || string.IsNullOrWhiteSpace(stationCode))
@@ -41,7 +42,8 @@ public sealed class OrdersReadController(
             restaurantId,
             businessDate,
             stationCode.Trim().ToUpperInvariant(),
-            ct
+            ct,
+            zoneId
         );
         return result is null ? Forbid() : Ok(result);
     }
@@ -83,18 +85,25 @@ public sealed class OrdersReadController(
     [Authorize]
     [HttpGet("kds")]
     [ProducesResponseType<IReadOnlyList<OrderResponse>>(StatusCodes.Status200OK)]
-    public Task<ActionResult<IReadOnlyList<OrderResponse>>> ListKds(
+    public async Task<ActionResult<IReadOnlyList<OrderResponse>>> ListKds(
         [FromQuery] Guid restaurantId,
         CancellationToken cancellationToken,
-        [FromQuery] string? stationCode = null
+        [FromQuery] string? stationCode = null,
+        [FromQuery] Guid? zoneId = null
     )
     {
-        return ListForPermission(
-            restaurantId,
-            stationCode,
-            RestaurantPermissions.KdsUse,
-            cancellationToken
-        );
+        if (
+            restaurantId == Guid.Empty
+            || (zoneId.HasValue && string.IsNullOrWhiteSpace(stationCode))
+        )
+        {
+            return BadRequest();
+        }
+        if (!User.CanAccessRestaurant(restaurantId, RestaurantPermissions.KdsUse))
+        {
+            return Forbid();
+        }
+        return Ok(await store.ListAsync(restaurantId, stationCode, cancellationToken, zoneId));
     }
 
     [Authorize]

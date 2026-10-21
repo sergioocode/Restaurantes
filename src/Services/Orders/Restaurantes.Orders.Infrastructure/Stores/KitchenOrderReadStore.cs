@@ -19,13 +19,18 @@ public sealed class KitchenOrderReadStore(OrderReadDbContext dbContext) : IKitch
     public async Task<IReadOnlyList<OrderResponse>> ListAsync(
         Guid restaurantId,
         string? stationCode,
-        CancellationToken ct
+        CancellationToken ct,
+        Guid? zoneId = null
     )
     {
         List<KitchenOrderReadModel> items = await dbContext
             .KitchenOrders.AsNoTracking()
             .Where(item =>
                 item.RestaurantId == restaurantId
+                && (
+                    zoneId == null
+                    || (zoneId == Guid.Empty ? item.ZoneId == null : item.ZoneId == zoneId)
+                )
                 && (
                     item.Status == "Submitted"
                     || item.Status == "InPreparation"
@@ -100,7 +105,8 @@ public sealed class KitchenOrderReadStore(OrderReadDbContext dbContext) : IKitch
             item.ReadyAtUtc,
             item.DeliveredAtUtc,
             lines,
-            stations
+            stations,
+            item.ZoneId
         );
     }
 }

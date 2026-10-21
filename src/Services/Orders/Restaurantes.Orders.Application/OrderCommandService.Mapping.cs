@@ -170,7 +170,8 @@ public sealed partial class OrderCommandService
                     x.ReadyAtUtc,
                     x.DispatchedAtUtc
                 ))
-                .ToList()
+                .ToList(),
+            o.ZoneId
         );
     }
 

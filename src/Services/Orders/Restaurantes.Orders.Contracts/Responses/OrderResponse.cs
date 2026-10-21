@@ -20,5 +20,6 @@ public sealed record OrderResponse(
     DateTime? ReadyAtUtc,
     DateTime? DeliveredAtUtc,
     IReadOnlyList<OrderLineResponse> Lines,
-    IReadOnlyList<OrderKitchenStationResponse> Stations
+    IReadOnlyList<OrderKitchenStationResponse> Stations,
+    Guid? ZoneId = null
 );

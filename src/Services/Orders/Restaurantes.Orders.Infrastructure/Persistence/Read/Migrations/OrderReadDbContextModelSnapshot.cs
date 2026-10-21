@@ -115,6 +115,9 @@ namespace Restaurantes.Orders.Infrastructure.Persistence.Read.Migrations
                     b.Property<Guid?>("TableId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ZoneId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("TableLabel")
                         .IsRequired()
                         .HasMaxLength(80)

@@ -48,6 +48,7 @@ public sealed class CatalogReadDbContext(DbContextOptions<CatalogReadDbContext> 
         s.Property(x => x.Code).HasMaxLength(40).IsRequired();
         s.Property(x => x.Name).HasMaxLength(80).IsRequired();
         s.Property(x => x.PrintTicket).HasDefaultValue(false);
+        s.Property(x => x.ManagesZones).HasDefaultValue(false);
         s.HasIndex(x => new { x.RestaurantId, x.Code }).IsUnique();
         s.HasIndex(x => x.RestaurantId)
             .HasFilter("\"IsPrimary\" = TRUE AND \"IsActive\" = TRUE")

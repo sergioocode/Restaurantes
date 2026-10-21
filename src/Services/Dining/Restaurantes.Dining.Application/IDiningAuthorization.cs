@@ -5,6 +5,7 @@ namespace Restaurantes.Dining.Application;
 public enum DiningPermission
 {
     TablesRead,
+    KdsZonesRead,
     TablesManage,
     OrdersCreate,
     TablesRelease,

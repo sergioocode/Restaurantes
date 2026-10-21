@@ -11,5 +11,6 @@ public sealed record KitchenStationResponse(
     int Priority,
     bool IsActive,
     int Version,
-    DateTime UpdatedAtUtc
+    DateTime UpdatedAtUtc,
+    bool ManagesZones = false
 );

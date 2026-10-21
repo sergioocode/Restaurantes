@@ -147,6 +147,17 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
             );
     }
 
+    public Task<Guid?> ReadTableZoneIdAsync(
+        Guid restaurantId,
+        Guid tableId,
+        CancellationToken ct
+    ) =>
+        db
+            .Tables.AsNoTracking()
+            .Where(table => table.RestaurantId == restaurantId && table.Id == tableId)
+            .Select(table => (Guid?)table.ZoneId)
+            .SingleOrDefaultAsync(ct);
+
     public Task<DiningSession?> FindSessionWithOrdersAsync(Guid sessionId, CancellationToken ct)
     {
         return db.Sessions.Include(x => x.Orders).SingleOrDefaultAsync(x => x.Id == sessionId, ct);

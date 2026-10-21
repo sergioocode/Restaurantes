@@ -8,6 +8,7 @@ public interface IKitchenHistoryQuery
         Guid restaurantId,
         DateOnly businessDate,
         string stationCode,
-        CancellationToken ct
+        CancellationToken ct,
+        Guid? zoneId = null
     );
 }
