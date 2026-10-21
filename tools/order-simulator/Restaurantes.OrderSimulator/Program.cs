@@ -108,7 +108,7 @@ internal static class Program
         }
     }
 
-    private static async Task<Exception?> PreflightRestaurantAsync(
+    internal static async Task<Exception?> PreflightRestaurantAsync(
         HttpClient client,
         RestaurantOptions restaurant,
         string posToken,
@@ -662,7 +662,7 @@ internal static class Program
         public required SemaphoreSlim RandomLock { get; init; }
     }
 
-    private static async Task EnsureCashRegisterOpenAsync(
+    internal static async Task EnsureCashRegisterOpenAsync(
         HttpClient client,
         RestaurantOptions restaurant,
         string token,
@@ -740,7 +740,7 @@ internal static class Program
             .ToList();
     }
 
-    private static async Task<bool> ProcessOrderAsync(
+    internal static async Task<bool> ProcessOrderAsync(
         HttpClient client,
         RestaurantOptions restaurant,
         string posToken,
