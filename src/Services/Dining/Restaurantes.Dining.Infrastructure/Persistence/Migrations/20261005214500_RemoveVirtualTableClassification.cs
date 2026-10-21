@@ -14,5 +14,8 @@ public partial class RemoveVirtualTableClassification : Migration
     }
 
     /// <inheritdoc />
-    protected override void Down(MigrationBuilder migrationBuilder) { }
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        // The removed IsVirtual values cannot be reconstructed after this migration.
+    }
 }
