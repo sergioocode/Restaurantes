@@ -299,18 +299,26 @@ public sealed class OrdersWriteController(
     )
     {
         Order? existing = await store.FindAsync(id, cancellationToken);
-        return existing is null ? (ActionResult<OrderResponse>)NotFound()
-            : User.Identity?.IsAuthenticated != true ? (ActionResult<OrderResponse>)Unauthorized()
-            : !User.CanManageOrder(existing.RestaurantId, existing.Source.ToString())
-                ? (ActionResult<OrderResponse>)Forbid()
-            : await ExecuteTransitionAsync(
-                id,
-                (orderId, token) =>
-                    commandService.CancelLineAsync(orderId, lineId, request.Reason, token),
-                "Order line cannot be cancelled",
-                cancellationToken,
-                existing.RestaurantId
-            );
+        if (existing is null)
+        {
+            return NotFound();
+        }
+        if (User.Identity?.IsAuthenticated != true)
+        {
+            return Unauthorized();
+        }
+        if (!User.CanManageOrder(existing.RestaurantId, existing.Source.ToString()))
+        {
+            return Forbid();
+        }
+        return await ExecuteTransitionAsync(
+            id,
+            (orderId, token) =>
+                commandService.CancelLineAsync(orderId, lineId, request.Reason, token),
+            "Order line cannot be cancelled",
+            cancellationToken,
+            existing.RestaurantId
+        );
     }
 
     private async Task<ActionResult<OrderResponse>> ExecuteTransitionAsync(
@@ -384,17 +392,25 @@ public sealed class OrdersWriteController(
     )
     {
         Order? existing = await store.FindAsync(id, cancellationToken);
-        return existing is null ? (ActionResult<OrderResponse>)NotFound()
-            : User.Identity?.IsAuthenticated != true ? (ActionResult<OrderResponse>)Unauthorized()
-            : !User.CanAccessRestaurant(existing.RestaurantId, permission)
-                ? (ActionResult<OrderResponse>)Forbid()
-            : await ExecuteTransitionAsync(
-                id,
-                transition,
-                conflictTitle,
-                cancellationToken,
-                requiresOpenCashRegister ? existing.RestaurantId : null
-            );
+        if (existing is null)
+        {
+            return NotFound();
+        }
+        if (User.Identity?.IsAuthenticated != true)
+        {
+            return Unauthorized();
+        }
+        if (!User.CanAccessRestaurant(existing.RestaurantId, permission))
+        {
+            return Forbid();
+        }
+        return await ExecuteTransitionAsync(
+            id,
+            transition,
+            conflictTitle,
+            cancellationToken,
+            requiresOpenCashRegister ? existing.RestaurantId : null
+        );
     }
 
     private async Task<ActionResult<OrderResponse>> ExecuteOrderManagementTransitionAsync(
@@ -406,16 +422,24 @@ public sealed class OrdersWriteController(
     )
     {
         Order? existing = await store.FindAsync(id, cancellationToken);
-        return existing is null ? (ActionResult<OrderResponse>)NotFound()
-            : User.Identity?.IsAuthenticated != true ? (ActionResult<OrderResponse>)Unauthorized()
-            : !User.CanManageOrder(existing.RestaurantId, existing.Source.ToString())
-                ? (ActionResult<OrderResponse>)Forbid()
-            : await ExecuteTransitionAsync(
-                id,
-                transition,
-                conflictTitle,
-                cancellationToken,
-                requiresOpenCashRegister ? existing.RestaurantId : null
-            );
+        if (existing is null)
+        {
+            return NotFound();
+        }
+        if (User.Identity?.IsAuthenticated != true)
+        {
+            return Unauthorized();
+        }
+        if (!User.CanManageOrder(existing.RestaurantId, existing.Source.ToString()))
+        {
+            return Forbid();
+        }
+        return await ExecuteTransitionAsync(
+            id,
+            transition,
+            conflictTitle,
+            cancellationToken,
+            requiresOpenCashRegister ? existing.RestaurantId : null
+        );
     }
 }

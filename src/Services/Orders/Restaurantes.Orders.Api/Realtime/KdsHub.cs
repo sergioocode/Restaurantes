@@ -14,13 +14,25 @@ public sealed class KdsHub : Hub<IKdsClient>
 
     public Task JoinStation(Guid restaurantId, string stationCode)
     {
-        return restaurantId == Guid.Empty ? throw new HubException("RestaurantId is required.")
-            : string.IsNullOrWhiteSpace(stationCode)
-                ? throw new HubException("StationCode is required.")
-            : Context.User is not { } user
+        if (restaurantId == Guid.Empty)
+        {
+            throw new HubException("RestaurantId is required.");
+        }
+        if (string.IsNullOrWhiteSpace(stationCode))
+        {
+            throw new HubException("StationCode is required.");
+        }
+        if (
+            Context.User is not { } user
             || !user.CanAccessRestaurant(restaurantId, RestaurantPermissions.KdsUse)
-                ? throw new HubException("The user cannot access this restaurant KDS.")
-            : Groups.AddToGroupAsync(Context.ConnectionId, StationGroup(restaurantId, stationCode));
+        )
+        {
+            throw new HubException("The user cannot access this restaurant KDS.");
+        }
+        return Groups.AddToGroupAsync(
+            Context.ConnectionId,
+            StationGroup(restaurantId, stationCode)
+        );
     }
 
     public Task LeaveRestaurant(Guid restaurantId)

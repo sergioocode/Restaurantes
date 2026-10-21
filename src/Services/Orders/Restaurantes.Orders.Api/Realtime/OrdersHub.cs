@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Restaurantes.Security;
 
@@ -49,10 +49,15 @@ public sealed class OrdersHub : Hub<IKdsClient>
 
     private Task Join(Guid restaurantId, string permission, string group)
     {
-        return restaurantId == Guid.Empty ? throw new HubException("RestaurantId is required.")
-            : Context.User is not { } user || !user.CanAccessRestaurant(restaurantId, permission)
-                ? throw new HubException("The user cannot access this restaurant order stream.")
-            : Groups.AddToGroupAsync(Context.ConnectionId, group);
+        if (restaurantId == Guid.Empty)
+        {
+            throw new HubException("RestaurantId is required.");
+        }
+        if (Context.User is not { } user || !user.CanAccessRestaurant(restaurantId, permission))
+        {
+            throw new HubException("The user cannot access this restaurant order stream.");
+        }
+        return Groups.AddToGroupAsync(Context.ConnectionId, group);
     }
 
     public static string CommanderGroup(Guid restaurantId)

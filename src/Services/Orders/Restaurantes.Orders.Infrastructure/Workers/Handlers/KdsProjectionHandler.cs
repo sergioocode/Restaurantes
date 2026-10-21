@@ -9,6 +9,9 @@ namespace Restaurantes.Orders.Infrastructure.Workers.Handlers;
 
 public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvider timeProvider)
 {
+    private const string DraftStatus = "Draft";
+    private const string CancelledStatus = "Cancelled";
+
     public async Task<KdsProjectionNotification?> ProjectAsync(
         Guid messageId,
         string? type,
@@ -36,7 +39,7 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
             if (data.ZoneId is Guid zoneId && projection.ZoneId is null)
             {
                 projection.ZoneId = zoneId;
-                if (projection.Version > data.Version && projection.Status != "Draft")
+                if (projection.Version > data.Version && projection.Status != DraftStatus)
                 {
                     OrderKitchenStationResponse[] stations =
                         JsonSerializer.Deserialize<OrderKitchenStationResponse[]>(
@@ -74,7 +77,7 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
                 projection.DeliveredAtUtc = data.DeliveredAtUtc;
                 projection.LinesJson = JsonSerializer.Serialize(data.Lines);
                 projection.StationsJson = JsonSerializer.Serialize(data.Stations);
-                shouldNotify = data.Status != "Draft";
+                shouldNotify = data.Status != DraftStatus;
             }
 
             dbContext.InboxMessages.Add(
@@ -87,7 +90,7 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
             );
             await dbContext.SaveChangesAsync(cancellationToken);
         }
-        else if (data.Status != "Draft")
+        else if (data.Status != DraftStatus)
         {
             shouldNotify = true;
         }
@@ -125,7 +128,7 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
                 value.ServiceMode,
                 value.Source,
                 value.PaymentTiming,
-                "Draft",
+                DraftStatus,
                 value.Version,
                 value.OccurredAtUtc,
                 null,
@@ -224,37 +227,7 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
         }
         if (type == typeof(KitchenTicketDispatched).FullName)
         {
-            KitchenTicketDispatched value =
-                JsonSerializer.Deserialize<KitchenTicketDispatched>(body)
-                ?? throw new JsonException("KitchenTicketDispatched body is empty.");
-            OrderKitchenStationSnapshot changed = value.Stations.Single(station =>
-                station.Code == value.ChangedStationCode
-            );
-            bool completed = value
-                .Stations.Where(station => station.Status != "Cancelled")
-                .All(station => station.Status == "Dispatched");
-            return CreateProjection(
-                value.OrderId,
-                value.RestaurantId,
-                value.TableId,
-                value.GuestCount,
-                value.DiningSessionId,
-                value.TableLabel,
-                value.CustomerName,
-                value.ServiceMode,
-                value.Source,
-                value.PaymentTiming,
-                completed ? "Delivered" : "Ready",
-                value.Version,
-                value.CreatedAtUtc,
-                value.SubmittedAtUtc,
-                value.PreparationStartedAtUtc,
-                changed.ReadyAtUtc,
-                completed ? value.DispatchedAtUtc : null,
-                value.Lines,
-                value.Stations,
-                value.Stations.Select(station => station.Code).ToList()
-            );
+            return DeserializeKitchenTicketDispatched(body);
         }
         if (type == typeof(OrderReady).FullName)
         {
@@ -328,7 +301,7 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
                 value.ServiceMode,
                 value.Source,
                 value.PaymentTiming,
-                "Cancelled",
+                CancelledStatus,
                 value.Version,
                 value.CreatedAtUtc,
                 value.SubmittedAtUtc,
@@ -342,38 +315,78 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
         }
         if (type == typeof(OrderLineCancelled).FullName)
         {
-            OrderLineCancelled value =
-                JsonSerializer.Deserialize<OrderLineCancelled>(body)
-                ?? throw new JsonException("OrderLineCancelled body is empty.");
-            return CreateProjection(
-                value.OrderId,
-                value.RestaurantId,
-                value.TableId,
-                value.GuestCount,
-                value.DiningSessionId,
-                value.TableLabel,
-                value.CustomerName,
-                value.ServiceMode,
-                value.Source,
-                value.PaymentTiming,
-                value.Status,
-                value.Version,
-                value.CreatedAtUtc,
-                value.SubmittedAtUtc,
-                value
-                    .Stations.Where(station => station.PreparationStartedAtUtc.HasValue)
-                    .Select(station => station.PreparationStartedAtUtc)
-                    .Min(),
-                value.Status == "Ready" ? value.CancelledAtUtc : null,
-                null,
-                value.Lines,
-                value.Stations,
-                value.Status == "Cancelled"
-                    ? value.Stations.Select(station => station.Code).ToArray()
-                    : new[] { value.ChangedStationCode }
-            );
+            return DeserializeOrderLineCancelled(body);
         }
         throw new NotSupportedException($"Unsupported order event: {type}");
+    }
+
+    private static ProjectionData DeserializeKitchenTicketDispatched(ReadOnlySpan<byte> body)
+    {
+        KitchenTicketDispatched value =
+            JsonSerializer.Deserialize<KitchenTicketDispatched>(body)
+            ?? throw new JsonException("KitchenTicketDispatched body is empty.");
+        OrderKitchenStationSnapshot changed = value.Stations.Single(station =>
+            station.Code == value.ChangedStationCode
+        );
+        bool completed = value
+            .Stations.Where(station => station.Status != CancelledStatus)
+            .All(station => station.Status == "Dispatched");
+        return CreateProjection(
+            value.OrderId,
+            value.RestaurantId,
+            value.TableId,
+            value.GuestCount,
+            value.DiningSessionId,
+            value.TableLabel,
+            value.CustomerName,
+            value.ServiceMode,
+            value.Source,
+            value.PaymentTiming,
+            completed ? "Delivered" : "Ready",
+            value.Version,
+            value.CreatedAtUtc,
+            value.SubmittedAtUtc,
+            value.PreparationStartedAtUtc,
+            changed.ReadyAtUtc,
+            completed ? value.DispatchedAtUtc : null,
+            value.Lines,
+            value.Stations,
+            value.Stations.Select(station => station.Code).ToList()
+        );
+    }
+
+    private static ProjectionData DeserializeOrderLineCancelled(ReadOnlySpan<byte> body)
+    {
+        OrderLineCancelled value =
+            JsonSerializer.Deserialize<OrderLineCancelled>(body)
+            ?? throw new JsonException("OrderLineCancelled body is empty.");
+        return CreateProjection(
+            value.OrderId,
+            value.RestaurantId,
+            value.TableId,
+            value.GuestCount,
+            value.DiningSessionId,
+            value.TableLabel,
+            value.CustomerName,
+            value.ServiceMode,
+            value.Source,
+            value.PaymentTiming,
+            value.Status,
+            value.Version,
+            value.CreatedAtUtc,
+            value.SubmittedAtUtc,
+            value
+                .Stations.Where(station => station.PreparationStartedAtUtc.HasValue)
+                .Select(station => station.PreparationStartedAtUtc)
+                .Min(),
+            value.Status == "Ready" ? value.CancelledAtUtc : null,
+            null,
+            value.Lines,
+            value.Stations,
+            value.Status == CancelledStatus
+                ? value.Stations.Select(station => station.Code).ToArray()
+                : new[] { value.ChangedStationCode }
+        );
     }
 
     private static ProjectionData CreateProjection(
@@ -413,7 +426,7 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
             paymentTiming,
             status,
             lines
-                .Where(line => line.Status != "Cancelled")
+                .Where(line => line.Status != CancelledStatus)
                 .Sum(line => line.UnitPrice * line.Quantity),
             version,
             createdAtUtc,

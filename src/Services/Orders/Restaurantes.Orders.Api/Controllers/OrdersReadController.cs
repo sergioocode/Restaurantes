@@ -57,13 +57,18 @@ public sealed class OrdersReadController(
         [FromQuery] int offset = 0
     )
     {
-        return restaurantId == Guid.Empty || offset < 0
-                ? (ActionResult<IReadOnlyList<ManagementOrderResponse>>)BadRequest()
-            : !User.CanAccessRestaurant(restaurantId, RestaurantPermissions.OrdersRead)
+        if (restaurantId == Guid.Empty || offset < 0)
+        {
+            return BadRequest();
+        }
+        if (
+            !User.CanAccessRestaurant(restaurantId, RestaurantPermissions.OrdersRead)
             && !User.CanAccessRestaurant(restaurantId, RestaurantPermissions.OrdersReportRead)
-                ? (ActionResult<IReadOnlyList<ManagementOrderResponse>>)Forbid()
-            : (ActionResult<IReadOnlyList<ManagementOrderResponse>>)
-                Ok(await management.ListAsync(restaurantId, date, offset, ct));
+        )
+        {
+            return Forbid();
+        }
+        return Ok(await management.ListAsync(restaurantId, date, offset, ct));
     }
 
     [HttpGet("restaurants/{restaurantId:guid}/cash-close-orders")]
@@ -73,13 +78,15 @@ public sealed class OrdersReadController(
         [FromQuery] int offset = 0
     )
     {
-        return !User.CanAccessRestaurant(restaurantId, RestaurantPermissions.CashRegisterManage)
-                ? (ActionResult<IReadOnlyList<CashCloseOrderResponse>>)Forbid()
-            : offset < 0
-                ? (ActionResult<IReadOnlyList<CashCloseOrderResponse>>)
-                    BadRequest("offset must be non-negative.")
-            : (ActionResult<IReadOnlyList<CashCloseOrderResponse>>)
-                Ok(await settlements.ListAsync(restaurantId, offset, ct));
+        if (!User.CanAccessRestaurant(restaurantId, RestaurantPermissions.CashRegisterManage))
+        {
+            return Forbid();
+        }
+        if (offset < 0)
+        {
+            return BadRequest("offset must be non-negative.");
+        }
+        return Ok(await settlements.ListAsync(restaurantId, offset, ct));
     }
 
     [Authorize]

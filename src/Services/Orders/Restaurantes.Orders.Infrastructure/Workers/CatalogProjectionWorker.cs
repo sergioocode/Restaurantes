@@ -83,119 +83,15 @@ public sealed class CatalogProjectionWorker(
             OrderWriteDbContext db = s.ServiceProvider.GetRequiredService<OrderWriteDbContext>();
             if (ea.BasicProperties.Type == typeof(CategoryChanged).FullName)
             {
-                CategoryChanged e =
-                    JsonSerializer.Deserialize<CategoryChanged>(ea.Body.Span)
-                    ?? throw new JsonException("Empty category");
-                List<OrderCatalogItem> products = await db
-                    .CatalogItems.Where(item => item.CategoryId == e.CategoryId)
-                    .ToListAsync();
-                foreach (OrderCatalogItem product in products)
-                {
-                    product.RequiresKds = e.RequiresKds;
-                    if (e.RequiresKds && string.IsNullOrWhiteSpace(product.StationCode))
-                    {
-                        product.StationCode = e.DefaultStationCode;
-                        product.StationName = e.DefaultStationName;
-                    }
-                }
+                await ProjectCategoryAsync(db, ea.Body);
             }
             else if (ea.BasicProperties.Type == typeof(CatalogItemChanged).FullName)
             {
-                CatalogItemChanged e =
-                    JsonSerializer.Deserialize<CatalogItemChanged>(ea.Body.Span)
-                    ?? throw new JsonException("Empty catalog item");
-                e = e with { OccurredAtUtc = EnsureUtc(e.OccurredAtUtc) };
-                OrderCatalogItem? x = await db.CatalogItems.SingleOrDefaultAsync(x =>
-                    x.RestaurantId == e.RestaurantId && x.ProductId == e.ProductId
-                );
-                if (x is null)
-                {
-                    db.CatalogItems.Add(
-                        new OrderCatalogItem
-                        {
-                            Id = Guid.NewGuid(),
-                            RestaurantId = e.RestaurantId,
-                            ProductId = e.ProductId,
-                            ProductName = e.ProductName,
-                            Price = e.Price,
-                            TaxRate = e.TaxRate,
-                            DefaultFormat = e.DefaultFormat,
-                            FormatsJson = JsonSerializer.Serialize(e.Formats ?? []),
-                            CategoryId = e.CategoryId,
-                            CategoryName = e.CategoryName,
-                            StationCode = e.PreparationStationCode,
-                            StationName = e.PreparationStationName,
-                            RequiresKds = e.RequiresKds,
-                            IsAvailable = e.IsAvailable,
-                            ExtraGroupsJson = JsonSerializer.Serialize(e.ExtraGroups ?? []),
-                            Version = e.Version,
-                            UpdatedAtUtc = e.OccurredAtUtc,
-                        }
-                    );
-                }
-                else if (x.Version < e.Version)
-                {
-                    x.ProductName = e.ProductName;
-                    x.Price = e.Price;
-                    x.TaxRate = e.TaxRate;
-                    x.DefaultFormat = e.DefaultFormat;
-                    x.FormatsJson = JsonSerializer.Serialize(e.Formats ?? []);
-                    x.CategoryId = e.CategoryId;
-                    x.CategoryName = e.CategoryName;
-                    x.StationCode = e.PreparationStationCode;
-                    x.StationName = e.PreparationStationName;
-                    x.RequiresKds = e.RequiresKds;
-                    x.IsAvailable = e.IsAvailable;
-                    x.ExtraGroupsJson = JsonSerializer.Serialize(e.ExtraGroups ?? []);
-                    x.Version = e.Version;
-                    x.UpdatedAtUtc = e.OccurredAtUtc;
-                }
+                await ProjectCatalogItemAsync(db, ea.Body);
             }
             else if (ea.BasicProperties.Type == typeof(KitchenStationChanged).FullName)
             {
-                KitchenStationChanged e =
-                    JsonSerializer.Deserialize<KitchenStationChanged>(ea.Body.Span)
-                    ?? throw new JsonException("Empty kitchen station");
-                e = e with { OccurredAtUtc = EnsureUtc(e.OccurredAtUtc) };
-                OrderKitchenStationConfiguration? x =
-                    await db.KitchenStationConfigurations.SingleOrDefaultAsync(x =>
-                        x.RestaurantId == e.RestaurantId && x.Code == e.Code
-                    );
-                if (e.IsDeleted)
-                {
-                    if (x is not null && x.Id == e.StationId && x.Version < e.Version)
-                    {
-                        db.KitchenStationConfigurations.Remove(x);
-                    }
-                }
-                else if (x is null)
-                {
-                    db.KitchenStationConfigurations.Add(
-                        new OrderKitchenStationConfiguration
-                        {
-                            Id = e.StationId,
-                            RestaurantId = e.RestaurantId,
-                            Code = e.Code,
-                            Name = e.Name,
-                            IsPrimary = e.IsPrimary,
-                            RequiresPrimaryDispatch = e.RequiresPrimaryDispatch,
-                            Priority = e.Priority,
-                            IsActive = e.IsActive,
-                            Version = e.Version,
-                            UpdatedAtUtc = e.OccurredAtUtc,
-                        }
-                    );
-                }
-                else if (x.Version < e.Version)
-                {
-                    x.Name = e.Name;
-                    x.IsPrimary = e.IsPrimary;
-                    x.RequiresPrimaryDispatch = e.RequiresPrimaryDispatch;
-                    x.Priority = e.Priority;
-                    x.IsActive = e.IsActive;
-                    x.Version = e.Version;
-                    x.UpdatedAtUtc = e.OccurredAtUtc;
-                }
+                await ProjectKitchenStationAsync(db, ea.Body);
             }
             else
             {
@@ -226,6 +122,134 @@ public sealed class CatalogProjectionWorker(
                 RabbitMqRetry.MaximumAttempts,
                 retry.Delay
             );
+        }
+    }
+
+    private static async Task ProjectCategoryAsync(
+        OrderWriteDbContext db,
+        ReadOnlyMemory<byte> body
+    )
+    {
+        CategoryChanged e =
+            JsonSerializer.Deserialize<CategoryChanged>(body.Span)
+            ?? throw new JsonException("Empty category");
+        List<OrderCatalogItem> products = await db
+            .CatalogItems.Where(item => item.CategoryId == e.CategoryId)
+            .ToListAsync();
+        foreach (OrderCatalogItem product in products)
+        {
+            product.RequiresKds = e.RequiresKds;
+            if (e.RequiresKds && string.IsNullOrWhiteSpace(product.StationCode))
+            {
+                product.StationCode = e.DefaultStationCode;
+                product.StationName = e.DefaultStationName;
+            }
+        }
+    }
+
+    private static async Task ProjectCatalogItemAsync(
+        OrderWriteDbContext db,
+        ReadOnlyMemory<byte> body
+    )
+    {
+        CatalogItemChanged e =
+            JsonSerializer.Deserialize<CatalogItemChanged>(body.Span)
+            ?? throw new JsonException("Empty catalog item");
+        e = e with { OccurredAtUtc = EnsureUtc(e.OccurredAtUtc) };
+        OrderCatalogItem? item = await db.CatalogItems.SingleOrDefaultAsync(x =>
+            x.RestaurantId == e.RestaurantId && x.ProductId == e.ProductId
+        );
+        if (item is null)
+        {
+            db.CatalogItems.Add(
+                new OrderCatalogItem
+                {
+                    Id = Guid.NewGuid(),
+                    RestaurantId = e.RestaurantId,
+                    ProductId = e.ProductId,
+                    ProductName = e.ProductName,
+                    Price = e.Price,
+                    TaxRate = e.TaxRate,
+                    DefaultFormat = e.DefaultFormat,
+                    FormatsJson = JsonSerializer.Serialize(e.Formats ?? []),
+                    CategoryId = e.CategoryId,
+                    CategoryName = e.CategoryName,
+                    StationCode = e.PreparationStationCode,
+                    StationName = e.PreparationStationName,
+                    RequiresKds = e.RequiresKds,
+                    IsAvailable = e.IsAvailable,
+                    ExtraGroupsJson = JsonSerializer.Serialize(e.ExtraGroups ?? []),
+                    Version = e.Version,
+                    UpdatedAtUtc = e.OccurredAtUtc,
+                }
+            );
+        }
+        else if (item.Version < e.Version)
+        {
+            item.ProductName = e.ProductName;
+            item.Price = e.Price;
+            item.TaxRate = e.TaxRate;
+            item.DefaultFormat = e.DefaultFormat;
+            item.FormatsJson = JsonSerializer.Serialize(e.Formats ?? []);
+            item.CategoryId = e.CategoryId;
+            item.CategoryName = e.CategoryName;
+            item.StationCode = e.PreparationStationCode;
+            item.StationName = e.PreparationStationName;
+            item.RequiresKds = e.RequiresKds;
+            item.IsAvailable = e.IsAvailable;
+            item.ExtraGroupsJson = JsonSerializer.Serialize(e.ExtraGroups ?? []);
+            item.Version = e.Version;
+            item.UpdatedAtUtc = e.OccurredAtUtc;
+        }
+    }
+
+    private static async Task ProjectKitchenStationAsync(
+        OrderWriteDbContext db,
+        ReadOnlyMemory<byte> body
+    )
+    {
+        KitchenStationChanged e =
+            JsonSerializer.Deserialize<KitchenStationChanged>(body.Span)
+            ?? throw new JsonException("Empty kitchen station");
+        e = e with { OccurredAtUtc = EnsureUtc(e.OccurredAtUtc) };
+        OrderKitchenStationConfiguration? station =
+            await db.KitchenStationConfigurations.SingleOrDefaultAsync(x =>
+                x.RestaurantId == e.RestaurantId && x.Code == e.Code
+            );
+        if (e.IsDeleted)
+        {
+            if (station is not null && station.Id == e.StationId && station.Version < e.Version)
+            {
+                db.KitchenStationConfigurations.Remove(station);
+            }
+        }
+        else if (station is null)
+        {
+            db.KitchenStationConfigurations.Add(
+                new OrderKitchenStationConfiguration
+                {
+                    Id = e.StationId,
+                    RestaurantId = e.RestaurantId,
+                    Code = e.Code,
+                    Name = e.Name,
+                    IsPrimary = e.IsPrimary,
+                    RequiresPrimaryDispatch = e.RequiresPrimaryDispatch,
+                    Priority = e.Priority,
+                    IsActive = e.IsActive,
+                    Version = e.Version,
+                    UpdatedAtUtc = e.OccurredAtUtc,
+                }
+            );
+        }
+        else if (station.Version < e.Version)
+        {
+            station.Name = e.Name;
+            station.IsPrimary = e.IsPrimary;
+            station.RequiresPrimaryDispatch = e.RequiresPrimaryDispatch;
+            station.Priority = e.Priority;
+            station.IsActive = e.IsActive;
+            station.Version = e.Version;
+            station.UpdatedAtUtc = e.OccurredAtUtc;
         }
     }
 

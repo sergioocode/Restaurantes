@@ -47,6 +47,90 @@ public sealed class Order
         Guid? zoneId = null
     )
     {
+        ValidateContext(
+            restaurantId,
+            tableId,
+            diningSessionId,
+            tableLabel,
+            customerName,
+            serviceMode
+        );
+        string normalizedTableLabel = tableLabel.Trim();
+        string normalizedCustomerName = customerName.Trim();
+
+        List<OrderLineDraft> drafts = lineDrafts.ToList();
+        if (drafts.Count == 0)
+        {
+            throw new ArgumentException(
+                "An order must contain at least one line.",
+                nameof(lineDrafts)
+            );
+        }
+
+        ValidatePaymentFlow(source, serviceMode, paymentTiming);
+
+        Guid orderId = Guid.NewGuid();
+        Order order = new()
+        {
+            Id = orderId,
+            RestaurantId = restaurantId,
+            TableId = tableId,
+            ZoneId = zoneId,
+            GuestCount = guestCount,
+            DiningSessionId = diningSessionId,
+            TableLabel = normalizedTableLabel,
+            CustomerName = normalizedCustomerName,
+            ServiceMode = serviceMode,
+            Source = source,
+            PaymentTiming = paymentTiming,
+            Status = OrderStatus.Draft,
+            Version = 1,
+            CreatedAtUtc = DateTime.SpecifyKind(occurredAtUtc, DateTimeKind.Utc),
+            CashRegisterSessionId = cashRegisterSessionId,
+            BusinessDate = businessDate,
+        };
+
+        foreach (OrderLineDraft draft in drafts)
+        {
+            order._lines.Add(OrderLine.Create(orderId, draft));
+        }
+        foreach (
+            IGrouping<string, OrderLine> stationLines in order
+                ._lines.Where(line => !string.IsNullOrWhiteSpace(line.PreparationStationCode))
+                .GroupBy(line => line.PreparationStationCode)
+        )
+        {
+            OrderLine firstLine = stationLines.First();
+            OrderLineDraft stationDraft = drafts.First(x =>
+                string.Equals(
+                    x.PreparationStationCode,
+                    firstLine.PreparationStationCode,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            );
+            order._stations.Add(
+                OrderKitchenStation.Create(
+                    orderId,
+                    firstLine.PreparationStationCode,
+                    firstLine.PreparationStationName,
+                    stationDraft.RequiresPrimaryDispatch,
+                    stationDraft.Priority
+                )
+            );
+        }
+
+        return order;
+    }
+
+    private static void ValidateContext(
+        Guid restaurantId,
+        Guid? tableId,
+        Guid? diningSessionId,
+        string tableLabel,
+        string customerName,
+        ServiceMode serviceMode
+    )
+    {
         if (restaurantId == Guid.Empty)
         {
             throw new ArgumentException("RestaurantId is required.", nameof(restaurantId));
@@ -86,16 +170,14 @@ public sealed class Order
                 nameof(customerName)
             );
         }
+    }
 
-        List<OrderLineDraft> drafts = lineDrafts.ToList();
-        if (drafts.Count == 0)
-        {
-            throw new ArgumentException(
-                "An order must contain at least one line.",
-                nameof(lineDrafts)
-            );
-        }
-
+    private static void ValidatePaymentFlow(
+        OrderSource source,
+        ServiceMode serviceMode,
+        PaymentTiming paymentTiming
+    )
+    {
         bool validPaymentFlow = (source, serviceMode, paymentTiming) switch
         {
             (OrderSource.CustomerQr, ServiceMode.DineIn, PaymentTiming.Immediate) => true,
@@ -111,67 +193,6 @@ public sealed class Order
                 "The source, service mode and payment timing combination is invalid."
             );
         }
-
-        Guid orderId = Guid.NewGuid();
-        Order order = new()
-        {
-            Id = orderId,
-            RestaurantId = restaurantId,
-            TableId = tableId,
-            ZoneId = zoneId,
-            GuestCount = guestCount,
-            DiningSessionId = diningSessionId,
-            TableLabel = normalizedTableLabel,
-            CustomerName = normalizedCustomerName,
-            ServiceMode = serviceMode,
-            Source = source,
-            PaymentTiming = paymentTiming,
-            Status = OrderStatus.Draft,
-            Version = 1,
-            CreatedAtUtc = DateTime.SpecifyKind(occurredAtUtc, DateTimeKind.Utc),
-            CashRegisterSessionId = cashRegisterSessionId,
-            BusinessDate = businessDate,
-        };
-
-        foreach (OrderLineDraft draft in drafts)
-        {
-            order._lines.Add(OrderLine.Create(orderId, draft));
-        }
-        foreach (
-            IGrouping<string, OrderLine> stationLines in order
-                ._lines.Where(line => !string.IsNullOrWhiteSpace(line.PreparationStationCode))
-                .GroupBy(line => line.PreparationStationCode)
-        )
-        {
-            OrderLine firstLine = stationLines.First();
-            order._stations.Add(
-                OrderKitchenStation.Create(
-                    orderId,
-                    firstLine.PreparationStationCode,
-                    firstLine.PreparationStationName,
-                    drafts
-                        .First(x =>
-                            string.Equals(
-                                x.PreparationStationCode,
-                                firstLine.PreparationStationCode,
-                                StringComparison.OrdinalIgnoreCase
-                            )
-                        )
-                        .RequiresPrimaryDispatch,
-                    drafts
-                        .First(x =>
-                            string.Equals(
-                                x.PreparationStationCode,
-                                firstLine.PreparationStationCode,
-                                StringComparison.OrdinalIgnoreCase
-                            )
-                        )
-                        .Priority
-                )
-            );
-        }
-
-        return order;
     }
 
     public void Submit(DateTime occurredAtUtc)

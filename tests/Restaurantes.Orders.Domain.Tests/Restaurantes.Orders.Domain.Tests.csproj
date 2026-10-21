@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
@@ -14,7 +14,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\BuildingBlocks\Restaurantes.Security\Restaurantes.Security.csproj" />
     <ProjectReference Include="..\..\src\Services\Orders\Restaurantes.Orders.Domain\Restaurantes.Orders.Domain.csproj" />
     <ProjectReference Include="..\..\src\Services\Orders\Restaurantes.Orders.Infrastructure\Restaurantes.Orders.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Services\Orders\Restaurantes.Orders.Api\Restaurantes.Orders.Api.csproj" />
   </ItemGroup>
 </Project>
