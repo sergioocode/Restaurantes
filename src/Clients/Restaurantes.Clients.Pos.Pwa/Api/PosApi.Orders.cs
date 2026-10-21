@@ -30,7 +30,7 @@ public sealed partial class PosApi
         return await ReadAsync<OrderDetailResponse>(response);
     }
 
-    public async Task<OrderResponse> CreateAndSubmitAsync(
+    public Task<OrderResponse> CreateAndSubmitAsync(
         Guid restaurantId,
         TableResponse table,
         Guid sessionId,
@@ -51,20 +51,10 @@ public sealed partial class PosApi
             paymentTiming = "OnAccount",
             lines = OrderLines(lines),
         };
-        using HttpRequestMessage create = Authorized(HttpMethod.Post, "/api/orders");
-        create.Content = JsonContent.Create(body);
-        using HttpResponseMessage createResponse = await http.SendAsync(create);
-        OrderResponse order = await ReadAsync<OrderResponse>(createResponse);
-
-        using HttpRequestMessage submit = Authorized(
-            HttpMethod.Post,
-            $"/api/orders/{order.Id}/submit"
-        );
-        using HttpResponseMessage submitResponse = await http.SendAsync(submit);
-        return await ReadAsync<OrderResponse>(submitResponse);
+        return CreateAndSubmitOrderAsync(body);
     }
 
-    public async Task<OrderResponse> CreateAndSubmitTakeawayAsync(
+    public Task<OrderResponse> CreateAndSubmitTakeawayAsync(
         Guid restaurantId,
         string customerName,
         IReadOnlyList<PosCartLine> lines
@@ -82,6 +72,11 @@ public sealed partial class PosApi
             paymentTiming = "OnAccount",
             lines = OrderLines(lines),
         };
+        return CreateAndSubmitOrderAsync(body);
+    }
+
+    private async Task<OrderResponse> CreateAndSubmitOrderAsync(object body)
+    {
         using HttpRequestMessage create = Authorized(HttpMethod.Post, "/api/orders");
         create.Content = JsonContent.Create(body);
         using HttpResponseMessage createResponse = await http.SendAsync(create);
