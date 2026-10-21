@@ -70,12 +70,14 @@ public sealed partial class CatalogCommandService
         item.Update(
             request.Name,
             request.IsActive,
-            request.IsPrimary,
-            request.RequiresPrimaryDispatch,
-            request.Priority,
-            now,
-            request.PrintTicket ?? item.PrintTicket,
-            request.ManagesZones ?? item.ManagesZones
+            new(
+                request.IsPrimary,
+                request.RequiresPrimaryDispatch,
+                request.Priority,
+                request.PrintTicket ?? item.PrintTicket,
+                request.ManagesZones ?? item.ManagesZones
+            ),
+            now
         );
         await SaveStationAsync(item, now, ct);
         return ToResponse(item);

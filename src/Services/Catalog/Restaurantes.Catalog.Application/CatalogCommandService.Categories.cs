@@ -30,35 +30,7 @@ public sealed partial class CatalogCommandService
             request.ShowInCustomerQr,
             request.RequiresKds
         );
-        CategoryChanged message = new(
-            item.Id,
-            item.Code,
-            item.Name,
-            item.DefaultStationCode,
-            item.DefaultStationName,
-            item.IsActive,
-            item.Version,
-            now,
-            item.ShowInPos,
-            item.ShowInCommander,
-            item.ShowInCustomerQr,
-            item.RequiresKds
-        );
-        await store.SaveWithEventAsync(item, message, ct);
-        return new(
-            item.Id,
-            item.Code,
-            item.Name,
-            item.DefaultStationCode,
-            item.DefaultStationName,
-            item.IsActive,
-            item.Version,
-            now,
-            item.ShowInPos,
-            item.ShowInCommander,
-            item.ShowInCustomerQr,
-            item.RequiresKds
-        );
+        return await SaveCategoryAsync(item, now, ct);
     }
 
     public async Task<CategoryResponse?> UpdateCategoryAsync(
@@ -85,6 +57,15 @@ public sealed partial class CatalogCommandService
             request.ShowInCustomerQr ?? item.ShowInCustomerQr,
             request.RequiresKds ?? item.RequiresKds
         );
+        return await SaveCategoryAsync(item, now, ct);
+    }
+
+    private async Task<CategoryResponse> SaveCategoryAsync(
+        Category item,
+        DateTime now,
+        CancellationToken ct
+    )
+    {
         CategoryChanged message = new(
             item.Id,
             item.Code,

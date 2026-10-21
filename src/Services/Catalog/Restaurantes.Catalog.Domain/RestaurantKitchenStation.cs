@@ -65,21 +65,16 @@ public sealed class RestaurantKitchenStation
         return new(restaurantId, code, name, configuration, now);
     }
 
-    public void Update(
-        string name,
-        bool isActive,
-        bool isPrimary,
-        bool requiresPrimaryDispatch,
-        int priority,
-        DateTime now,
-        bool printTicket = false,
-        bool managesZones = false
-    )
+    public void Update(string name, bool isActive, Configuration configuration, DateTime now)
     {
         Name = Category.Required(name, 80);
-        ConfigureDispatch(isPrimary, requiresPrimaryDispatch, priority);
-        PrintTicket = printTicket;
-        ManagesZones = managesZones;
+        ConfigureDispatch(
+            configuration.IsPrimary,
+            configuration.RequiresPrimaryDispatch,
+            configuration.Priority
+        );
+        PrintTicket = configuration.PrintTicket;
+        ManagesZones = configuration.ManagesZones;
         IsActive = isActive;
         Version++;
         UpdatedAtUtc = now;

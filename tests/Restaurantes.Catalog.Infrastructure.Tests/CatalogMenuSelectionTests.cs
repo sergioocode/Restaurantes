@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Restaurantes.Catalog.Application;
 using Restaurantes.Catalog.Domain;
 using Restaurantes.Catalog.Infrastructure.Persistence.Read;
@@ -10,6 +10,57 @@ namespace Restaurantes.Catalog.Infrastructure.Tests;
 
 public sealed class CatalogMenuSelectionTests
 {
+    [Fact]
+    public async Task Catalog_lists_read_categories_and_write_products_in_name_order()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        string suffix = Guid.NewGuid().ToString("N");
+        await using CatalogWriteDbContext write = new(
+            new DbContextOptionsBuilder<CatalogWriteDbContext>()
+                .UseInMemoryDatabase("catalog-write-" + suffix)
+                .Options
+        );
+        await using CatalogReadDbContext read = new(
+            new DbContextOptionsBuilder<CatalogReadDbContext>()
+                .UseInMemoryDatabase("catalog-read-" + suffix)
+                .Options
+        );
+        Guid categoryId = Guid.NewGuid();
+        read.Categories.AddRange(
+            new CategoryReadModel
+            {
+                Id = Guid.NewGuid(),
+                Code = "B",
+                Name = "Bebidas",
+                IsActive = true,
+            },
+            new CategoryReadModel
+            {
+                Id = categoryId,
+                Code = "A",
+                Name = "Entrantes",
+                IsActive = true,
+            }
+        );
+        write.Products.AddRange(
+            Product.Create("P-2", "Zumo", categoryId, DateTime.UtcNow),
+            Product.Create("P-1", "Aceitunas", categoryId, DateTime.UtcNow)
+        );
+        await read.SaveChangesAsync(ct);
+        await write.SaveChangesAsync(ct);
+
+        CatalogReadStore store = new(read, write);
+        Assert.Equal(
+            ["Bebidas", "Entrantes"],
+            (await store.ListCategoriesAsync(ct)).Select(category => category.Name)
+        );
+        Assert.Equal(
+            ["Aceitunas", "Zumo"],
+            (await store.ListProductsAsync(ct)).Select(product => product.Name)
+        );
+        Assert.Empty(await store.ListMenuAsync(Guid.NewGuid(), CatalogClientChannel.Pos, ct));
+    }
+
     [Fact]
     public async Task Global_menu_is_filtered_by_local_product_availability()
     {
