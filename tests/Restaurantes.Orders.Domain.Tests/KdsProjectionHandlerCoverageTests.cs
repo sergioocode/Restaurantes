@@ -366,6 +366,48 @@ public sealed class KdsProjectionHandlerCoverageTests
     }
 
     [Fact]
+    public async Task Created_event_arriving_after_submission_adds_zone_and_notifies_current_stations()
+    {
+        await using OrderReadDbContext db = CreateDatabase();
+        KdsProjectionHandler handler = new(db, TimeProvider.System);
+        Guid orderId = Guid.NewGuid();
+        Guid restaurantId = Guid.NewGuid();
+        Guid zoneId = Guid.NewGuid();
+        OrderSubmitted submitted = Submitted(orderId, restaurantId, 2, "Mesa 1");
+        await Project(handler, Guid.NewGuid(), submitted);
+        OrderCreated created = new(
+            orderId,
+            restaurantId,
+            null,
+            2,
+            null,
+            "Mesa 1",
+            "",
+            "DineIn",
+            "Pos",
+            "Immediate",
+            1,
+            CreatedAtUtc,
+            [Line("Pasta", 10)],
+            [Station("CALIENTE", "Pending")],
+            ZoneId: zoneId
+        );
+
+        KdsProjectionNotification notification = Assert.IsType<KdsProjectionNotification>(
+            await Project(handler, Guid.NewGuid(), created)
+        );
+        KitchenOrderReadModel projection = await db.KitchenOrders.SingleAsync(
+            TestContext.Current.CancellationToken
+        );
+
+        Assert.Equal(zoneId, projection.ZoneId);
+        Assert.Equal(2, projection.Version);
+        Assert.Equal("Submitted", notification.Status);
+        Assert.Equal(2, notification.Version);
+        Assert.Equal(["CALIENTE"], notification.AffectedStationCodes);
+    }
+
+    [Fact]
     public async Task Unknown_event_and_empty_known_event_body_are_rejected()
     {
         await using OrderReadDbContext db = CreateDatabase();

@@ -446,6 +446,31 @@ public sealed class OrderCommandServiceCreateTests
         Assert.Contains("superan el límite", notes.Message);
     }
 
+    [Fact]
+    public async Task Create_dine_in_captures_the_table_zone_in_order_and_event()
+    {
+        Guid productId = Guid.NewGuid();
+        Guid tableId = Guid.NewGuid();
+        RecordingStores stores = new([Product(productId)]);
+        OrderCommandService service = CreateService(stores);
+
+        OrderResponse response = await service.CreateAsync(
+            Request(
+                serviceMode: "DineIn",
+                tableId: tableId,
+                diningSessionId: Guid.NewGuid(),
+                lines: [new CreateOrderLineRequest { ProductId = productId, Quantity = 1 }]
+            ),
+            "token",
+            CashSession,
+            TestContext.Current.CancellationToken
+        );
+
+        Assert.Equal(tableId, response.ZoneId);
+        Assert.Equal(tableId, stores.SavedOrder?.ZoneId);
+        Assert.Equal(tableId, Assert.IsType<OrderCreated>(stores.IntegrationEvent).ZoneId);
+    }
+
     private static OrderCommandService CreateService(RecordingStores stores) =>
         new(stores, stores, stores, stores, new FixedTimeProvider());
 
@@ -563,7 +588,7 @@ public sealed class OrderCommandServiceCreateTests
         public Task<bool> IsRefundedAsync(Guid orderId, CancellationToken ct) =>
             Task.FromResult(false);
 
-        public Task<int?> EnsureOpenAsync(
+        public Task<DiningSessionValidation> EnsureOpenAsync(
             Guid diningSessionId,
             Guid restaurantId,
             Guid tableId,
@@ -574,7 +599,7 @@ public sealed class OrderCommandServiceCreateTests
         )
         {
             DiningCalled = true;
-            return Task.FromResult<int?>(2);
+            return Task.FromResult(new DiningSessionValidation(2, tableId));
         }
     }
 

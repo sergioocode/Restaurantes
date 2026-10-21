@@ -191,6 +191,7 @@ public sealed class DiningServiceSessionTests
     public async Task ValidateSession_checks_open_session_guest_count_mode_and_qr_token()
     {
         (DiningService service, DiningSessionStoreProxy store, _, _) = CreateService();
+        store.TableZoneId = Guid.NewGuid();
         DiningRequest request = new(Principal(UserId), "secret-token", null);
         DiningSession session = Session(requestGuestCount: true);
 
@@ -245,6 +246,7 @@ public sealed class DiningServiceSessionTests
         );
         Assert.Equal(DiningOutcome.NoContent, validQr.Outcome);
         Assert.Equal(2, validQr.GuestCount);
+        Assert.Equal(store.TableZoneId, validQr.ZoneId);
     }
 
     [Theory]
@@ -1377,6 +1379,7 @@ public sealed class DiningServiceSessionTests
     public class DiningSessionStoreProxy : DispatchProxy
     {
         public RestaurantTable? Table { get; set; }
+        public Guid? TableZoneId { get; set; }
         public DiningSession? Session { get; set; }
         public DiningSession? RequiredActiveSession { get; set; }
         public DiningZone? Zone { get; set; }
@@ -1429,6 +1432,7 @@ public sealed class DiningServiceSessionTests
                 nameof(IDiningStore.FindActiveSessionWithOrdersAsync) => Task.FromResult(Session),
                 nameof(IDiningStore.ReadSessionWithOrdersAsync) => Task.FromResult(Session),
                 nameof(IDiningStore.ReadValidatedSessionAsync) => Task.FromResult(Session),
+                nameof(IDiningStore.ReadTableZoneIdAsync) => Task.FromResult(TableZoneId),
                 nameof(IDiningStore.FindSessionWithOrdersAsync) => Task.FromResult(Session),
                 nameof(IDiningStore.Add) => Add(args![0]!),
                 nameof(IDiningStore.Detach) => Detach(),

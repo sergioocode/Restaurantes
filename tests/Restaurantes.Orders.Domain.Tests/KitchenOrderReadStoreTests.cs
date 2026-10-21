@@ -104,6 +104,46 @@ public sealed class KitchenOrderReadStoreTests
     }
 
     [Fact]
+    public async Task List_filters_the_same_station_by_zone_without_affecting_global_view()
+    {
+        await using OrderReadDbContext db = CreateDatabase();
+        Guid restaurantId = Guid.NewGuid();
+        Guid firstZoneId = Guid.NewGuid();
+        Guid secondZoneId = Guid.NewGuid();
+        KitchenOrderReadModel first = Order(restaurantId, Guid.NewGuid(), "Submitted");
+        first.ZoneId = firstZoneId;
+        KitchenOrderReadModel second = Order(restaurantId, Guid.NewGuid(), "Submitted");
+        second.ZoneId = secondZoneId;
+        KitchenOrderReadModel withoutZone = Order(restaurantId, Guid.NewGuid(), "Submitted");
+        db.KitchenOrders.AddRange(first, second, withoutZone);
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        KitchenOrderReadStore store = new(db);
+
+        IReadOnlyList<OrderResponse> firstZone = await store.ListAsync(
+            restaurantId,
+            "GRILL",
+            TestContext.Current.CancellationToken,
+            firstZoneId
+        );
+        IReadOnlyList<OrderResponse> noZone = await store.ListAsync(
+            restaurantId,
+            "GRILL",
+            TestContext.Current.CancellationToken,
+            Guid.Empty
+        );
+        IReadOnlyList<OrderResponse> global = await store.ListAsync(
+            restaurantId,
+            "GRILL",
+            TestContext.Current.CancellationToken
+        );
+
+        Assert.Equal(first.Id, Assert.Single(firstZone).Id);
+        Assert.Equal(firstZoneId, Assert.Single(firstZone).ZoneId);
+        Assert.Equal(withoutZone.Id, Assert.Single(noZone).Id);
+        Assert.Equal(3, global.Count);
+    }
+
+    [Fact]
     public async Task Chef_queue_hides_fully_dispatched_ready_dine_in_orders_but_keeps_takeaway()
     {
         await using OrderReadDbContext db = CreateDatabase();

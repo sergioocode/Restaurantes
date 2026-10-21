@@ -209,7 +209,7 @@ public sealed class OrderCommandServiceKitchenTests
         public Task<bool> IsRefundedAsync(Guid orderId, CancellationToken ct) =>
             Task.FromResult(false);
 
-        public Task<int?> EnsureOpenAsync(
+        public Task<DiningSessionValidation> EnsureOpenAsync(
             Guid diningSessionId,
             Guid restaurantId,
             Guid tableId,
@@ -217,6 +217,6 @@ public sealed class OrderCommandServiceKitchenTests
             string serviceMode,
             string customerAccessToken,
             CancellationToken ct
-        ) => Task.FromResult<int?>(null);
+        ) => Task.FromResult(new DiningSessionValidation(null, tableId));
     }
 }
