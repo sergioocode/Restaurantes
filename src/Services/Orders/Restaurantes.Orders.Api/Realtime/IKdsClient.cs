@@ -7,4 +7,6 @@ public interface IKdsClient
     Task OrderUpdated(KdsOrderUpdated notification);
 
     Task DiningTableUpdated(Guid restaurantId);
+
+    Task SaleCompleted(Guid saleId);
 }

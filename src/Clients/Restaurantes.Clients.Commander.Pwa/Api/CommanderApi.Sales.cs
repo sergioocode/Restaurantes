@@ -4,8 +4,12 @@ namespace Restaurantes.Clients.Commander.Pwa.Api;
 
 public sealed partial class CommanderApi
 {
-    public Task<SaleResponse> SaleAsync(Guid saleId)
+    public async Task<SaleResponse?> TrySaleAsync(Guid saleId)
     {
-        return GetAsync<SaleResponse>($"/api/sales/{saleId}");
+        using HttpRequestMessage request = Authorized(HttpMethod.Get, $"/api/sales/{saleId}");
+        using HttpResponseMessage response = await http.SendAsync(request);
+        return response.StatusCode == System.Net.HttpStatusCode.NotFound
+            ? null
+            : await ReadAsync<SaleResponse>(response);
     }
 }

@@ -1823,6 +1823,7 @@ public sealed class PosHomeRenderingTests : BunitContext
             }
         );
 
+        await cut.InvokeAsync(() => InvokeTask(cut.Instance, "RefreshSalesTicketAsync", bill.Id));
         await cut.InvokeAsync(() => Invoke(cut.Instance, "OpenSalesTicket"));
         await Rerender(cut);
 
@@ -1844,7 +1845,38 @@ public sealed class PosHomeRenderingTests : BunitContext
 
         await cut.Find("button[aria-label='Cerrar ticket de venta']").ClickAsync();
         Assert.False(GetField<bool>(cut.Instance, "salesTicketOpen"));
-        Assert.Null(GetField<SaleResponse?>(cut.Instance, "salesTicket"));
+        Assert.NotNull(GetField<SaleResponse?>(cut.Instance, "salesTicket"));
+    }
+
+    [Fact]
+    public async Task Paid_session_offers_ticket_only_after_sales_completes_it()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        SessionBillResponse paidBill = Bill(restaurantId) with
+        {
+            Outstanding = 0m,
+            CanCheckout = false,
+            Orders = [new(Guid.NewGuid(), "Delivered", "Paid", 60m, 60m, DateTime.UtcNow)],
+        };
+        SaleTicketHandler handler = new(new SaleResponse()) { Ready = false };
+        IRenderedComponent<PosHome> cut = await RenderPayment(restaurantId, paidBill, handler);
+
+        await cut.InvokeAsync(() =>
+            InvokeTask(cut.Instance, "RefreshSalesTicketAsync", paidBill.Id)
+        );
+        await Rerender(cut);
+
+        Assert.DoesNotContain("aria-label=\"Ver ticket de venta\"", cut.Markup);
+        Assert.Contains("Preparando ticket de venta", cut.Markup);
+        Assert.DoesNotContain("API 404", cut.Markup);
+
+        handler.Ready = true;
+        await cut.InvokeAsync(() => InvokeTask(cut.Instance, "HandleSaleCompleted", paidBill.Id));
+        await Rerender(cut);
+
+        Assert.Contains("aria-label=\"Ver ticket de venta\"", cut.Markup);
+        await cut.Find("button[aria-label='Ver ticket de venta']").ClickAsync();
+        Assert.True(GetField<bool>(cut.Instance, "salesTicketOpen"));
     }
 
     [Fact]
@@ -3023,11 +3055,24 @@ public sealed class PosHomeRenderingTests : BunitContext
 
     private sealed class SaleTicketHandler(SaleResponse sale) : HttpMessageHandler
     {
+        public bool Ready { get; set; } = true;
+
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken
         ) =>
             request.Method == HttpMethod.Get
+            && request.RequestUri!.AbsolutePath == "/api/identity/auth/provider"
+                ? Task.FromResult(
+                    new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = JsonContent.Create(
+                            new ProviderSettingsResponse("", false, false)
+                        ),
+                    }
+                )
+            : Ready
+            && request.Method == HttpMethod.Get
             && request.RequestUri!.AbsolutePath.StartsWith("/api/sales/", StringComparison.Ordinal)
                 ? Task.FromResult(
                     new HttpResponseMessage(HttpStatusCode.OK)
@@ -3035,7 +3080,7 @@ public sealed class PosHomeRenderingTests : BunitContext
                         Content = JsonContent.Create(sale),
                     }
                 )
-                : Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+            : Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
     }
 
     private sealed class CheckoutHandler(SessionBillResponse checkoutResult) : HttpMessageHandler

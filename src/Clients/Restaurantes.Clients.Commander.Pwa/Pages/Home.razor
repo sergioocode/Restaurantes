@@ -287,9 +287,13 @@
                             {
                                 <p class="muted">El pendiente corresponde a comandas de otro perfil o anteriores. Solo puede cobrarse desde el perfil que las creó o desde el TPV.</p>
                             }
+                            @if (bill.Outstanding == 0 && BillConsumptionTotal > 0 && readyTicketSessionId != bill.Id)
+                            {
+                                <p class="muted">@(ticketAvailabilityError is null ? "Preparando ticket de venta…" : "No se pudo comprobar el ticket. Pulsa Actualizar para volver a consultarlo.")</p>
+                            }
                             <div class="bill-actions">
                                 <button class="ghost" @onclick="OpenBill" disabled="@busy">Actualizar</button>
-                                @if (bill.Outstanding == 0 && BillConsumptionTotal > 0)
+                                @if (bill.Outstanding == 0 && BillConsumptionTotal > 0 && readyTicketSessionId == bill.Id && salesTicket is not null)
                                 {
                                     <button class="ghost account-preview-icon-button" @onclick="OpenSalesTicket" disabled="@busy" aria-label="Ver ticket de venta" title="Ver ticket de venta">
                                         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">

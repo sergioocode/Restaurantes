@@ -69,6 +69,8 @@ public partial class Home
     private bool accountPreviewOpen;
     private bool salesTicketOpen;
     private SaleResponse? salesTicket;
+    private Guid? readyTicketSessionId;
+    private string? ticketAvailabilityError;
     private DateTime accountPreviewCreatedAt;
     private decimal BillConsumptionTotal =>
         bill?.Orders.Where(order => order.OrderStatus != CancelledStatus).Sum(order => order.Amount)
@@ -364,6 +366,7 @@ public partial class Home
     {
         Realtime.OrderUpdated += HandleOrderUpdated;
         Realtime.DiningTableUpdated += HandleDiningTableUpdated;
+        Realtime.SaleCompleted += HandleSaleCompleted;
         CatalogRealtime.MenuChanged += HandleMenuChanged;
         try
         {
@@ -1314,6 +1317,11 @@ public partial class Home
             billLoadError = exception.Message;
             throw;
         }
+
+        if (bill is { Outstanding: 0, Total: > 0 })
+        {
+            await RefreshSalesTicketAsync(bill.Id);
+        }
     }
 
     private void OpenDiscountDialog()
@@ -1442,27 +1450,55 @@ public partial class Home
     private async Task PrintAccountPreview() =>
         await Js.InvokeVoidAsync("window.print", CancellationToken.None);
 
-    private async Task OpenSalesTicket()
+    private Task OpenSalesTicket()
     {
-        if (bill is null || bill.Outstanding > 0 || bill.Total <= 0)
+        if (
+            bill is null
+            || bill.Outstanding > 0
+            || bill.Total <= 0
+            || readyTicketSessionId != bill.Id
+            || salesTicket is null
+        )
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        await Run(
-            async () =>
-            {
-                salesTicket = await Api.SaleAsync(bill.Id);
-                salesTicketOpen = true;
-            },
-            false
-        );
+        salesTicketOpen = true;
+        return Task.CompletedTask;
     }
 
     private void CloseSalesTicket()
     {
         salesTicketOpen = false;
-        salesTicket = null;
+    }
+
+    private async Task RefreshSalesTicketAsync(Guid sessionId)
+    {
+        if (readyTicketSessionId == sessionId || session?.Id != sessionId)
+        {
+            return;
+        }
+
+        try
+        {
+            ticketAvailabilityError = null;
+            SaleResponse? ticket = await Api.TrySaleAsync(sessionId);
+            if (session?.Id == sessionId && ticket is not null)
+            {
+                salesTicket = ticket;
+                readyTicketSessionId = sessionId;
+                ticketAvailabilityError = null;
+                StateHasChanged();
+            }
+        }
+        catch (Exception exception)
+        {
+            if (session?.Id == sessionId)
+            {
+                ticketAvailabilityError = exception.Message;
+                StateHasChanged();
+            }
+        }
     }
 
     private async Task PrintSalesTicket() =>
@@ -1620,6 +1656,10 @@ public partial class Home
                     $"Cobro de {paymentAmount + tipAmount:0.00} € registrado."
                     + $" Cambio a devolver: {changeAmount:0.00} €."
                     + $" Pendiente de la cuenta: {bill.Outstanding:0.00} €.";
+                if (bill.Outstanding == 0)
+                {
+                    await RefreshSalesTicketAsync(bill.Id);
+                }
             },
             false
         );
@@ -1735,6 +1775,10 @@ public partial class Home
         hasSessionOrders = false;
         bill = null;
         billOrders = [];
+        salesTicket = null;
+        salesTicketOpen = false;
+        readyTicketSessionId = null;
+        ticketAvailabilityError = null;
         billOpen = false;
         paymentDialogOpen = false;
         lastChangeAmount = null;
@@ -2160,6 +2204,13 @@ public partial class Home
         return ScheduleRealtimeRefresh(changedRestaurantId);
     }
 
+    private Task HandleSaleCompleted(Guid saleId) =>
+        InvokeAsync(async () =>
+        {
+            await RefreshSalesTicketAsync(saleId);
+            StateHasChanged();
+        });
+
     private async Task HandleMenuChanged(Guid changedRestaurantId)
     {
         if (
@@ -2342,6 +2393,7 @@ public partial class Home
     {
         Realtime.OrderUpdated -= HandleOrderUpdated;
         Realtime.DiningTableUpdated -= HandleDiningTableUpdated;
+        Realtime.SaleCompleted -= HandleSaleCompleted;
         CatalogRealtime.MenuChanged -= HandleMenuChanged;
         if (realtimeRefresh is not null)
         {

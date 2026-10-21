@@ -53,6 +53,8 @@ public partial class Home
     private bool paymentDialogOpen;
     private bool salesTicketOpen;
     private SaleResponse? salesTicket;
+    private Guid? readyTicketSessionId;
+    private string? ticketAvailabilityError;
     private string paymentMethod = "Card";
     private string paymentReference = string.Empty;
     private string paymentKeypadTarget = "Charge";
@@ -324,6 +326,7 @@ public partial class Home
     {
         Realtime.OrderUpdated += HandleOrderUpdated;
         Realtime.DiningTableUpdated += HandleDiningTableUpdated;
+        Realtime.SaleCompleted += HandleSaleCompleted;
         try
         {
             providerSettings = await Api.ProviderAsync();
@@ -861,6 +864,10 @@ public partial class Home
             bill.Orders.Select(order => Api.OrderAsync(order.OrderId))
         );
         billOrders = details.ToDictionary(order => order.Id);
+        if (bill is { Outstanding: 0 } && BillConsumptionTotal > 0)
+        {
+            await RefreshSalesTicketAsync(bill.Id);
+        }
     }
 
     private void OpenPaymentDialog()
@@ -1046,7 +1053,6 @@ public partial class Home
                 );
                 checkoutKey = Guid.Empty;
                 paymentDialogOpen = false;
-                salesTicket = null;
                 await Realtime.NotifyDiningTableUpdatedAsync();
                 await LoadBill();
                 success = true;
@@ -1057,27 +1063,55 @@ public partial class Home
         );
     }
 
-    private async Task OpenSalesTicket()
+    private Task OpenSalesTicket()
     {
-        if (bill is null || bill.Outstanding > 0 || BillConsumptionTotal <= 0 || busy)
+        if (
+            bill is null
+            || bill.Outstanding > 0
+            || BillConsumptionTotal <= 0
+            || busy
+            || readyTicketSessionId != bill.Id
+            || salesTicket is null
+        )
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        await Run(
-            async () =>
-            {
-                salesTicket = await Api.SaleAsync(bill.Id);
-                salesTicketOpen = true;
-            },
-            false
-        );
+        salesTicketOpen = true;
+        return Task.CompletedTask;
     }
 
     private void CloseSalesTicket()
     {
         salesTicketOpen = false;
-        salesTicket = null;
+    }
+
+    private async Task RefreshSalesTicketAsync(Guid saleId)
+    {
+        if (readyTicketSessionId == saleId || sessionId != saleId)
+        {
+            return;
+        }
+
+        try
+        {
+            ticketAvailabilityError = null;
+            SaleResponse? ticket = await Api.TrySaleAsync(saleId);
+            if (sessionId == saleId && ticket is not null)
+            {
+                salesTicket = ticket;
+                readyTicketSessionId = saleId;
+                StateHasChanged();
+            }
+        }
+        catch (Exception exception)
+        {
+            if (sessionId == saleId)
+            {
+                ticketAvailabilityError = exception.Message;
+                StateHasChanged();
+            }
+        }
     }
 
     private async Task PrintSalesTicket()
@@ -1169,6 +1203,8 @@ public partial class Home
         paymentDialogOpen = false;
         salesTicketOpen = false;
         salesTicket = null;
+        readyTicketSessionId = null;
+        ticketAvailabilityError = null;
         checkoutKey = Guid.Empty;
         guestCountDialogOpen = false;
         guestCountSessionOpenedHere = false;
@@ -1277,6 +1313,13 @@ public partial class Home
         return ScheduleRealtimeRefresh(changedRestaurantId);
     }
 
+    private Task HandleSaleCompleted(Guid saleId) =>
+        InvokeAsync(async () =>
+        {
+            await RefreshSalesTicketAsync(saleId);
+            StateHasChanged();
+        });
+
     private Task ScheduleRealtimeRefresh(Guid changedRestaurantId)
     {
         if (login is null || changedRestaurantId != restaurantId)
@@ -1339,6 +1382,7 @@ public partial class Home
     {
         Realtime.OrderUpdated -= HandleOrderUpdated;
         Realtime.DiningTableUpdated -= HandleDiningTableUpdated;
+        Realtime.SaleCompleted -= HandleSaleCompleted;
         if (realtimeRefresh is not null)
         {
             await realtimeRefresh.CancelAsync();

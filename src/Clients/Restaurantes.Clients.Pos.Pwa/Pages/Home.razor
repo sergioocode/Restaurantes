@@ -412,10 +412,14 @@
                             {
                                 <p class="warning">@(bill.Total == 0 ? "No hay importe pendiente. Esperando la confirmación de cancelación o el fin de cocina para liberar la mesa." : "Cuenta pagada. La mesa seguirá ocupada hasta que cocina termine y los pedidos se entreguen o cancelen.")</p>
                             }
+                            @if (bill.Outstanding == 0 && bill.Total > 0 && readyTicketSessionId != bill.Id)
+                            {
+                                <p class="muted">@(ticketAvailabilityError is null ? "Preparando ticket de venta…" : "No se pudo comprobar el ticket. Pulsa Actualizar para volver a consultarlo.")</p>
+                            }
                             <div class="bill-actions">
                                 <button class="ghost" @onclick="OpenAccountPreview" disabled="@busy">Ver cuenta</button>
                                 <button class="ghost" @onclick="OpenDiscountDialog" disabled="@(busy || bill.Orders.Any(order => order.AmountPaid > 0))">Descuento</button>
-                                @if (bill.Outstanding == 0 && bill.Total > 0)
+                                @if (bill.Outstanding == 0 && bill.Total > 0 && readyTicketSessionId == bill.Id && salesTicket is not null)
                                 {
                                     <button class="ghost account-preview-icon-button" @onclick="OpenSalesTicket" aria-label="Ver ticket de venta" title="Ver ticket de venta">
                                         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">

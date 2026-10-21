@@ -15,6 +15,7 @@ public abstract class RestaurantOrderRealtimeClient<TNotification>(
 
     public event Func<TNotification, Task>? OrderUpdated;
     public event Func<Guid, Task>? DiningTableUpdated;
+    public event Func<Guid, Task>? SaleCompleted;
 
     public async Task ConnectAsync(Guid newRestaurantId)
     {
@@ -51,6 +52,10 @@ public abstract class RestaurantOrderRealtimeClient<TNotification>(
                 .Build();
             connection.On<TNotification>("OrderUpdated", NotifyAsync);
             connection.On<Guid>("DiningTableUpdated", NotifyDiningTableUpdatedAsync);
+            connection.On<Guid>(
+                "SaleCompleted",
+                saleId => SaleCompleted?.Invoke(saleId) ?? Task.CompletedTask
+            );
             connection.Reconnected += async _ =>
             {
                 if (restaurantId != Guid.Empty)

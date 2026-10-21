@@ -25,6 +25,7 @@ public sealed class CommanderHomeCheckoutTests : BunitContext
         Guid userId = Guid.NewGuid();
         Guid orderId = Guid.NewGuid();
         List<JsonDocument> checkoutRequests = [];
+        bool saleReady = false;
         SessionBillResponse paidBill = new(
             sessionId,
             restaurantId,
@@ -64,6 +65,8 @@ public sealed class CommanderHomeCheckoutTests : BunitContext
                     return Json(
                         new OrderDetailResponse(orderId, restaurantId, "Submitted", 20m, [], [])
                     );
+                if (path == $"/api/sales/{sessionId}" && saleReady)
+                    return Json(new SaleResponse(PaymentMethod: "Card"));
                 return new HttpResponseMessage(HttpStatusCode.NotFound);
             })
         )
@@ -136,6 +139,12 @@ public sealed class CommanderHomeCheckoutTests : BunitContext
         string message = (string)Get(cut.Instance, "message")!;
         Assert.Contains("Cobro con tarjeta de", message);
         Assert.Contains("€ registrado", message);
+        Assert.Null(Get(cut.Instance, "readyTicketSessionId"));
+
+        saleReady = true;
+        MethodInfo completed = typeof(Home).GetMethod("HandleSaleCompleted", PrivateInstance)!;
+        await cut.InvokeAsync(() => (Task)completed.Invoke(cut.Instance, [sessionId])!);
+        Assert.Equal(sessionId, Get(cut.Instance, "readyTicketSessionId"));
     }
 
     [Fact]

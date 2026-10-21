@@ -8,6 +8,7 @@ public static class SalesTopology
     public const string SaleCompletedRoutingKey = "sale.completed.v1";
     public const string CheckoutQueueName = "sales.checkout-process";
     public const string ReadModelQueueName = "sales.read-model";
+    public const string TicketNotificationQueueName = "sales.ticket-notification";
     public const string DeadLetterExchangeName = "sales.dead-letter";
     public const string DeadLetterQueueName = "sales.dead-letter.messages";
 
@@ -100,6 +101,22 @@ public static class SalesTopology
         await RabbitMqRetry.DeclareAsync(channel, ReadModelQueueName, ct);
         await channel.QueueBindAsync(
             ReadModelQueueName,
+            ExchangeName,
+            SaleCompletedRoutingKey,
+            null,
+            cancellationToken: ct
+        );
+        await channel.QueueDeclareAsync(
+            TicketNotificationQueueName,
+            true,
+            false,
+            false,
+            args,
+            cancellationToken: ct
+        );
+        await RabbitMqRetry.DeclareAsync(channel, TicketNotificationQueueName, ct);
+        await channel.QueueBindAsync(
+            TicketNotificationQueueName,
             ExchangeName,
             SaleCompletedRoutingKey,
             null,

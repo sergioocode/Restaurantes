@@ -7,5 +7,6 @@
     <ProjectReference Include="..\Restaurantes.Orders.Contracts\Restaurantes.Orders.Contracts.csproj" />
     <ProjectReference Include="..\Restaurantes.Orders.Domain\Restaurantes.Orders.Domain.csproj" />
     <ProjectReference Include="..\Restaurantes.Orders.Infrastructure\Restaurantes.Orders.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Sales\Restaurantes.Sales.Contracts\Restaurantes.Sales.Contracts.csproj" />
   </ItemGroup>
 </Project>

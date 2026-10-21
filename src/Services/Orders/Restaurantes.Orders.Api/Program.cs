@@ -55,6 +55,7 @@ builder
     )
     .ValidateOnStart();
 builder.Services.AddHostedService<KdsSignalRWorker>();
+builder.Services.AddHostedService<SaleTicketSignalRWorker>();
 
 WorkerHost.ConfigureServices(builder.Services, builder.Configuration);
 WebApplication app = builder.Build();
