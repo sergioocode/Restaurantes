@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Restaurantes.Payments.Application;
@@ -48,8 +48,10 @@ public sealed class DiningSessionValidator(HttpClient httpClient) : ICustomerDin
             JsonElement root = document.RootElement;
             if (
                 !root.TryGetProperty("restaurantId", out JsonElement restaurant)
-                || restaurant.GetGuid() != restaurantId
+                || !restaurant.TryGetGuid(out Guid actualRestaurantId)
+                || actualRestaurantId != restaurantId
                 || !root.TryGetProperty("orders", out JsonElement orders)
+                || orders.ValueKind != JsonValueKind.Array
             )
             {
                 return false;
@@ -59,9 +61,11 @@ public sealed class DiningSessionValidator(HttpClient httpClient) : ICustomerDin
                 .EnumerateArray()
                 .Any(order =>
                     order.TryGetProperty("orderId", out JsonElement id)
-                    && id.GetGuid() == orderId
+                    && id.TryGetGuid(out Guid actualOrderId)
+                    && actualOrderId == orderId
                     && order.TryGetProperty("amount", out JsonElement expected)
-                    && expected.GetDecimal() == amount
+                    && expected.TryGetDecimal(out decimal expectedAmount)
+                    && expectedAmount == amount
                 );
         }
         catch (HttpRequestException)
