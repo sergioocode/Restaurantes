@@ -313,12 +313,14 @@ public sealed class OrdersReadControllerTests
 
         public void SetUser(Guid restaurantId, params string[] permissions)
         {
-            Claim[] claims = permissions
-                .Select(permission => new Claim(
+            Claim[] claims = new Claim[permissions.Length];
+            for (int index = 0; index < permissions.Length; index++)
+            {
+                claims[index] = new Claim(
                     RestaurantClaimTypes.Permission,
-                    RestaurantSecurityExtensions.ScopedPermission(restaurantId, permission)
-                ))
-                .ToArray();
+                    RestaurantSecurityExtensions.ScopedPermission(restaurantId, permissions[index])
+                );
+            }
             Controller.HttpContext.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         }
 
