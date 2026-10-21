@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Restaurantes.Clients.Commander.Pwa.Models;
 using Restaurantes.Clients.Commander.Pwa.Pages;
 using Xunit;
@@ -602,6 +602,155 @@ public sealed class CommanderHomeOverallCoverageTests
         Set(home, "cart", new List<CommanderCartLine> { otherFormat });
         Invoke(home, "ChangeQuantity", productId, -1);
         Assert.Empty((List<CommanderCartLine>)Get(home, "cart")!);
+    }
+
+    [Fact]
+    public void Checkout_allocates_a_partial_charge_only_to_unpaid_own_orders()
+    {
+        Home home = new();
+        Guid userId = Guid.NewGuid();
+        Guid firstId = Guid.NewGuid();
+        Guid secondId = Guid.NewGuid();
+        Set(
+            home,
+            "login",
+            new LoginResponse(
+                "token",
+                DateTime.UtcNow.AddHours(1),
+                new LoginUser(userId, "user", "Usuario"),
+                []
+            )
+        );
+        Set(
+            home,
+            "bill",
+            new SessionBillResponse(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                "Open",
+                38m,
+                24m,
+                [
+                    new(
+                        firstId,
+                        "Submitted",
+                        "PartiallyPaid",
+                        12m,
+                        2m,
+                        DateTime.UtcNow,
+                        Source: "Comandero",
+                        CreatedByUserId: userId
+                    ),
+                    new(
+                        Guid.NewGuid(),
+                        "Submitted",
+                        "Unpaid",
+                        8m,
+                        0m,
+                        DateTime.UtcNow,
+                        Source: "Pos"
+                    ),
+                    new(
+                        Guid.NewGuid(),
+                        "Cancelled",
+                        "Unpaid",
+                        6m,
+                        0m,
+                        DateTime.UtcNow,
+                        Source: "Comandero",
+                        CreatedByUserId: userId
+                    ),
+                    new(
+                        secondId,
+                        "Submitted",
+                        "Unpaid",
+                        12m,
+                        0m,
+                        DateTime.UtcNow,
+                        Source: "Comandero",
+                        CreatedByUserId: userId
+                    ),
+                ]
+            )
+        );
+        Set(home, "currentChargeAmount", 15m);
+
+        var allocations = Invoke<
+            List<Restaurantes.Clients.Commander.Pwa.Api.CommanderApi.CheckoutOrderAllocation>
+        >(home, "GetCurrentAllocations");
+
+        Assert.Collection(
+            allocations,
+            first =>
+            {
+                Assert.Equal(firstId, first.OrderId);
+                Assert.Equal(10m, first.Amount);
+            },
+            second =>
+            {
+                Assert.Equal(secondId, second.OrderId);
+                Assert.Equal(5m, second.Amount);
+            }
+        );
+        Assert.Equal(22m, GetProperty<decimal>(home, "CommanderOutstanding"));
+    }
+
+    [Fact]
+    public void Payment_dialog_opens_only_for_outstanding_bill_and_keeps_card_as_payment_method()
+    {
+        Home home = new();
+        Invoke(home, "OpenPaymentDialog");
+        Assert.False((bool)Get(home, "paymentDialogOpen")!);
+
+        Guid userId = Guid.NewGuid();
+        Set(
+            home,
+            "login",
+            new LoginResponse(
+                "token",
+                DateTime.UtcNow.AddHours(1),
+                new LoginUser(userId, "user", "Usuario"),
+                []
+            )
+        );
+        Set(
+            home,
+            "bill",
+            new SessionBillResponse(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                "Open",
+                20m,
+                20m,
+                [
+                    new(
+                        Guid.NewGuid(),
+                        "Submitted",
+                        "Unpaid",
+                        20m,
+                        0m,
+                        DateTime.UtcNow,
+                        Source: "Comandero",
+                        CreatedByUserId: userId
+                    ),
+                ]
+            )
+        );
+        Set(home, "paymentMethod", "Cash");
+        Set(home, "currentChargeAmount", 3m);
+
+        Invoke(home, "OpenPaymentDialog");
+
+        Assert.True((bool)Get(home, "paymentDialogOpen")!);
+        Assert.Equal("Card", Get(home, "paymentMethod"));
+        Assert.Equal(20m, Get(home, "currentChargeAmount"));
+        Assert.Equal("20,00", Get(home, "paymentKeypadText"));
+        Invoke(home, "SetPaymentMethod", "Cash");
+        Assert.Equal("Card", Get(home, "paymentMethod"));
+        Invoke(home, "ClosePaymentDialog");
+        Assert.False((bool)Get(home, "paymentDialogOpen")!);
     }
 
     [Theory]
