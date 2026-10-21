@@ -299,16 +299,27 @@ public sealed class IdentityService(
         Guid? restaurantId
     )
     {
-        return string.IsNullOrWhiteSpace(email) || !email.Contains('@') || email.Length > 320
-                ? "Introduce un correo válido."
-            : string.IsNullOrWhiteSpace(displayName) || displayName.Length > 120
-                ? "Introduce un nombre visible."
-            : !Roles.Contains(role, StringComparer.Ordinal) ? "Rol no válido."
-            : allRestaurants && restaurantId is not null
-                ? "Todos los Locales no admite un local concreto."
-            : !allRestaurants && (restaurantId is null || restaurantId == Guid.Empty)
-                ? "Selecciona un local o Todos los Locales."
-            : null;
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@') || email.Length > 320)
+        {
+            return "Introduce un correo válido.";
+        }
+        if (string.IsNullOrWhiteSpace(displayName) || displayName.Length > 120)
+        {
+            return "Introduce un nombre visible.";
+        }
+        if (!Roles.Contains(role, StringComparer.Ordinal))
+        {
+            return "Rol no válido.";
+        }
+        if (allRestaurants && restaurantId is not null)
+        {
+            return "Todos los Locales no admite un local concreto.";
+        }
+        if (!allRestaurants && (restaurantId is null || restaurantId == Guid.Empty))
+        {
+            return "Selecciona un local o Todos los Locales.";
+        }
+        return null;
     }
 
     private static bool CanManageScope(

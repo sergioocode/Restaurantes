@@ -14,5 +14,8 @@ public partial class ResetAuthorizedAccounts : Migration
     }
 
     /// <inheritdoc />
-    protected override void Down(MigrationBuilder migrationBuilder) { }
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        // Deleted authorization records cannot be restored without a backup.
+    }
 }

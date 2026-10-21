@@ -1,4 +1,4 @@
-<Solution>
+﻿<Solution>
   <Configurations>
     <Platform Name="Any CPU" />
     <Platform Name="x64" />
@@ -12,6 +12,7 @@
     <Project Path="tests/Restaurantes.Clients.Pwa.Tests/Restaurantes.Clients.Pwa.Tests.csproj" />
     <Project Path="tests/Restaurantes.Orders.Domain.Tests/Restaurantes.Orders.Domain.Tests.csproj" />
     <Project Path="tests/Restaurantes.Hosts.Tests/Restaurantes.Hosts.Tests.csproj" />
+    <Project Path="tests/Restaurantes.Identity.Application.Tests/Restaurantes.Identity.Application.Tests.csproj" />
     <Project Path="tests/Restaurantes.Payments.Api.Tests/Restaurantes.Payments.Api.Tests.csproj" />
     <Project Path="tests/Restaurantes.Reporting.Infrastructure.Tests/Restaurantes.Reporting.Infrastructure.Tests.csproj" />
     <Project Path="tests/Restaurantes.Sales.Application.Tests/Restaurantes.Sales.Application.Tests.csproj" />

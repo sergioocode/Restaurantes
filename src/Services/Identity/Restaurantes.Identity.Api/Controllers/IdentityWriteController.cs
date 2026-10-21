@@ -3,26 +3,13 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Restaurantes.Identity.Application;
-using Restaurantes.Security;
 
 namespace Restaurantes.Identity.Api.Controllers;
 
 [ApiController, Route("api/identity")]
 public sealed class IdentityWriteController(IdentityService service, IConfiguration configuration)
-    : ControllerBase
+    : IdentityControllerBase(configuration)
 {
-    private bool MicrosoftConfigured =>
-        !string.IsNullOrWhiteSpace(configuration["ExternalAuth:PublicOrigin"])
-        && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Microsoft:TenantId"])
-        && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Microsoft:ClientId"])
-        && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Microsoft:ClientSecret"]);
-    private bool GoogleConfigured =>
-        !string.IsNullOrWhiteSpace(configuration["ExternalAuth:PublicOrigin"])
-        && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Google:WorkspaceDomain"])
-        && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Google:ClientId"])
-        && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Google:ClientSecret"]);
-    private string ActiveProvider => ReadActiveProvider(configuration);
-
     [HttpGet("auth/start/{provider}")]
     public async Task<IActionResult> Start(
         string provider,
@@ -106,35 +93,12 @@ public sealed class IdentityWriteController(IdentityService service, IConfigurat
         }
 
         string? accountType = principal.FindFirstValue("acct");
-        if (
-            provider == "Microsoft"
-            && (
-                !string.Equals(
-                    tenant,
-                    configuration["ExternalAuth:Microsoft:TenantId"],
-                    StringComparison.OrdinalIgnoreCase
-                ) || (accountType is not null && accountType != "0")
-            )
-        )
+        if (provider == "Microsoft" && !IsAllowedMicrosoftAccount(tenant, accountType))
         {
             return Redirect($"{returnPath}#login_error=tenant");
         }
 
-        if (
-            provider == "Google"
-            && (
-                !string.Equals(
-                    principal.FindFirstValue("hd"),
-                    configuration["ExternalAuth:Google:WorkspaceDomain"],
-                    StringComparison.OrdinalIgnoreCase
-                )
-                || !string.Equals(
-                    principal.FindFirstValue("email_verified"),
-                    "true",
-                    StringComparison.OrdinalIgnoreCase
-                )
-            )
-        )
+        if (provider == "Google" && !IsAllowedGoogleAccount(principal))
         {
             return Redirect($"{returnPath}#login_error=workspace");
         }
@@ -201,60 +165,32 @@ public sealed class IdentityWriteController(IdentityService service, IConfigurat
             : Execute(() => service.DeleteUser(id, allRestaurants, restaurantIds, ct));
     }
 
-    private (bool AllRestaurants, HashSet<Guid> RestaurantIds) IdentityManagementScope()
-    {
-        bool allRestaurants = User.FindAll(ClaimTypes.Role)
-            .Any(claim =>
-                RestaurantPermissions
-                    .ForRole(claim.Value)
-                    .Contains(RestaurantPermissions.IdentityManage)
-            );
-        HashSet<Guid> restaurantIds = [];
-        string suffix = $":{RestaurantPermissions.IdentityManage}";
-        foreach (
-            Claim claim in User.FindAll(RestaurantClaimTypes.Permission)
-                .Where(claim => claim.Value.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-        )
-        {
-            if (Guid.TryParse(claim.Value[..^suffix.Length], out Guid restaurantId))
-            {
-                restaurantIds.Add(restaurantId);
-            }
-        }
-
-        return (allRestaurants, restaurantIds);
-    }
-
     private static bool IsAllowedReturnPath(string path)
     {
         return path is "/backoffice/" or "/pos/" or "/commander/" or "/kds/" or "/dashboard/";
     }
 
-    private static string ReadActiveProvider(IConfiguration configuration)
+    private bool IsAllowedMicrosoftAccount(string? tenant, string? accountType)
     {
-        string? provider = configuration["ExternalAuth:Provider"];
-        return provider is "Microsoft" or "Google"
-            ? provider
-            : throw new InvalidOperationException(
-                "ExternalAuth:Provider must be Microsoft or Google."
-            );
+        return string.Equals(
+                tenant,
+                Configuration["ExternalAuth:Microsoft:TenantId"],
+                StringComparison.OrdinalIgnoreCase
+            ) && (accountType is null || accountType == "0");
     }
 
-    private async Task<IActionResult> Execute(Func<Task<IdentityResult>> operation)
+    private bool IsAllowedGoogleAccount(ClaimsPrincipal principal)
     {
-        IdentityResult result = await operation();
-        return result.Outcome switch
-        {
-            IdentityOutcome.Ok => Ok(result.Value),
-            IdentityOutcome.Created => Created(result.Location!, result.Value),
-            IdentityOutcome.NoContent => NoContent(),
-            IdentityOutcome.BadRequest => BadRequest(result.Value),
-            IdentityOutcome.Unauthorized => Unauthorized(),
-            IdentityOutcome.Forbidden => Forbid(),
-            IdentityOutcome.NotFound => NotFound(),
-            IdentityOutcome.Conflict => Conflict(result.Value),
-            _ => throw new ArgumentOutOfRangeException(),
-        };
+        return string.Equals(
+                principal.FindFirstValue("hd"),
+                Configuration["ExternalAuth:Google:WorkspaceDomain"],
+                StringComparison.OrdinalIgnoreCase
+            )
+            && string.Equals(
+                principal.FindFirstValue("email_verified"),
+                "true",
+                StringComparison.OrdinalIgnoreCase
+            );
     }
 
     public sealed record ExchangeRequest(string Code);

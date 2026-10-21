@@ -24,5 +24,8 @@ public partial class BackfillIdentityUserStamps : Migration
     }
 
     /// <inheritdoc />
-    protected override void Down(MigrationBuilder migrationBuilder) { }
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        // Original empty stamps cannot be distinguished from stamps set by this backfill.
+    }
 }
