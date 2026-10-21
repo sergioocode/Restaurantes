@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Restaurantes.Orders.Contracts.Events;
 using Restaurantes.Payments.Contracts.Events;
@@ -246,6 +246,81 @@ public sealed class ReportingProjectionHandlerTests
         DateTimeKind.Utc
     );
     private static readonly DateTime EventUpdatedAtUtc = EventCreatedAtUtc.AddMinutes(5);
+
+    [Fact]
+    public async Task Payment_projection_creates_an_order_fact_when_order_event_has_not_arrived()
+    {
+        await using ReportingReadDbContext db = new(
+            new DbContextOptionsBuilder<ReportingReadDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .Options
+        );
+        ReportingProjectionHandler handler = new(db, TimeProvider.System);
+        Guid orderId = Guid.NewGuid();
+        Guid restaurantId = Guid.NewGuid();
+        Guid saleGroupId = Guid.NewGuid();
+        DateTime capturedAtUtc = EventUpdatedAtUtc;
+
+        await ProjectAsync(
+            handler,
+            Guid.NewGuid(),
+            new PaymentCaptured(
+                Guid.NewGuid(),
+                orderId,
+                restaurantId,
+                12m,
+                "Card",
+                "Takeaway",
+                "Pos",
+                "",
+                capturedAtUtc,
+                IsFullyPaid: true,
+                SaleGroupId: saleGroupId
+            )
+        );
+
+        OrderReportingFact fact = await db.Orders.SingleAsync(
+            TestContext.Current.CancellationToken
+        );
+        Assert.Equal(restaurantId, fact.RestaurantId);
+        Assert.Equal("Takeaway", fact.ServiceMode);
+        Assert.Equal("Draft", fact.OrderStatus);
+        Assert.Equal("Paid", fact.PaymentStatus);
+        Assert.Equal(saleGroupId, fact.PaymentTransactionId);
+        Assert.Equal(capturedAtUtc, fact.PaidAtUtc);
+    }
+
+    [Fact]
+    public async Task Completed_sale_waits_until_every_order_projection_is_available()
+    {
+        await using ReportingReadDbContext db = new(
+            new DbContextOptionsBuilder<ReportingReadDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .Options
+        );
+        ReportingProjectionHandler handler = new(db, TimeProvider.System);
+
+        InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            ProjectAsync(
+                handler,
+                Guid.NewGuid(),
+                new SaleCompleted(
+                    Guid.NewGuid(),
+                    Guid.NewGuid(),
+                    "Pos",
+                    "Card",
+                    12m,
+                    EventUpdatedAtUtc,
+                    [Guid.NewGuid()],
+                    []
+                )
+            )
+        );
+
+        Assert.Contains("order projection is not ready", error.Message);
+        Assert.Empty(db.Sales);
+        Assert.Empty(db.InboxMessages);
+    }
 
     [Theory]
     [MemberData(nameof(OrderLifecycleEvents))]
