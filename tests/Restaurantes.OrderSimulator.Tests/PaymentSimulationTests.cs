@@ -1,4 +1,4 @@
-using Restaurantes.OrderSimulator;
+﻿using Restaurantes.OrderSimulator;
 using Xunit;
 using Simulator = Restaurantes.OrderSimulator.Program;
 
@@ -95,5 +95,62 @@ public sealed class PaymentSimulationTests
         );
 
         Assert.Equal("amount", error.ParamName);
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(5)]
+    public void Guest_payments_cover_the_full_amount_with_three_methods(int guestCount)
+    {
+        using SemaphoreSlim randomLock = new(1, 1);
+
+        List<PaymentPart> parts = Simulator.CreateGuestPaymentParts(
+            new PaymentOptions(),
+            14.50m,
+            guestCount,
+            new Simulator.SimulatorRandom(17),
+            randomLock
+        );
+
+        Assert.Equal(14.50m, parts.Sum(part => part.Amount));
+        Assert.Equal(guestCount, parts.Select(part => part.GuestNumber).Distinct().Count());
+        Assert.Equal(3, parts.Select(part => part.Method).Distinct().Count());
+        Assert.All(parts, part => Assert.True(part.Amount > 0));
+    }
+
+    [Fact]
+    public void Guest_payments_reject_an_amount_too_small_to_split()
+    {
+        using SemaphoreSlim randomLock = new(1, 1);
+
+        InvalidDataException error = Assert.Throws<InvalidDataException>(() =>
+            Simulator.CreateGuestPaymentParts(
+                new PaymentOptions(),
+                0.01m,
+                2,
+                new Simulator.SimulatorRandom(17),
+                randomLock
+            )
+        );
+
+        Assert.Contains("demasiado bajo", error.Message);
+    }
+
+    [Fact]
+    public void Weighted_allocation_preserves_the_total_and_rejects_invalid_weights()
+    {
+        List<decimal> shares = Simulator.Allocate(10.01m, [1m, 1m, 1m]);
+
+        Assert.Equal([3.34m, 3.34m, 3.33m], shares);
+        Assert.Equal(10.01m, shares.Sum());
+        Assert.Equal(
+            "weights",
+            Assert.Throws<ArgumentException>(() => Simulator.Allocate(1m, [])).ParamName
+        );
+        Assert.Equal(
+            "weights",
+            Assert.Throws<ArgumentException>(() => Simulator.Allocate(1m, [0m])).ParamName
+        );
     }
 }
