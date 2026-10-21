@@ -13,6 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Services\Identity\Restaurantes.Identity.Api\Restaurantes.Identity.Api.csproj" />
     <ProjectReference Include="..\..\src\Services\Identity\Restaurantes.Identity.Application\Restaurantes.Identity.Application.csproj" />
   </ItemGroup>
 </Project>
