@@ -109,25 +109,27 @@ public static class RabbitMqRetry
 
     private static int GetRetryCount(IDictionary<string, object?>? headers)
     {
-        return headers is null || !headers.TryGetValue(RetryCountHeader, out object? value)
-            ? 0
-            : value switch
-            {
-                byte number => number,
-                sbyte number => number,
-                short number => number,
-                ushort number => number,
-                int number => number,
-                uint number when number <= int.MaxValue => (int)number,
-                long number when number is >= 0 and <= int.MaxValue => (int)number,
-                byte[] bytes
-                    when int.TryParse(
-                        Encoding.UTF8.GetString(bytes),
-                        NumberStyles.None,
-                        CultureInfo.InvariantCulture,
-                        out int number
-                    ) => number,
-                _ => 0,
-            };
+        int retryCount =
+            headers is null || !headers.TryGetValue(RetryCountHeader, out object? value)
+                ? 0
+                : value switch
+                {
+                    byte number => number,
+                    sbyte number => number,
+                    short number => number,
+                    ushort number => number,
+                    int number => number,
+                    uint number when number <= int.MaxValue => (int)number,
+                    long number when number is >= 0 and <= int.MaxValue => (int)number,
+                    byte[] bytes
+                        when int.TryParse(
+                            Encoding.UTF8.GetString(bytes),
+                            NumberStyles.None,
+                            CultureInfo.InvariantCulture,
+                            out int number
+                        ) => number,
+                    _ => 0,
+                };
+        return Math.Max(0, retryCount);
     }
 }
