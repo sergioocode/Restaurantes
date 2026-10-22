@@ -239,11 +239,7 @@ public sealed class CommanderHomeOverallCoverageTests
         );
         Set(home, "selectedZoneId", zoneId);
         Set(home, "restaurantId", restaurantId);
-        Set(
-            home,
-            "restaurants",
-            new List<RestaurantResponse> { new(restaurantId, "LOCAL", "Local", "", true) }
-        );
+        Set(home, "restaurant", new RestaurantResponse(restaurantId, "LOCAL", "Local", "", true));
         Set(home, "selectedTable", firstTable);
         Set(
             home,

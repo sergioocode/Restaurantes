@@ -41,15 +41,6 @@
         <header class="topbar">
             <div><p class="eyebrow">COMANDERO</p><strong>@login.User.DisplayName</strong></div>
             <div class="topbar-actions">
-                <label class="restaurant-picker">
-                    <span>Local</span>
-                    <select value="@restaurantId" @onchange="RestaurantChanged" disabled="@(busy || restaurants.Count <= 1 || selectedTable is not null)">
-                        @foreach (RestaurantResponse restaurant in restaurants)
-                        {
-                            <option value="@restaurant.Id">@restaurant.Name · @restaurant.Code</option>
-                        }
-                    </select>
-                </label>
                 <button class="ghost" @onclick="LoadTables" disabled="@busy">Actualizar mesas</button>
                 <button class="ghost" @onclick="Logout">Salir</button>
             </div>
@@ -117,14 +108,12 @@
                 <div class="session-progress-details">
                     @if (guestCount is int savedGuestCount)
                     {
-                        <span class="session-guest-count">@savedGuestCount comensales</span>
+                        <span class="session-guest-count" aria-label="@savedGuestCount comensales">👥 @savedGuestCount</span>
                     }
-                    <strong>Estado de comandas:</strong>
                     <span class="session-status">@SessionOrderSummary(sessionId)</span>
                 </div>
                 <button class="ghost" @onclick="OpenBill">Ver consumo</button>
             </section>
-
             <nav class="category-tabs" aria-label="Categorías del menú">
                 <button class="@CategoryClass(null)" @onclick="() => SelectCategory(null)">Todo</button>
                 @foreach (string itemCategory in Categories())

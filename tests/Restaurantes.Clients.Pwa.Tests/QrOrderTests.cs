@@ -1054,23 +1054,10 @@ public sealed class QrOrderTests : BunitContext
     }
 
     [Fact]
-    public async Task Commander_ignores_unavailable_restaurants_and_loads_the_selected_restaurant()
+    public void Commander_header_does_not_offer_restaurant_selection()
     {
-        Guid firstRestaurantId = Guid.NewGuid();
-        Guid selectedRestaurantId = Guid.NewGuid();
-        Guid unauthorizedRestaurantId = Guid.NewGuid();
-        List<string> requests = [];
         HttpClient http = new(
-            new ReplyHandler(request =>
-            {
-                string path = request.RequestUri!.PathAndQuery;
-                requests.Add(path);
-                return path == $"/api/dining/restaurants/{selectedRestaurantId}/tables"
-                        ? JsonResponse(Array.Empty<CommanderTable>())
-                    : path == $"/api/orders/commander?restaurantId={selectedRestaurantId}"
-                        ? JsonResponse(Array.Empty<CommanderOrder>())
-                    : new HttpResponseMessage(HttpStatusCode.NotFound);
-            })
+            new ReplyHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound))
         )
         {
             BaseAddress = new Uri("https://test.local"),
@@ -1081,48 +1068,24 @@ public sealed class QrOrderTests : BunitContext
         Services.AddSingleton<IJSRuntime, EmptyJsRuntime>();
 
         IRenderedComponent<CommanderHome> cut = Render<CommanderHome>();
-        requests.Clear();
-        SetField(cut.Instance, "restaurantId", firstRestaurantId);
         SetField(
             cut.Instance,
-            "restaurants",
-            new List<Restaurantes.Clients.Commander.Pwa.Models.RestaurantResponse>
-            {
-                new(firstRestaurantId, "A", "Primero", "", true),
-                new(selectedRestaurantId, "B", "Segundo", "", true),
-            }
+            "login",
+            new CommanderLogin(
+                "token",
+                DateTime.UtcNow.AddHours(1),
+                new Restaurantes.Clients.Commander.Pwa.Models.LoginUser(
+                    Guid.NewGuid(),
+                    "user",
+                    "Usuario"
+                ),
+                []
+            )
         );
-        MethodInfo restaurantChanged = typeof(CommanderHome).GetMethod(
-            "RestaurantChanged",
-            BindingFlags.Instance | BindingFlags.NonPublic
-        )!;
+        cut.Render();
 
-        await cut.InvokeAsync(() =>
-            (Task)
-                restaurantChanged.Invoke(
-                    cut.Instance,
-                    [new ChangeEventArgs { Value = unauthorizedRestaurantId }]
-                )!
-        );
-
-        Assert.Equal(firstRestaurantId, GetField(cut.Instance, "restaurantId"));
-        Assert.Empty(requests);
-
-        await cut.InvokeAsync(() =>
-            (Task)
-                restaurantChanged.Invoke(
-                    cut.Instance,
-                    [new ChangeEventArgs { Value = selectedRestaurantId }]
-                )!
-        );
-
-        Assert.Equal(selectedRestaurantId, GetField(cut.Instance, "restaurantId"));
-        Assert.Contains($"/api/dining/restaurants/{selectedRestaurantId}/tables", requests);
-        Assert.Contains($"/api/orders/commander?restaurantId={selectedRestaurantId}", requests);
-        Assert.DoesNotContain(
-            requests,
-            request => request.Contains(firstRestaurantId.ToString(), StringComparison.Ordinal)
-        );
+        Assert.Empty(cut.FindAll(".topbar select"));
+        Assert.Equal(2, cut.FindAll(".topbar-actions button").Count);
     }
 
     [Fact]
@@ -1214,9 +1177,12 @@ public sealed class QrOrderTests : BunitContext
         await cut.InvokeAsync(() => (Task)loadRestaurants.Invoke(cut.Instance, null)!);
 
         Assert.Equal(accessibleRestaurantId, GetField(cut.Instance, "restaurantId"));
-        Assert.Single(
-            (List<Restaurantes.Clients.Commander.Pwa.Models.RestaurantResponse>)
-                GetField(cut.Instance, "restaurants")!
+        Assert.Equal(
+            accessibleRestaurantId,
+            (
+                (Restaurantes.Clients.Commander.Pwa.Models.RestaurantResponse)
+                    GetField(cut.Instance, "restaurant")!
+            ).Id
         );
     }
 

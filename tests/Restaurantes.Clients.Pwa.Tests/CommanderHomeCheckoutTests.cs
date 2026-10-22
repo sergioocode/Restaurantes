@@ -593,15 +593,14 @@ public sealed class CommanderHomeCheckoutTests : BunitContext
     }
 
     [Fact]
-    public async Task Changing_restaurant_clears_stale_selection_and_loads_active_tables()
+    public async Task Loading_operational_data_clears_stale_zone_and_ignores_inactive_tables()
     {
-        Guid currentRestaurantId = Guid.NewGuid();
-        Guid nextRestaurantId = Guid.NewGuid();
+        Guid restaurantId = Guid.NewGuid();
         Guid previousZoneId = Guid.NewGuid();
         Guid nextZoneId = Guid.NewGuid();
         TableResponse activeTable = new(
             Guid.NewGuid(),
-            nextRestaurantId,
+            restaurantId,
             "M02",
             "Mesa 2",
             true,
@@ -621,9 +620,9 @@ public sealed class CommanderHomeCheckoutTests : BunitContext
                 return Task.FromResult(
                     path == "/api/identity/auth/provider"
                         ? Json(new ProviderSettingsResponse("", false, false))
-                    : path == $"/api/dining/restaurants/{nextRestaurantId}/tables"
+                    : path == $"/api/dining/restaurants/{restaurantId}/tables"
                         ? Json(new[] { inactiveTable, activeTable })
-                    : path == $"/api/orders/commander?restaurantId={nextRestaurantId}"
+                    : path == $"/api/orders/commander?restaurantId={restaurantId}"
                         ? Json(Array.Empty<OrderResponse>())
                     : new HttpResponseMessage(HttpStatusCode.NotFound)
                 );
@@ -638,43 +637,13 @@ public sealed class CommanderHomeCheckoutTests : BunitContext
         Services.AddSingleton<IJSRuntime, EmptyJsRuntime>();
         IRenderedComponent<Home> cut = Render<Home>();
         cut.WaitForState(() => !(bool)Get(cut.Instance, "initializing")!);
-        Set(cut.Instance, "restaurantId", currentRestaurantId);
-        Set(
-            cut.Instance,
-            "restaurants",
-            new List<RestaurantResponse>
-            {
-                new(currentRestaurantId, "R1", "Uno", "Calle 1", true),
-                new(nextRestaurantId, "R2", "Dos", "Calle 2", true),
-            }
-        );
+        Set(cut.Instance, "restaurantId", restaurantId);
         Set(cut.Instance, "selectedZoneId", previousZoneId);
-        Set(cut.Instance, "selectedTable", activeTable);
-        MethodInfo change = typeof(Home).GetMethod("RestaurantChanged", PrivateInstance)!;
+        MethodInfo reload = typeof(Home).GetMethod("LoadOperationalData", PrivateInstance)!;
+        await cut.InvokeAsync(() => (Task)reload.Invoke(cut.Instance, null)!);
 
-        await cut.InvokeAsync(() =>
-            (Task)change.Invoke(cut.Instance, [new ChangeEventArgs { Value = "bad-id" }])!
-        );
-        await cut.InvokeAsync(() =>
-            (Task)
-                change.Invoke(
-                    cut.Instance,
-                    [new ChangeEventArgs { Value = currentRestaurantId.ToString() }]
-                )!
-        );
-        Assert.DoesNotContain(requests, path => path.Contains("/tables", StringComparison.Ordinal));
-
-        await cut.InvokeAsync(() =>
-            (Task)
-                change.Invoke(
-                    cut.Instance,
-                    [new ChangeEventArgs { Value = nextRestaurantId.ToString() }]
-                )!
-        );
-
-        Assert.Equal(nextRestaurantId, Get(cut.Instance, "restaurantId"));
+        Assert.Equal(restaurantId, Get(cut.Instance, "restaurantId"));
         Assert.Null(Get(cut.Instance, "selectedZoneId"));
-        Assert.Null(Get(cut.Instance, "selectedTable"));
         Assert.Equal(
             activeTable.Id,
             Assert
@@ -686,13 +655,9 @@ public sealed class CommanderHomeCheckoutTests : BunitContext
                 )
                 .Id
         );
-        Assert.Contains($"/api/orders/commander?restaurantId={nextRestaurantId}", requests);
+        Assert.Contains($"/api/dining/restaurants/{restaurantId}/tables", requests);
+        Assert.Contains($"/api/orders/commander?restaurantId={restaurantId}", requests);
         Assert.False((bool)Get(cut.Instance, "busy")!);
-
-        Set(cut.Instance, "selectedZoneId", previousZoneId);
-        MethodInfo reload = typeof(Home).GetMethod("LoadOperationalData", PrivateInstance)!;
-        await cut.InvokeAsync(() => (Task)reload.Invoke(cut.Instance, null)!);
-        Assert.Null(Get(cut.Instance, "selectedZoneId"));
     }
 
     [Fact]
@@ -1059,8 +1024,8 @@ public sealed class CommanderHomeCheckoutTests : BunitContext
         );
         Set(
             cut.Instance,
-            "restaurants",
-            new List<RestaurantResponse> { new(Guid.NewGuid(), "R1", "Restaurante", "Calle", true) }
+            "restaurant",
+            new RestaurantResponse(Guid.NewGuid(), "R1", "Restaurante", "Calle", true)
         );
         Set(
             cut.Instance,
@@ -1087,7 +1052,7 @@ public sealed class CommanderHomeCheckoutTests : BunitContext
 
         Assert.Null(api.AccessToken);
         Assert.Null(Get(cut.Instance, "login"));
-        Assert.Empty((List<RestaurantResponse>)Get(cut.Instance, "restaurants")!);
+        Assert.Null(Get(cut.Instance, "restaurant"));
         Assert.Empty(
             (List<TableResponse>)
                 typeof(Home).GetProperty("FilteredTables", PrivateInstance)!.GetValue(cut.Instance)!
@@ -1801,25 +1766,22 @@ public sealed class CommanderHomeCheckoutTests : BunitContext
         );
         Set(
             cut.Instance,
-            "restaurants",
-            new List<RestaurantResponse>
-            {
-                new(
-                    restaurantId,
-                    "CENTRO",
-                    "Restaurante Centro",
+            "restaurant",
+            new RestaurantResponse(
+                restaurantId,
+                "CENTRO",
+                "Restaurante Centro",
+                "Calle Mayor 1",
+                true,
+                new RestaurantCompanyResponse(
+                    Guid.NewGuid(),
+                    "Restaurante Centro SL",
+                    "B12345678",
                     "Calle Mayor 1",
-                    true,
-                    new RestaurantCompanyResponse(
-                        Guid.NewGuid(),
-                        "Restaurante Centro SL",
-                        "B12345678",
-                        "Calle Mayor 1",
-                        "910000000",
-                        "centro@example.test"
-                    )
-                ),
-            }
+                    "910000000",
+                    "centro@example.test"
+                )
+            )
         );
         Set(cut.Instance, "restaurantId", restaurantId);
         TableResponse table = new(
@@ -2013,11 +1975,8 @@ public sealed class CommanderHomeCheckoutTests : BunitContext
         Assert.Contains("centro@example.test", cut.Markup);
         Set(
             cut.Instance,
-            "restaurants",
-            new List<RestaurantResponse>
-            {
-                new(restaurantId, "LOCAL", "Local", "Calle Central 2", true),
-            }
+            "restaurant",
+            new RestaurantResponse(restaurantId, "LOCAL", "Local", "Calle Central 2", true)
         );
         Set(
             cut.Instance,

@@ -24,7 +24,7 @@ public partial class Home
     private ProviderSettingsResponse? providerSettings;
     private Guid restaurantId;
     private Guid? selectedZoneId;
-    private List<RestaurantResponse> restaurants = [];
+    private RestaurantResponse? restaurant;
 
     private List<TableResponse> FilteredTables { get; set; } = [];
     private IEnumerable<TableResponse> TablesInSelectedZone =>
@@ -172,8 +172,7 @@ public partial class Home
         ?? 0;
     private bool CanChargeOwnCommanderOrders =>
         bill is { Status: "Open" } && CommanderOutstanding > 0;
-    private RestaurantResponse? CurrentRestaurant =>
-        restaurants.FirstOrDefault(x => x.Id == restaurantId);
+    private RestaurantResponse? CurrentRestaurant => restaurant;
     private string CurrentLabel => selectedTable?.Label ?? string.Empty;
     private decimal CurrentTipAmount { get; set; }
     private decimal SuggestedTipAmount =>
@@ -413,7 +412,7 @@ public partial class Home
         await Realtime.DisconnectAsync();
         Api.AccessToken = null;
         login = null;
-        restaurants = [];
+        restaurant = null;
         FilteredTables = [];
         selectedZoneId = null;
         BackToTables();
@@ -427,36 +426,14 @@ public partial class Home
 
     private async Task LoadRestaurants()
     {
-        restaurants = await Api.RestaurantsAsync();
-        if (restaurants.Count == 0)
+        restaurant = (await Api.RestaurantsAsync()).FirstOrDefault();
+        if (restaurant is null)
         {
             throw new InvalidOperationException(
                 "El usuario no tiene permisos para operar el Comandero en ningún local."
             );
         }
-
-        if (!restaurants.Any(restaurant => restaurant.Id == restaurantId))
-        {
-            restaurantId = restaurants[0].Id;
-        }
-    }
-
-    private async Task RestaurantChanged(ChangeEventArgs args)
-    {
-        if (
-            !Guid.TryParse(args.Value?.ToString(), out Guid value)
-            || value == restaurantId
-            || restaurants.All(restaurant => restaurant.Id != value)
-        )
-        {
-            return;
-        }
-
-        restaurantId = value;
-        selectedZoneId = null;
-        BackToTables();
-        await LoadTables();
-        await ConnectRealtimeAsync();
+        restaurantId = restaurant.Id;
     }
 
     private async Task LoadOperationalData()
