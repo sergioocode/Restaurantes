@@ -445,7 +445,7 @@ Esta consulta de Prometheus conserva la evidencia del flujo completo: apertura d
 
 ### Calidad y seguridad local
 
-SonarQube Community Build permite analizar mantenibilidad, fiabilidad y reglas básicas de seguridad antes de integrar cambios. Se mantiene en un perfil Compose independiente para no cargar su base de datos ni su imagen cuando sólo se necesita la infraestructura operativa:
+SonarQube Community Build permite analizar mantenibilidad, fiabilidad y reglas básicas de seguridad antes de promover los cambios a `master`. Se mantiene en un perfil Compose independiente para no cargar su base de datos ni su imagen cuando sólo se necesita la infraestructura operativa:
 
 ```powershell
 docker compose --env-file tools/vault/.env --profile quality up -d sonarqube
@@ -474,13 +474,13 @@ docker compose --env-file tools/vault/.env --profile quality stop sonarqube sona
 
 ![Quality Gate inicial de SonarQube](assets/sonar/sonarqube-quality-gate.jpg)
 
-### Calidad continua en Cloud
+### Integración continua y calidad local
 
-[SonarQube Cloud](https://sonarcloud.io/) analiza `master`, la rama principal configurada para este proyecto. `develop` es la rama habitual de trabajo e integración; sus pushes no ejecutan GitHub Actions. Los cambios se promueven a `master` mediante un commit de merge con mensaje de resumen, incluso si se incorpora un solo commit.
+`develop` es la rama habitual de trabajo e integración. Tras validar los cambios y superar el Quality Gate local, se promueven a `master` con `git merge --ff-only develop`, sin crear un commit de merge.
 
-El [workflow de CI](.github/workflows/ci.yml) se ejecuta al subir `master` o manualmente. Compila la solución, ejecuta las pruebas .NET con cobertura OpenCover y las pruebas de KDS con LCOV, publica el análisis Cloud y espera el resultado del **Quality Gate**. Solo un commit de `master` que supere esas comprobaciones es candidato a release.
+El [workflow de CI](.github/workflows/ci.yml) se ejecuta al subir `master` o manualmente. Restaura y compila la solución, ejecuta las pruebas .NET con cobertura OpenCover y las pruebas de KDS con cobertura LCOV, y publica los informes de cobertura como artefactos.
 
-El workflow usa `SONAR_TOKEN` como secreto del repositorio en GitHub. La organización y la clave del proyecto están configuradas allí; el valor del token no se versiona.
+El análisis de SonarQube Community Build y su **Quality Gate** se ejecutan localmente con el script indicado arriba, antes de promover los cambios a `master`. Antes de publicar un release, comprueba que el workflow del commit de `master` ha terminado correctamente.
 
 ### Scripts PostgreSQL
 
