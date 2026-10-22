@@ -1,0 +1,58 @@
+name: Publicar release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  release:
+    name: Crear release de GitHub
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Obtener el código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validar tag y procedencia
+        shell: bash
+        run: |
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
+            echo "El tag debe tener el formato vMAJOR.MINOR.PATCH, con un sufijo opcional de prelanzamiento." >&2
+            exit 1
+          fi
+
+          git fetch --no-tags origin master:refs/remotes/origin/master
+          if ! git merge-base --is-ancestor HEAD refs/remotes/origin/master; then
+            echo "El tag debe apuntar a un commit de master." >&2
+            exit 1
+          fi
+
+      - name: Confirmar CI de master
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          commit=$(git rev-parse HEAD)
+          approved=$(gh run list --workflow ci.yml --commit "$commit" --event push --status success --limit 1 --json databaseId --jq 'length')
+          if [[ "$approved" -eq 0 ]]; then
+            echo "El commit etiquetado aún no tiene una ejecución satisfactoria de Integración continua en master." >&2
+            exit 1
+          fi
+
+      - name: Publicar release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          options=(--verify-tag --title "$GITHUB_REF_NAME" --notes "")
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            options+=(--prerelease)
+          fi
+          gh release create "$GITHUB_REF_NAME" "${options[@]}"
