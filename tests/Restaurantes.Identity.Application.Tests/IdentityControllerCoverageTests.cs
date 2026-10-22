@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Restaurantes.Identity.Api.Controllers;
@@ -253,6 +254,23 @@ public sealed class IdentityControllerCoverageTests
     }
 
     [Fact]
+    public async Task Complete_uses_local_fallback_when_url_helper_rejects_return_path()
+    {
+        IdentityWriteController controller = CreateWriteController(
+            CreateIdentityService(new FakeIdentityStore()),
+            Configuration(),
+            new FakeAuthenticationService(AuthenticateResult.NoResult())
+        );
+        controller.Url = new FixedUrlHelper(isLocal: false);
+
+        RedirectResult redirect = Assert.IsType<RedirectResult>(
+            await controller.Complete("Microsoft", "/pos/", Ct)
+        );
+
+        Assert.Equal("/#login_error=authentication", redirect.Url);
+    }
+
+    [Fact]
     public async Task Complete_checks_microsoft_account_type_and_google_workspace_before_linking()
     {
         ClaimsPrincipal personalMicrosoftAccount = new(
@@ -369,7 +387,23 @@ public sealed class IdentityControllerCoverageTests
                     .BuildServiceProvider(),
             },
         };
+        controller.Url = new FixedUrlHelper(isLocal: true);
         return controller;
+    }
+
+    private sealed class FixedUrlHelper(bool isLocal) : IUrlHelper
+    {
+        public ActionContext ActionContext { get; } = new();
+
+        public string? Action(UrlActionContext actionContext) => throw new NotSupportedException();
+
+        public string? Content(string? contentPath) => contentPath;
+
+        public bool IsLocalUrl(string? url) => isLocal;
+
+        public string? Link(string? routeName, object? values) => throw new NotSupportedException();
+
+        public string? RouteUrl(UrlRouteContext routeContext) => throw new NotSupportedException();
     }
 
     private static FakeAuthenticationService ExternalAuthentication(

@@ -63,6 +63,8 @@ public sealed class IdentityWriteController(IdentityService service, IConfigurat
             return BadRequest();
         }
 
+        string safeReturnPath = Url.IsLocalUrl(returnPath) ? returnPath : "/";
+
         AuthenticateResult authentication = await HttpContext.AuthenticateAsync("External");
         await HttpContext.SignOutAsync("External");
         if (
@@ -76,7 +78,7 @@ public sealed class IdentityWriteController(IdentityService service, IConfigurat
             || challengedProvider != provider
         )
         {
-            return Redirect($"{returnPath}#login_error=authentication");
+            return Redirect($"{safeReturnPath}#login_error=authentication");
         }
 
         ClaimsPrincipal principal = authentication.Principal;
@@ -89,18 +91,18 @@ public sealed class IdentityWriteController(IdentityService service, IConfigurat
         string? tenant = provider == "Microsoft" ? principal.FindFirstValue("tid") : null;
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(subject))
         {
-            return Redirect($"{returnPath}#login_error=identity");
+            return Redirect($"{safeReturnPath}#login_error=identity");
         }
 
         string? accountType = principal.FindFirstValue("acct");
         if (provider == "Microsoft" && !IsAllowedMicrosoftAccount(tenant, accountType))
         {
-            return Redirect($"{returnPath}#login_error=tenant");
+            return Redirect($"{safeReturnPath}#login_error=tenant");
         }
 
         if (provider == "Google" && !IsAllowedGoogleAccount(principal))
         {
-            return Redirect($"{returnPath}#login_error=workspace");
+            return Redirect($"{safeReturnPath}#login_error=workspace");
         }
 
         IdentityResult result = await service.AuthorizeExternalAsync(
@@ -112,8 +114,10 @@ public sealed class IdentityWriteController(IdentityService service, IConfigurat
             ct
         );
         return result.Outcome != IdentityOutcome.Ok
-            ? Redirect($"{returnPath}#login_error=unauthorized")
-            : Redirect($"{returnPath}#login_code={Uri.EscapeDataString((string)result.Value!)}");
+            ? Redirect($"{safeReturnPath}#login_error=unauthorized")
+            : Redirect(
+                $"{safeReturnPath}#login_code={Uri.EscapeDataString((string)result.Value!)}"
+            );
     }
 
     [HttpPost("auth/exchange")]
