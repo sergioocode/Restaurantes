@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Reflection;
@@ -22,6 +23,12 @@ namespace Restaurantes.Clients.Pwa.Tests;
 
 public sealed class PosHomeRenderingTests : BunitContext
 {
+    public PosHomeRenderingTests()
+    {
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("es-ES");
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("es-ES");
+    }
+
     [Fact]
     public async Task Login_code_loads_the_allowed_restaurant_and_switching_local_reloads_its_tables()
     {
