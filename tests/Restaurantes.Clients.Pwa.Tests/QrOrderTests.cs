@@ -219,6 +219,423 @@ public sealed class QrOrderTests : BunitContext
     }
 
     [Fact]
+    public void Customer_qr_shows_network_guidance_when_preview_is_forbidden()
+    {
+        Services.AddSingleton(
+            new CustomerQrApi(
+                new HttpClient(
+                    new ReplyHandler(_ => new HttpResponseMessage(HttpStatusCode.Forbidden)
+                    {
+                        Content = JsonContent.Create(new { title = "Red no autorizada" }),
+                    })
+                )
+                {
+                    BaseAddress = new Uri("https://test.local"),
+                }
+            )
+        );
+        Services.AddSingleton<IJSRuntime, EmptyJsRuntime>();
+
+        IRenderedComponent<QrOrder> cut = Render<QrOrder>(parameters =>
+            parameters.Add(component => component.QrCode, "MESA-403")
+        );
+
+        cut.WaitForAssertion(() =>
+            Assert.Contains("Conéctate a la red autorizada del restaurante", cut.Markup)
+        );
+    }
+
+    [Fact]
+    public async Task Closed_restaurant_does_not_load_the_menu_or_persist_orders()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        List<string> requests = [];
+        QrSessionEnvelope closed = new(
+            new QrTableResponse(Guid.NewGuid(), restaurantId, "MESA-C", "Mesa cerrada"),
+            null,
+            "customer-token",
+            false
+        );
+        Services.AddSingleton(
+            new CustomerQrApi(
+                new HttpClient(
+                    new ReplyHandler(request =>
+                    {
+                        requests.Add(request.RequestUri!.AbsolutePath);
+                        return JsonResponse(closed);
+                    })
+                )
+                {
+                    BaseAddress = new Uri("https://test.local"),
+                }
+            )
+        );
+        Services.AddSingleton<IJSRuntime, EmptyJsRuntime>();
+
+        IRenderedComponent<QrOrder> cut = Render<QrOrder>(parameters =>
+            parameters.Add(component => component.QrCode, "MESA-C")
+        );
+        cut.WaitForAssertion(() => Assert.Contains("El local aún no está disponible", cut.Markup));
+
+        Assert.Single(requests);
+        Assert.Equal(string.Empty, GetField(cut.Instance, "ordersStorageKey"));
+        await cut.Instance.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task Guest_count_is_validated_before_opening_a_session()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        Guid sessionId = Guid.NewGuid();
+        Guid tableId = Guid.NewGuid();
+        Guid productId = Guid.NewGuid();
+        List<string> requests = [];
+        QrSessionEnvelope envelope = new(
+            new QrTableResponse(tableId, restaurantId, "MESA-G", "Mesa", true),
+            new QrDiningSessionResponse(sessionId, restaurantId, tableId, "Open", true),
+            "customer-token",
+            true
+        );
+        Services.AddSingleton(
+            new CustomerQrApi(
+                new HttpClient(
+                    new ReplyHandler(request =>
+                    {
+                        string path = request.RequestUri!.AbsolutePath;
+                        requests.Add($"{request.Method} {request.RequestUri.PathAndQuery}");
+                        if (path == "/api/dining/qr/MESA-G")
+                            return JsonResponse(envelope);
+                        if (path == $"/api/restaurant-operations/restaurants/{restaurantId}")
+                            return JsonResponse(
+                                new RestaurantResponse(
+                                    restaurantId,
+                                    "R-G",
+                                    "Restaurante",
+                                    "Calle",
+                                    true,
+                                    1,
+                                    DateTime.UtcNow
+                                )
+                            );
+                        if (path == $"/api/catalog/restaurants/{restaurantId}/menu")
+                            return JsonResponse(
+                                new[]
+                                {
+                                    new MenuItemResponse(
+                                        restaurantId,
+                                        productId,
+                                        "SKU-G",
+                                        "Producto",
+                                        Guid.NewGuid(),
+                                        "COMIDA",
+                                        "Comida",
+                                        10m,
+                                        true,
+                                        "COCINA",
+                                        "Cocina"
+                                    ),
+                                }
+                            );
+                        return new HttpResponseMessage(HttpStatusCode.NotFound);
+                    })
+                )
+                {
+                    BaseAddress = new Uri("https://test.local"),
+                }
+            )
+        );
+        Services.AddSingleton<IJSRuntime, EmptyJsRuntime>();
+
+        IRenderedComponent<QrOrder> cut = Render<QrOrder>(parameters =>
+            parameters.Add(component => component.QrCode, "MESA-G")
+        );
+        cut.WaitForAssertion(() => Assert.Contains("Producto", cut.Markup));
+        SetField(cut.Instance, "quantities", new Dictionary<Guid, int> { [productId] = 1 });
+        await cut.Find(".checkout-bar button").ClickAsync();
+
+        Assert.Contains("Indica entre 1 y 999 comensales", cut.Markup);
+        Assert.DoesNotContain(requests, request => request.Contains("/sessions"));
+        await cut.Instance.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task Guest_count_is_saved_before_customer_qr_order_is_created()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        Guid tableId = Guid.NewGuid();
+        Guid sessionId = Guid.NewGuid();
+        Guid productId = Guid.NewGuid();
+        Guid orderId = Guid.NewGuid();
+        List<string> requests = [];
+        QrSessionEnvelope preview = new(
+            new QrTableResponse(tableId, restaurantId, "MESA-N", "Mesa nueva", true),
+            null,
+            "customer-token",
+            true
+        );
+        QrSessionEnvelope opened = preview with
+        {
+            Session = new QrDiningSessionResponse(sessionId, restaurantId, tableId, "Open", true),
+        };
+        Services.AddSingleton(
+            new CustomerQrApi(
+                new HttpClient(
+                    new ReplyHandler(request =>
+                    {
+                        string path = request.RequestUri!.AbsolutePath;
+                        requests.Add($"{request.Method} {request.RequestUri.PathAndQuery}");
+                        if (path == "/api/dining/qr/MESA-N")
+                            return JsonResponse(preview);
+                        if (path == "/api/dining/qr/MESA-N/sessions")
+                            return JsonResponse(opened);
+                        if (path == $"/api/dining/sessions/{sessionId}/guests")
+                            return JsonResponse(
+                                new QrDiningSessionResponse(
+                                    sessionId,
+                                    restaurantId,
+                                    tableId,
+                                    "Open",
+                                    true,
+                                    3
+                                )
+                            );
+                        if (path == $"/api/restaurant-operations/restaurants/{restaurantId}")
+                            return JsonResponse(
+                                new RestaurantResponse(
+                                    restaurantId,
+                                    "R-N",
+                                    "Restaurante",
+                                    "Calle",
+                                    true,
+                                    1,
+                                    DateTime.UtcNow
+                                )
+                            );
+                        if (path == $"/api/catalog/restaurants/{restaurantId}/menu")
+                            return JsonResponse(
+                                new[]
+                                {
+                                    new MenuItemResponse(
+                                        restaurantId,
+                                        productId,
+                                        "SKU-N",
+                                        "Producto",
+                                        Guid.NewGuid(),
+                                        "COMIDA",
+                                        "Comida",
+                                        10m,
+                                        true,
+                                        "COCINA",
+                                        "Cocina"
+                                    ),
+                                }
+                            );
+                        if (path == "/api/orders")
+                            return JsonResponse(
+                                new OrderResponse(
+                                    orderId,
+                                    restaurantId,
+                                    "Draft",
+                                    10m,
+                                    1,
+                                    DateTime.UtcNow
+                                )
+                            );
+                        if (path == $"/api/payments/orders/{orderId}/capture-customer-qr")
+                            return JsonResponse(
+                                new PaymentResponse(
+                                    Guid.NewGuid(),
+                                    orderId,
+                                    restaurantId,
+                                    10m,
+                                    "CustomerQr",
+                                    "Paid",
+                                    DateTime.UtcNow,
+                                    null
+                                )
+                            );
+                        if (path == $"/api/orders/{orderId}/submit")
+                            return JsonResponse(
+                                new OrderResponse(
+                                    orderId,
+                                    restaurantId,
+                                    "Submitted",
+                                    10m,
+                                    2,
+                                    DateTime.UtcNow
+                                )
+                            );
+                        if (path == $"/api/payments/restaurants/{restaurantId}/order-statuses")
+                            return JsonResponse(Array.Empty<object>());
+                        return new HttpResponseMessage(HttpStatusCode.NotFound);
+                    })
+                )
+                {
+                    BaseAddress = new Uri("https://test.local"),
+                }
+            )
+        );
+        Services.AddSingleton<IJSRuntime, EmptyJsRuntime>();
+
+        IRenderedComponent<QrOrder> cut = Render<QrOrder>(parameters =>
+            parameters.Add(component => component.QrCode, "MESA-N")
+        );
+        cut.WaitForAssertion(() => Assert.Contains("Producto", cut.Markup));
+        await cut.Find("input[placeholder='Cantidad de comensales']").ChangeAsync("3");
+        await cut.Find(".quantity-control button:last-child").ClickAsync();
+        await cut.Find(".checkout-bar button").ClickAsync();
+
+        Assert.Contains("POST /api/dining/qr/MESA-N/sessions?guestCount=3", requests);
+        Assert.Contains($"PUT /api/dining/sessions/{sessionId}/guests", requests);
+        Assert.Contains("POST /api/orders", requests);
+        Assert.Contains("pagado y enviado", cut.Markup);
+        await cut.Instance.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task Retry_after_capture_failure_reuses_order_and_idempotency_key()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        Guid tableId = Guid.NewGuid();
+        Guid sessionId = Guid.NewGuid();
+        Guid productId = Guid.NewGuid();
+        Guid orderId = Guid.NewGuid();
+        int orderCreations = 0;
+        List<string> captureBodies = [];
+        QrSessionEnvelope envelope = new(
+            new QrTableResponse(tableId, restaurantId, "MESA-R", "Mesa", false),
+            new QrDiningSessionResponse(sessionId, restaurantId, tableId, "Open", false, 2),
+            "customer-token",
+            true
+        );
+        Services.AddSingleton(
+            new CustomerQrApi(
+                new HttpClient(
+                    new ReplyHandler(request =>
+                    {
+                        string path = request.RequestUri!.AbsolutePath;
+                        if (path == "/api/dining/qr/MESA-R" || path.EndsWith("/sessions"))
+                            return JsonResponse(envelope);
+                        if (path == $"/api/restaurant-operations/restaurants/{restaurantId}")
+                            return JsonResponse(
+                                new RestaurantResponse(
+                                    restaurantId,
+                                    "R-R",
+                                    "Restaurante",
+                                    "Calle",
+                                    true,
+                                    1,
+                                    DateTime.UtcNow
+                                )
+                            );
+                        if (path == $"/api/catalog/restaurants/{restaurantId}/menu")
+                            return JsonResponse(
+                                new[]
+                                {
+                                    new MenuItemResponse(
+                                        restaurantId,
+                                        productId,
+                                        "SKU-R",
+                                        "Producto",
+                                        Guid.NewGuid(),
+                                        "COMIDA",
+                                        "Comida",
+                                        10m,
+                                        true,
+                                        "COCINA",
+                                        "Cocina"
+                                    ),
+                                }
+                            );
+                        if (path == "/api/orders" && request.Method == HttpMethod.Post)
+                        {
+                            orderCreations++;
+                            return JsonResponse(
+                                new OrderResponse(
+                                    orderId,
+                                    restaurantId,
+                                    "Draft",
+                                    10m,
+                                    1,
+                                    DateTime.UtcNow
+                                )
+                            );
+                        }
+                        if (path == $"/api/payments/orders/{orderId}/capture-customer-qr")
+                        {
+                            captureBodies.Add(
+                                request.Content!.ReadAsStringAsync().GetAwaiter().GetResult()
+                            );
+                            return captureBodies.Count == 1
+                                ? new HttpResponseMessage(HttpStatusCode.InternalServerError)
+                                {
+                                    Content = JsonContent.Create(
+                                        new { title = "Pago temporalmente no disponible" }
+                                    ),
+                                }
+                                : JsonResponse(
+                                    new PaymentResponse(
+                                        Guid.NewGuid(),
+                                        orderId,
+                                        restaurantId,
+                                        10m,
+                                        "CustomerQr",
+                                        "Paid",
+                                        DateTime.UtcNow,
+                                        null
+                                    )
+                                );
+                        }
+                        if (path == $"/api/orders/{orderId}/submit")
+                            return JsonResponse(
+                                new OrderResponse(
+                                    orderId,
+                                    restaurantId,
+                                    "Submitted",
+                                    10m,
+                                    2,
+                                    DateTime.UtcNow
+                                )
+                            );
+                        if (path == $"/api/payments/restaurants/{restaurantId}/order-statuses")
+                            return JsonResponse(Array.Empty<object>());
+                        return new HttpResponseMessage(HttpStatusCode.NotFound);
+                    })
+                )
+                {
+                    BaseAddress = new Uri("https://test.local"),
+                }
+            )
+        );
+        Services.AddSingleton<IJSRuntime, EmptyJsRuntime>();
+
+        IRenderedComponent<QrOrder> cut = Render<QrOrder>(parameters =>
+            parameters.Add(component => component.QrCode, "MESA-R")
+        );
+        cut.WaitForAssertion(() => Assert.Contains("Producto", cut.Markup));
+        await cut.Find(".quantity-control button:last-child").ClickAsync();
+        await cut.Find(".checkout-bar button").ClickAsync();
+
+        Assert.Contains("Pago temporalmente no disponible", cut.Markup);
+        Assert.Equal(orderId, ((OrderResponse)GetField(cut.Instance, "pendingOrder")!).Id);
+
+        await cut.Find(".primary-button").ClickAsync();
+        cut.WaitForAssertion(() => Assert.Contains("Producto", cut.Markup));
+        await cut.Find(".checkout-bar button").ClickAsync();
+
+        Assert.Equal(1, orderCreations);
+        Assert.Equal(2, captureBodies.Count);
+        using JsonDocument first = JsonDocument.Parse(captureBodies[0]);
+        using JsonDocument second = JsonDocument.Parse(captureBodies[1]);
+        Assert.Equal(
+            first.RootElement.GetProperty("idempotencyKey").GetGuid(),
+            second.RootElement.GetProperty("idempotencyKey").GetGuid()
+        );
+        Assert.Contains("pagado y enviado", cut.Markup);
+        await cut.Instance.DisposeAsync();
+    }
+
+    [Fact]
     public async Task Changing_the_qr_replaces_the_previous_status_polling_cycle()
     {
         Services.AddSingleton(

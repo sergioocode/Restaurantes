@@ -1,4 +1,5 @@
-﻿using System.Reflection;
+﻿using System.Net;
+using System.Reflection;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -52,6 +53,30 @@ public sealed class OrdersReadControllerTests
 
         Assert.IsType<ForbidResult>(denied.Result);
         Assert.IsType<ForbidResult>(forbidden.Result);
+    }
+
+    [Fact]
+    public async Task Read_endpoints_reject_empty_restaurant_ids_and_blank_kds_station()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        Fixture fixture = new();
+
+        ActionResult<IReadOnlyList<KitchenHistoryResponse>> blankHistoryStation =
+            await fixture.Controller.KitchenHistory(restaurantId, "  ", Ct);
+        ActionResult<IReadOnlyList<ManagementOrderResponse>> emptyManagementRestaurant =
+            await fixture.Controller.ManagementOrders(Guid.Empty, BusinessDate, Ct);
+        ActionResult<IReadOnlyList<OrderResponse>> emptyKdsRestaurant =
+            await fixture.Controller.ListKds(Guid.Empty, Ct);
+        ActionResult<IReadOnlyList<OrderResponse>> emptyCommanderRestaurant =
+            await fixture.Controller.ListCommander(Guid.Empty, Ct);
+        ActionResult<IReadOnlyList<OrderResponse>> emptyPosRestaurant =
+            await fixture.Controller.ListPos(Guid.Empty, Ct);
+
+        Assert.IsType<BadRequestResult>(blankHistoryStation.Result);
+        Assert.IsType<BadRequestResult>(emptyManagementRestaurant.Result);
+        Assert.IsType<BadRequestResult>(emptyKdsRestaurant.Result);
+        Assert.IsType<BadRequestObjectResult>(emptyCommanderRestaurant.Result);
+        Assert.IsType<BadRequestObjectResult>(emptyPosRestaurant.Result);
     }
 
     [Fact]
@@ -197,6 +222,52 @@ public sealed class OrdersReadControllerTests
         Assert.IsType<NotFoundResult>(missing.Result);
     }
 
+    [Fact]
+    public async Task Get_customer_qr_orders_checks_network_and_open_dining_session()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        Guid sessionId = Guid.NewGuid();
+        Guid tableId = Guid.NewGuid();
+        Fixture fixture = new();
+        fixture.Order = Order(restaurantId, "CustomerQr");
+
+        ActionResult<OrderResponse> deniedByNetwork = await fixture.Controller.Get(
+            fixture.Order.Id,
+            null,
+            Ct
+        );
+
+        Assert.Equal(
+            StatusCodes.Status403Forbidden,
+            Assert.IsType<ObjectResult>(deniedByNetwork.Result).StatusCode
+        );
+        Assert.Equal(0, fixture.DiningSessionValidations);
+
+        fixture.Controller.HttpContext.Connection.RemoteIpAddress = IPAddress.Loopback;
+        ActionResult<OrderResponse> missingSession = await fixture.Controller.Get(
+            fixture.Order.Id,
+            null,
+            Ct
+        );
+        Assert.IsType<ForbidResult>(missingSession.Result);
+
+        fixture.Order = fixture.Order with { DiningSessionId = sessionId, TableId = tableId };
+        ActionResult<OrderResponse> accessible = await fixture.Controller.Get(
+            fixture.Order.Id,
+            "qr-session-token",
+            Ct
+        );
+
+        Assert.Same(fixture.Order, Assert.IsType<OkObjectResult>(accessible.Result).Value);
+        Assert.Equal(1, fixture.DiningSessionValidations);
+        Assert.Equal(sessionId, fixture.ValidatedDiningSessionId);
+        Assert.Equal(restaurantId, fixture.ValidatedRestaurantId);
+        Assert.Equal(tableId, fixture.ValidatedTableId);
+        Assert.Equal("CustomerQr", fixture.ValidatedSource);
+        Assert.Equal("DineIn", fixture.ValidatedServiceMode);
+        Assert.Equal("qr-session-token", fixture.ValidatedCustomerToken);
+    }
+
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private static OrderResponse Order(Guid restaurantId, string source) =>
@@ -239,7 +310,22 @@ public sealed class OrdersReadControllerTests
             IOrderCashRegister cashRegister = Proxy<IOrderCashRegister>(
                 out InterfaceProxy cashProxy
             );
-            IDiningSessionStore dining = Proxy<IDiningSessionStore>(out _);
+            IDiningSessionStore dining = Proxy<IDiningSessionStore>(out InterfaceProxy diningProxy);
+            diningProxy.Handler = (method, args) =>
+            {
+                if (method.Name != nameof(IDiningSessionStore.EnsureOpenAsync))
+                {
+                    throw new NotSupportedException(method.Name);
+                }
+                DiningSessionValidations++;
+                ValidatedDiningSessionId = (Guid)args[0]!;
+                ValidatedRestaurantId = (Guid)args[1]!;
+                ValidatedTableId = (Guid)args[2]!;
+                ValidatedSource = (string)args[3]!;
+                ValidatedServiceMode = (string)args[4]!;
+                ValidatedCustomerToken = (string)args[5]!;
+                return Task.FromResult(new DiningSessionValidation(2, null));
+            };
             cashProxy.Handler = (method, _) =>
                 method.Name switch
                 {
@@ -258,7 +344,14 @@ public sealed class OrdersReadControllerTests
                 history,
                 cashRegister,
                 dining,
-                new ConfigurationBuilder().Build()
+                new ConfigurationBuilder()
+                    .AddInMemoryCollection(
+                        new Dictionary<string, string?>
+                        {
+                            ["QrAccess:AllowedClientNetworks:0"] = "127.0.0.1/32",
+                        }
+                    )
+                    .Build()
             );
             Controller.ControllerContext = new ControllerContext
             {
@@ -298,7 +391,7 @@ public sealed class OrdersReadControllerTests
         public IReadOnlyList<KitchenHistoryResponse>? HistoryResult { get; set; } = [];
         public OrderResponse? Order
         {
-            get => Orders.FirstOrDefault();
+            get => Orders.Count == 0 ? null : Orders[0];
             set => Orders = value is null ? [] : [value];
         }
 
@@ -310,6 +403,13 @@ public sealed class OrdersReadControllerTests
         public string? ListStation { get; private set; }
         public int ManagementOffset { get; private set; }
         public int CashCloseOffset { get; private set; }
+        public int DiningSessionValidations { get; private set; }
+        public Guid ValidatedDiningSessionId { get; private set; }
+        public Guid ValidatedRestaurantId { get; private set; }
+        public Guid ValidatedTableId { get; private set; }
+        public string? ValidatedSource { get; private set; }
+        public string? ValidatedServiceMode { get; private set; }
+        public string? ValidatedCustomerToken { get; private set; }
 
         public void SetUser(Guid restaurantId, params string[] permissions)
         {

@@ -1,6 +1,7 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -88,6 +89,64 @@ public sealed class PaymentProjectionWorkerCoverageTests
         Assert.Equal(3, fixture.ChannelProxy.Acknowledgements);
     }
 
+    [Fact]
+    public async Task Capture_without_paid_amount_uses_total_and_refund_can_create_projection()
+    {
+        await using WorkerFixture fixture = await WorkerFixture.CreateAsync();
+        Guid orderId = Guid.NewGuid();
+        DateTime capturedAt = new(2026, 10, 22, 10, 0, 0, DateTimeKind.Utc);
+        PaymentCaptured capture = new(
+            Guid.NewGuid(),
+            orderId,
+            Guid.NewGuid(),
+            24m,
+            "Transfer",
+            "TakeAway",
+            "Pos",
+            "REF-789",
+            capturedAt,
+            IsFullyPaid: true
+        );
+
+        await fixture.DeliverAsync(typeof(PaymentCaptured).FullName!, capture);
+
+        OrderPaymentProjection capturedProjection = await fixture.Db.OrderPayments.SingleAsync(
+            TestContext.Current.CancellationToken
+        );
+        Assert.Equal(24m, capturedProjection.Amount);
+        Assert.Equal("Paid", capturedProjection.Status);
+        Assert.Equal(capturedAt, capturedProjection.CapturedAtUtc);
+        Assert.Equal(1, fixture.ChannelProxy.Acknowledgements);
+
+        PaymentRefunded refund = new(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            11m,
+            "Cash",
+            "TakeAway",
+            "Pos",
+            "Reembolso",
+            capturedAt.AddHours(1)
+        );
+        await fixture.DeliverAsync(typeof(PaymentRefunded).FullName!, refund);
+
+        OrderPaymentProjection[] projections = await fixture
+            .Db.OrderPayments.OrderBy(item => item.OrderId)
+            .ToArrayAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(2, projections.Length);
+        OrderPaymentProjection refundedProjection = Assert.Single(
+            projections,
+            item => item.OrderId == refund.OrderId
+        );
+        Assert.Equal(refund.PaymentId, refundedProjection.PaymentId);
+        Assert.Equal(11m, refundedProjection.Amount);
+        Assert.Equal("Refunded", refundedProjection.Status);
+        Assert.Null(refundedProjection.CapturedAtUtc);
+        Assert.Equal(capturedAt.AddHours(1), refundedProjection.UpdatedAtUtc);
+        Assert.Equal(2, fixture.ChannelProxy.Acknowledgements);
+    }
+
     [Theory]
     [InlineData("unknown.event", "{}")]
     [InlineData("Restaurantes.Payments.Contracts.Events.PaymentCaptured", "null")]
@@ -99,6 +158,70 @@ public sealed class PaymentProjectionWorkerCoverageTests
 
         Assert.Equal(0, fixture.ChannelProxy.Acknowledgements);
         Assert.Equal(1, fixture.ChannelProxy.Rejections);
+    }
+
+    [Fact]
+    public async Task Storage_failure_schedules_payment_event_retry()
+    {
+        await using WorkerFixture fixture = await WorkerFixture.CreateAsync(failOnSave: true);
+
+        await fixture.DeliverAsync(
+            typeof(PaymentCaptured).FullName!,
+            new PaymentCaptured(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                12m,
+                "Card",
+                "DineIn",
+                "Pos",
+                "",
+                DateTime.UtcNow,
+                IsFullyPaid: true
+            )
+        );
+
+        var retry = Assert.Single(fixture.ChannelProxy.PublishedMessages);
+        Assert.Equal($"{PaymentsTopology.OrdersIntegrationQueueName}.retry.1", retry.RoutingKey);
+        Assert.Equal(1, retry.Properties.Headers!["x-restaurantes-retry-count"]);
+        Assert.Equal(1, fixture.ChannelProxy.Acknowledgements);
+        Assert.Equal(0, fixture.ChannelProxy.Rejections);
+    }
+
+    [Fact]
+    public async Task Storage_failure_at_retry_limit_is_rejected_without_requeue()
+    {
+        await using WorkerFixture fixture = await WorkerFixture.CreateAsync(failOnSave: true);
+        BasicProperties properties = new()
+        {
+            Type = typeof(PaymentCaptured).FullName,
+            Headers = new Dictionary<string, object?>
+            {
+                ["x-restaurantes-retry-count"] = RabbitMqRetry.MaximumAttempts,
+            },
+        };
+
+        await fixture.DeliverRawAsync(
+            properties,
+            JsonSerializer.SerializeToUtf8Bytes(
+                new PaymentCaptured(
+                    Guid.NewGuid(),
+                    Guid.NewGuid(),
+                    Guid.NewGuid(),
+                    12m,
+                    "Card",
+                    "DineIn",
+                    "Pos",
+                    "",
+                    DateTime.UtcNow,
+                    IsFullyPaid: true
+                )
+            )
+        );
+
+        Assert.Empty(fixture.ChannelProxy.PublishedMessages);
+        Assert.Equal(1, fixture.ChannelProxy.Rejections);
+        Assert.Equal(0, fixture.ChannelProxy.Acknowledgements);
     }
 
     private sealed class WorkerFixture : IAsyncDisposable
@@ -125,13 +248,17 @@ public sealed class PaymentProjectionWorkerCoverageTests
         public OrderWriteDbContext Db { get; }
         public CatalogProjectionWorkerCoverageTests.ChannelProxy ChannelProxy { get; }
 
-        public static async Task<WorkerFixture> CreateAsync()
+        public static async Task<WorkerFixture> CreateAsync(bool failOnSave = false)
         {
-            OrderWriteDbContext db = new(
-                new DbContextOptionsBuilder<OrderWriteDbContext>()
-                    .UseInMemoryDatabase(Guid.NewGuid().ToString())
-                    .Options
-            );
+            DbContextOptionsBuilder<OrderWriteDbContext> optionsBuilder =
+                new DbContextOptionsBuilder<OrderWriteDbContext>().UseInMemoryDatabase(
+                    Guid.NewGuid().ToString()
+                );
+            if (failOnSave)
+            {
+                optionsBuilder.AddInterceptors(new ThrowOnSaveChangesInterceptor());
+            }
+            OrderWriteDbContext db = new(optionsBuilder.Options);
             await db.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
             ServiceProvider services = new ServiceCollection()
                 .AddSingleton(db)
@@ -156,9 +283,11 @@ public sealed class PaymentProjectionWorkerCoverageTests
         public Task DeliverAsync<TEvent>(string eventType, TEvent message) =>
             DeliverRawAsync(eventType, JsonSerializer.SerializeToUtf8Bytes(message));
 
-        public async Task DeliverRawAsync(string eventType, byte[] body)
+        public Task DeliverRawAsync(string eventType, byte[] body) =>
+            DeliverRawAsync(new BasicProperties { Type = eventType }, body);
+
+        public async Task DeliverRawAsync(BasicProperties properties, byte[] body)
         {
-            BasicProperties properties = new() { Type = eventType };
             BasicDeliverEventArgs args = new(
                 "consumer",
                 (ulong)(ChannelProxy.Acknowledgements + ChannelProxy.Rejections + 1),
@@ -178,4 +307,15 @@ public sealed class PaymentProjectionWorkerCoverageTests
 
         public async ValueTask DisposeAsync() => await services.DisposeAsync();
     }
+
+    private sealed class ThrowOnSaveChangesInterceptor : SaveChangesInterceptor
+    {
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default
+        ) => throw new InvalidOperationException("Temporary projection storage failure.");
+    }
+
+    private sealed record PublishedRetry(string RoutingKey, BasicProperties Properties);
 }

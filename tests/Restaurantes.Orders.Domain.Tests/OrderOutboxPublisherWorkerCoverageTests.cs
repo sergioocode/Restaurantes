@@ -1,5 +1,6 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -78,9 +79,53 @@ public sealed class OrderOutboxPublisherWorkerCoverageTests
                 Assert.Equal(OrdersTopology.ExchangeName, publication.Exchange);
                 Assert.NotEmpty(publication.MessageId);
                 Assert.Equal("application/json", publication.ContentType);
+                Assert.Equal(DeliveryModes.Persistent, publication.DeliveryMode);
+                Assert.Contains("Restaurantes.Orders.Contracts.Events.", publication.EventType);
                 Assert.Contains("sequence", Encoding.UTF8.GetString(publication.Body));
             }
         );
+    }
+
+    [Fact]
+    public async Task Batch_is_ordered_and_limited_to_fifty_pending_messages()
+    {
+        await using WorkerFixture fixture = await WorkerFixture.CreateAsync();
+        DateTime firstOccurredAt = DateTime.UtcNow;
+        for (int index = 51; index >= 0; index--)
+        {
+            fixture.Db.OutboxMessages.Add(
+                new OutboxMessage
+                {
+                    Id = Guid.NewGuid(),
+                    Type = typeof(OrderCreated).FullName!,
+                    Payload = "{\"index\":" + index + "}",
+                    OccurredAtUtc = firstOccurredAt.AddSeconds(index),
+                    ProcessedAtUtc = index == 51 ? firstOccurredAt : null,
+                }
+            );
+        }
+        await fixture.Db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(await fixture.PublishBatchAsync());
+        Assert.Equal(50, fixture.ChannelProxy.Publications.Count);
+        Assert.Equal(
+            Enumerable.Range(0, 50),
+            fixture.ChannelProxy.Publications.Select(publication =>
+                JsonDocument.Parse(publication.Body).RootElement.GetProperty("index").GetInt32()
+            )
+        );
+        Assert.Equal(
+            1,
+            fixture.Db.OutboxMessages.Count(message => !message.ProcessedAtUtc.HasValue)
+        );
+
+        Assert.True(await fixture.PublishBatchAsync());
+        PublishedMessage remaining = Assert.Single(fixture.ChannelProxy.Publications.Skip(50));
+        Assert.Equal(
+            50,
+            JsonDocument.Parse(remaining.Body).RootElement.GetProperty("index").GetInt32()
+        );
+        Assert.False(await fixture.PublishBatchAsync());
     }
 
     [Fact]
@@ -135,6 +180,30 @@ public sealed class OrderOutboxPublisherWorkerCoverageTests
         Assert.Equal("broker unavailable", exception.Message);
         Assert.Equal("broker unavailable", pending.Error);
         Assert.Null(pending.ProcessedAtUtc);
+    }
+
+    [Fact]
+    public async Task Publish_failure_is_truncated_to_the_outbox_error_limit()
+    {
+        await using WorkerFixture fixture = await WorkerFixture.CreateAsync();
+        OutboxMessage pending = new()
+        {
+            Id = Guid.NewGuid(),
+            Type = typeof(OrderCreated).FullName!,
+            Payload = "{}",
+            OccurredAtUtc = DateTime.UtcNow,
+        };
+        fixture.Db.OutboxMessages.Add(pending);
+        await fixture.Db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        fixture.ChannelProxy.PublishException = new InvalidOperationException(
+            new string('x', 2_500)
+        );
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.PublishBatchAsync());
+
+        Assert.Equal(2_000, pending.Error!.Length);
+        Assert.Null(pending.ProcessedAtUtc);
+        Assert.Empty(fixture.ChannelProxy.Publications);
     }
 
     private sealed class WorkerFixture : IAsyncDisposable
@@ -219,6 +288,8 @@ public sealed class OrderOutboxPublisherWorkerCoverageTests
                         (string)args[1]!,
                         properties.MessageId!,
                         properties.ContentType!,
+                        properties.Type!,
+                        properties.DeliveryMode,
                         ((ReadOnlyMemory<byte>)args[4]!).ToArray()
                     )
                 );
@@ -233,6 +304,8 @@ public sealed class OrderOutboxPublisherWorkerCoverageTests
         string RoutingKey,
         string MessageId,
         string ContentType,
+        string EventType,
+        DeliveryModes DeliveryMode,
         byte[] Body
     );
 }

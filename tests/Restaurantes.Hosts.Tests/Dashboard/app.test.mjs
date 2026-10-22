@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict';
+﻿import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
@@ -111,9 +111,11 @@ test('dashboard order renderer displays each payment method and all service labe
   assert.match(takeaway, /Cash/u);
 });
 
-async function loadDashboard(session, deadLetters = []) {
+async function loadDashboard(session, deadLetters = [], testOptions = {}) {
   const elements = new Map();
   const requests = [];
+  const sockets = [];
+  const scheduled = [];
   const getElementById = id => {
     if (!elements.has(id)) elements.set(id, { ...createElement(), hidden: false, value: '', innerHTML: '', textContent: '' });
     return elements.get(id);
@@ -141,12 +143,21 @@ async function loadDashboard(session, deadLetters = []) {
       requests.push({ url: String(url), headers: options.headers });
       const path = new URL(url).pathname;
       if (path.endsWith('/provider')) return json({ activeProvider: 'Microsoft', microsoftConfigured: true });
-      if (path.endsWith('/restaurants')) return json([
-        { id: 'restaurant-1', name: 'Centro' },
-        { id: 'restaurant-2', name: 'Norte' },
-      ]);
-      if (path.endsWith('/daily')) return json(daily);
-      if (path.endsWith('/health')) return json([{ service: 'Orders', healthy: true, status: 'OK' }]);
+      if (path.endsWith('/restaurants')) {
+        if (testOptions.failRestaurants) throw new Error('restaurant list unavailable');
+        return json([
+          { id: 'restaurant-1', name: 'Centro' },
+          { id: 'restaurant-2', name: 'Norte' },
+        ]);
+      }
+      if (path.endsWith('/daily')) {
+        if (testOptions.failDaily) throw new Error('daily unavailable');
+        return json(daily);
+      }
+      if (path.endsWith('/health')) {
+        if (testOptions.failHealth) throw new Error('health unavailable');
+        return json([{ service: 'Orders', healthy: true, status: 'OK' }]);
+      }
       if (path.endsWith('/dead-letters')) return json(deadLetters);
       if (path.endsWith('/negotiate')) return json({ connectionToken: 'connection' });
       throw new Error('Unexpected dashboard request: ' + url);
@@ -158,25 +169,35 @@ async function loadDashboard(session, deadLetters = []) {
       getItem: () => JSON.stringify(session),
       removeItem() {}, setItem() {},
     },
-    setTimeout: () => 1,
+    setTimeout: (callback, delay) => {
+      scheduled.push({ callback, delay });
+      return scheduled.length;
+    },
     clearTimeout() {},
-    WebSocket: class { close() {} },
+    WebSocket: class {
+      constructor(url) { this.url = url; this.sent = []; sockets.push(this); }
+      send(message) { this.sent.push(message); }
+      close() {}
+    },
     window: {
       location: { hash: '', pathname: '/dashboard/', assign() {} },
-      setTimeout: () => 1,
+      setTimeout: (callback, delay) => {
+        scheduled.push({ callback, delay });
+        return scheduled.length;
+      },
       addEventListener() {},
     },
   });
   const instrumentedSource = appSource.replace(
     /\}\)\(\);\s*$/u,
-    'globalThis.__dashboardTest = { load, logout };})();'
+    'globalThis.__dashboardTest = { load, logout, openDashboard, loadHealth, loadDeadLetters, schedule };})();'
   );
   vm.runInContext(instrumentedSource, context, { filename: fileURLToPath(appUrl) });
   for (let attempt = 0; attempt < 50 && !getElementById('operations').innerHTML; attempt++) {
     await new Promise(resolve => setImmediate(resolve));
   }
   assert.ok(getElementById('operations').innerHTML, 'dashboard did not load');
-  return { context, getElementById, requests };
+  return { context, getElementById, requests, sockets, scheduled, testOptions };
 }
 
 test('dashboard loads authorized local data, escapes product names and refreshes filters', async () => {
@@ -202,6 +223,27 @@ test('dashboard loads authorized local data, escapes product names and refreshes
   assert.equal(getElementById('loginView').hidden, false);
 });
 
+test('dashboard rejects unauthorized access and reports a failed data refresh', async () => {
+  const session = {
+    accessToken: 'manager-token', expiresAtUtc: '2099-01-01T00:00:00Z',
+    user: { displayName: 'Gerente' },
+    restaurants: [{ restaurantId: 'restaurant-1', role: 'Gerente', permissions: ['dashboard.read'] }],
+  };
+  const { context, getElementById, requests, testOptions } = await loadDashboard(session);
+  const requestsBeforeDeniedAccess = requests.length;
+
+  await assert.rejects(context.__dashboardTest.openDashboard({
+    accessToken: 'unprivileged-token',
+    user: { displayName: 'Cajero' },
+    restaurants: [{ restaurantId: 'restaurant-1', role: 'Cajero', permissions: ['dashboard.read'] }],
+  }), /Este perfil no tiene acceso al Dashboard/u);
+  assert.equal(requests.length, requestsBeforeDeniedAccess);
+
+  testOptions.failDaily = true;
+  await context.__dashboardTest.load();
+  assert.equal(getElementById('state').textContent, 'Error: daily unavailable');
+});
+
 test('dashboard alerts an administrator about pending dead letters', async () => {
   const session = {
     accessToken: 'admin-token', expiresAtUtc: '2099-01-01T00:00:00Z',
@@ -219,4 +261,61 @@ test('dashboard alerts an administrator about pending dead letters', async () =>
   assert.match(getElementById('deadLetterAlert').textContent, /DLQ 3/u);
   assert.match(getElementById('deadLetterAlert').title, /orders.dead: 3 pendientes/u);
   assert.match(getElementById('deadLetterAlert').title, /sales.dead: no disponible/u);
+});
+
+test('dashboard falls back to the restaurant access list when discovery is unavailable', async () => {
+  const session = {
+    accessToken: 'manager-token', expiresAtUtc: '2099-01-01T00:00:00Z',
+    user: { displayName: 'Gerente' },
+    restaurants: [{ restaurantId: 'restaurant-1', role: 'Gerente', permissions: ['dashboard.read'] }],
+  };
+  const { getElementById, requests } = await loadDashboard(session, [], { failRestaurants: true });
+
+  assert.equal(getElementById('currentUser').textContent, 'Gerente');
+  assert.match(getElementById('operations').innerHTML, /Mesa 1/u);
+  assert.ok(requests.some(request => request.url.endsWith('/api/restaurant-operations/restaurants')));
+});
+
+test('dashboard reports unavailable health and an empty dead-letter queue', async () => {
+  const session = {
+    accessToken: 'admin-token', expiresAtUtc: '2099-01-01T00:00:00Z',
+    user: { displayName: 'Admin' }, restaurants: [],
+    allRestaurantsRoles: ['Admin'], allRestaurantsPermissions: ['dashboard.read'],
+  };
+  const { getElementById } = await loadDashboard(session, [], { failHealth: true });
+
+  assert.match(getElementById('health').innerHTML, /Error al consultar/u);
+  assert.match(getElementById('deadLetterAlert').textContent, /DLQ 0/u);
+  assert.match(getElementById('deadLetterAlert').title, /No hay mensajes muertos/u);
+});
+
+test('dashboard joins realtime updates and schedules a refresh after a notification', async () => {
+  const session = {
+    accessToken: 'manager-token', expiresAtUtc: '2099-01-01T00:00:00Z',
+    user: { displayName: 'Gerente' },
+    restaurants: [{ restaurantId: 'restaurant-1', role: 'Gerente', permissions: ['dashboard.read'] }],
+  };
+  const { context, getElementById, sockets, scheduled } = await loadDashboard(session);
+  for (let attempt = 0; attempt < 50 && sockets.length === 0; attempt++) {
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.equal(sockets.length, 1);
+
+  const socket = sockets[0];
+  const separator = String.fromCodePoint(30);
+  socket.onopen();
+  socket.onmessage({ data: '{}' + separator });
+  assert.equal(getElementById('state').textContent, 'Conectado');
+  assert.match(socket.sent[1], /JoinRestaurants/u);
+
+  socket.onmessage({
+    data: JSON.stringify({ type: 1, target: 'DashboardUpdated', arguments: [] }) + separator,
+  });
+  const refresh = scheduled.findLast(item => item.delay === 200);
+  assert.ok(refresh);
+  await refresh.callback();
+  assert.equal(getElementById('operations').innerHTML.includes('Mesa 1'), true);
+  socket.onclose();
+  assert.ok(scheduled.some(item => item.delay === 2000));
+  context.__dashboardTest.logout();
 });

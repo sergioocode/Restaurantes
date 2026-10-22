@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Reflection;
 using System.Text.Json;
 using Bunit;
@@ -239,6 +239,91 @@ public sealed class ProductSettingsCoverageTests : BunitContext
         )!;
         Assert.Contains(prices, price => price.Channel == "DELIVERY" && price.Amount == 12);
         Assert.Contains(prices, price => price.Channel == "LOCAL" && price.Format == "PLATO");
+    }
+
+    [Fact]
+    public async Task Extra_product_uses_single_serve_price_and_preserves_combo_configuration()
+    {
+        Guid productId = Guid.NewGuid();
+        Guid categoryId = Guid.NewGuid();
+        Guid extraId = Guid.NewGuid();
+        ProductResponse product = new()
+        {
+            Id = productId,
+            Name = "Bocadillo",
+            CategoryId = categoryId,
+        };
+        ProductResponse extra = new()
+        {
+            Id = extraId,
+            Name = "Patatas",
+            CategoryId = categoryId,
+        };
+        CatalogDesignSnapshot snapshot = new()
+        {
+            Configurations =
+            [
+                new ProductConfigurationModel { ProductId = productId, IsCombo = true },
+            ],
+            Groups =
+            [
+                new ProductOptionGroupModel
+                {
+                    ParentProductId = productId,
+                    Name = "Principal",
+                    Kind = "Choice",
+                },
+            ],
+        };
+        BackofficeHome host = CreateHost(
+            [
+                new CategoryResponse
+                {
+                    Id = categoryId,
+                    Code = "EXTRAS",
+                    Name = "Extras",
+                },
+            ],
+            [product, extra]
+        );
+        IRenderedComponent<ProductSettings> cut = Render<ProductSettings>(parameters =>
+            parameters
+                .Add(component => component.Product, product)
+                .Add(component => component.Host, host)
+                .Add(component => component.Snapshot, snapshot)
+        );
+
+        await cut.InvokeAsync(() =>
+            cut.FindAll("button").Single(button => button.TextContent.Contains("Precios")).Click()
+        );
+        Assert.Contains("Precio predeterminado por ración.", cut.Markup);
+        await cut.InvokeAsync(() =>
+            cut.FindAll("button")
+                .Single(button => button.TextContent.Contains("Añadir precio"))
+                .Click()
+        );
+        Assert.Contains("RACION", cut.Find(".product-price-row select").InnerHtml);
+        Assert.DoesNotContain("PLATO", cut.Find(".product-price-row select").InnerHtml);
+
+        await cut.InvokeAsync(() =>
+            cut.FindAll("button").Single(button => button.TextContent.Contains("Extras")).Click()
+        );
+        await cut.InvokeAsync(() => cut.Find(".product-dialog-options input").Change(true));
+        await cut.InvokeAsync(() =>
+            cut.FindAll("button").Single(button => button.TextContent == "Guardar").Click()
+        );
+
+        ProductDefinitionDraft saved = JsonSerializer.Deserialize<ProductDefinitionDraft>(
+            handler.Requests[^1].Body,
+            SerializerOptions
+        )!;
+        Assert.True(saved.IsCombo);
+        Assert.True(saved.AllowsExtras);
+        Assert.Contains(saved.Groups, group => group.Kind == "Choice");
+        Assert.Contains(
+            saved.Groups,
+            group => group.Kind == "Extra" && group.ProductIds.Contains(extraId)
+        );
     }
 
     [Fact]

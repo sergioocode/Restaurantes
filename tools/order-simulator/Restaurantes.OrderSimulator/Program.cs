@@ -387,7 +387,7 @@ internal static class Program
         }
     }
 
-    private static async Task<RestaurantRunResult> RunRestaurantAsync(
+    internal static async Task<RestaurantRunResult> RunRestaurantAsync(
         HttpClient client,
         RestaurantOptions restaurant,
         string posToken,
@@ -1597,7 +1597,7 @@ internal static class Program
         }
     }
 
-    private sealed class RandomOrderScheduler(
+    internal sealed class RandomOrderScheduler(
         int maxConcurrentOrders,
         IEnumerable<Guid> restaurantIds,
         SimulatorRandom random

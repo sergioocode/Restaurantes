@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -52,6 +52,88 @@ public sealed class CatalogWriteControllerCoverageTests
         );
         Assert.Equal("Category code already exists", details.Title);
         Assert.Single(db.Categories);
+        Assert.Single(db.OutboxMessages);
+    }
+
+    [Fact]
+    public async Task UpdateCategory_checks_permission_and_synchronizes_a_saved_change()
+    {
+        await using CatalogWriteDbContext db = CreateDatabase();
+        Category category = Category.Create("BEBIDAS", "Bebidas", "BAR", "Bar", DateTime.UtcNow);
+        db.Categories.Add(category);
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        CatalogWriteController forbiddenController = CreateController(
+            db,
+            Guid.Empty,
+            isAdmin: false
+        );
+        CatalogWriteController controller = CreateController(db, Guid.Empty, isAdmin: true);
+
+        var forbidden = await forbiddenController.UpdateCategory(
+            category.Id,
+            new UpdateCategoryRequest { Name = "Bebidas frías" },
+            TestContext.Current.CancellationToken
+        );
+        var missing = await controller.UpdateCategory(
+            Guid.NewGuid(),
+            new UpdateCategoryRequest { Name = "No existe" },
+            TestContext.Current.CancellationToken
+        );
+        var accepted = await controller.UpdateCategory(
+            category.Id,
+            new UpdateCategoryRequest
+            {
+                Name = "Bebidas frías",
+                DefaultStationCode = "BAR",
+                DefaultStationName = "Barra",
+            },
+            TestContext.Current.CancellationToken
+        );
+
+        Assert.IsType<ForbidResult>(forbidden.Result);
+        Assert.IsType<NotFoundResult>(missing.Result);
+        Assert.IsType<AcceptedResult>(accepted.Result);
+        Assert.Equal("Bebidas frías", category.Name);
+        Assert.Single(db.OutboxMessages);
+    }
+
+    [Fact]
+    public async Task SetProductCategory_returns_not_found_or_persists_and_synchronizes()
+    {
+        await using CatalogWriteDbContext db = CreateDatabase();
+        Category previousCategory = Category.Create(
+            "PLATOS",
+            "Platos",
+            "COCINA",
+            "Cocina",
+            DateTime.UtcNow
+        );
+        Category nextCategory = Category.Create(
+            "POSTRES",
+            "Postres",
+            "COCINA",
+            "Cocina",
+            DateTime.UtcNow
+        );
+        Product product = Product.Create("P-1", "Pasta", previousCategory.Id, DateTime.UtcNow);
+        db.AddRange(previousCategory, nextCategory, product);
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        CatalogWriteController controller = CreateController(db, Guid.Empty, isAdmin: true);
+
+        var missing = await controller.SetProductCategory(
+            Guid.NewGuid(),
+            nextCategory.Id,
+            TestContext.Current.CancellationToken
+        );
+        var accepted = await controller.SetProductCategory(
+            product.Id,
+            nextCategory.Id,
+            TestContext.Current.CancellationToken
+        );
+
+        Assert.IsType<NotFoundResult>(missing.Result);
+        Assert.IsType<AcceptedResult>(accepted.Result);
+        Assert.Equal(nextCategory.Id, product.CategoryId);
         Assert.Single(db.OutboxMessages);
     }
 
@@ -332,6 +414,31 @@ public sealed class CatalogWriteControllerCoverageTests
                     restaurantId,
                     station.Id,
                     true,
+                    CancellationToken.None
+                )
+            ).Result
+        );
+        KitchenStationResponse zonesEnabled = Assert.IsType<KitchenStationResponse>(
+            Assert
+                .IsType<AcceptedResult>(
+                    (
+                        await controller.SetStationManagesZones(
+                            restaurantId,
+                            station.Id,
+                            true,
+                            CancellationToken.None
+                        )
+                    ).Result
+                )
+                .Value
+        );
+        Assert.True(zonesEnabled.ManagesZones);
+        Assert.IsType<NotFoundResult>(
+            (
+                await controller.SetStationManagesZones(
+                    restaurantId,
+                    Guid.NewGuid(),
+                    false,
                     CancellationToken.None
                 )
             ).Result

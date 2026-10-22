@@ -19,6 +19,9 @@ public sealed class OrderKitchenLineLifecycleTests
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             CreateSingleLineOrder(valid with { TaxRate = 101m })
         );
+        Assert.Throws<ArgumentException>(() =>
+            CreateSingleLineOrder(valid with { UnitPrice = -1m })
+        );
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             CreateSingleLineOrder(valid with { Quantity = 0 })
         );

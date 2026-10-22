@@ -1,12 +1,14 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Restaurantes.Catalog.Contracts.Events;
+using Restaurantes.Catalog.Contracts.Responses;
 using Restaurantes.Messaging.RabbitMq;
 using Restaurantes.Orders.Infrastructure.Persistence.Write;
 using Restaurantes.Orders.Infrastructure.Workers;
@@ -77,6 +79,20 @@ public sealed class CatalogProjectionWorkerCoverageTests
             CatalogEvent(restaurantId, productId, categoryId, "Nuevo", 12m, 1) with
             {
                 OccurredAtUtc = new DateTime(2026, 10, 20, 8, 30, 0, DateTimeKind.Local),
+                TaxRate = 10m,
+                DefaultFormat = "RACION",
+                Formats = [new MenuItemFormatPrice("RACION", 12m)],
+                ExtraGroups =
+                [
+                    new ProductExtraGroup(
+                        Guid.NewGuid(),
+                        "Extras",
+                        0,
+                        1,
+                        [new ProductExtraOption(Guid.NewGuid(), "EX-1", "Extra", 2m)]
+                    ),
+                ],
+                RequiresKds = false,
             }
         );
         OrderCatalogItem item = await fixture.Db.CatalogItems.SingleAsync(
@@ -84,6 +100,11 @@ public sealed class CatalogProjectionWorkerCoverageTests
         );
         Assert.Equal("Nuevo", item.ProductName);
         Assert.Equal(12m, item.Price);
+        Assert.Equal(10m, item.TaxRate);
+        Assert.Equal("RACION", item.DefaultFormat);
+        Assert.False(item.RequiresKds);
+        Assert.Single(JsonSerializer.Deserialize<MenuItemFormatPrice[]>(item.FormatsJson)!);
+        Assert.Single(JsonSerializer.Deserialize<ProductExtraGroup[]>(item.ExtraGroupsJson)!);
         Assert.Equal(DateTimeKind.Utc, item.UpdatedAtUtc.Kind);
 
         await fixture.DeliverAsync(
@@ -127,6 +148,14 @@ public sealed class CatalogProjectionWorkerCoverageTests
         Assert.False(station.IsActive);
 
         await fixture.DeliverAsync(
+            StationEvent(Guid.NewGuid(), restaurantId, "COCINA", "Otra estación", 5) with
+            {
+                IsDeleted = true,
+            }
+        );
+        Assert.Single(fixture.Db.KitchenStationConfigurations);
+
+        await fixture.DeliverAsync(
             StationEvent(stationId, restaurantId, "COCINA", "Cocina", 2) with
             {
                 IsDeleted = true,
@@ -141,7 +170,7 @@ public sealed class CatalogProjectionWorkerCoverageTests
             }
         );
         Assert.Empty(fixture.Db.KitchenStationConfigurations);
-        Assert.Equal(4, fixture.ChannelProxy.Acknowledgements);
+        Assert.Equal(5, fixture.ChannelProxy.Acknowledgements);
     }
 
     [Fact]
@@ -154,6 +183,60 @@ public sealed class CatalogProjectionWorkerCoverageTests
 
         Assert.Equal(2, fixture.ChannelProxy.Rejections);
         Assert.Equal(0, fixture.ChannelProxy.Acknowledgements);
+    }
+
+    [Fact]
+    public async Task Projection_storage_failure_schedules_a_retry_with_attempt_metadata()
+    {
+        await using ProjectionFixture fixture = await ProjectionFixture.CreateAsync(
+            failOnSave: true
+        );
+
+        await fixture.DeliverAsync(
+            CatalogEvent(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Producto", 5m, 1)
+        );
+
+        Assert.Equal(1, fixture.ChannelProxy.Acknowledgements);
+        Assert.Equal(0, fixture.ChannelProxy.Rejections);
+        PublishedRetry retry = Assert.Single(fixture.ChannelProxy.PublishedMessages);
+        Assert.Equal($"{CatalogTopology.OrdersIntegrationQueueName}.retry.1", retry.RoutingKey);
+        Assert.Equal(1, retry.Properties.Headers!["x-restaurantes-retry-count"]);
+    }
+
+    [Fact]
+    public async Task Projection_storage_failure_at_retry_limit_is_dead_lettered()
+    {
+        await using ProjectionFixture fixture = await ProjectionFixture.CreateAsync(
+            failOnSave: true
+        );
+        BasicProperties properties = new()
+        {
+            Type = typeof(CategoryChanged).FullName,
+            Headers = new Dictionary<string, object?>
+            {
+                ["x-restaurantes-retry-count"] = RabbitMqRetry.MaximumAttempts,
+            },
+        };
+
+        await fixture.DeliverRawAsync(
+            properties,
+            JsonSerializer.SerializeToUtf8Bytes(
+                new CategoryChanged(
+                    Guid.NewGuid(),
+                    "FOOD",
+                    "Comida",
+                    "KITCHEN",
+                    "Cocina",
+                    true,
+                    1,
+                    DateTime.UtcNow
+                )
+            )
+        );
+
+        Assert.Equal(0, fixture.ChannelProxy.Acknowledgements);
+        Assert.Equal(1, fixture.ChannelProxy.Rejections);
+        Assert.Empty(fixture.ChannelProxy.PublishedMessages);
     }
 
     private static OrderCatalogItem CatalogItem(Guid categoryId, string stationCode) =>
@@ -226,12 +309,17 @@ public sealed class CatalogProjectionWorkerCoverageTests
         public OrderWriteDbContext Db { get; }
         public ChannelProxy ChannelProxy { get; }
 
-        public static async Task<ProjectionFixture> CreateAsync()
+        public static async Task<ProjectionFixture> CreateAsync(bool failOnSave = false)
         {
-            DbContextOptions<OrderWriteDbContext> options =
-                new DbContextOptionsBuilder<OrderWriteDbContext>()
-                    .UseInMemoryDatabase(Guid.NewGuid().ToString())
-                    .Options;
+            DbContextOptionsBuilder<OrderWriteDbContext> optionsBuilder =
+                new DbContextOptionsBuilder<OrderWriteDbContext>().UseInMemoryDatabase(
+                    Guid.NewGuid().ToString()
+                );
+            if (failOnSave)
+            {
+                optionsBuilder.AddInterceptors(new ThrowOnSaveChangesInterceptor());
+            }
+            DbContextOptions<OrderWriteDbContext> options = optionsBuilder.Options;
             OrderWriteDbContext db = new(options);
             await db.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
             ServiceProvider services = new ServiceCollection()
@@ -259,6 +347,11 @@ public sealed class CatalogProjectionWorkerCoverageTests
         public async Task DeliverRawAsync(string eventType, byte[] body)
         {
             BasicProperties properties = new() { Type = eventType };
+            await DeliverRawAsync(properties, body);
+        }
+
+        public async Task DeliverRawAsync(BasicProperties properties, byte[] body)
+        {
             BasicDeliverEventArgs args = new(
                 "consumer",
                 (ulong)(ChannelProxy.Acknowledgements + ChannelProxy.Rejections + 1),
@@ -285,6 +378,7 @@ public sealed class CatalogProjectionWorkerCoverageTests
     {
         public int Acknowledgements { get; private set; }
         public int Rejections { get; private set; }
+        public List<PublishedRetry> PublishedMessages { get; } = [];
 
         protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
         {
@@ -298,7 +392,25 @@ public sealed class CatalogProjectionWorkerCoverageTests
                 Rejections++;
                 return ValueTask.CompletedTask;
             }
+            if (targetMethod?.Name == nameof(IChannel.BasicPublishAsync))
+            {
+                PublishedMessages.Add(
+                    new PublishedRetry((string)args![1]!, (BasicProperties)args[3]!)
+                );
+                return ValueTask.CompletedTask;
+            }
             throw new NotSupportedException(targetMethod?.Name);
         }
     }
+
+    private sealed class ThrowOnSaveChangesInterceptor : SaveChangesInterceptor
+    {
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default
+        ) => throw new InvalidOperationException("Temporary projection storage failure.");
+    }
+
+    public sealed record PublishedRetry(string RoutingKey, BasicProperties Properties);
 }

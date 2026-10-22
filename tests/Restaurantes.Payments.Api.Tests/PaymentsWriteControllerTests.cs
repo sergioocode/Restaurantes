@@ -4,11 +4,14 @@ using System.Net;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Restaurantes.Payments.Api.Controllers;
 using Restaurantes.Payments.Application;
 using Restaurantes.Payments.Contracts.Requests;
 using Restaurantes.Payments.Domain;
+using Restaurantes.Payments.Infrastructure.Persistence.Write;
 using Restaurantes.Security;
 using Xunit;
 
@@ -44,6 +47,123 @@ public sealed class PaymentsWriteControllerTests
         );
 
         Assert.IsType<NotFoundResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Adjust_amount_updates_unpaid_order_for_discount_permission()
+    {
+        PayableOrder order = CreatePayableOrder(diningSessionId: Guid.NewGuid());
+        PaymentStore store = new(order);
+        await using PaymentWriteDbContext db = await CreateDatabase(order);
+        PaymentCommandService service = new(store, TimeProvider.System);
+        PaymentsWriteController controller = CreateController(
+            store,
+            order.RestaurantId,
+            RestaurantPermissions.DiscountsApply,
+            service: service,
+            db: db
+        );
+
+        IActionResult result = await controller.AdjustAmount(
+            order.OrderId,
+            new SetPayableOrderAmountRequest { Amount = 9m },
+            TestContext.Current.CancellationToken
+        );
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.Equal(9m, order.Amount);
+        Assert.Equal(1, store.SaveCount);
+    }
+
+    [Fact]
+    public async Task Adjust_amount_returns_conflict_when_discount_is_not_allowed_by_order_state()
+    {
+        PayableOrder order = CreatePayableOrder(diningSessionId: Guid.NewGuid());
+        PaymentStore store = new(order);
+        await using PaymentWriteDbContext db = await CreateDatabase(order);
+        PaymentCommandService service = new(store, TimeProvider.System);
+        PaymentsWriteController controller = CreateController(
+            store,
+            order.RestaurantId,
+            RestaurantPermissions.DiscountsApply,
+            service: service,
+            db: db
+        );
+
+        IActionResult result = await controller.AdjustAmount(
+            order.OrderId,
+            new SetPayableOrderAmountRequest { Amount = 0m },
+            TestContext.Current.CancellationToken
+        );
+
+        ConflictObjectResult conflict = Assert.IsType<ConflictObjectResult>(result);
+        ProblemDetails problem = Assert.IsType<ProblemDetails>(conflict.Value);
+        Assert.Equal("Only unpaid open orders can receive a discount.", problem.Title);
+        Assert.Equal(StatusCodes.Status409Conflict, problem.Status);
+    }
+
+    [Fact]
+    public async Task Capture_returns_accepted_payment_and_publishes_capture_event()
+    {
+        PayableOrder order = CreatePayableOrder();
+        PaymentStore store = new(order);
+        await using PaymentWriteDbContext db = await CreateDatabase(order);
+        PaymentCommandService service = new(store, TimeProvider.System);
+        PaymentsWriteController controller = CreateController(
+            store,
+            order.RestaurantId,
+            RestaurantPermissions.PaymentsCapture,
+            service: service,
+            db: db
+        );
+
+        ActionResult<Contracts.Responses.PaymentResponse> result = await controller.Capture(
+            order.OrderId,
+            new CapturePaymentRequest { IdempotencyKey = Guid.NewGuid(), Method = "Cash" },
+            TestContext.Current.CancellationToken
+        );
+
+        AcceptedResult accepted = Assert.IsType<AcceptedResult>(result.Result);
+        Contracts.Responses.PaymentResponse response =
+            Assert.IsType<Contracts.Responses.PaymentResponse>(accepted.Value);
+        Assert.Equal("Paid", response.Status);
+        Assert.Equal(0m, response.Outstanding);
+        Assert.IsType<Restaurantes.Payments.Contracts.Events.PaymentCaptured>(
+            store.IntegrationEvent
+        );
+    }
+
+    [Fact]
+    public async Task Capture_returns_conflict_when_tendered_amount_is_insufficient()
+    {
+        PayableOrder order = CreatePayableOrder();
+        PaymentStore store = new(order);
+        await using PaymentWriteDbContext db = await CreateDatabase(order);
+        PaymentCommandService service = new(store, TimeProvider.System);
+        PaymentsWriteController controller = CreateController(
+            store,
+            order.RestaurantId,
+            RestaurantPermissions.PaymentsCapture,
+            service: service,
+            db: db
+        );
+
+        ActionResult<Contracts.Responses.PaymentResponse> result = await controller.Capture(
+            order.OrderId,
+            new CapturePaymentRequest
+            {
+                IdempotencyKey = Guid.NewGuid(),
+                Method = "Cash",
+                TenderedAmount = 5m,
+            },
+            TestContext.Current.CancellationToken
+        );
+
+        ConflictObjectResult conflict = Assert.IsType<ConflictObjectResult>(result.Result);
+        ProblemDetails problem = Assert.IsType<ProblemDetails>(conflict.Value);
+        Assert.Equal("Payment cannot be captured", problem.Title);
+        Assert.Equal(StatusCodes.Status409Conflict, problem.Status);
+        Assert.Equal(0, store.SaveCount);
     }
 
     [Fact]
@@ -162,6 +282,60 @@ public sealed class PaymentsWriteControllerTests
     }
 
     [Fact]
+    public async Task Refund_returns_accepted_and_publishes_refund_event_for_paid_order()
+    {
+        PayableOrder order = CreatePayableOrder();
+        order.Capture(12m, 0m, "Cash", "", Guid.NewGuid(), DateTime.UtcNow);
+        PaymentStore store = new(order);
+        PaymentCommandService service = new(store, TimeProvider.System);
+        PaymentsWriteController controller = CreateController(
+            store,
+            order.RestaurantId,
+            RestaurantPermissions.PaymentsRefund,
+            service: service
+        );
+
+        ActionResult<Contracts.Responses.PaymentResponse> result = await controller.Refund(
+            order.OrderId,
+            new RefundPaymentRequest { Reason = "Solicitud del cliente" },
+            TestContext.Current.CancellationToken
+        );
+
+        AcceptedResult accepted = Assert.IsType<AcceptedResult>(result.Result);
+        Contracts.Responses.PaymentResponse response =
+            Assert.IsType<Contracts.Responses.PaymentResponse>(accepted.Value);
+        Assert.Equal("Refunded", response.Status);
+        Assert.IsType<Restaurantes.Payments.Contracts.Events.PaymentRefunded>(
+            store.IntegrationEvent
+        );
+    }
+
+    [Fact]
+    public async Task Refund_returns_conflict_when_order_has_not_been_paid()
+    {
+        PayableOrder order = CreatePayableOrder();
+        PaymentStore store = new(order);
+        PaymentCommandService service = new(store, TimeProvider.System);
+        PaymentsWriteController controller = CreateController(
+            store,
+            order.RestaurantId,
+            RestaurantPermissions.PaymentsRefund,
+            service: service
+        );
+
+        ActionResult<Contracts.Responses.PaymentResponse> result = await controller.Refund(
+            order.OrderId,
+            new RefundPaymentRequest { Reason = "Solicitud del cliente" },
+            TestContext.Current.CancellationToken
+        );
+
+        ConflictObjectResult conflict = Assert.IsType<ConflictObjectResult>(result.Result);
+        ProblemDetails problem = Assert.IsType<ProblemDetails>(conflict.Value);
+        Assert.Equal("Payment cannot be refunded", problem.Title);
+        Assert.Equal(StatusCodes.Status409Conflict, problem.Status);
+    }
+
+    [Fact]
     public async Task Customer_qr_capture_rejects_a_client_network_that_is_not_allowed()
     {
         PaymentStore store = new(null);
@@ -232,6 +406,56 @@ public sealed class PaymentsWriteControllerTests
         ObjectResult tooEarly = Assert.IsType<ObjectResult>(result.Result);
         Assert.Equal(425, tooEarly.StatusCode);
         Assert.Equal(1, store.FindCount);
+    }
+
+    [Fact]
+    public async Task Customer_qr_capture_returns_accepted_after_validating_dining_session()
+    {
+        Guid sessionId = Guid.NewGuid();
+        PayableOrder order = PayableOrder.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            sessionId,
+            "DineIn",
+            "CustomerQr",
+            12m,
+            DateTime.UtcNow
+        );
+        PaymentStore store = new(order);
+        await using PaymentWriteDbContext db = await CreateDatabase(order);
+        PaymentCommandService service = new(store, TimeProvider.System);
+        DiningValidator dining = new(isValid: true);
+        PaymentsWriteController controller = CreateQrController(
+            store,
+            ["127.0.0.1"],
+            service,
+            db,
+            dining
+        );
+
+        ActionResult<Contracts.Responses.PaymentResponse> result =
+            await controller.CaptureCustomerQr(
+                order.OrderId,
+                new CaptureCustomerQrPaymentRequest
+                {
+                    IdempotencyKey = Guid.NewGuid(),
+                    DiningSessionId = sessionId,
+                },
+                "customer-token",
+                TestContext.Current.CancellationToken
+            );
+
+        AcceptedResult accepted = Assert.IsType<AcceptedResult>(result.Result);
+        Contracts.Responses.PaymentResponse response =
+            Assert.IsType<Contracts.Responses.PaymentResponse>(accepted.Value);
+        Assert.Equal("Paid", response.Status);
+        Assert.Equal($"QR-{order.OrderId:N}", order.ExternalReference);
+        Assert.Equal(sessionId, dining.ReceivedSessionId);
+        Assert.Equal("customer-token", dining.ReceivedToken);
+        Assert.IsType<Restaurantes.Payments.Contracts.Events.PaymentCaptured>(
+            store.IntegrationEvent
+        );
     }
 
     [Theory]
@@ -395,15 +619,17 @@ public sealed class PaymentsWriteControllerTests
         PaymentStore store,
         Guid? authorizedRestaurantId = null,
         string? permission = null,
-        IPaymentCashRegister? cashRegister = null
+        IPaymentCashRegister? cashRegister = null,
+        PaymentCommandService? service = null,
+        PaymentWriteDbContext? db = null
     )
     {
         PaymentsWriteController controller = new(
-            null!,
+            service!,
             store,
             new DiningValidator(),
             cashRegister ?? new OpenCashRegister(),
-            null!,
+            db!,
             new ConfigurationBuilder().Build()
         );
         ClaimsIdentity identity = new(
@@ -427,15 +653,18 @@ public sealed class PaymentsWriteControllerTests
 
     private static PaymentsWriteController CreateQrController(
         PaymentStore store,
-        string[] allowedNetworks
+        string[] allowedNetworks,
+        PaymentCommandService? service = null,
+        PaymentWriteDbContext? db = null,
+        DiningValidator? dining = null
     )
     {
         PaymentsWriteController controller = new(
-            null!,
+            service!,
             store,
-            new DiningValidator(),
+            dining ?? new DiningValidator(),
             new OpenCashRegister(),
-            null!,
+            db!,
             new ConfigurationBuilder()
                 .AddInMemoryCollection(
                     allowedNetworks.Select(
@@ -456,6 +685,21 @@ public sealed class PaymentsWriteControllerTests
         return controller;
     }
 
+    private static async Task<PaymentWriteDbContext> CreateDatabase(PayableOrder order)
+    {
+        PaymentWriteDbContext db = new(
+            new DbContextOptionsBuilder<PaymentWriteDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .ConfigureWarnings(warnings =>
+                    warnings.Ignore(InMemoryEventId.TransactionIgnoredWarning)
+                )
+                .Options
+        );
+        db.PayableOrders.Add(order);
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        return db;
+    }
+
     private static PayableOrder CreatePayableOrder(Guid? diningSessionId = null)
     {
         return PayableOrder.Create(
@@ -473,6 +717,8 @@ public sealed class PaymentsWriteControllerTests
     private sealed class PaymentStore(PayableOrder? order) : IPaymentWriteStore
     {
         public int FindCount { get; private set; }
+        public int SaveCount { get; private set; }
+        public object? IntegrationEvent { get; private set; }
 
         public Task<PayableOrder?> FindAsync(Guid orderId, CancellationToken cancellationToken)
         {
@@ -486,10 +732,16 @@ public sealed class PaymentsWriteControllerTests
             CancellationToken cancellationToken
         )
         {
-            return Task.FromResult<PayableOrderCapture?>(null);
+            return Task.FromResult(
+                order?.Captures.FirstOrDefault(capture => capture.IdempotencyKey == idempotencyKey)
+            );
         }
 
-        public Task SaveAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task SaveAsync(CancellationToken cancellationToken)
+        {
+            SaveCount++;
+            return Task.CompletedTask;
+        }
 
         public Task SaveWithEventAsync(
             PayableOrder order,
@@ -498,7 +750,9 @@ public sealed class PaymentsWriteControllerTests
             CancellationToken cancellationToken
         )
         {
-            throw new NotSupportedException();
+            SaveCount++;
+            IntegrationEvent = integrationEvent;
+            return Task.CompletedTask;
         }
 
         public Task SaveWithEventAsync(
@@ -507,11 +761,13 @@ public sealed class PaymentsWriteControllerTests
             CancellationToken cancellationToken
         )
         {
-            throw new NotSupportedException();
+            SaveCount++;
+            IntegrationEvent = integrationEvent;
+            return Task.CompletedTask;
         }
     }
 
-    private sealed class DiningValidator : ICustomerDiningSessionValidator
+    private sealed class DiningValidator(bool isValid = false) : ICustomerDiningSessionValidator
     {
         public Guid ReceivedSessionId { get; private set; }
         public string? ReceivedToken { get; private set; }
@@ -527,7 +783,7 @@ public sealed class PaymentsWriteControllerTests
         {
             ReceivedSessionId = sessionId;
             ReceivedToken = customerAccessToken;
-            return Task.FromResult(false);
+            return Task.FromResult(isValid);
         }
 
         public Task<bool> IsChargeAmountValidAsync(

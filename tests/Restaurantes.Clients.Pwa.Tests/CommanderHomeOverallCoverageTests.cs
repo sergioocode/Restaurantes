@@ -14,6 +14,89 @@ public sealed class CommanderHomeOverallCoverageTests
     private static readonly string[] TapaFormat = ["TAPA"];
 
     [Fact]
+    public void Bill_tax_breakdown_is_empty_before_a_bill_is_loaded()
+    {
+        Assert.Empty(GetTaxBreakdown(new Home()));
+    }
+
+    [Fact]
+    public void Returning_to_tables_clears_the_open_order_and_checkout_state()
+    {
+        Home home = new();
+        Guid zoneId = Guid.NewGuid();
+        Invoke(home, "SelectZone", zoneId);
+        Assert.Equal(zoneId, Get(home, "selectedZoneId"));
+        Set(home, "paymentDialogOpen", true);
+        Set(home, "salesTicketOpen", true);
+        Set(home, "billOpen", true);
+        Set(home, "guestCountDialogOpen", true);
+        Set(home, "guestCountSessionOpenedHere", true);
+        Set(
+            home,
+            "guestCountTable",
+            new TableResponse(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                "M1",
+                "Mesa 1",
+                true,
+                "Occupied",
+                Guid.NewGuid(),
+                zoneId,
+                "Sala",
+                1
+            )
+        );
+        Set(
+            home,
+            "selectedTable",
+            new TableResponse(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                "M2",
+                "Mesa 2",
+                true,
+                "Occupied",
+                Guid.NewGuid(),
+                zoneId,
+                "Sala",
+                1
+            )
+        );
+        Set(home, "sessionId", Guid.NewGuid());
+        Set(home, "cart", new List<CommanderCartLine> { new() });
+        SetProperty(home, "HasSessionOrders", true);
+
+        Invoke(home, "BackToTables");
+        Invoke(home, "BackToZones");
+
+        Assert.Null(Get(home, "selectedZoneId"));
+        Assert.Null(Get(home, "selectedTable"));
+        Assert.Null(Get(home, "guestCountTable"));
+        Assert.Equal(Guid.Empty, Get(home, "sessionId"));
+        Assert.False((bool)Get(home, "paymentDialogOpen")!);
+        Assert.False((bool)Get(home, "salesTicketOpen")!);
+        Assert.False((bool)Get(home, "billOpen")!);
+        Assert.False((bool)Get(home, "guestCountDialogOpen")!);
+        Assert.False((bool)GetProperty<bool>(home, "HasSessionOrders"));
+        Assert.Empty((List<CommanderCartLine>)Get(home, "cart")!);
+    }
+
+    [Fact]
+    public void Closing_the_bill_keeps_the_selected_table_session_open()
+    {
+        Home home = new();
+        Guid sessionId = Guid.NewGuid();
+        Set(home, "billOpen", true);
+        Set(home, "sessionId", sessionId);
+
+        Invoke(home, "CloseBill");
+
+        Assert.False((bool)Get(home, "billOpen")!);
+        Assert.Equal(sessionId, Get(home, "sessionId"));
+    }
+
+    [Fact]
     public void Tax_breakdown_aggregates_rates_applies_discount_and_skips_cancelled_lines()
     {
         Home home = new();

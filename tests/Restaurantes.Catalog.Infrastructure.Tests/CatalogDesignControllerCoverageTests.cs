@@ -1,6 +1,7 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -442,6 +443,160 @@ public sealed class CatalogDesignControllerCoverageTests
     }
 
     [Fact]
+    public async Task Save_product_allergens_replaces_the_previous_selection_and_ignores_duplicates()
+    {
+        await using RelationalDatabase fixture = await CreateRelationalDatabaseAsync();
+        CatalogWriteDbContext db = fixture.Db;
+        Category category = Category.Create(
+            "PLATOS",
+            "Platos",
+            "CHEF",
+            "Chef",
+            DateTime.UtcNow,
+            requiresKds: true
+        );
+        Product product = Product.Create("P-1", "Producto", category.Id, DateTime.UtcNow);
+        CatalogAllergen previous = new() { Code = "GLUTEN", Name = "Gluten" };
+        CatalogAllergen selected = new() { Code = "NUTS", Name = "Frutos secos" };
+        db.AddRange(category, product, previous, selected);
+        db.ProductAllergens.Add(
+            new ProductAllergen { ProductId = product.Id, AllergenId = previous.Id }
+        );
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        CatalogDesignController controller = CreateController(db, isAdmin: true);
+
+        IActionResult result = await controller.SaveProductAllergens(
+            product.Id,
+            [selected.Id, selected.Id],
+            TestContext.Current.CancellationToken
+        );
+
+        Assert.IsType<NoContentResult>(result);
+        ProductAllergen saved = Assert.Single(db.ProductAllergens);
+        Assert.Equal(product.Id, saved.ProductId);
+        Assert.Equal(selected.Id, saved.AllergenId);
+    }
+
+    [Fact]
+    public async Task Save_definition_replaces_combo_configuration_and_ordered_choices()
+    {
+        await using RelationalDatabase fixture = await CreateRelationalDatabaseAsync();
+        CatalogWriteDbContext db = fixture.Db;
+        Category category = Category.Create(
+            "PLATOS",
+            "Platos",
+            "CHEF",
+            "Chef",
+            DateTime.UtcNow,
+            requiresKds: true
+        );
+        Product parent = Product.Create("P-1", "Combo", category.Id, DateTime.UtcNow);
+        Product first = Product.Create("P-2", "Primera opción", category.Id, DateTime.UtcNow);
+        Product second = Product.Create("P-3", "Segunda opción", category.Id, DateTime.UtcNow);
+        Product replacement = Product.Create("P-4", "Nueva opción", category.Id, DateTime.UtcNow);
+        db.AddRange(category, parent, first, second, replacement);
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        CatalogDesignController controller = CreateController(db, isAdmin: true);
+        CatalogDesignController.GroupInput firstGroup = new(
+            " Tamaño ",
+            "Choice",
+            1,
+            1,
+            [first.Id, second.Id]
+        );
+        CatalogDesignController.GroupInput replacementGroup = new(
+            "  Plato  ",
+            "Choice",
+            1,
+            1,
+            [replacement.Id]
+        );
+
+        IActionResult created = await controller.SaveDefinition(
+            parent.Id,
+            new CatalogDesignController.DefinitionInput(true, false, [firstGroup]),
+            TestContext.Current.CancellationToken
+        );
+        IActionResult updated = await controller.SaveDefinition(
+            parent.Id,
+            new CatalogDesignController.DefinitionInput(true, true, [replacementGroup]),
+            TestContext.Current.CancellationToken
+        );
+
+        Assert.IsType<NoContentResult>(created);
+        Assert.IsType<NoContentResult>(updated);
+        ProductConfiguration configuration = Assert.Single(db.ProductConfigurations);
+        Assert.True(configuration.IsCombo);
+        Assert.True(configuration.AllowsExtras);
+        ProductOptionGroup group = Assert.Single(db.ProductOptionGroups);
+        Assert.Equal("Plato", group.Name);
+        Assert.Equal(0, group.SortOrder);
+        ProductOption option = Assert.Single(db.ProductOptions);
+        Assert.Equal(group.Id, option.GroupId);
+        Assert.Equal(replacement.Id, option.ProductId);
+        Assert.Equal(0, option.SortOrder);
+    }
+
+    [Fact]
+    public async Task Save_prices_replaces_global_prices_and_updates_default_menu_format()
+    {
+        await using RelationalDatabase fixture = await CreateRelationalDatabaseAsync();
+        CatalogWriteDbContext db = fixture.Db;
+        Category category = Category.Create(
+            "PLATOS",
+            "Platos",
+            "CHEF",
+            "Chef",
+            DateTime.UtcNow,
+            requiresKds: true
+        );
+        Product product = Product.Create("P-1", "Producto", category.Id, DateTime.UtcNow);
+        db.AddRange(category, product);
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        CatalogDesignController controller = CreateController(db, isAdmin: true);
+
+        IActionResult created = await controller.SavePrices(
+            product.Id,
+            Guid.Empty,
+            [new("LOCAL", "RACION", 12m), new("DELIVERY", "PLATO", 14m)],
+            TestContext.Current.CancellationToken
+        );
+        db.ChangeTracker.Clear();
+        IActionResult updated = await controller.SavePrices(
+            product.Id,
+            Guid.Empty,
+            [new("LOCAL", "PLATO", 15m), new("LOCAL", "RACION", 13m)],
+            TestContext.Current.CancellationToken
+        );
+        db.ChangeTracker.Clear();
+        IActionResult removedFromLocalMenu = await controller.SavePrices(
+            product.Id,
+            Guid.Empty,
+            [new("DELIVERY", "UNIDAD", 16m)],
+            TestContext.Current.CancellationToken
+        );
+
+        Assert.IsType<NoContentResult>(created);
+        Assert.IsType<NoContentResult>(updated);
+        Assert.IsType<NoContentResult>(removedFromLocalMenu);
+        CatalogMenu menu = Assert.Single(db.CatalogMenus);
+        Assert.Equal(Guid.Empty, menu.RestaurantId);
+        Assert.Empty(db.CatalogMenuEntries);
+        Assert.Equal(
+            [("DELIVERY", "UNIDAD", 16m)],
+            db.CatalogMenuPrices.AsEnumerable()
+                .Select(price => (price.Channel, price.Format, price.Amount))
+                .ToArray()
+        );
+        Assert.Equal(
+            [("DELIVERY", "UNIDAD", 16m)],
+            db.Prices.AsEnumerable()
+                .Select(price => (price.Channel, price.Format, price.Amount))
+                .ToArray()
+        );
+    }
+
+    [Fact]
     public async Task Set_local_availability_creates_and_updates_restaurant_selection()
     {
         await using CatalogWriteDbContext db = CreateDatabase();
@@ -679,6 +834,44 @@ public sealed class CatalogDesignControllerCoverageTests
         Assert.IsType<ForbidResult>(result);
     }
 
+    [Fact]
+    public async Task Catalog_design_mutations_forbid_users_without_global_or_local_catalog_access()
+    {
+        await using CatalogWriteDbContext db = CreateDatabase();
+        CatalogDesignController controller = CreateController(db, isAdmin: false);
+        Guid id = Guid.NewGuid();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+
+        Assert.IsType<ForbidResult>(await controller.Snapshot(ct));
+        Assert.IsType<ForbidResult>(
+            await controller.SaveTax(
+                id,
+                new CatalogDesignController.TaxInput("IVA", "IVA", 21m, true),
+                ct
+            )
+        );
+        Assert.IsType<ForbidResult>(
+            await controller.SaveAllergen(
+                id,
+                new CatalogDesignController.AllergenInput("GLUTEN", "Gluten", "", true),
+                ct
+            )
+        );
+        Assert.IsType<ForbidResult>(await controller.SaveProductTax(id, Guid.Empty, ct));
+        Assert.IsType<ForbidResult>(await controller.SaveProductAllergens(id, [], ct));
+        Assert.IsType<ForbidResult>(
+            await controller.SaveDefinition(
+                id,
+                new CatalogDesignController.DefinitionInput(false, false, []),
+                ct
+            )
+        );
+        Assert.IsType<ForbidResult>(await controller.SavePrices(id, Guid.Empty, [], ct));
+        Assert.IsType<ForbidResult>(
+            await controller.SetLocalAvailability(Guid.NewGuid(), id, true, ct)
+        );
+    }
+
     private static CatalogWriteDbContext CreateDatabase() =>
         new(
             new DbContextOptionsBuilder<CatalogWriteDbContext>()
@@ -688,6 +881,29 @@ public sealed class CatalogDesignControllerCoverageTests
                 )
                 .Options
         );
+
+    private static async Task<RelationalDatabase> CreateRelationalDatabaseAsync()
+    {
+        SqliteConnection connection = new("Data Source=:memory:");
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        CatalogWriteDbContext db = new(
+            new DbContextOptionsBuilder<CatalogWriteDbContext>().UseSqlite(connection).Options
+        );
+        await db.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
+        return new RelationalDatabase(connection, db);
+    }
+
+    private sealed class RelationalDatabase(SqliteConnection connection, CatalogWriteDbContext db)
+        : IAsyncDisposable
+    {
+        public CatalogWriteDbContext Db => db;
+
+        public async ValueTask DisposeAsync()
+        {
+            await db.DisposeAsync();
+            await connection.DisposeAsync();
+        }
+    }
 
     private static CatalogDesignController CreateController(
         CatalogWriteDbContext db,

@@ -156,6 +156,51 @@ public sealed class SimulatorValidationTests
         }
     }
 
+    [Fact]
+    public void Invalid_payment_configuration_reports_each_rejected_setting()
+    {
+        (PaymentOptions Payment, string Expected)[] cases =
+        [
+            (
+                new PaymentOptions
+                {
+                    Methods =
+                    [
+                        new() { Name = "Card", Weight = 0 },
+                        new() { Name = "Cash", Weight = 1 },
+                        new() { Name = "Transfer", Weight = 1 },
+                    ],
+                },
+                "métodos Card"
+            ),
+            (
+                new PaymentOptions
+                {
+                    Methods =
+                    [
+                        new() { Name = "Card", Weight = 1 },
+                        new() { Name = "Cash", Weight = 1 },
+                        new() { Name = "Crypto", Weight = 1 },
+                    ],
+                },
+                "métodos Card"
+            ),
+            (new PaymentOptions { CashOverpayProbability = -0.1 }, "probabilidades entre 0 y 1"),
+            (new PaymentOptions { CashOverpayProbability = 1.1 }, "probabilidades entre 0 y 1"),
+            (new PaymentOptions { TipPercentages = [] }, "probabilidades entre 0 y 1"),
+            (new PaymentOptions { TipPercentages = [0] }, "probabilidades entre 0 y 1"),
+            (new PaymentOptions { TipPercentages = [101] }, "probabilidades entre 0 y 1"),
+        ];
+
+        foreach ((PaymentOptions payment, string expected) in cases)
+        {
+            InvalidDataException error = Assert.Throws<InvalidDataException>(() =>
+                Simulator.Validate(Options(restaurants: [Restaurant(payment: payment)]))
+            );
+            Assert.Contains(expected, error.Message);
+        }
+    }
+
     private static SimulatorOptions Options(
         string apiBaseUrl = "http://localhost:5001",
         string accessToken = "test-token",

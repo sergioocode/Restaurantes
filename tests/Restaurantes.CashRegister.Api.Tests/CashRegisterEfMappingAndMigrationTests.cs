@@ -1,5 +1,6 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
@@ -33,6 +34,47 @@ public sealed class CashRegisterEfMappingAndMigrationTests
         Assert.Equal(string.Empty, newMovement.Method);
         Assert.Equal(string.Empty, newMovement.Category);
         Assert.Equal(string.Empty, newMovement.Reference);
+    }
+
+    [Fact]
+    public void Cash_register_migrations_generate_operational_and_reversible_schema()
+    {
+        DbContextOptions<CashRegisterDbContext> options =
+            new DbContextOptionsBuilder<CashRegisterDbContext>()
+                .UseNpgsql(
+                    "Host=localhost;Database=unused;Username=unused;Password=unused",
+                    npgsql =>
+                        npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "cash_register")
+                )
+                .Options;
+        using CashRegisterDbContext context = new(options);
+        AssertSnapshotMatchesCurrentModel(context);
+        IMigrator migrator = context.GetService<IMigrator>();
+
+        string script = migrator.GenerateScript();
+        string rollback = migrator.GenerateScript(context.Database.GetMigrations().Last(), "0");
+
+        Assert.Contains("CREATE TABLE cash_register_sessions", script);
+        Assert.Contains("ExpectedTotalAtClose", script);
+        Assert.Contains("cash_movements", script);
+        Assert.Contains("IX_cash_movements_SaleId", script);
+        Assert.Contains("DROP TABLE cash_movements", rollback);
+    }
+
+    private static void AssertSnapshotMatchesCurrentModel(DbContext context)
+    {
+        ModelSnapshot snapshot = context.GetService<IMigrationsAssembly>().ModelSnapshot!;
+        var snapshotModel = context
+            .GetService<IModelRuntimeInitializer>()
+            .Initialize(snapshot.Model, designTime: true);
+        IMigrationsModelDiffer differ = context.GetService<IMigrationsModelDiffer>();
+
+        Assert.False(
+            differ.HasDifferences(
+                snapshotModel.GetRelationalModel(),
+                context.GetService<IDesignTimeModel>().Model.GetRelationalModel()
+            )
+        );
     }
 
     [Theory]

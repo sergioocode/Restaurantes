@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict';
+﻿import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 const appUrl = new URL('../../../src/Clients/Restaurantes.Clients.Kds.Web/wwwroot/kds/js/app.js', import.meta.url);
@@ -100,9 +100,17 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
   const connectionStatus = element('connectionStatus');
   connectionStatus.append(new Element('span'), new Element('span'));
   const assigned = [];
-  const saved = new Map([['restaurantes.kds.station.restaurant-1', 'GRILL']]);
+  const saved = new Map([
+    ['restaurantes.kds.station.restaurant-1', 'GRILL'],
+    ['restaurantes.kds.zone.restaurant-1.GRILL', 'zone-2'],
+  ]);
   const calls = [];
   const sockets = [];
+  let commandStatus = null;
+  let historyMode = 'order';
+  let stationsFailure = false;
+  let ordersFailure = false;
+  let confirmDelivery = false;
   const line = {
     id: 'line-1', quantity: 1, productName: 'Tortilla', categoryName: 'Tapas',
     kitchenStatus: 'Pending', preparationStationCode: 'GRILL', format: 'TAPA',
@@ -114,7 +122,7 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
     submittedAtUtc: '2026-10-19T08:00:00Z',
     stations: [
       { code: 'MAIN', name: 'Principal', isPrimary: true, isActive: true, priority: 0, status: 'Pending' },
-      { code: 'GRILL', name: 'Parrilla', isPrimary: false, isActive: true, priority: 1, status: 'Pending', printTicket: true },
+      { code: 'GRILL', name: 'Parrilla', isPrimary: false, isActive: true, priority: 1, status: 'Pending', printTicket: true, managesZones: true },
     ],
     lines: [line],
   };
@@ -132,7 +140,10 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
       assign: url => assigned.push(url),
     },
     setInterval: () => 1,
-    setTimeout: () => 1,
+    setTimeout: (callback, delay) => {
+      if (delay === 150) callback();
+      return 1;
+    },
     clearTimeout() {},
     addEventListener() {},
   });
@@ -140,7 +151,7 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
   replaceGlobal('sessionStorage', {
     getItem: () => JSON.stringify({
       accessToken: 'test-token', expiresAtUtc: '2099-01-01T00:00:00Z',
-      restaurants: [{ restaurantId: 'restaurant-1', role: 'Kds', permissions: ['kds.use'] }],
+      restaurants: [{ restaurantId: 'restaurant-1', role: 'Kds', permissions: ['kds.use', 'orders.recover'] }],
     }),
     setItem() {}, removeItem() {},
   });
@@ -149,6 +160,7 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
     setItem: (key, value) => saved.set(key, value),
   });
   replaceGlobal('history', { replaceState() {} });
+  replaceGlobal('confirm', () => confirmDelivery);
   replaceGlobal('WebSocket', class {
     constructor(url) { this.url = url; this.listeners = new Map(); sockets.push(this); }
     addEventListener(name, listener) { this.listeners.set(name, listener); }
@@ -163,12 +175,32 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
       { id: 'restaurant-1', name: 'Centro', code: 'CENTRO' },
       { id: 'restaurant-2', name: 'Norte', code: 'NORTE' },
     ]);
-    if (path.endsWith('/stations')) return json(path.includes('restaurant-2') ? [] : stations);
-    if (path.endsWith('/kds-history')) return json([{ orderId: order.id, status: 'Ready',
-      tableLabel: order.tableLabel, createdAtUtc: order.submittedAtUtc,
-      lines: [{ quantity: 1, productName: 'Tortilla', format: 'TAPA', status: 'Active' }] }]);
-    if (path.endsWith('/kds')) return json([order]);
+    if (path.endsWith('/zones')) return json([
+      { id: 'zone-2', name: 'Terraza', sortOrder: 2, deletedAtUtc: null },
+      { id: 'zone-1', name: 'Barra', sortOrder: 1, deletedAtUtc: null },
+      { id: 'zone-deleted', name: 'Cerrada', sortOrder: 0, deletedAtUtc: '2026-10-19T08:00:00Z' },
+    ]);
+    if (path.endsWith('/stations')) {
+      if (stationsFailure) throw new Error('stations offline');
+      return json(path.includes('restaurant-2') ? [] : stations);
+    }
+    if (path.endsWith('/kds-history')) {
+      if (historyMode === 'failure') throw new Error('history offline');
+      if (historyMode === 'empty') return json([]);
+      return json([{ orderId: order.id, status: 'Ready',
+        tableLabel: order.tableLabel, createdAtUtc: order.submittedAtUtc,
+        lines: [{ quantity: 1, productName: 'Tortilla', format: 'TAPA', status: 'Active' }] }]);
+    }
+    if (path.endsWith('/kds')) {
+      if (ordersFailure) throw new Error('orders offline');
+      return json([order]);
+    }
+    if (path.endsWith('/deliver')) {
+      order = { ...order, version: order.version + 1, status: 'Delivered' };
+      return json(order);
+    }
     if (path.includes('/lines/line-1/')) {
+      if (commandStatus !== null) return new Response('command rejected', { status: commandStatus });
       const ready = path.endsWith('/ready');
       order = { ...order, version: order.version + 1,
         lines: [{ ...line, kitchenStatus: ready ? 'Ready' : 'InPreparation',
@@ -184,13 +216,65 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
     await until(() => element('stationCode').options.length === 2);
     assert.equal(element('restaurantId').value, 'restaurant-1');
     assert.equal(element('stationCode').value, 'GRILL');
+    assert.equal(element('zoneId').disabled, false);
+    assert.deepEqual(element('zoneId').options.map(option => option.value), ['zone-1', 'zone-2']);
+    assert.equal(element('zoneId').value, 'zone-2');
     assert.equal(sockets.length, 1);
     assert.equal(element('monitorPanel').classList.contains('hidden'), false);
 
+    const socket = sockets[0];
+    const separator = String.fromCodePoint(30);
+    await socket.listeners.get('open')();
+    await socket.listeners.get('message')({ data: '{}' + separator });
+    await socket.listeners.get('message')({
+      data: JSON.stringify({
+        type: 1,
+        target: 'OrderUpdated',
+        arguments: [{ orderId: order.id, status: order.status, version: order.version }],
+      }) + separator,
+    });
+    assert.equal(
+      element('event').textContent,
+      'Actualización recibida: pedido order-12345678, InPreparation v1',
+    );
+    assert.ok(calls.some(call => call.url.includes('/kds?restaurantId=restaurant-1')));
+
+    element('stationCode').value = 'CHEF';
+    await element('stationCode').listeners.get('change')();
+    assert.equal(element('zoneId').disabled, true);
     await element('refresh').listeners.get('click')();
-    const orderCard = element('orders').children[0];
+    assert.ok(calls.some(call => call.url.endsWith('/kds?restaurantId=restaurant-1&stationCode=CHEF')));
+    element('stationCode').value = 'GRILL';
+    await element('stationCode').listeners.get('change')();
+    await element('refresh').listeners.get('click')();
+
+    element('zoneId').value = 'zone-1';
+    await element('zoneId').listeners.get('change')();
+    assert.equal(saved.get('restaurantes.kds.zone.restaurant-1.GRILL'), 'zone-1');
+    assert.ok(calls.some(call => call.url.includes('zoneId=zone-1')));
+
+    element('zoneId').value = '';
+    await element('zoneId').listeners.get('change')();
+    assert.match(element('orders').children[0].textContent, /No hay zonas activas/u);
+    element('zoneId').value = 'zone-2';
+    await element('zoneId').listeners.get('change')();
+
+    await element('refresh').listeners.get('click')();
+    let orderCard = element('orders').children[0];
     assert.equal(orderCard.classes.has('order'), true);
     let action = orderCard.querySelectorAll('button').find(button => button.textContent === 'Iniciar');
+    assert.ok(action);
+    commandStatus = 500;
+    ordersFailure = true;
+    await action.listeners.get('click')();
+    assert.equal(
+      element('event').textContent,
+      'El comando fue rechazado: HTTP 500 No se pudo actualizar el monitor: orders offline',
+    );
+    ordersFailure = false;
+    commandStatus = null;
+    orderCard = element('orders').children[0];
+    action = orderCard.querySelectorAll('button').find(button => button.textContent === 'Iniciar');
     assert.ok(action);
     await action.listeners.get('click')();
     assert.equal(order.version, 2);
@@ -198,8 +282,15 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
 
     action = element('orders').children[0].querySelectorAll('button').find(button => button.textContent === 'Listo');
     assert.ok(action);
+    order = { ...order, version: order.version + 1 };
+    commandStatus = 409;
     await action.listeners.get('click')();
-    assert.equal(order.version, 3);
+    assert.equal(element('event').textContent, 'El estado del pedido cambió; esperando la actualización…');
+    commandStatus = null;
+    action = element('orders').children[0].querySelectorAll('button').find(button => button.textContent === 'Listo');
+    assert.ok(action);
+    await action.listeners.get('click')();
+    assert.equal(order.version, 4);
     assert.equal(element('ticketDialog').open, true);
     assert.match(element('ticketContent').children[0].textContent, /Parrilla/u);
     element('closeTicket').listeners.get('click')();
@@ -211,17 +302,143 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
     assert.equal(element('historyPanel').classList.contains('hidden'), false);
     element('historyButton').listeners.get('click')();
     assert.equal(element('historyPanel').classList.contains('hidden'), true);
+    historyMode = 'empty';
+    element('historyButton').listeners.get('click')();
+    await until(() => element('historyList').children[0]?.classes.has('empty'));
+    assert.match(element('historyList').children[0].textContent, /No hay pedidos procesados/u);
+    element('historyButton').listeners.get('click')();
+    historyMode = 'failure';
+    element('historyButton').listeners.get('click')();
+    await until(() => element('event').textContent === 'history offline');
+    assert.equal(element('historyButton').disabled, false);
 
     element('restaurantId').value = 'restaurant-2';
     element('restaurantId').listeners.get('change')();
     await until(() => element('connectionStatus').children[1].textContent === 'Sin estaciones KDS activas');
     assert.match(element('orders').children[0].textContent, /no tiene estaciones/u);
     assert.ok(calls.some(call => call.url.includes('/kds-history')));
+    stationsFailure = true;
+    await element('refresh').listeners.get('click')();
+    assert.equal(element('event').textContent, 'stations offline');
+    assert.equal(element('refresh').disabled, false);
+
+    stationsFailure = false;
+    element('restaurantId').value = 'restaurant-1';
+    element('restaurantId').listeners.get('change')();
+    await until(() => element('stationCode').options.length === 2);
+    ordersFailure = true;
+    await element('refresh').listeners.get('click')();
+    assert.equal(element('event').textContent, 'orders offline');
+    assert.equal(element('refresh').disabled, false);
+    ordersFailure = false;
+    await element('refresh').listeners.get('click')();
+    order = {
+      ...order,
+      status: 'Ready',
+      serviceMode: 'Takeaway',
+      customerName: 'Elena',
+      lines: [{ ...line, kitchenStatus: 'Ready' }],
+    };
+    await element('refresh').listeners.get('click')();
+    let delivery = element('orders').children[0].querySelectorAll('button')
+      .find(button => button.textContent === 'Entregado · resolver incidencia');
+    assert.ok(delivery);
+    const deliveryCallsBeforeCancel = calls.filter(call => call.url.endsWith('/deliver')).length;
+    await delivery.listeners.get('click')();
+    assert.equal(calls.filter(call => call.url.endsWith('/deliver')).length, deliveryCallsBeforeCancel);
+    confirmDelivery = true;
+    await delivery.listeners.get('click')();
+    assert.equal(calls.filter(call => call.url.endsWith('/deliver')).length, deliveryCallsBeforeCancel + 1);
+    assert.equal(order.status, 'Delivered');
 
     element('logout').listeners.get('click')();
     assert.equal(element('loginPanel').classList.contains('hidden'), false);
     element('loginMicrosoft').listeners.get('click')();
     assert.match(assigned[0], /auth\/start\/Microsoft/u);
+  } finally {
+    for (const [name, descriptor] of original) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else delete globalThis[name];
+    }
+  }
+});
+
+test('KDS login error keeps the login screen available and registers its service worker', async () => {
+  const original = new Map();
+  const replaceGlobal = (name, value) => {
+    original.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
+    Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
+  };
+  const elements = new Map();
+  const element = id => {
+    if (!elements.has(id)) elements.set(id, new Element());
+    return elements.get(id);
+  };
+  const authLoading = element('authLoading');
+  const loginPanel = element('loginPanel');
+  const monitorPanel = element('monitorPanel');
+  const eventText = element('event');
+  const historyCalls = [];
+  const serviceWorkerCalls = [];
+  const windowListeners = new Map();
+  let reloadCount = 0;
+  replaceGlobal('document', {
+    querySelector: selector => element(selector.slice(1)),
+    createElement: tag => new Element(tag),
+    addEventListener() {},
+  });
+  replaceGlobal('window', {
+    setInterval: () => 1,
+    setTimeout: () => 1,
+    clearTimeout() {},
+    addEventListener: (name, listener) => windowListeners.set(name, listener),
+    location: {
+      origin: 'https://kds.test',
+      hash: '#login_error=access_denied',
+      pathname: '/kds/',
+      assign() {},
+      reload: () => reloadCount++,
+    },
+  });
+  replaceGlobal('navigator', {
+    serviceWorker: {
+      addEventListener: (name, listener) => serviceWorkerCalls.push({ name, listener }),
+      register: (...args) => serviceWorkerCalls.push({ name: 'register', args }),
+    },
+  });
+  replaceGlobal('sessionStorage', { getItem: () => null, setItem() {}, removeItem() {} });
+  replaceGlobal('localStorage', { getItem: () => null, setItem() {} });
+  replaceGlobal('history', { replaceState: (...args) => historyCalls.push(args) });
+  replaceGlobal('fetch', async url => {
+    assert.match(String(url), /\/api\/identity\/auth\/provider$/u);
+    return Response.json({
+      activeProvider: 'Microsoft',
+      microsoftConfigured: true,
+      googleConfigured: false,
+    });
+  });
+
+  try {
+    await import(appUrl.href + '?login-error-service-worker');
+    await until(() => eventText.textContent.includes('proveedor rechazó el acceso'));
+
+    assert.equal(authLoading.classList.contains('hidden'), true);
+    assert.equal(loginPanel.classList.contains('hidden'), false);
+    assert.equal(monitorPanel.classList.contains('hidden'), false);
+    assert.equal(element('loginMicrosoft').disabled, false);
+    assert.equal(element('loginGoogle').disabled, true);
+    assert.equal(historyCalls.length, 1);
+    assert.deepEqual(historyCalls[0], [null, '', '/kds/']);
+
+    const controllerChange = serviceWorkerCalls.find(call => call.name === 'controllerchange');
+    assert.ok(controllerChange);
+    controllerChange.listener();
+    assert.equal(reloadCount, 1);
+    windowListeners.get('load')();
+    assert.deepEqual(serviceWorkerCalls.find(call => call.name === 'register').args, [
+      './service-worker.js',
+      { updateViaCache: 'none' },
+    ]);
   } finally {
     for (const [name, descriptor] of original) {
       if (descriptor) Object.defineProperty(globalThis, name, descriptor);

@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using System.Reflection;
 using System.Text.Json;
@@ -124,6 +124,45 @@ public sealed class BackofficeStationFlowTests : BunitContext
     }
 
     [Fact]
+    public async Task Stations_module_saves_name_priority_and_zone_management_flag()
+    {
+        Services.AddSyncfusionBlazor();
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        Guid restaurantId = Guid.NewGuid();
+        KitchenStationResponse station = Station(restaurantId);
+        station.RequiresPrimaryDispatch = false;
+        station.Priority = 2;
+        station.ManagesZones = false;
+        StationHandler handler = new(station);
+        IRenderedComponent<BackofficeHome> home = RenderHome(restaurantId, handler, station);
+        IRenderedComponent<StationsModule> module = Render<StationsModule>(parameters =>
+            parameters.Add(component => component.Host, home.Instance)
+        );
+
+        Assert.Contains("Maneja zonas", module.Markup);
+        await module.InvokeAsync(() =>
+            module.Find(".station-row input[maxlength='80']").Change("Plancha")
+        );
+        await module.InvokeAsync(() =>
+            module.Find(".station-row button[aria-label='Guardar nombre KDS']").Click()
+        );
+        Assert.Equal("Plancha", handler.Stations.Single().Name);
+        await module.InvokeAsync(() => module.Find(".station-row input[type='number']").Change(4));
+        await module.InvokeAsync(() =>
+            module.Find(".station-row button[aria-label='Guardar prioridad KDS']").Click()
+        );
+        Assert.Equal(4, handler.Stations.Single().Priority);
+        await module.InvokeAsync(() =>
+            module.FindAll(".station-row input[type='checkbox']")[3].Change(true)
+        );
+
+        Assert.Equal("Plancha", station.Name);
+        Assert.Equal(4, station.Priority);
+        Assert.True(station.ManagesZones);
+        Assert.Contains("/stations/", handler.Paths.Last());
+    }
+
+    [Fact]
     public async Task Changing_restaurant_loads_its_local_data_and_ignores_invalid_ids()
     {
         Guid firstRestaurantId = Guid.NewGuid();
@@ -190,6 +229,82 @@ public sealed class BackofficeStationFlowTests : BunitContext
             path => path == $"/api/catalog/restaurants/{secondRestaurantId}/stations"
         );
         Assert.Equal(requestsAfterChange, handler.Paths.Count);
+    }
+
+    [Fact]
+    public async Task Refresh_module_dispatches_to_the_selected_read_projection()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        KitchenStationResponse station = Station(restaurantId);
+        StationHandler handler = new(station);
+        IRenderedComponent<BackofficeHome> cut = RenderHome(restaurantId, handler, station);
+
+        (string Module, string[] ExpectedPaths)[] refreshes =
+        [
+            ("companies", ["/api/restaurant-operations/companies"]),
+            (
+                "restaurants",
+                ["/api/restaurant-operations/restaurants", "/api/restaurant-operations/companies"]
+            ),
+            (
+                "categories",
+                ["/api/catalog/categories", $"/api/catalog/restaurants/{restaurantId}/stations"]
+            ),
+            ("products", ["/api/catalog/categories", "/api/catalog/products"]),
+            ("stations", [$"/api/catalog/restaurants/{restaurantId}/stations"]),
+            (
+                "zones",
+                [
+                    $"/api/dining/restaurants/{restaurantId}/zones",
+                    $"/api/dining/restaurants/{restaurantId}/tables",
+                ]
+            ),
+        ];
+
+        foreach ((string module, string[] expectedPaths) in refreshes)
+        {
+            SetField(cut.Instance, "module", module);
+            handler.Paths.Clear();
+
+            await cut.InvokeAsync(() => Invoke(cut.Instance, "RefreshModule"));
+
+            foreach (string path in expectedPaths)
+            {
+                Assert.Contains(path, handler.Paths);
+            }
+        }
+
+        SetField(cut.Instance, "module", "unmapped-module");
+        handler.Paths.Clear();
+        await cut.InvokeAsync(() => Invoke(cut.Instance, "RefreshModule"));
+        Assert.Empty(handler.Paths);
+    }
+
+    [Fact]
+    public async Task Loading_local_data_without_a_selectable_restaurant_clears_stale_lists()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        KitchenStationResponse station = Station(restaurantId);
+        StationHandler handler = new(station);
+        IRenderedComponent<BackofficeHome> cut = RenderHome(restaurantId, handler, station);
+        SetField(
+            cut.Instance,
+            "login",
+            new LoginResponse(
+                "token",
+                DateTime.UtcNow.AddHours(1),
+                new LoginUser(Guid.NewGuid(), "viewer", "Viewer"),
+                []
+            )
+        );
+        handler.Paths.Clear();
+
+        await cut.InvokeAsync(() => Invoke(cut.Instance, "LoadLocalCore"));
+
+        Assert.Empty(GetField<List<KitchenStationResponse>>(cut.Instance, "stations"));
+        Assert.Empty(GetField<List<TableResponse>>(cut.Instance, "tables"));
+        Assert.Empty(GetField<List<ZoneResponse>>(cut.Instance, "zones"));
+        Assert.Empty(handler.Paths);
     }
 
     private static T InvokeStatic<T>(string methodName, params object?[] arguments) =>
@@ -321,6 +436,39 @@ public sealed class BackofficeStationFlowTests : BunitContext
 
         Assert.Equal(restaurantId, GetField<Guid>(cut.Instance, "restaurantId"));
         Assert.Equal("exchanged-token", GetField<LoginResponse>(cut.Instance, "login").AccessToken);
+        Assert.Contains(handler.Paths, path => path == "/api/identity/auth/exchange");
+    }
+
+    [Fact]
+    public void Login_code_without_backoffice_permission_is_rejected_before_restoring_the_session()
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        Services.AddSyncfusionBlazor();
+        Guid restaurantId = Guid.NewGuid();
+        LoginResponse login = new(
+            "commander-only-token",
+            DateTime.UtcNow.AddHours(1),
+            new LoginUser(Guid.NewGuid(), "commander", "Comandero"),
+            [new RestaurantAccess(restaurantId, "Comandero", ["commander.use"])]
+        );
+        KitchenStationResponse station = Station(restaurantId);
+        StationHandler handler = new(station) { ExchangeLogin = login };
+        BackofficeApi api = new(
+            new HttpClient(handler) { BaseAddress = new Uri("https://test.local") }
+        );
+        Services.AddSingleton(api);
+        Services.AddSingleton(new SessionAuthenticationStateProvider());
+        NavigationManager navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(navigation.BaseUri + "#login_code=one-time-code");
+
+        IRenderedComponent<BackofficeHome> cut = Render<BackofficeHome>();
+        cut.WaitForState(() => !GetField<bool>(cut.Instance, "initializing"));
+
+        Assert.Equal(
+            "Este perfil no tiene acceso al Backoffice.",
+            GetField<string>(cut.Instance, "message")
+        );
+        Assert.Null(api.AccessToken);
         Assert.Contains(handler.Paths, path => path == "/api/identity/auth/exchange");
     }
 
@@ -723,6 +871,65 @@ public sealed class BackofficeStationFlowTests : BunitContext
                 .Single(GetField<List<CategoryResponse>>(home.Instance, "categories"))
                 .ShowInCustomerQr
         );
+
+        await module.InvokeAsync(() =>
+            Invoke(
+                module.Instance,
+                "SetRequiresKds",
+                projected,
+                new ChangeEventArgs { Value = false }
+            )
+        );
+        Assert.False(projected.RequiresKds);
+
+        await module.InvokeAsync(() =>
+            Invoke(
+                module.Instance,
+                "SetStation",
+                projected,
+                new ChangeEventArgs { Value = "MISSING" }
+            )
+        );
+        Assert.Equal("OVEN", projected.DefaultStationCode);
+        await module.InvokeAsync(() =>
+            Invoke(module.Instance, "SetStation", projected, new ChangeEventArgs { Value = "OVEN" })
+        );
+
+        CategoryResponse categoryWithoutStation = new()
+        {
+            Id = Guid.NewGuid(),
+            Code = "OTHER",
+            Name = "Sin estación",
+            RequiresKds = false,
+        };
+        List<CategoryResponse> categories = GetField<List<CategoryResponse>>(
+            home.Instance,
+            "categories"
+        );
+        categories.Add(categoryWithoutStation);
+        SetField(home.Instance, "stations", new List<KitchenStationResponse>());
+        await module.InvokeAsync(() =>
+            Invoke(
+                module.Instance,
+                "SetRequiresKds",
+                categoryWithoutStation,
+                new ChangeEventArgs { Value = true }
+            )
+        );
+        Assert.False(categoryWithoutStation.RequiresKds);
+
+        SetField(home.Instance, "busy", true);
+        await module.InvokeAsync(() =>
+            Invoke(
+                module.Instance,
+                "SetFlag",
+                projected,
+                new ChangeEventArgs { Value = false },
+                new Func<bool>(() => projected.IsActive),
+                new Action<bool>(value => projected.IsActive = value)
+            )
+        );
+        Assert.True(projected.IsActive);
     }
 
     [Fact]
@@ -879,6 +1086,33 @@ public sealed class BackofficeStationFlowTests : BunitContext
         Assert.Equal(1, js.Confirmations);
         Assert.Empty(GetField<List<StaffUserResponse>>(cut.Instance, "users"));
         Assert.Contains("Cuenta eliminada", GetField<string>(cut.Instance, "message"));
+    }
+
+    [Fact]
+    public async Task Declining_user_deletion_keeps_the_user_and_skips_the_api_call()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        KitchenStationResponse station = Station(restaurantId);
+        StationHandler handler = new(station);
+        ConfirmingJsRuntime js = new(false);
+        Services.AddSingleton<IJSRuntime>(js);
+        IRenderedComponent<BackofficeHome> cut = RenderHome(restaurantId, handler, station);
+        StaffUserResponse user = new()
+        {
+            Id = Guid.NewGuid(),
+            Email = "camarero@example.com",
+            DisplayName = "Camarero",
+            Role = "Camarero",
+            RestaurantId = restaurantId,
+            IsActive = true,
+        };
+        SetField(cut.Instance, "users", new List<StaffUserResponse> { user });
+
+        await cut.InvokeAsync(() => Invoke(cut.Instance, "DeleteUser", user));
+
+        Assert.Equal(1, js.Confirmations);
+        Assert.Same(user, Assert.Single(GetField<List<StaffUserResponse>>(cut.Instance, "users")));
+        Assert.DoesNotContain(handler.Paths, path => path == $"/api/identity/users/{user.Id}");
     }
 
     [Fact]
@@ -1551,6 +1785,12 @@ public sealed class BackofficeStationFlowTests : BunitContext
                 }
                 if (path.EndsWith("/print-ticket", StringComparison.Ordinal))
                     station.PrintTicket = true;
+                if (path.EndsWith("/manages-zones", StringComparison.Ordinal))
+                {
+                    station.ManagesZones = JsonSerializer.Deserialize<bool>(
+                        await request.Content!.ReadAsStringAsync(cancellationToken)
+                    );
+                }
                 if (path.EndsWith("/primary", StringComparison.Ordinal))
                 {
                     station.IsPrimary = true;

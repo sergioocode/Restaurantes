@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -98,6 +98,142 @@ public sealed class CatalogPhotoControllerTests
         Assert.Equal(0, storage.Writes);
     }
 
+    [Theory]
+    [InlineData("small", "thumbnail.webp")]
+    [InlineData("medium", "card.webp")]
+    [InlineData("large", "detail.webp")]
+    [InlineData("thumbnail", "thumbnail.webp")]
+    [InlineData("card", "card.webp")]
+    [InlineData("detail", "detail.webp")]
+    public async Task Get_serves_each_public_photo_variant_with_immutable_cache_headers(
+        string alias,
+        string storedName
+    )
+    {
+        await using CatalogWriteDbContext db = CreateDatabase();
+        Guid productId = Guid.NewGuid();
+        Guid revision = Guid.NewGuid();
+        db.ProductPhotos.Add(
+            new ProductPhoto
+            {
+                ProductId = productId,
+                Revision = revision,
+                OriginalContentType = "image/png",
+            }
+        );
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        RecordingStorage storage = new()
+        {
+            Image = new StoredProductImage(new MemoryStream([1, 2, 3]), "image/webp"),
+        };
+        CatalogPhotoController controller = CreateController(db, storage);
+
+        IActionResult result = await controller.Get(
+            productId,
+            alias,
+            TestContext.Current.CancellationToken
+        );
+
+        FileStreamResult file = Assert.IsType<FileStreamResult>(result);
+        using MemoryStream content = new();
+        await file.FileStream.CopyToAsync(content, TestContext.Current.CancellationToken);
+        Assert.Equal([1, 2, 3], content.ToArray());
+        Assert.Equal("image/webp", file.ContentType);
+        Assert.True(file.EnableRangeProcessing);
+        Assert.Equal(revision, storage.ReadRevision);
+        Assert.Equal(storedName, storage.ReadVariant);
+        Assert.Equal(
+            "public, max-age=31536000, immutable",
+            controller.Response.Headers.CacheControl
+        );
+    }
+
+    [Fact]
+    public async Task Get_returns_not_found_for_unknown_variant_missing_photo_and_missing_blob()
+    {
+        await using CatalogWriteDbContext db = CreateDatabase();
+        Guid productId = Guid.NewGuid();
+        Guid revision = Guid.NewGuid();
+        db.ProductPhotos.Add(new ProductPhoto { ProductId = productId, Revision = revision });
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        RecordingStorage storage = new();
+        CatalogPhotoController controller = CreateController(db, storage);
+
+        Assert.IsType<NotFoundResult>(
+            await controller.Get(productId, "original", TestContext.Current.CancellationToken)
+        );
+        Assert.IsType<NotFoundResult>(
+            await controller.Get(Guid.NewGuid(), "small", TestContext.Current.CancellationToken)
+        );
+        Assert.IsType<NotFoundResult>(
+            await controller.Get(productId, "small", TestContext.Current.CancellationToken)
+        );
+        Assert.Equal(revision, storage.ReadRevision);
+        Assert.Equal("thumbnail.webp", storage.ReadVariant);
+    }
+
+    [Fact]
+    public async Task Upload_storage_failure_removes_the_unpublished_revision_and_rethrows()
+    {
+        await using CatalogWriteDbContext db = CreateDatabase();
+        Product product = Product.Create("PHOTO", "Foto", Guid.NewGuid(), DateTime.UtcNow);
+        db.Products.Add(product);
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        RecordingStorage storage = new() { StoreError = new IOException("storage unavailable") };
+        CatalogPhotoController controller = CreateController(db, storage);
+        using MemoryStream stream = CreatePng();
+        FormFile file = new(stream, 0, stream.Length, "original", "photo.png");
+
+        IOException exception = await Assert.ThrowsAsync<IOException>(() =>
+            controller.Upload(product.Id, file, TestContext.Current.CancellationToken)
+        );
+
+        Assert.Equal("storage unavailable", exception.Message);
+        Assert.Equal(storage.Revision, Assert.Single(storage.DeletedRevisions));
+        Assert.Empty(db.ProductPhotos);
+    }
+
+    [Fact]
+    public async Task Upload_replaces_the_revision_and_cleans_up_the_previous_image()
+    {
+        await using CatalogWriteDbContext db = CreateDatabase();
+        Product product = Product.Create("PHOTO", "Foto", Guid.NewGuid(), DateTime.UtcNow);
+        Guid oldRevision = Guid.NewGuid();
+        db.Products.Add(product);
+        db.ProductPhotos.Add(
+            new ProductPhoto
+            {
+                ProductId = product.Id,
+                Revision = oldRevision,
+                OriginalContentType = "image/jpeg",
+            }
+        );
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        RecordingStorage storage = new();
+        CatalogPhotoController controller = CreateController(db, storage);
+        using MemoryStream stream = CreatePng();
+        FormFile file = new(stream, 0, stream.Length, "original", "photo.png");
+
+        IActionResult result = await controller.Upload(
+            product.Id,
+            file,
+            TestContext.Current.CancellationToken
+        );
+
+        Assert.IsType<OkObjectResult>(result);
+        ProductPhoto saved = Assert.Single(db.ProductPhotos);
+        Assert.NotEqual(oldRevision, saved.Revision);
+        Assert.Equal(saved.Revision, storage.Revision);
+        Assert.Equal(oldRevision, Assert.Single(storage.DeletedRevisions));
+    }
+
+    private static MemoryStream CreatePng()
+    {
+        using SkiaSharp.SKBitmap bitmap = new(2, 2);
+        using SkiaSharp.SKData png = bitmap.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+        return new MemoryStream(png.ToArray());
+    }
+
     private static CatalogWriteDbContext CreateDatabase() =>
         new(
             new DbContextOptionsBuilder<CatalogWriteDbContext>()
@@ -127,6 +263,11 @@ public sealed class CatalogPhotoControllerTests
         public int Writes { get; private set; }
         public Guid Revision { get; private set; }
         public string[] Names { get; private set; } = [];
+        public StoredProductImage? Image { get; init; }
+        public string? ReadVariant { get; private set; }
+        public Guid ReadRevision { get; private set; }
+        public Exception? StoreError { get; init; }
+        public List<Guid> DeletedRevisions { get; } = [];
 
         public Task StoreAsync(
             Guid productId,
@@ -138,6 +279,10 @@ public sealed class CatalogPhotoControllerTests
             Writes++;
             Revision = revision;
             Names = variants.Select(variant => variant.Name).ToArray();
+            if (StoreError is not null)
+            {
+                throw StoreError;
+            }
             return Task.CompletedTask;
         }
 
@@ -146,9 +291,17 @@ public sealed class CatalogPhotoControllerTests
             Guid revision,
             string variant,
             CancellationToken ct
-        ) => Task.FromResult<StoredProductImage?>(null);
+        )
+        {
+            ReadRevision = revision;
+            ReadVariant = variant;
+            return Task.FromResult(Image);
+        }
 
-        public Task DeleteAsync(Guid productId, Guid revision, CancellationToken ct) =>
-            Task.CompletedTask;
+        public Task DeleteAsync(Guid productId, Guid revision, CancellationToken ct)
+        {
+            DeletedRevisions.Add(revision);
+            return Task.CompletedTask;
+        }
     }
 }

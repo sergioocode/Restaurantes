@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -104,6 +104,68 @@ public sealed class SalesReadProjectionWorkerCoverageTests
         Assert.Equal(1, fixture.ChannelProxy.Rejections);
     }
 
+    [Fact]
+    public async Task Delivery_acknowledgement_failure_publishes_a_retry_copy()
+    {
+        await using WorkerFixture fixture = await WorkerFixture.CreateAsync();
+        fixture.ChannelProxy.ThrowOnNextAcknowledgement = true;
+
+        await fixture.DeliverAsync(
+            Guid.NewGuid(),
+            typeof(SaleCompleted).FullName!,
+            Sale(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Cash", 12m)
+        );
+
+        Assert.Equal(1, fixture.ChannelProxy.Acknowledgements);
+        Assert.Equal(0, fixture.ChannelProxy.Rejections);
+        PublishedMessage retry = Assert.Single(fixture.ChannelProxy.PublishedMessages);
+        Assert.Equal($"{SalesTopology.ReadModelQueueName}.retry.1", retry.RoutingKey);
+        Assert.Equal(1, retry.Properties.Headers!["x-restaurantes-retry-count"]);
+        Assert.Single(fixture.Db.Sales);
+    }
+
+    [Fact]
+    public async Task Delivery_acknowledgement_failure_at_retry_limit_is_dead_lettered()
+    {
+        await using WorkerFixture fixture = await WorkerFixture.CreateAsync();
+        fixture.ChannelProxy.ThrowOnNextAcknowledgement = true;
+
+        await fixture.DeliverRawAsync(
+            Guid.NewGuid().ToString(),
+            typeof(SaleCompleted).FullName!,
+            JsonSerializer.SerializeToUtf8Bytes(
+                Sale(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Cash", 12m)
+            ),
+            new Dictionary<string, object?> { ["x-restaurantes-retry-count"] = 3 }
+        );
+
+        Assert.Empty(fixture.ChannelProxy.PublishedMessages);
+        Assert.Equal(1, fixture.ChannelProxy.Rejections);
+        Assert.Equal(0, fixture.ChannelProxy.Acknowledgements);
+        Assert.Single(fixture.Db.Sales);
+    }
+
+    [Fact]
+    public async Task Dispose_releases_and_clears_rabbitmq_resources()
+    {
+        await using WorkerFixture fixture = await WorkerFixture.CreateAsync();
+
+        await fixture.DisposeWorkerResourcesAsync();
+
+        Assert.Equal(1, fixture.ChannelProxy.Disposals);
+        Assert.Equal(1, fixture.ConnectionProxy.Disposals);
+        Assert.Null(
+            typeof(SalesReadProjectionWorker)
+                .GetField("channel", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(fixture.Worker)
+        );
+        Assert.Null(
+            typeof(SalesReadProjectionWorker)
+                .GetField("connection", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(fixture.Worker)
+        );
+    }
+
     private static SaleCompleted Sale(
         Guid saleId,
         Guid restaurantId,
@@ -126,7 +188,6 @@ public sealed class SalesReadProjectionWorkerCoverageTests
     private sealed class WorkerFixture : IAsyncDisposable
     {
         private readonly ServiceProvider services;
-        private readonly SalesReadProjectionWorker worker;
         private readonly IChannel channel;
 
         private WorkerFixture(
@@ -134,18 +195,22 @@ public sealed class SalesReadProjectionWorkerCoverageTests
             SaleReadDbContext db,
             SalesReadProjectionWorker worker,
             IChannel channel,
-            ChannelProxy channelProxy
+            ChannelProxy channelProxy,
+            ConnectionProxy connectionProxy
         )
         {
             this.services = services;
             Db = db;
-            this.worker = worker;
+            Worker = worker;
             this.channel = channel;
             ChannelProxy = channelProxy;
+            ConnectionProxy = connectionProxy;
         }
 
         public SaleReadDbContext Db { get; }
+        public SalesReadProjectionWorker Worker { get; }
         public ChannelProxy ChannelProxy { get; }
+        public ConnectionProxy ConnectionProxy { get; }
 
         public static async Task<WorkerFixture> CreateAsync()
         {
@@ -166,10 +231,15 @@ public sealed class SalesReadProjectionWorkerCoverageTests
             );
             IChannel channel = DispatchProxy.Create<IChannel, ChannelProxy>();
             ChannelProxy proxy = (ChannelProxy)(object)channel;
+            IConnection connection = DispatchProxy.Create<IConnection, ConnectionProxy>();
+            ConnectionProxy connectionProxy = (ConnectionProxy)(object)connection;
             typeof(SalesReadProjectionWorker)
                 .GetField("channel", BindingFlags.Instance | BindingFlags.NonPublic)!
                 .SetValue(worker, channel);
-            return new WorkerFixture(services, db, worker, channel, proxy);
+            typeof(SalesReadProjectionWorker)
+                .GetField("connection", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .SetValue(worker, connection);
+            return new WorkerFixture(services, db, worker, channel, proxy, connectionProxy);
         }
 
         public Task DeliverAsync<TEvent>(Guid messageId, string eventType, TEvent message) =>
@@ -179,9 +249,19 @@ public sealed class SalesReadProjectionWorkerCoverageTests
                 JsonSerializer.SerializeToUtf8Bytes(message)
             );
 
-        public async Task DeliverRawAsync(string messageId, string eventType, byte[] body)
+        public async Task DeliverRawAsync(
+            string messageId,
+            string eventType,
+            byte[] body,
+            IDictionary<string, object?>? headers = null
+        )
         {
-            BasicProperties properties = new() { MessageId = messageId, Type = eventType };
+            BasicProperties properties = new()
+            {
+                MessageId = messageId,
+                Type = eventType,
+                Headers = headers,
+            };
             BasicDeliverEventArgs args = new(
                 "consumer",
                 (ulong)(ChannelProxy.Acknowledgements + ChannelProxy.Rejections + 1),
@@ -196,7 +276,16 @@ public sealed class SalesReadProjectionWorkerCoverageTests
                 "Handle",
                 BindingFlags.Instance | BindingFlags.NonPublic
             )!;
-            await (Task)handle.Invoke(worker, [channel, args])!;
+            await (Task)handle.Invoke(Worker, [channel, args])!;
+        }
+
+        public async Task DisposeWorkerResourcesAsync()
+        {
+            MethodInfo dispose = typeof(SalesReadProjectionWorker).GetMethod(
+                "DisposeResourcesAsync",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            )!;
+            await (Task)dispose.Invoke(Worker, null)!;
         }
 
         public async ValueTask DisposeAsync() => await services.DisposeAsync();
@@ -206,11 +295,20 @@ public sealed class SalesReadProjectionWorkerCoverageTests
     {
         public int Acknowledgements { get; private set; }
         public int Rejections { get; private set; }
+        public bool ThrowOnNextAcknowledgement { get; set; }
+        public int Disposals { get; private set; }
+        public List<PublishedMessage> PublishedMessages { get; } = [];
 
         protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
         {
             if (targetMethod?.Name == nameof(IChannel.BasicAckAsync))
             {
+                if (ThrowOnNextAcknowledgement)
+                {
+                    ThrowOnNextAcknowledgement = false;
+                    throw new InvalidOperationException("Broker acknowledgement failed.");
+                }
+
                 Acknowledgements++;
                 return ValueTask.CompletedTask;
             }
@@ -219,7 +317,44 @@ public sealed class SalesReadProjectionWorkerCoverageTests
                 Rejections++;
                 return ValueTask.CompletedTask;
             }
+            if (targetMethod?.Name == nameof(IChannel.BasicPublishAsync))
+            {
+                PublishedMessages.Add(
+                    new PublishedMessage(
+                        (string)args![1]!,
+                        ((ReadOnlyMemory<byte>)args[4]!).ToArray(),
+                        (BasicProperties)args[3]!
+                    )
+                );
+                return ValueTask.CompletedTask;
+            }
+            if (targetMethod?.Name == nameof(IChannel.DisposeAsync))
+            {
+                Disposals++;
+                return ValueTask.CompletedTask;
+            }
             throw new NotSupportedException(targetMethod?.Name);
         }
     }
+
+    public class ConnectionProxy : DispatchProxy
+    {
+        public int Disposals { get; private set; }
+
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+        {
+            if (targetMethod?.Name == nameof(IConnection.DisposeAsync))
+            {
+                Disposals++;
+                return ValueTask.CompletedTask;
+            }
+            throw new NotSupportedException(targetMethod?.Name);
+        }
+    }
+
+    public sealed record PublishedMessage(
+        string RoutingKey,
+        byte[] Body,
+        BasicProperties Properties
+    );
 }

@@ -125,6 +125,57 @@ public sealed class SimulatorOrderFlowTests
     }
 
     [Fact]
+    public async Task Cash_register_open_is_rejected_when_the_api_does_not_confirm_open_status()
+    {
+        RecordingHandler handler = new(
+            Json(HttpStatusCode.OK, new CashRegisterStatusResponse("Closed")),
+            Json(HttpStatusCode.OK, new CashRegisterStatusResponse("Opening"))
+        );
+        using HttpClient client = new(handler) { BaseAddress = new Uri("http://localhost/") };
+
+        InvalidDataException error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            Simulator.EnsureCashRegisterOpenAsync(
+                client,
+                Restaurant(),
+                "pos-token",
+                TestContext.Current.CancellationToken
+            )
+        );
+
+        Assert.Contains("no confirmó que la caja quedara abierta", error.Message);
+        Assert.Equal(
+            [
+                (HttpMethod.Get, $"api/cash-register/restaurants/{RestaurantId}/current"),
+                (HttpMethod.Post, $"api/cash-register/restaurants/{RestaurantId}/open"),
+            ],
+            handler.Requests.Select(request => (request.Method, request.Path))
+        );
+    }
+
+    [Fact]
+    public async Task Cash_register_open_conflict_is_rethrown_when_status_remains_closed()
+    {
+        RecordingHandler handler = new(
+            Json(HttpStatusCode.OK, new CashRegisterStatusResponse("Closed")),
+            new HttpResponseMessage(HttpStatusCode.Conflict),
+            Json(HttpStatusCode.OK, new CashRegisterStatusResponse("Closed"))
+        );
+        using HttpClient client = new(handler) { BaseAddress = new Uri("http://localhost/") };
+
+        HttpRequestException error = await Assert.ThrowsAsync<HttpRequestException>(() =>
+            Simulator.EnsureCashRegisterOpenAsync(
+                client,
+                Restaurant(),
+                "pos-token",
+                TestContext.Current.CancellationToken
+            )
+        );
+
+        Assert.Equal(HttpStatusCode.Conflict, error.StatusCode);
+        Assert.Equal(3, handler.Requests.Count);
+    }
+
+    [Fact]
     public async Task Order_flow_submits_delivers_collects_payment_and_closes_the_session()
     {
         SessionInfo session = new(SessionId, RestaurantId, TableId, "Open");
@@ -181,6 +232,46 @@ public sealed class SimulatorOrderFlowTests
     }
 
     [Fact]
+    public async Task Cancellation_before_order_generation_finishes_without_querying_tables()
+    {
+        RecordingHandler handler = new(
+            Json(HttpStatusCode.OK, new[] { MenuItem() }),
+            Json(HttpStatusCode.OK, new CashRegisterStatusResponse("Open"))
+        );
+        using HttpClient client = new(handler) { BaseAddress = new Uri("http://localhost/") };
+        using CancellationTokenSource stopCreating = new();
+        stopCreating.Cancel();
+        Simulator.RandomOrderScheduler scheduler = new(
+            1,
+            [RestaurantId],
+            new Simulator.SimulatorRandom(17)
+        );
+
+        RestaurantRunResult result = await Simulator.RunRestaurantAsync(
+            client,
+            Restaurant(),
+            "pos-token",
+            "kds-token",
+            2,
+            scheduler,
+            TimeSpan.Zero,
+            TimeSpan.FromMinutes(1),
+            new Simulator.SimulatorRandom(17),
+            new SemaphoreSlim(1, 1),
+            stopCreating.Token
+        );
+
+        Assert.Equal(new RestaurantRunResult(0, 0), result);
+        Assert.Equal(
+            [
+                $"api/catalog/restaurants/{RestaurantId}/menu",
+                $"api/cash-register/restaurants/{RestaurantId}/current",
+            ],
+            handler.Requests.Select(request => request.Path)
+        );
+    }
+
+    [Fact]
     public async Task Failed_submission_keeps_the_confirmed_order_and_does_not_cancel_its_session()
     {
         SessionInfo session = new(SessionId, RestaurantId, TableId, "Open");
@@ -216,6 +307,86 @@ public sealed class SimulatorOrderFlowTests
                 (HttpMethod.Post, $"api/orders/{OrderId}/submit"),
             ],
             handler.Requests.Select(request => (request.Method, request.Path))
+        );
+    }
+
+    [Fact]
+    public async Task Failed_order_creation_cancels_the_empty_session()
+    {
+        RecordingHandler handler = new(
+            Json(HttpStatusCode.OK, new SessionInfo(SessionId, RestaurantId, TableId, "Open")),
+            new HttpResponseMessage(HttpStatusCode.BadRequest)
+            {
+                Content = new StringContent("order rejected"),
+            },
+            Json(HttpStatusCode.OK, new SessionInfo(SessionId, RestaurantId, TableId, "Cancelled"))
+        );
+        using HttpClient client = new(handler) { BaseAddress = new Uri("http://localhost/") };
+
+        bool completed = await Simulator.ProcessOrderAsync(
+            client,
+            Restaurant(),
+            "pos-token",
+            "kds-token",
+            [MenuItem()],
+            new HashSet<Guid> { ProductId },
+            new TableInfo(TableId, "Mesa 04", "Available", true, null, false, "SALÓN"),
+            TimeSpan.Zero,
+            new Simulator.SimulatorRandom(17),
+            new SemaphoreSlim(1, 1)
+        );
+
+        Assert.False(completed);
+        Assert.Equal(
+            [
+                (HttpMethod.Post, $"api/dining/tables/{TableId}/sessions"),
+                (HttpMethod.Post, "api/orders"),
+                (HttpMethod.Post, $"api/dining/sessions/{SessionId}/cancel"),
+            ],
+            handler.Requests.Select(request => (request.Method, request.Path))
+        );
+    }
+
+    [Fact]
+    public async Task Run_stops_generating_when_the_table_query_fails_and_reports_execution_error()
+    {
+        RecordingHandler handler = new(
+            Json(HttpStatusCode.OK, new[] { MenuItem() }),
+            Json(HttpStatusCode.OK, new CashRegisterStatusResponse("Open")),
+            new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+            {
+                Content = new StringContent("tables unavailable"),
+            }
+        );
+        using HttpClient client = new(handler) { BaseAddress = new Uri("http://localhost/") };
+        Simulator.RandomOrderScheduler scheduler = new(
+            1,
+            [RestaurantId],
+            new Simulator.SimulatorRandom(17)
+        );
+
+        RestaurantRunResult result = await Simulator.RunRestaurantAsync(
+            client,
+            Restaurant(),
+            "pos-token",
+            "kds-token",
+            1,
+            scheduler,
+            TimeSpan.Zero,
+            TimeSpan.FromMinutes(1),
+            new Simulator.SimulatorRandom(17),
+            new SemaphoreSlim(1, 1),
+            CancellationToken.None
+        );
+
+        Assert.Equal(new RestaurantRunResult(0, 1), result);
+        Assert.Equal(
+            [
+                $"api/catalog/restaurants/{RestaurantId}/menu",
+                $"api/cash-register/restaurants/{RestaurantId}/current",
+                $"api/dining/restaurants/{RestaurantId}/tables",
+            ],
+            handler.Requests.Select(request => request.Path)
         );
     }
 

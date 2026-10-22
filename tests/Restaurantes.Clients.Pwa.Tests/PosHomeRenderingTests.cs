@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Net;
 using System.Net.Http.Json;
 using System.Reflection;
@@ -67,6 +67,27 @@ public sealed class PosHomeRenderingTests : BunitContext
         );
         Assert.Contains(handler.Paths, path => path == "/api/identity/auth/exchange");
 
+        int pathsBeforeIgnoredChanges = handler.Paths.Count;
+        await cut.InvokeAsync(() =>
+            InvokeTask(cut.Instance, "RestaurantChanged", new ChangeEventArgs { Value = "invalid" })
+        );
+        await cut.InvokeAsync(() =>
+            InvokeTask(
+                cut.Instance,
+                "RestaurantChanged",
+                new ChangeEventArgs { Value = firstId.ToString() }
+            )
+        );
+        await cut.InvokeAsync(() =>
+            InvokeTask(
+                cut.Instance,
+                "RestaurantChanged",
+                new ChangeEventArgs { Value = Guid.NewGuid().ToString() }
+            )
+        );
+        Assert.Equal(pathsBeforeIgnoredChanges, handler.Paths.Count);
+        Assert.Equal(firstId, GetField<Guid>(cut.Instance, "restaurantId"));
+
         await cut.InvokeAsync(() =>
             InvokeTask(
                 cut.Instance,
@@ -79,6 +100,125 @@ public sealed class PosHomeRenderingTests : BunitContext
             secondTable.Id,
             Assert.Single(GetField<List<TableResponse>>(cut.Instance, "tables")).Id
         );
+    }
+
+    [Fact]
+    public async Task Login_error_fragment_shows_authorization_guidance()
+    {
+        HttpClient http = new(new ProviderSettingsHandler())
+        {
+            BaseAddress = new Uri("https://test.local"),
+        };
+        PosApi api = new(http);
+        Services.AddSingleton(api);
+        Services.AddSingleton(new OrderRealtimeClient(http, api));
+        Services.AddSingleton(new CatalogRealtimeClient(http, api));
+        Services.AddSingleton<IJSRuntime, EmptyJsRuntime>();
+        NavigationManager navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(navigation.BaseUri + "#other=value&login_error=access_denied");
+
+        IRenderedComponent<PosHome> cut = Render<PosHome>();
+        cut.WaitForState(() => !GetField<bool>(cut.Instance, "initializing"));
+
+        Assert.Contains(
+            "La cuenta no está autorizada o el proveedor rechazó el acceso.",
+            GetField<string>(cut.Instance, "message")
+        );
+    }
+
+    [Fact]
+    public async Task LoadRestaurants_rejects_users_without_any_pos_restaurant()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        IRenderedComponent<PosHome> cut = await RenderTakeaway(
+            restaurantId,
+            [],
+            new EmptyAccessibleRestaurantsHandler()
+        );
+
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () =>
+                cut.InvokeAsync(() => InvokeTask(cut.Instance, "LoadRestaurants"))
+        );
+
+        Assert.Equal(
+            "El usuario no tiene permisos para operar el TPV en ningún local.",
+            exception.Message
+        );
+    }
+
+    [Fact]
+    public async Task Realtime_connection_failure_keeps_pos_loaded_and_reports_degraded_updates()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        IRenderedComponent<PosHome> cut = await RenderTakeaway(restaurantId, []);
+
+        await cut.InvokeAsync(() => InvokeTask(cut.Instance, "ConnectRealtimeAsync"));
+
+        Assert.Contains(
+            "Datos cargados, pero sin actualización en tiempo real:",
+            GetField<string>(cut.Instance, "message")
+        );
+    }
+
+    [Fact]
+    public async Task Logout_removes_authentication_and_clears_restaurant_operational_state()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        IRenderedComponent<PosHome> cut = await RenderTakeaway(restaurantId, []);
+        PosApi api = Services.GetRequiredService<PosApi>();
+        CancellationTokenSource reconciliation = new();
+        CancellationTokenSource kitchenClockRefresh = new();
+        api.AccessToken = "session-token";
+        SetField(cut.Instance, "reconciliation", reconciliation);
+        SetField(cut.Instance, "kitchenClockRefresh", kitchenClockRefresh);
+        SetField(
+            cut.Instance,
+            "tables",
+            new List<TableResponse>
+            {
+                new(
+                    Guid.NewGuid(),
+                    restaurantId,
+                    "M1",
+                    "Mesa 1",
+                    true,
+                    "Available",
+                    null,
+                    Guid.NewGuid(),
+                    "Sala",
+                    1
+                ),
+            }
+        );
+        SetField(cut.Instance, "selectedZoneId", Guid.NewGuid());
+        SetField(cut.Instance, "pickupView", true);
+
+        await cut.InvokeAsync(() => Invoke(cut.Instance, "Logout"));
+
+        Assert.Null(api.AccessToken);
+        Assert.Null(GetField<LoginResponse?>(cut.Instance, "login"));
+        Assert.Empty(GetField<List<RestaurantResponse>>(cut.Instance, "restaurants"));
+        Assert.Empty(GetField<List<TableResponse>>(cut.Instance, "tables"));
+        Assert.Null(GetField<Guid?>(cut.Instance, "selectedZoneId"));
+        Assert.False(GetField<bool>(cut.Instance, "pickupView"));
+        Assert.True(reconciliation.IsCancellationRequested);
+        Assert.True(kitchenClockRefresh.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task Login_button_navigates_to_pos_auth_return_path()
+    {
+        IRenderedComponent<PosHome> cut = await RenderTakeaway(
+            Guid.NewGuid(),
+            [],
+            new ProviderSettingsHandler()
+        );
+        NavigationManager navigation = Services.GetRequiredService<NavigationManager>();
+
+        await cut.InvokeAsync(() => InvokeVoid(cut.Instance, "StartLogin", "Microsoft"));
+
+        Assert.Contains("/api/identity/auth/start/Microsoft?returnPath=%2Fpos%2F", navigation.Uri);
     }
 
     [Theory]
@@ -334,6 +474,10 @@ public sealed class PosHomeRenderingTests : BunitContext
         cut.Find(".product-tile").Click();
         Assert.True(cut.Find(".extras-card button.primary").HasAttribute("disabled"));
         cut.FindAll(".extra-option .stepper button")[1].Click();
+        cut.FindAll(".extra-option .stepper button")[1].Click();
+        cut.FindAll(".extra-option .stepper button")[1].Click();
+        Assert.Equal("2", cut.FindAll(".extra-option .stepper span")[0].TextContent);
+        cut.FindAll(".extra-option .stepper button")[0].Click();
         Assert.False(cut.Find(".extras-card button.primary").HasAttribute("disabled"));
         cut.Find(".extras-card button.primary").Click();
         Assert.Contains("1 × Queso", cut.Markup);
@@ -428,16 +572,30 @@ public sealed class PosHomeRenderingTests : BunitContext
         Assert.Contains("8,00 €", cut.Find(".product-tile").TextContent);
         cut.FindAll(".format-tabs button").Single(button => button.TextContent == "Tapa").Click();
         Assert.Contains("4,00 €", cut.Find(".product-tile").TextContent);
+
+        for (int quantity = 0; quantity < 100; quantity++)
+        {
+            await cut.Find(".product-tile").ClickAsync();
+        }
+
+        PosCartLine cartLine = Assert.Single(GetField<List<PosCartLine>>(cut.Instance, "cart"));
+        Assert.Equal(99, cartLine.Quantity);
+        Assert.Equal("TAPA", cartLine.Format);
+        Assert.Equal(4m, cartLine.ExpectedUnitPrice);
+
+        await cut.Find(".ticket-lines article .stepper button:last-child").ClickAsync();
+        Assert.Equal(99, cartLine.Quantity);
     }
 
     [Fact]
     public async Task Payment_dialog_calculates_change_and_requires_exact_amount_for_transfer()
     {
         Guid restaurantId = Guid.NewGuid();
-        SessionBillResponse bill = Bill(restaurantId);
+        SessionBillResponse bill = Bill(restaurantId) with { GuestCount = 2 };
         IRenderedComponent<PosHome> cut = await RenderPayment(restaurantId, bill);
 
         cut.Find(".session-bill-card .bill-actions button.primary").Click();
+        Assert.Contains("2 comensales", cut.Find(".payment-dialog .bill-guest-count").TextContent);
         Assert.True(
             cut.Find(".payment-dialog .bill-actions button.primary").HasAttribute("disabled")
         );
@@ -471,6 +629,35 @@ public sealed class PosHomeRenderingTests : BunitContext
     }
 
     [Fact]
+    public async Task Payment_dialog_opens_only_for_a_chargeable_bill_and_cannot_close_while_busy()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        SessionBillResponse bill = Bill(restaurantId);
+        IRenderedComponent<PosHome> cut = await RenderPayment(restaurantId, bill);
+
+        SetField(cut.Instance, "busy", true);
+        await cut.InvokeAsync(() => InvokeVoid(cut.Instance, "OpenPaymentDialog"));
+        Assert.False(GetField<bool>(cut.Instance, "paymentDialogOpen"));
+
+        SetField(cut.Instance, "busy", false);
+        SetField(cut.Instance, "bill", bill with { Outstanding = 0m, CanCheckout = false });
+        await cut.InvokeAsync(() => InvokeVoid(cut.Instance, "OpenPaymentDialog"));
+        Assert.False(GetField<bool>(cut.Instance, "paymentDialogOpen"));
+
+        SetField(cut.Instance, "bill", bill);
+        await cut.InvokeAsync(() => InvokeVoid(cut.Instance, "OpenPaymentDialog"));
+        Assert.True(GetField<bool>(cut.Instance, "paymentDialogOpen"));
+
+        SetField(cut.Instance, "busy", true);
+        await cut.InvokeAsync(() => InvokeVoid(cut.Instance, "ClosePaymentDialog"));
+        Assert.True(GetField<bool>(cut.Instance, "paymentDialogOpen"));
+
+        SetField(cut.Instance, "busy", false);
+        await cut.InvokeAsync(() => InvokeVoid(cut.Instance, "ClosePaymentDialog"));
+        Assert.False(GetField<bool>(cut.Instance, "paymentDialogOpen"));
+    }
+
+    [Fact]
     public async Task Discount_dialog_rejects_invalid_values_and_applies_or_removes_discount()
     {
         Guid restaurantId = Guid.NewGuid();
@@ -491,6 +678,11 @@ public sealed class PosHomeRenderingTests : BunitContext
         Assert.Contains("no superar el 99,99", cut.Markup);
         Assert.Equal(0, handler.Updates);
 
+        cut.Find("#discount-percentage-input").Change("no es un número");
+        cut.Find(".discount-dialog button.primary").Click();
+        Assert.Contains("Indica un porcentaje válido", cut.Markup);
+        Assert.Equal(0, handler.Updates);
+
         cut.Find("#discount-percentage-input").Change("12.5");
         cut.Find(".discount-dialog button.primary").Click();
         Assert.Equal(12.5m, handler.LastPercentage);
@@ -503,6 +695,273 @@ public sealed class PosHomeRenderingTests : BunitContext
         cut.Find(".discount-dialog .discount-no-discount").Click();
         Assert.Equal(0m, handler.LastPercentage);
         Assert.Contains("Descuento quitado", cut.Markup);
+
+        cut.FindAll(".session-bill-card .bill-actions button")
+            .Single(button => button.TextContent == "Descuento")
+            .Click();
+        cut.Find(".discount-dialog button.ghost").Click();
+        Assert.False(GetField<bool>(cut.Instance, "discountDialogOpen"));
+        Assert.Equal(2, handler.Updates);
+    }
+
+    [Fact]
+    public async Task Applying_discount_skips_invalid_busy_or_missing_session_and_handles_noop()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        SessionBillResponse bill = Bill(restaurantId);
+        DiscountHandler handler = new(bill);
+        IRenderedComponent<PosHome> cut = await RenderPayment(restaurantId, bill, handler);
+        Guid originalBillId = GetField<SessionBillResponse>(cut.Instance, "bill").Id;
+
+        SetField(cut.Instance, "busy", true);
+        await cut.InvokeAsync(() => InvokeTask(cut.Instance, "ApplyDiscountPercentage", 10m));
+        Assert.Equal(0, handler.Updates);
+        Assert.Equal(originalBillId, GetField<SessionBillResponse>(cut.Instance, "bill").Id);
+
+        SetField(cut.Instance, "busy", false);
+        await cut.InvokeAsync(() => InvokeTask(cut.Instance, "ApplyDiscountPercentage", -1m));
+        await cut.InvokeAsync(() => InvokeTask(cut.Instance, "ApplyDiscountPercentage", 100m));
+        Assert.Equal(0, handler.Updates);
+
+        SetField(cut.Instance, "session", null!);
+        await cut.InvokeAsync(() => InvokeTask(cut.Instance, "ApplyDiscountPercentage", 10m));
+        Assert.Equal(0, handler.Updates);
+
+        SetField(
+            cut.Instance,
+            "session",
+            new DiningSessionResponse(bill.Id, restaurantId, bill.TableId, "Pos", "Open", [])
+        );
+        SetField(cut.Instance, "discountDialogOpen", true);
+        await cut.InvokeAsync(() => InvokeTask(cut.Instance, "ApplyDiscountPercentage", 0m));
+
+        Assert.Equal(0, handler.Updates);
+        Assert.False(GetField<bool>(cut.Instance, "discountDialogOpen"));
+        Assert.True(GetField<bool>(cut.Instance, "success"));
+        Assert.Equal(
+            "No hay ningún descuento aplicado.",
+            GetField<string>(cut.Instance, "message")
+        );
+    }
+
+    [Fact]
+    public async Task Location_screen_renders_pickup_states_and_table_session_snapshots()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        Guid pickupId = Guid.NewGuid();
+        Guid zoneId = Guid.NewGuid();
+        Guid tableId = Guid.NewGuid();
+        Guid sessionId = Guid.NewGuid();
+        DateTime submittedAt = DateTime.UtcNow.AddMinutes(-4);
+        IRenderedComponent<PosHome> cut = await RenderTakeaway(restaurantId, []);
+        OrderResponse pickup = new(
+            pickupId,
+            restaurantId,
+            null,
+            null,
+            "Ana",
+            "Takeaway",
+            "OnAccount",
+            "Submitted",
+            12m,
+            submittedAt
+        );
+
+        SetField(cut.Instance, "takeawayOpen", false);
+        SetField(cut.Instance, "pickupView", true);
+        SetField(cut.Instance, "pickupOrders", new List<OrderResponse> { pickup });
+        SetField(
+            cut.Instance,
+            "pickupPaymentStatuses",
+            new Dictionary<Guid, string> { [pickupId] = "Paid" }
+        );
+        cut.Render();
+        Assert.Contains("Ana", cut.Markup);
+        Assert.Contains("Pagado", cut.Markup);
+        SetField(cut.Instance, "pickupPaymentStatuses", new Dictionary<Guid, string>());
+        cut.Render();
+        Assert.Contains("Sin sincronizar", cut.Markup);
+
+        SetField(cut.Instance, "pickupOrders", new List<OrderResponse>());
+        cut.Render();
+        Assert.Contains("No hay pedidos pendientes de recogida", cut.Markup);
+
+        TableResponse table = new(
+            tableId,
+            restaurantId,
+            "M1",
+            "Mesa 1",
+            true,
+            "Occupied",
+            sessionId,
+            zoneId,
+            "Terraza",
+            1,
+            2
+        );
+        OrderResponse activeOrder = new(
+            Guid.NewGuid(),
+            restaurantId,
+            tableId,
+            sessionId,
+            string.Empty,
+            "DineIn",
+            "OnAccount",
+            "Submitted",
+            18m,
+            submittedAt,
+            submittedAt,
+            [new OrderStationProgressResponse("BAR", "Barra", "InPreparation")]
+        );
+        SetField(cut.Instance, "pickupView", false);
+        SetField(cut.Instance, "selectedZoneId", zoneId);
+        SetField(cut.Instance, "tables", new List<TableResponse> { table });
+        SetField(cut.Instance, "activeOrders", new List<OrderResponse> { activeOrder });
+
+        cut.Render();
+        Assert.Contains("Actualizando comandas", cut.Markup);
+        IDictionary snapshots = GetField<IDictionary>(cut.Instance, "tableSessionOrderSnapshots");
+        Type snapshotType = typeof(PosHome).GetNestedType(
+            "TableSessionOrderSnapshot",
+            BindingFlags.NonPublic
+        )!;
+        ConstructorInfo snapshotConstructor = snapshotType.GetConstructors(
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic
+        )[0];
+        snapshots[tableId] = snapshotConstructor.Invoke([
+            sessionId,
+            "CustomerQr",
+            new List<DiningSessionOrderResponse> { new(Guid.NewGuid(), "Submitted", "Paid", 18m) },
+            true,
+        ]);
+        cut.Render();
+
+        Assert.Contains("QR", cut.Markup);
+        Assert.Contains("Submitted", cut.Markup);
+        Assert.Contains("Paid", cut.Markup);
+        Assert.Contains("2 comensales", cut.Markup);
+        Assert.Contains("Tiempo desde el envío a cocina", cut.Markup);
+
+        snapshots[tableId] = snapshotConstructor.Invoke([
+            sessionId,
+            "Comandero",
+            new List<DiningSessionOrderResponse>(),
+            false,
+        ]);
+        cut.Render();
+        Assert.Contains("Estado de comandas no disponible", cut.Markup);
+
+        snapshots[tableId] = snapshotConstructor.Invoke([
+            sessionId,
+            "Pos",
+            new List<DiningSessionOrderResponse>(),
+            true,
+        ]);
+        cut.Render();
+        Assert.Contains("1 en cola", cut.Markup);
+        SetField(cut.Instance, "tables", new List<TableResponse>());
+        SetField(cut.Instance, "selectedZoneId", zoneId);
+        cut.Render();
+        Assert.Contains("No hay ubicaciones para este filtro", cut.Markup);
+
+        SetField(cut.Instance, "selectedZoneId", null);
+        cut.Render();
+        Assert.Contains("No hay sectores configurados", cut.Markup);
+
+        SetField(cut.Instance, "tables", new List<TableResponse> { table });
+        cut.Render();
+        Assert.Contains("Selecciona un sector", cut.Markup);
+    }
+
+    [Fact]
+    public async Task Cash_panel_and_close_ticket_render_payment_and_movement_reconciliation()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        DateTime openedAt = DateTime.UtcNow.AddHours(-4);
+        DateTime closedAt = DateTime.UtcNow;
+        List<CashMovementResponse> movements =
+        [
+            new(
+                Guid.NewGuid(),
+                "Income",
+                "Cash",
+                10m,
+                "Cambio caja",
+                openedAt,
+                "Aportación de caja",
+                "Cajera"
+            ),
+            new(
+                Guid.NewGuid(),
+                "Expense",
+                "Card",
+                5m,
+                "Papel térmico",
+                openedAt,
+                "Compra de suministros",
+                "Cajera"
+            ),
+        ];
+        CashRegisterResponse cashRegister = new(
+            Guid.NewGuid(),
+            restaurantId,
+            DateOnly.FromDateTime(DateTime.Today),
+            "Open",
+            100m,
+            300m,
+            200m,
+            10m,
+            5m,
+            300m,
+            305m,
+            304m,
+            199m,
+            -1m,
+            openedAt,
+            "Cajera",
+            null,
+            null,
+            [new("Cash", 200m), new("Card", 100m)],
+            [new("Cash", 205m), new("Card", 100m)],
+            [],
+            movements
+        );
+        IRenderedComponent<PosHome> cut = await RenderTakeaway(restaurantId, []);
+        SetField(cut.Instance, "cashRegister", cashRegister);
+        SetField(cut.Instance, "cashPanelOpen", true);
+        SetField(
+            cut.Instance,
+            "reconciliationAmounts",
+            new Dictionary<string, decimal> { ["Cash"] = 205m, ["Card"] = 100m }
+        );
+        cut.Render();
+
+        Assert.Contains("200,00 €", cut.Markup);
+        Assert.Contains("Tarjeta / datáfono · esperado 100,00 €", cut.Markup);
+        Assert.Contains("Diferencia total provisional", cut.Markup);
+
+        SetField(cut.Instance, "cashCloseTicketOpen", true);
+        SetField(
+            cut.Instance,
+            "cashRegister",
+            cashRegister with
+            {
+                Status = "Closed",
+                ClosedAtUtc = closedAt,
+                ClosedByName = "Encargado",
+                Difference = -1m,
+                Reconciliations = [new("Cash", 205m, 204m, -1m), new("Card", 100m, 100m, 0m)],
+            }
+        );
+        cut.Render();
+
+        Assert.Contains("Arqueo cerrado", cut.Markup);
+        Assert.Contains("Cambio caja", cut.Markup);
+        Assert.Contains("Compra de suministros · Papel térmico", cut.Markup);
+        Assert.Contains("Ingreso · Efectivo", cut.Markup);
+        Assert.Contains("Egreso · Tarjeta / datáfono", cut.Markup);
+        Assert.Contains("Descuadre total", cut.Markup);
+        Assert.Contains("Encargado", cut.Markup);
     }
 
     [Fact]
@@ -558,6 +1017,17 @@ public sealed class PosHomeRenderingTests : BunitContext
         await cut.InvokeAsync(() => InvokeVoid(cut.Instance, "PressPaymentKey", "Borrar"));
         Assert.Equal("0", GetField<string>(cut.Instance, "keypadText"));
         Assert.Equal(0m, GetField<decimal>(cut.Instance, "currentChargeAmount"));
+
+        SetField(cut.Instance, "paymentMethod", "Transfer");
+        SetField(cut.Instance, "keypadTarget", "Tip");
+        SetField(cut.Instance, "keypadText", "0");
+        SetField(cut.Instance, "keypadStartNew", true);
+        await cut.InvokeAsync(() => InvokeVoid(cut.Instance, "PressPaymentKey", "x"));
+        Assert.Equal("0", GetField<string>(cut.Instance, "keypadText"));
+
+        await cut.InvokeAsync(() => InvokeVoid(cut.Instance, "PressPaymentKey", "5"));
+        Assert.Equal(5m, GetField<decimal>(cut.Instance, "tipAmount"));
+        Assert.True(GetField<bool>(cut.Instance, "tipAmountManuallyEdited"));
     }
 
     [Fact]
@@ -602,6 +1072,39 @@ public sealed class PosHomeRenderingTests : BunitContext
             "Debes abrir la caja antes de registrar el cobro",
             GetField<string>(cut.Instance, "message")
         );
+
+        SetField(
+            cut.Instance,
+            "cashRegister",
+            new CashRegisterResponse(
+                Guid.NewGuid(),
+                restaurantId,
+                DateOnly.FromDateTime(DateTime.Today),
+                "Open",
+                0m,
+                0m,
+                0m,
+                0m,
+                0m,
+                0m,
+                0m,
+                null,
+                null,
+                null,
+                DateTime.UtcNow,
+                "Cajero",
+                null,
+                null,
+                [],
+                [],
+                [],
+                []
+            )
+        );
+        SetField(cut.Instance, "paymentMethod", "Cash");
+        SetField(cut.Instance, "currentChargeAmount", 0m);
+        await cut.InvokeAsync(() => Invoke(cut.Instance, "CheckoutSession"));
+        Assert.Null(handler.CheckoutRequest);
     }
 
     [Fact]
@@ -828,16 +1331,61 @@ public sealed class PosHomeRenderingTests : BunitContext
                 []
             )
         );
+        OrderRealtimeNotification unrelatedOrder = new(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "Ready",
+            1,
+            DateTime.UtcNow,
+            []
+        );
+        await cut.InvokeAsync(() => InvokeTask(cut.Instance, "HandleOrderUpdated", unrelatedOrder));
+        await cut.InvokeAsync(() =>
+            InvokeTask(cut.Instance, "HandleDiningTableUpdated", Guid.NewGuid())
+        );
+        Assert.Null(GetField<CancellationTokenSource?>(cut.Instance, "realtimeRefresh"));
+
         await (Task)schedule.Invoke(cut.Instance, [Guid.NewGuid()])!;
         Assert.Null(GetField<CancellationTokenSource?>(cut.Instance, "realtimeRefresh"));
 
-        await (Task)schedule.Invoke(cut.Instance, [restaurantId])!;
+        OrderRealtimeNotification matchingOrder = unrelatedOrder with
+        {
+            RestaurantId = restaurantId,
+        };
+        await cut.InvokeAsync(() => InvokeTask(cut.Instance, "HandleOrderUpdated", matchingOrder));
         await Task.Delay(500, Xunit.TestContext.Current.CancellationToken);
         Assert.Contains(
             handler.Paths,
             path => path == $"/api/dining/restaurants/{restaurantId}/tables"
         );
         Assert.Contains(handler.Paths, path => path == "/api/orders/pos");
+    }
+
+    [Fact]
+    public async Task Realtime_refresh_is_silent_when_cancelled_and_reports_failed_table_reads()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        OperationalRefreshHandler handler = new(restaurantId) { FailTables = true };
+        IRenderedComponent<PosHome> cut = await RenderTakeaway(restaurantId, [], handler);
+        MethodInfo refresh = typeof(PosHome).GetMethod(
+            "RefreshAfterOrderEventAsync",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        )!;
+        using CancellationTokenSource cancelled = new();
+        cancelled.Cancel();
+        string? initialMessage = GetField<string?>(cut.Instance, "message");
+
+        await cut.InvokeAsync(() =>
+            InvokeTask(cut.Instance, "RefreshAfterOrderEventAsync", cancelled.Token)
+        );
+
+        Assert.Equal(initialMessage, GetField<string?>(cut.Instance, "message"));
+        await cut.InvokeAsync(() => (Task)refresh.Invoke(cut.Instance, [CancellationToken.None])!);
+
+        Assert.Contains(
+            "No se pudo actualizar el TPV en tiempo real",
+            GetField<string>(cut.Instance, "message")
+        );
     }
 
     [Fact]
@@ -999,12 +1547,112 @@ public sealed class PosHomeRenderingTests : BunitContext
 
         await cut.InvokeAsync(() => Invoke(cut.Instance, "LoadVisibleTableSessionOrdersAsync"));
 
+        cut.Render();
+        Assert.Contains("Actualizando comandas", cut.Markup);
         IDictionary snapshots = GetField<IDictionary>(cut.Instance, "tableSessionOrderSnapshots");
         Assert.Equal(2, snapshots.Count);
         Assert.True(snapshots.Contains(currentTableId));
         Assert.True(snapshots.Contains(failedTableId));
         Assert.False(snapshots.Contains(staleTableId));
         Assert.False(snapshots.Contains(availableTableId));
+
+        SetField(cut.Instance, "takeawayOpen", true);
+        await cut.InvokeAsync(() => Invoke(cut.Instance, "LoadVisibleTableSessionOrdersAsync"));
+        Assert.Equal(2, snapshots.Count);
+    }
+
+    [Fact]
+    public async Task Visible_table_session_reads_discard_results_after_zone_changes()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        Guid originalZoneId = Guid.NewGuid();
+        Guid activeSessionId = Guid.NewGuid();
+        Guid tableId = Guid.NewGuid();
+        DelayedVisibleSessionHandler handler = new(restaurantId, tableId, activeSessionId);
+        IRenderedComponent<PosHome> cut = await RenderTakeaway(restaurantId, [], handler);
+        SetField(cut.Instance, "takeawayOpen", false);
+        SetField(cut.Instance, "serviceMode", "DineIn");
+        SetField(cut.Instance, "selectedZoneId", originalZoneId);
+        SetField(
+            cut.Instance,
+            "tables",
+            new List<TableResponse>
+            {
+                new(
+                    tableId,
+                    restaurantId,
+                    "M1",
+                    "Mesa 1",
+                    true,
+                    "Occupied",
+                    activeSessionId,
+                    originalZoneId,
+                    "Sala",
+                    1
+                ),
+            }
+        );
+
+        Task load = cut.InvokeAsync(() =>
+            Invoke(cut.Instance, "LoadVisibleTableSessionOrdersAsync")
+        );
+        await handler.RequestStarted.Task.WaitAsync(
+            TimeSpan.FromSeconds(5),
+            Xunit.TestContext.Current.CancellationToken
+        );
+        await cut.InvokeAsync(() => SetField(cut.Instance, "selectedZoneId", Guid.NewGuid()));
+        handler.CompleteRequest();
+        await load;
+
+        Assert.Empty(GetField<IDictionary>(cut.Instance, "tableSessionOrderSnapshots"));
+        Assert.Equal(1, handler.RequestCount);
+
+        SetField(cut.Instance, "selectedZoneId", null!);
+        await cut.InvokeAsync(() => Invoke(cut.Instance, "LoadVisibleTableSessionOrdersAsync"));
+
+        Assert.Empty(GetField<IDictionary>(cut.Instance, "tableSessionOrderSnapshots"));
+        Assert.Equal(1, handler.RequestCount);
+    }
+
+    [Fact]
+    public async Task Table_refresh_preserves_an_available_zone_and_resets_a_removed_zone_filter()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        Guid selectedZoneId = Guid.NewGuid();
+        IRenderedComponent<PosHome> cut = await RenderTakeaway(restaurantId, []);
+        TableResponse table = new(
+            Guid.NewGuid(),
+            restaurantId,
+            "M1",
+            "Mesa 1",
+            true,
+            "Occupied",
+            Guid.NewGuid(),
+            selectedZoneId,
+            "Sala",
+            1
+        );
+        SetField(cut.Instance, "selectedZoneId", selectedZoneId);
+        SetField(cut.Instance, "tableFilter", "Occupied");
+
+        await cut.InvokeAsync(() =>
+            InvokeVoid(cut.Instance, "SetTables", new List<TableResponse> { table })
+        );
+
+        Assert.Equal(selectedZoneId, GetField<Guid?>(cut.Instance, "selectedZoneId"));
+        Assert.Equal("Occupied", GetField<string>(cut.Instance, "tableFilter"));
+        Assert.Equal(table, Assert.Single(GetField<List<TableResponse>>(cut.Instance, "tables")));
+
+        await cut.InvokeAsync(() =>
+            InvokeVoid(
+                cut.Instance,
+                "SetTables",
+                new List<TableResponse> { table with { ZoneId = Guid.NewGuid() } }
+            )
+        );
+
+        Assert.Null(GetField<Guid?>(cut.Instance, "selectedZoneId"));
+        Assert.Equal("All", GetField<string>(cut.Instance, "tableFilter"));
     }
 
     [Fact]
@@ -1158,6 +1806,23 @@ public sealed class PosHomeRenderingTests : BunitContext
     }
 
     [Fact]
+    public async Task Opening_cash_register_reports_api_failure_without_losing_the_float()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        IRenderedComponent<PosHome> cut = await RenderTakeaway(restaurantId, []);
+        SetField(cut.Instance, "cashPanelOpen", true);
+        SetField(cut.Instance, "openingFloat", 25m);
+
+        await cut.InvokeAsync(() => Invoke(cut.Instance, "OpenDailyCashRegister"));
+
+        Assert.Equal(25m, GetField<decimal>(cut.Instance, "openingFloat"));
+        Assert.True(GetField<bool>(cut.Instance, "cashPanelOpen"));
+        Assert.False(GetField<bool>(cut.Instance, "busy"));
+        Assert.False(GetField<bool>(cut.Instance, "success"));
+        Assert.Contains("API 404", GetField<string>(cut.Instance, "message"));
+    }
+
+    [Fact]
     public async Task Takeaway_requires_an_open_register_and_starts_with_a_fresh_menu_and_cart()
     {
         Guid restaurantId = Guid.NewGuid();
@@ -1286,7 +1951,8 @@ public sealed class PosHomeRenderingTests : BunitContext
                 2m,
                 true,
                 "BAR",
-                "Bar"
+                "Bar",
+                PhotoSmallUrl: "/media/cafe-small.jpg"
             )
         );
         IRenderedComponent<PosHome> cut = await RenderTakeaway(restaurantId, [], handler);
@@ -1300,6 +1966,7 @@ public sealed class PosHomeRenderingTests : BunitContext
             "Café",
             Assert.Single(GetField<List<MenuItemResponse>>(cut.Instance, "menu")).ProductName
         );
+        Assert.Equal("/media/cafe-small.jpg", cut.Find(".product-tile img").GetAttribute("src"));
         Assert.Equal(1, handler.MenuReads);
 
         SetField(cut.Instance, "takeawayOpen", false);
@@ -1429,6 +2096,64 @@ public sealed class PosHomeRenderingTests : BunitContext
     }
 
     [Fact]
+    public async Task Refreshing_pickup_orders_updates_the_open_pickup_payment_projection()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        Guid orderId = Guid.NewGuid();
+        OrderResponse pickup = new(
+            orderId,
+            restaurantId,
+            null,
+            null,
+            "Ana",
+            "Takeaway",
+            "OnAccount",
+            "Submitted",
+            12m,
+            DateTime.UtcNow
+        );
+        OrderLineDetailResponse line = new(
+            Guid.NewGuid(),
+            "Bocadillo",
+            12m,
+            1,
+            12m,
+            "COCINA",
+            "Cocina",
+            "Active",
+            null,
+            "",
+            KitchenStatus: "Pending"
+        );
+        PickupLifecycleHandler handler = new(restaurantId, pickup, line);
+        IRenderedComponent<PosHome> cut = await RenderTakeaway(restaurantId, [], handler);
+        SetField(cut.Instance, "pickupBillOpen", true);
+        SetField(cut.Instance, "selectedPickup", pickup);
+
+        await cut.InvokeAsync(() => Invoke(cut.Instance, "LoadPickupOrdersCore"));
+
+        Assert.Equal(
+            orderId,
+            Assert.Single(GetField<List<OrderResponse>>(cut.Instance, "pickupOrders")).Id
+        );
+        Assert.Equal("Open", GetField<string>(cut.Instance, "pickupPaymentStatus"));
+        Assert.Equal(
+            "Open",
+            GetField<Dictionary<Guid, string>>(cut.Instance, "pickupPaymentStatuses")[orderId]
+        );
+        Assert.Equal("Submitted", GetField<OrderResponse>(cut.Instance, "selectedPickup").Status);
+        Assert.IsType<OrderDetailResponse>(
+            GetField<OrderDetailResponse?>(cut.Instance, "pickupDetail")
+        );
+        Assert.Equal(
+            2,
+            handler.Paths.Count(path =>
+                path.StartsWith("/api/payments/restaurants/", StringComparison.Ordinal)
+            )
+        );
+    }
+
+    [Fact]
     public async Task Pickup_can_be_opened_paid_and_delivered_from_its_detail()
     {
         Guid restaurantId = Guid.NewGuid();
@@ -1494,6 +2219,10 @@ public sealed class PosHomeRenderingTests : BunitContext
                     [GetField<OrderDetailResponse>(cut.Instance, "pickupDetail").Lines.Single()]
                 )!
         );
+        await cut.InvokeAsync(() => Invoke(cut.Instance, "CapturePickup"));
+        Assert.Equal("Open", GetField<string>(cut.Instance, "pickupPaymentStatus"));
+        Assert.Contains("Debes abrir la caja", GetField<string>(cut.Instance, "message"));
+
         SetField(
             cut.Instance,
             "cashRegister",
@@ -1526,6 +2255,14 @@ public sealed class PosHomeRenderingTests : BunitContext
         await cut.InvokeAsync(() => Invoke(cut.Instance, "CapturePickup"));
         Assert.Equal("Paid", GetField<string>(cut.Instance, "pickupPaymentStatus"));
         Assert.True(GetField<bool>(cut.Instance, "success"));
+        int captureRequests = handler.Paths.Count(path =>
+            path.EndsWith("/capture", StringComparison.Ordinal)
+        );
+        await cut.InvokeAsync(() => Invoke(cut.Instance, "CapturePickup"));
+        Assert.Equal(
+            captureRequests,
+            handler.Paths.Count(path => path.EndsWith("/capture", StringComparison.Ordinal))
+        );
 
         await cut.InvokeAsync(() => Invoke(cut.Instance, "DeliverPickup"));
         Assert.False(GetField<bool>(cut.Instance, "pickupBillOpen"));
@@ -1533,6 +2270,60 @@ public sealed class PosHomeRenderingTests : BunitContext
         Assert.Contains("Pedido entregado", GetField<string>(cut.Instance, "message"));
         Assert.Contains(handler.Paths, path => path.EndsWith("/capture", StringComparison.Ordinal));
         Assert.Contains(handler.Paths, path => path.EndsWith("/deliver", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Cancelling_a_pickup_line_stops_when_the_reason_is_blank_or_confirmation_is_denied()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        OrderResponse pickup = new(
+            Guid.NewGuid(),
+            restaurantId,
+            null,
+            null,
+            "Ana",
+            "Takeaway",
+            "OnAccount",
+            "Submitted",
+            12m,
+            DateTime.UtcNow
+        );
+        OrderLineDetailResponse line = new(
+            Guid.NewGuid(),
+            "Bocadillo",
+            12m,
+            1,
+            12m,
+            "KITCHEN",
+            "Cocina",
+            "Active",
+            null,
+            string.Empty,
+            "Pending"
+        );
+        PickupLifecycleHandler handler = new(restaurantId, pickup, line);
+        PickupJsRuntime js = new() { PromptResult = "   " };
+        IRenderedComponent<PosHome> cut = await RenderTakeaway(restaurantId, [], handler, js);
+        await cut.InvokeAsync(() => InvokeTask(cut.Instance, "CancelPickupLine", line));
+        Assert.Equal(0, js.ConfirmationCount);
+        await cut.InvokeAsync(() => InvokeTask(cut.Instance, "OpenPickup", pickup));
+
+        await cut.InvokeAsync(() => InvokeTask(cut.Instance, "CancelPickupLine", line));
+        Assert.DoesNotContain(
+            handler.Paths,
+            path => path.EndsWith("/cancel", StringComparison.Ordinal)
+        );
+        Assert.Equal(0, js.ConfirmationCount);
+
+        js.PromptResult = "Cliente cambió de opinión";
+        js.Confirmation = false;
+        await cut.InvokeAsync(() => InvokeTask(cut.Instance, "CancelPickupLine", line));
+
+        Assert.Equal(1, js.ConfirmationCount);
+        Assert.DoesNotContain(
+            handler.Paths,
+            path => path.EndsWith("/cancel", StringComparison.Ordinal)
+        );
     }
 
     [Fact]
@@ -1671,6 +2462,56 @@ public sealed class PosHomeRenderingTests : BunitContext
     }
 
     [Fact]
+    public async Task Declining_cash_register_close_keeps_the_open_register_unchanged()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        CashRegisterResponse opened = new(
+            Guid.NewGuid(),
+            restaurantId,
+            DateOnly.FromDateTime(DateTime.Today),
+            "Open",
+            25m,
+            0m,
+            0m,
+            0m,
+            0m,
+            25m,
+            25m,
+            null,
+            null,
+            null,
+            DateTime.UtcNow,
+            "Cajero",
+            null,
+            null,
+            [],
+            [],
+            [],
+            []
+        );
+        ConfirmJsRuntime js = new(false);
+        IRenderedComponent<PosHome> cut = await RenderTakeaway(restaurantId, [], jsRuntime: js);
+        SetField(cut.Instance, "cashRegister", opened);
+        SetField(cut.Instance, "cashPanelOpen", true);
+        MethodInfo close = typeof(PosHome).GetMethod(
+            "CloseDailyCashRegister",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        )!;
+
+        await cut.InvokeAsync(() => (Task)close.Invoke(cut.Instance, null)!);
+        await Rerender(cut);
+
+        Assert.Equal(1, js.ConfirmationCount);
+        Assert.Equal("Open", GetField<CashRegisterResponse>(cut.Instance, "cashRegister").Status);
+        Assert.True(GetField<bool>(cut.Instance, "cashPanelOpen"));
+        Assert.False(GetField<bool>(cut.Instance, "cashCloseTicketOpen"));
+
+        SetField(cut.Instance, "cashRegister", null);
+        await cut.InvokeAsync(() => (Task)close.Invoke(cut.Instance, null)!);
+        Assert.Equal(1, js.ConfirmationCount);
+    }
+
+    [Fact]
     public async Task Creating_cash_income_uses_selected_category_and_resets_the_form()
     {
         Guid restaurantId = Guid.NewGuid();
@@ -1749,7 +2590,7 @@ public sealed class PosHomeRenderingTests : BunitContext
             TipTotal = 3m,
             DiscountPercentage = 10m,
             DiscountAmount = 6m,
-            Orders = [new(orderId, "Delivered", "Pending", 54m, 0m, DateTime.UtcNow)],
+            Orders = [new(orderId, "Delivered", "Pending", 54m, 0m, DateTime.UtcNow, 3m)],
         };
         SaleTicketHandler handler = new(
             new SaleResponse([new SalePaymentBreakdown("Card", 1, 57m)], "Promoción", 10m, 6m)
@@ -1823,6 +2664,11 @@ public sealed class PosHomeRenderingTests : BunitContext
             }
         );
 
+        await Rerender(cut);
+        Assert.Contains("Incluye 3,00 € de propina", cut.Markup);
+        Assert.Contains("Preparando ticket de venta…", cut.Markup);
+        Assert.DoesNotContain("aria-label=\"Ver ticket de venta\"", cut.Markup);
+
         await cut.InvokeAsync(() => InvokeTask(cut.Instance, "RefreshSalesTicketAsync", bill.Id));
         await cut.InvokeAsync(() => Invoke(cut.Instance, "OpenSalesTicket"));
         await Rerender(cut);
@@ -1846,6 +2692,38 @@ public sealed class PosHomeRenderingTests : BunitContext
         await cut.Find("button[aria-label='Cerrar ticket de venta']").ClickAsync();
         Assert.False(GetField<bool>(cut.Instance, "salesTicketOpen"));
         Assert.NotNull(GetField<SaleResponse?>(cut.Instance, "salesTicket"));
+        SetField(
+            cut.Instance,
+            "restaurants",
+            new List<RestaurantResponse>
+            {
+                new(restaurantId, "CENTRO", "Centro", "Calle Mayor 8", true),
+            }
+        );
+        SetField(
+            cut.Instance,
+            "bill",
+            bill with
+            {
+                GuestCount = null,
+                TipTotal = 0m,
+                DiscountPercentage = 0m,
+                DiscountAmount = 0m,
+                PaymentMethod = "Mixed",
+                PaidAtUtc = null,
+            }
+        );
+        SetField(cut.Instance, "salesTicket", new SaleResponse());
+        SetField(cut.Instance, "salesTicketOpen", true);
+        await Rerender(cut);
+
+        string ticketText = cut.Find(".sales-ticket").TextContent;
+        Assert.Contains("Calle Mayor 8", ticketText);
+        Assert.Contains("Sin desglose disponible", ticketText);
+        Assert.DoesNotContain("Restaurantes SL", ticketText);
+        Assert.DoesNotContain("Descuento (", ticketText);
+        Assert.DoesNotContain("Total por comensal", ticketText);
+        Assert.DoesNotContain("Propina", ticketText);
     }
 
     [Fact]
@@ -1880,6 +2758,128 @@ public sealed class PosHomeRenderingTests : BunitContext
     }
 
     [Fact]
+    public async Task Ticket_lookup_error_keeps_ticket_unavailable_and_allows_a_successful_retry()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        SessionBillResponse paidBill = Bill(restaurantId) with
+        {
+            Outstanding = 0m,
+            CanCheckout = false,
+            Orders = [new(Guid.NewGuid(), "Delivered", "Paid", 60m, 60m, DateTime.UtcNow)],
+        };
+        SaleTicketHandler handler = new(new SaleResponse())
+        {
+            FailureStatus = HttpStatusCode.ServiceUnavailable,
+        };
+        IRenderedComponent<PosHome> cut = await RenderPayment(restaurantId, paidBill, handler);
+
+        await cut.InvokeAsync(() =>
+            InvokeTask(cut.Instance, "RefreshSalesTicketAsync", paidBill.Id)
+        );
+        await Rerender(cut);
+
+        Assert.Null(GetField<Guid?>(cut.Instance, "readyTicketSessionId"));
+        Assert.Null(GetField<SaleResponse?>(cut.Instance, "salesTicket"));
+        Assert.False(
+            string.IsNullOrWhiteSpace(GetField<string>(cut.Instance, "ticketAvailabilityError"))
+        );
+        Assert.Contains("No se pudo comprobar el ticket", cut.Markup);
+        Assert.DoesNotContain("aria-label=\"Ver ticket de venta\"", cut.Markup);
+
+        handler.FailureStatus = null;
+        await cut.InvokeAsync(() =>
+            InvokeTask(cut.Instance, "RefreshSalesTicketAsync", paidBill.Id)
+        );
+        await Rerender(cut);
+
+        Assert.Equal(paidBill.Id, GetField<Guid?>(cut.Instance, "readyTicketSessionId"));
+        Assert.Null(GetField<string?>(cut.Instance, "ticketAvailabilityError"));
+        Assert.Contains("aria-label=\"Ver ticket de venta\"", cut.Markup);
+    }
+
+    [Fact]
+    public async Task Ticket_result_for_a_previous_session_is_ignored_after_the_selected_session_changes()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        SessionBillResponse paidBill = Bill(restaurantId) with
+        {
+            Outstanding = 0m,
+            CanCheckout = false,
+            Orders = [new(Guid.NewGuid(), "Delivered", "Paid", 60m, 60m, DateTime.UtcNow)],
+        };
+        DeferredSaleTicketHandler handler = new(new SaleResponse());
+        IRenderedComponent<PosHome> cut = await RenderPayment(restaurantId, paidBill, handler);
+        Task refresh = cut.InvokeAsync(() =>
+            InvokeTask(cut.Instance, "RefreshSalesTicketAsync", paidBill.Id)
+        );
+
+        await handler.SaleRequestStarted.Task.WaitAsync(
+            TimeSpan.FromSeconds(5),
+            Xunit.TestContext.Current.CancellationToken
+        );
+        await cut.InvokeAsync(() =>
+            SetField(
+                cut.Instance,
+                "session",
+                new DiningSessionResponse(
+                    Guid.NewGuid(),
+                    restaurantId,
+                    paidBill.TableId,
+                    "Pos",
+                    "Open",
+                    []
+                )
+            )
+        );
+        handler.CompleteSaleRequest();
+        await refresh;
+
+        Assert.Null(GetField<Guid?>(cut.Instance, "readyTicketSessionId"));
+        Assert.Null(GetField<SaleResponse?>(cut.Instance, "salesTicket"));
+    }
+
+    [Fact]
+    public async Task Ticket_cannot_open_until_the_bill_is_paid_and_its_sale_is_ready()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        SessionBillResponse bill = Bill(restaurantId) with { Outstanding = 1m, CanCheckout = true };
+        IRenderedComponent<PosHome> cut = await RenderPayment(restaurantId, bill);
+        SaleResponse ticket = new();
+
+        SetField(cut.Instance, "salesTicket", ticket);
+        SetField(cut.Instance, "readyTicketSessionId", bill.Id);
+        await cut.InvokeAsync(() => Invoke(cut.Instance, "OpenSalesTicket"));
+        Assert.False(GetField<bool>(cut.Instance, "salesTicketOpen"));
+
+        SetField(
+            cut.Instance,
+            "bill",
+            bill with
+            {
+                Outstanding = 0m,
+                Total = 0m,
+                CanCheckout = false,
+            }
+        );
+        await cut.InvokeAsync(() => Invoke(cut.Instance, "OpenSalesTicket"));
+        Assert.False(GetField<bool>(cut.Instance, "salesTicketOpen"));
+
+        SetField(cut.Instance, "bill", bill with { Outstanding = 0m, CanCheckout = false });
+        SetField(cut.Instance, "readyTicketSessionId", Guid.NewGuid());
+        await cut.InvokeAsync(() => Invoke(cut.Instance, "OpenSalesTicket"));
+        Assert.False(GetField<bool>(cut.Instance, "salesTicketOpen"));
+
+        SetField(cut.Instance, "readyTicketSessionId", bill.Id);
+        SetField(cut.Instance, "salesTicket", null);
+        await cut.InvokeAsync(() => Invoke(cut.Instance, "OpenSalesTicket"));
+        Assert.False(GetField<bool>(cut.Instance, "salesTicketOpen"));
+
+        SetField(cut.Instance, "salesTicket", ticket);
+        await cut.InvokeAsync(() => Invoke(cut.Instance, "OpenSalesTicket"));
+        Assert.True(GetField<bool>(cut.Instance, "salesTicketOpen"));
+    }
+
+    [Fact]
     public async Task Checkout_allocates_partial_payment_only_to_active_unpaid_orders()
     {
         Guid restaurantId = Guid.NewGuid();
@@ -1910,6 +2910,48 @@ public sealed class PosHomeRenderingTests : BunitContext
         Assert.Equal(5m, allocatedOrders[1].GetProperty("amount").GetDecimal());
         Assert.Empty(cut.FindAll(".payment-dialog"));
         Assert.Contains("Pendiente de la cuenta: 30,00 €", cut.Markup);
+    }
+
+    [Fact]
+    public async Task Full_cash_checkout_saves_tip_and_change_and_waits_for_ticket_projection()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        SessionBillResponse bill = Bill(restaurantId);
+        CheckoutHandler handler = new(
+            bill with
+            {
+                Outstanding = 0m,
+                CanCheckout = false,
+                Orders = bill
+                    .Orders.Select(order =>
+                        order with
+                        {
+                            PaymentStatus = "Paid",
+                            AmountPaid = order.Amount,
+                        }
+                    )
+                    .ToList(),
+            }
+        );
+        IRenderedComponent<PosHome> cut = await RenderPayment(restaurantId, bill, handler);
+
+        cut.Find(".session-bill-card .bill-actions button.primary").Click();
+        cut.FindAll(".payment-methods button")
+            .Single(button => button.TextContent == "Efectivo")
+            .Click();
+        cut.Find(".payment-exact").Click();
+        cut.FindAll(".tip-options button").Single(button => button.TextContent == "10%").Click();
+        cut.Find(".payment-keypad button[aria-label='7']").Click();
+        cut.Find(".payment-keypad button[aria-label='0']").Click();
+        cut.Find(".payment-dialog .bill-actions button.primary").Click();
+
+        JsonElement request = Assert.IsType<JsonElement>(handler.CheckoutRequest);
+        Assert.Equal("Cash", request.GetProperty("method").GetString());
+        Assert.Equal(76m, request.GetProperty("amountReceived").GetDecimal());
+        Assert.Equal(6m, request.GetProperty("tipAmount").GetDecimal());
+        Assert.Equal(10m, GetField<decimal>(cut.Instance, "lastChangeAmount"));
+        Assert.Contains("Cobro de 76,00 € registrado", GetField<string>(cut.Instance, "message"));
+        Assert.DoesNotContain("aria-label=\"Ver ticket de venta\"", cut.Markup);
     }
 
     [Fact]
@@ -1986,6 +3028,65 @@ public sealed class PosHomeRenderingTests : BunitContext
         Assert.Contains("IVA (21 %)", cut.Find(".account-preview-total").TextContent);
         Assert.Contains("1,56 €", cut.Find(".account-preview-total").TextContent);
         Assert.Contains("27,00 €", cut.Find(".account-preview-per-person").TextContent);
+
+        cut.Find("button[aria-label='Imprimir cuenta']").Click();
+        cut.Find("button[aria-label='Cerrar cuenta']").Click();
+        Assert.False(GetField<bool>(cut.Instance, "accountPreviewOpen"));
+    }
+
+    [Fact]
+    public async Task Account_tax_breakdown_is_hidden_when_any_active_amount_has_an_unknown_tax_rate()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        Guid orderId = Guid.NewGuid();
+        Guid lineId = Guid.NewGuid();
+        SessionBillResponse bill = Bill(restaurantId) with
+        {
+            Orders = [new(orderId, "Delivered", "Pending", 20m, 0m, DateTime.UtcNow)],
+        };
+        IRenderedComponent<PosHome> cut = await RenderPayment(restaurantId, bill);
+        PropertyInfo taxBreakdown = typeof(PosHome).GetProperty(
+            "BillTaxBreakdown",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        )!;
+
+        SetField(cut.Instance, "bill", null);
+        Assert.Empty((IEnumerable)taxBreakdown.GetValue(cut.Instance)!);
+
+        SetField(cut.Instance, "bill", bill);
+        SetField(cut.Instance, "billOrders", new Dictionary<Guid, OrderDetailResponse>());
+        Assert.Empty((IEnumerable)taxBreakdown.GetValue(cut.Instance)!);
+
+        SetField(
+            cut.Instance,
+            "billOrders",
+            new Dictionary<Guid, OrderDetailResponse>
+            {
+                [orderId] = new(
+                    orderId,
+                    restaurantId,
+                    "Delivered",
+                    20m,
+                    [
+                        new(
+                            lineId,
+                            "Producto sin tasa",
+                            20m,
+                            1,
+                            20m,
+                            "KITCHEN",
+                            "Cocina",
+                            "Active",
+                            null,
+                            string.Empty
+                        ),
+                    ],
+                    []
+                ),
+            }
+        );
+
+        Assert.Empty((IEnumerable)taxBreakdown.GetValue(cut.Instance)!);
     }
 
     [Fact]
@@ -2069,6 +3170,39 @@ public sealed class PosHomeRenderingTests : BunitContext
     }
 
     [Fact]
+    public async Task Opening_an_already_paid_bill_waits_for_the_sale_projection_before_offering_its_ticket()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        Guid orderId = Guid.NewGuid();
+        SessionBillResponse bill = Bill(restaurantId) with
+        {
+            Total = 12m,
+            Outstanding = 0m,
+            CanCheckout = false,
+            Orders = [new(orderId, "Delivered", "Paid", 12m, 12m, DateTime.UtcNow)],
+        };
+        SaleResponse sale = new([new SalePaymentBreakdown("Card", 1, 12m)]);
+        BillingHandler handler = new(
+            bill,
+            new OrderDetailResponse(orderId, restaurantId, "Delivered", 12m, [], []),
+            sale: sale
+        );
+        IRenderedComponent<PosHome> cut = await RenderTakeaway(restaurantId, [], handler);
+        SetField(
+            cut.Instance,
+            "session",
+            new DiningSessionResponse(bill.Id, restaurantId, bill.TableId, "Pos", "Open", [])
+        );
+        SetField(cut.Instance, "hasSessionOrders", true);
+
+        await cut.InvokeAsync(() => Invoke(cut.Instance, "OpenBill"));
+
+        Assert.Equal(bill.Id, GetField<Guid?>(cut.Instance, "readyTicketSessionId"));
+        Assert.IsType<SaleResponse>(GetField<SaleResponse?>(cut.Instance, "salesTicket"));
+        Assert.Contains("aria-label=\"Ver ticket de venta\"", cut.Markup);
+    }
+
+    [Fact]
     public async Task Releasing_a_billable_session_clears_pos_state_and_refreshes_operational_data()
     {
         Guid restaurantId = Guid.NewGuid();
@@ -2133,6 +3267,100 @@ public sealed class PosHomeRenderingTests : BunitContext
         Assert.False(GetField<bool>(cut.Instance, "paymentDialogOpen"));
         Assert.False(GetField<bool>(cut.Instance, "hasSessionOrders"));
         Assert.Contains("Mesa liberada desde TPV.", GetField<string>(cut.Instance, "message"));
+    }
+
+    [Fact]
+    public async Task Realtime_refresh_keeps_guest_count_prompt_and_replaces_the_active_session()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        Guid tableId = Guid.NewGuid();
+        Guid sessionId = Guid.NewGuid();
+        DiningSessionResponse refreshedSession = new(
+            sessionId,
+            restaurantId,
+            tableId,
+            "Pos",
+            "Open",
+            [new(Guid.NewGuid(), "Submitted", "Pending", 12m)],
+            true,
+            null
+        );
+        OperationalRefreshHandler handler = new(restaurantId) { Session = refreshedSession };
+        TableResponse table = new(
+            tableId,
+            restaurantId,
+            "M1",
+            "Mesa 1",
+            true,
+            "Occupied",
+            sessionId,
+            Guid.NewGuid(),
+            "Sala",
+            0
+        );
+        handler.Tables.Add(table);
+        IRenderedComponent<PosHome> cut = await RenderTakeaway(restaurantId, [], handler);
+        SetField(
+            cut.Instance,
+            "session",
+            new DiningSessionResponse(sessionId, restaurantId, tableId, "Pos", "Open", [])
+        );
+        SetField(cut.Instance, "guestCountDialogOpen", true);
+        SetField(cut.Instance, "tables", new List<TableResponse> { table });
+
+        await cut.InvokeAsync(() =>
+            Invoke(cut.Instance, "RefreshActiveSessionAfterOrderEventAsync")
+        );
+
+        Assert.Equal(1, handler.ActiveSessionReads);
+        DiningSessionResponse updatedSession = GetField<DiningSessionResponse>(
+            cut.Instance,
+            "session"
+        );
+        Assert.Equal(sessionId, updatedSession.Id);
+        Assert.Equal(refreshedSession.Orders.Single(), updatedSession.Orders.Single());
+        Assert.True(GetField<bool>(cut.Instance, "hasSessionOrders"));
+        Assert.Equal(table, GetField<TableResponse?>(cut.Instance, "guestCountTable"));
+        Assert.Null(GetField<TableResponse?>(cut.Instance, "selectedTable"));
+    }
+
+    [Fact]
+    public async Task Realtime_refresh_returns_to_tables_when_session_is_no_longer_active()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        Guid tableId = Guid.NewGuid();
+        Guid sessionId = Guid.NewGuid();
+        OperationalRefreshHandler handler = new(restaurantId);
+        handler.Tables.Add(
+            new TableResponse(
+                tableId,
+                restaurantId,
+                "M1",
+                "Mesa 1",
+                true,
+                "Available",
+                null,
+                Guid.NewGuid(),
+                "Sala",
+                0
+            )
+        );
+        IRenderedComponent<PosHome> cut = await RenderTakeaway(restaurantId, [], handler);
+        SetField(
+            cut.Instance,
+            "session",
+            new DiningSessionResponse(sessionId, restaurantId, tableId, "Pos", "Open", [])
+        );
+        SetField(cut.Instance, "tables", handler.Tables);
+        SetField(cut.Instance, "selectedTable", handler.Tables.Single());
+
+        await cut.InvokeAsync(() =>
+            Invoke(cut.Instance, "RefreshActiveSessionAfterOrderEventAsync")
+        );
+
+        Assert.Null(GetField<DiningSessionResponse?>(cut.Instance, "session"));
+        Assert.Null(GetField<TableResponse?>(cut.Instance, "selectedTable"));
+        Assert.Equal(0, handler.ActiveSessionReads);
     }
 
     [Fact]
@@ -2313,6 +3541,211 @@ public sealed class PosHomeRenderingTests : BunitContext
         );
         Assert.Equal(submittedAt, completed.Start);
         Assert.Equal(submittedAt, completed.End);
+    }
+
+    [Theory]
+    [InlineData("Cancelled")]
+    [InlineData("Delivered")]
+    public void Kitchen_clock_excludes_orders_that_are_not_active(string status)
+    {
+        DateTime submittedAt = DateTime.UtcNow.AddMinutes(-5);
+        object? clock = InvokeStatic<object?>(
+            "KitchenClock",
+            Order(status, submittedAt, [new("BAR", "Barra", "InPreparation")])
+        );
+
+        Assert.Null(clock);
+    }
+
+    [Fact]
+    public void Kitchen_clock_uses_latest_ready_time_and_never_precedes_submission()
+    {
+        DateTime submittedAt = new(2026, 10, 22, 10, 0, 0, DateTimeKind.Utc);
+        object? latestReady = InvokeStatic<object?>(
+            "KitchenClock",
+            Order(
+                "Submitted",
+                submittedAt,
+                [
+                    new("KITCHEN", "Cocina", "Ready", submittedAt.AddMinutes(4)),
+                    new("BAR", "Barra", "Dispatched", submittedAt.AddMinutes(9)),
+                ]
+            )
+        );
+        object? timestampBeforeSubmission = InvokeStatic<object?>(
+            "KitchenClock",
+            Order(
+                "Submitted",
+                submittedAt,
+                [new("BAR", "Barra", "Ready", submittedAt.AddMinutes(-1))]
+            )
+        );
+
+        Assert.Equal(
+            submittedAt.AddMinutes(9),
+            Assert.IsType<ValueTuple<DateTime, DateTime?>>(latestReady).Item2
+        );
+        Assert.Equal(
+            submittedAt,
+            Assert.IsType<ValueTuple<DateTime, DateTime?>>(timestampBeforeSubmission).Item2
+        );
+    }
+
+    [Fact]
+    public void Kitchen_duration_formats_hours_and_clamps_negative_elapsed_time()
+    {
+        Assert.Equal(
+            "1:02:03",
+            InvokeStatic<string>("FormatKitchenDuration", TimeSpan.FromSeconds(3723))
+        );
+        Assert.Equal(
+            "00:00",
+            InvokeStatic<string>("FormatKitchenDuration", TimeSpan.FromSeconds(-1))
+        );
+        Assert.Equal(
+            "00:00",
+            InvokeStatic<string>("FormatKitchenDuration", TimeSpan.FromMilliseconds(999))
+        );
+    }
+
+    [Fact]
+    public async Task Table_kitchen_time_shows_the_longest_active_order_duration()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        Guid tableId = Guid.NewGuid();
+        Guid sessionId = Guid.NewGuid();
+        IRenderedComponent<PosHome> cut = await RenderTakeaway(restaurantId, []);
+        TableResponse table = new(
+            tableId,
+            restaurantId,
+            "M1",
+            "Mesa 1",
+            true,
+            "Occupied",
+            sessionId,
+            Guid.NewGuid(),
+            "Sala",
+            2
+        );
+        DateTime submittedAt = DateTime.UtcNow.AddMinutes(-30);
+        SetField(
+            cut.Instance,
+            "activeOrders",
+            new List<OrderResponse>
+            {
+                Order(
+                    "Submitted",
+                    submittedAt,
+                    [new("KITCHEN", "Cocina", "Ready", submittedAt.AddMinutes(12))]
+                ) with
+                {
+                    TableId = tableId,
+                    DiningSessionId = sessionId,
+                },
+                Order(
+                    "Submitted",
+                    submittedAt,
+                    [new("BAR", "Barra", "Ready", submittedAt.AddMinutes(20))]
+                ) with
+                {
+                    TableId = tableId,
+                    DiningSessionId = sessionId,
+                },
+            }
+        );
+
+        string? kitchenTime = (string?)
+            typeof(PosHome)
+                .GetMethod("TableKitchenTime", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(cut.Instance, [table]);
+
+        Assert.Equal("20:00", kitchenTime);
+    }
+
+    [Fact]
+    public async Task Pos_actions_without_required_state_return_without_changing_the_cart()
+    {
+        IRenderedComponent<PosHome> cut = await RenderTakeaway(Guid.NewGuid(), []);
+
+        await cut.InvokeAsync(async () =>
+        {
+            InvokeVoid(cut.Instance, "SelectProduct", Guid.NewGuid());
+            InvokeVoid(cut.Instance, "ChangeCartQuantity", Guid.NewGuid(), 1);
+            InvokeVoid(cut.Instance, "SetExactAmount");
+            InvokeVoid(cut.Instance, "OpenAccountPreview");
+            InvokeVoid(cut.Instance, "OpenDiscountDialog");
+            await Invoke(cut.Instance, "AcceptGuestCount");
+            await Invoke(cut.Instance, "CancelSession");
+            await Invoke(cut.Instance, "DeliverPickup");
+            await Invoke(cut.Instance, "RefreshPickup");
+            await Invoke(cut.Instance, "OpenBill");
+            await Invoke(cut.Instance, "OpenSalesTicket");
+            await Invoke(cut.Instance, "ReleaseSession");
+            await InvokeTask(cut.Instance, "RefreshSalesTicketAsync", Guid.NewGuid());
+            await Invoke(cut.Instance, "CreateCashMovement");
+        });
+
+        List<PosCartLine> cart = GetField<List<PosCartLine>>(cut.Instance, "cart");
+        Assert.Empty(cart);
+        Assert.False(GetField<bool>(cut.Instance, "accountPreviewOpen"));
+        Assert.False(GetField<bool>(cut.Instance, "discountDialogOpen"));
+        Assert.False(GetField<bool>(cut.Instance, "salesTicketOpen"));
+        Assert.Empty(
+            (List<PosApi.CheckoutOrderAllocation>)
+                typeof(PosHome)
+                    .GetMethod(
+                        "GetCurrentAllocations",
+                        BindingFlags.Instance | BindingFlags.NonPublic
+                    )!
+                    .Invoke(cut.Instance, null)!
+        );
+    }
+
+    [Fact]
+    public async Task Cash_movement_dialog_resets_its_draft_before_opening()
+    {
+        IRenderedComponent<PosHome> cut = await RenderTakeaway(Guid.NewGuid(), []);
+        SetField(cut.Instance, "cashMovementType", "Income");
+        SetField(cut.Instance, "cashMovementCategory", "Aportación de caja");
+        SetField(cut.Instance, "cashMovementDescription", "Texto anterior");
+        SetField(cut.Instance, "cashMovementAmount", 12m);
+
+        await cut.InvokeAsync(() => InvokeVoid(cut.Instance, "OpenCashMovements"));
+
+        Assert.True(GetField<bool>(cut.Instance, "cashMovementsOpen"));
+        Assert.Equal("Expense", GetField<string>(cut.Instance, "cashMovementType"));
+        Assert.Equal("Pago a proveedor", GetField<string>(cut.Instance, "cashMovementCategory"));
+        Assert.Equal(string.Empty, GetField<string>(cut.Instance, "cashMovementDescription"));
+        Assert.Equal(0m, GetField<decimal>(cut.Instance, "cashMovementAmount"));
+
+        await cut.InvokeAsync(() => InvokeVoid(cut.Instance, "CloseCashMovements"));
+        Assert.False(GetField<bool>(cut.Instance, "cashMovementsOpen"));
+    }
+
+    [Fact]
+    public async Task Tip_selection_and_transfer_payment_keep_the_charge_keypad_consistent()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        SessionBillResponse bill = Bill(restaurantId);
+        IRenderedComponent<PosHome> cut = await RenderPayment(restaurantId, bill);
+        SetField(cut.Instance, "currentChargeAmount", bill.Outstanding);
+        SetField(cut.Instance, "keypadTarget", "Tip");
+
+        await cut.InvokeAsync(() => InvokeVoid(cut.Instance, "SelectTip", 10));
+
+        Assert.Equal(6m, GetField<decimal>(cut.Instance, "tipAmount"));
+        Assert.Equal("6,00", GetField<string>(cut.Instance, "keypadText"));
+
+        await cut.InvokeAsync(() => InvokeVoid(cut.Instance, "SetPaymentMethod", "Transfer"));
+        Assert.Equal(bill.Outstanding, GetField<decimal>(cut.Instance, "currentChargeAmount"));
+        Assert.Equal("Charge", GetField<string>(cut.Instance, "keypadTarget"));
+
+        await cut.InvokeAsync(() => InvokeVoid(cut.Instance, "SelectKeypadTarget", "Charge"));
+        Assert.Equal(bill.Outstanding, GetField<decimal>(cut.Instance, "currentChargeAmount"));
+
+        await cut.InvokeAsync(() => InvokeVoid(cut.Instance, "SetPaymentMethod", "Cash"));
+        Assert.Equal(0m, GetField<decimal>(cut.Instance, "currentChargeAmount"));
+        Assert.Equal("Cash", GetField<string>(cut.Instance, "paymentMethod"));
     }
 
     private static OrderResponse Order(
@@ -2544,7 +3977,7 @@ public sealed class PosHomeRenderingTests : BunitContext
             .GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)!
             .Invoke(component, args);
 
-    private static void SetField(object component, string name, object value) =>
+    private static void SetField(object component, string name, object? value) =>
         component
             .GetType()
             .GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!
@@ -2556,6 +3989,38 @@ public sealed class PosHomeRenderingTests : BunitContext
             HttpRequestMessage request,
             CancellationToken cancellationToken
         ) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+    }
+
+    private sealed class ProviderSettingsHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken
+        ) =>
+            Task.FromResult(
+                request.RequestUri!.AbsolutePath == "/api/identity/auth/provider"
+                    ? new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = JsonContent.Create(
+                            new ProviderSettingsResponse("", false, false)
+                        ),
+                    }
+                    : new HttpResponseMessage(HttpStatusCode.NotFound)
+            );
+    }
+
+    private sealed class EmptyAccessibleRestaurantsHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken
+        ) =>
+            Task.FromResult(
+                new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(Array.Empty<RestaurantResponse>()),
+                }
+            );
     }
 
     private sealed class LoginBootstrapHandler(
@@ -2651,6 +4116,7 @@ public sealed class PosHomeRenderingTests : BunitContext
         public List<MenuItemResponse> Menu { get; } = [];
         public DiningSessionResponse? Session { get; init; }
         public bool FailMenu { get; set; }
+        public bool FailTables { get; set; }
         public int MenuReads { get; private set; }
         public int ActiveSessionReads { get; private set; }
 
@@ -2671,7 +4137,11 @@ public sealed class PosHomeRenderingTests : BunitContext
                 );
             }
             if (path == $"/api/dining/restaurants/{restaurantId}/tables")
-                return Task.FromResult(Json(Tables));
+                return Task.FromResult(
+                    FailTables
+                        ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+                        : Json(Tables)
+                );
             if (path == "/api/orders/pos")
                 return Task.FromResult(Json(Array.Empty<OrderResponse>()));
             if (
@@ -2990,6 +4460,57 @@ public sealed class PosHomeRenderingTests : BunitContext
             new(HttpStatusCode.OK) { Content = JsonContent.Create(value) };
     }
 
+    private sealed class DelayedVisibleSessionHandler(
+        Guid restaurantId,
+        Guid tableId,
+        Guid sessionId
+    ) : HttpMessageHandler
+    {
+        private readonly TaskCompletionSource<HttpResponseMessage> response = new(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+
+        public TaskCompletionSource RequestStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int RequestCount { get; private set; }
+
+        public void CompleteRequest() =>
+            response.SetResult(
+                new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(
+                        new DiningSessionResponse(
+                            sessionId,
+                            restaurantId,
+                            tableId,
+                            "Pos",
+                            "Open",
+                            []
+                        )
+                    ),
+                }
+            );
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken
+        )
+        {
+            if (
+                request.Method == HttpMethod.Get
+                && request.RequestUri!.AbsolutePath
+                    == "/api/dining/tables/" + tableId + "/active-session"
+            )
+            {
+                RequestCount++;
+                RequestStarted.TrySetResult();
+                return response.Task;
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        }
+    }
+
     private sealed class OpenCashRegisterHandler(CashRegisterResponse opened) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(
@@ -3056,6 +4577,7 @@ public sealed class PosHomeRenderingTests : BunitContext
     private sealed class SaleTicketHandler(SaleResponse sale) : HttpMessageHandler
     {
         public bool Ready { get; set; } = true;
+        public HttpStatusCode? FailureStatus { get; set; }
 
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
@@ -3071,6 +4593,10 @@ public sealed class PosHomeRenderingTests : BunitContext
                         ),
                     }
                 )
+            : FailureStatus is HttpStatusCode failureStatus
+            && request.Method == HttpMethod.Get
+            && request.RequestUri!.AbsolutePath.StartsWith("/api/sales/", StringComparison.Ordinal)
+                ? Task.FromResult(new HttpResponseMessage(failureStatus))
             : Ready
             && request.Method == HttpMethod.Get
             && request.RequestUri!.AbsolutePath.StartsWith("/api/sales/", StringComparison.Ordinal)
@@ -3081,6 +4607,45 @@ public sealed class PosHomeRenderingTests : BunitContext
                     }
                 )
             : Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+    }
+
+    private sealed class DeferredSaleTicketHandler(SaleResponse sale) : HttpMessageHandler
+    {
+        private readonly TaskCompletionSource<HttpResponseMessage> response = new(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        public TaskCompletionSource SaleRequestStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public void CompleteSaleRequest() =>
+            response.TrySetResult(
+                new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(sale) }
+            );
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken
+        ) =>
+            request.Method == HttpMethod.Get
+            && request.RequestUri!.AbsolutePath == "/api/identity/auth/provider"
+                ? Task.FromResult(
+                    new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = JsonContent.Create(
+                            new ProviderSettingsResponse("", false, false)
+                        ),
+                    }
+                )
+            : request.Method == HttpMethod.Get
+            && request.RequestUri!.AbsolutePath.StartsWith("/api/sales/", StringComparison.Ordinal)
+                ? WaitForSaleAsync()
+            : Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+
+        private Task<HttpResponseMessage> WaitForSaleAsync()
+        {
+            SaleRequestStarted.TrySetResult();
+            return response.Task;
+        }
     }
 
     private sealed class CheckoutHandler(SessionBillResponse checkoutResult) : HttpMessageHandler
@@ -3114,7 +4679,8 @@ public sealed class PosHomeRenderingTests : BunitContext
     private sealed class BillingHandler(
         SessionBillResponse bill,
         OrderDetailResponse? detail = null,
-        bool failBillRequest = false
+        bool failBillRequest = false,
+        SaleResponse? sale = null
     ) : HttpMessageHandler
     {
         public int BillRequests { get; private set; }
@@ -3137,6 +4703,15 @@ public sealed class PosHomeRenderingTests : BunitContext
                         ? new HttpResponseMessage(HttpStatusCode.InternalServerError)
                         : Json(bill)
                 );
+            }
+
+            if (
+                request.Method == HttpMethod.Get
+                && path == "/api/sales/" + bill.Id
+                && sale is not null
+            )
+            {
+                return Task.FromResult(Json(sale));
             }
 
             if (
@@ -3331,15 +4906,25 @@ public sealed class PosHomeRenderingTests : BunitContext
 
     private sealed class PickupJsRuntime : IJSRuntime
     {
+        public string? PromptResult { get; set; } = "Cambio de pedido";
+        public bool Confirmation { get; set; } = true;
+        public int ConfirmationCount { get; private set; }
+
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
         {
             object? value = identifier switch
             {
-                "prompt" => "Cambio de pedido",
-                "confirm" => true,
+                "prompt" => PromptResult,
+                "confirm" => Confirm(),
                 _ => default(TValue),
             };
             return ValueTask.FromResult((TValue)value!);
+        }
+
+        private bool Confirm()
+        {
+            ConfirmationCount++;
+            return Confirmation;
         }
 
         public ValueTask<TValue> InvokeAsync<TValue>(
@@ -3381,10 +4966,18 @@ public sealed class PosHomeRenderingTests : BunitContext
         ) => ValueTask.FromResult(default(TValue)!);
     }
 
-    private sealed class ConfirmJsRuntime : IJSRuntime
+    private sealed class ConfirmJsRuntime(bool confirmation = true) : IJSRuntime
     {
+        public int ConfirmationCount { get; private set; }
+
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args) =>
-            ValueTask.FromResult(identifier == "confirm" ? (TValue)(object)true : default!);
+            ValueTask.FromResult(identifier == "confirm" ? Confirm<TValue>() : default!);
+
+        private TValue Confirm<TValue>()
+        {
+            ConfirmationCount++;
+            return (TValue)(object)confirmation;
+        }
 
         public ValueTask<TValue> InvokeAsync<TValue>(
             string identifier,

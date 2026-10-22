@@ -1,5 +1,6 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Restaurantes.Catalog.Infrastructure.Persistence.Read;
 using Restaurantes.Catalog.Infrastructure.Persistence.Write;
@@ -17,13 +18,17 @@ public sealed class CatalogMigrationTests
                 .UseNpgsql("Host=localhost;Database=unused;Username=unused;Password=unused")
                 .Options;
         using CatalogWriteDbContext context = new(options);
-        string script = context.GetService<IMigrator>().GenerateScript();
+        AssertSnapshotMatchesCurrentModel(context);
+        IMigrator migrator = context.GetService<IMigrator>();
+        string script = migrator.GenerateScript();
+        string rollback = migrator.GenerateScript(context.Database.GetMigrations().Last(), "0");
         Assert.Contains("CREATE TABLE catalog_menu_prices", script);
         Assert.Contains("ALTER TABLE products DROP COLUMN \"BasePrice\"", script);
         Assert.Contains("ALTER TABLE products ADD COLUMN \"TaxId\"", script);
         Assert.Contains("ADD COLUMN \"AllowsExtras\" boolean", script);
         Assert.DoesNotContain("Vista completa", script);
         Assert.DoesNotContain("INSERT INTO restaurant_kitchen_stations", script);
+        Assert.Contains("ADD COLUMN \"BasePrice\"", rollback);
     }
 
     [Fact]
@@ -34,9 +39,29 @@ public sealed class CatalogMigrationTests
                 .UseNpgsql("Host=localhost;Database=unused;Username=unused;Password=unused")
                 .Options;
         using CatalogReadDbContext context = new(options);
-        string script = context.GetService<IMigrator>().GenerateScript();
+        AssertSnapshotMatchesCurrentModel(context);
+        IMigrator migrator = context.GetService<IMigrator>();
+        string script = migrator.GenerateScript();
+        string rollback = migrator.GenerateScript(context.Database.GetMigrations().Last(), "0");
         Assert.Contains("DROP COLUMN \"BasePrice\"", script);
         Assert.DoesNotContain("Vista completa", script);
         Assert.DoesNotContain("INSERT INTO kitchen_station_views", script);
+        Assert.Contains("DROP COLUMN \"ManagesZones\"", rollback);
+    }
+
+    private static void AssertSnapshotMatchesCurrentModel(DbContext context)
+    {
+        ModelSnapshot snapshot = context.GetService<IMigrationsAssembly>().ModelSnapshot!;
+        IMigrationsModelDiffer differ = context.GetService<IMigrationsModelDiffer>();
+        IModel snapshotModel = context
+            .GetService<IModelRuntimeInitializer>()
+            .Initialize(snapshot.Model, designTime: true);
+
+        Assert.False(
+            differ.HasDifferences(
+                snapshotModel.GetRelationalModel(),
+                context.GetService<IDesignTimeModel>().Model.GetRelationalModel()
+            )
+        );
     }
 }

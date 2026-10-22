@@ -136,6 +136,9 @@ public sealed class OrderOverallCoverageTests
 
         order.CancelLine(lines[0].Id, "Sin stock", Timestamp.AddMinutes(1));
         Assert.Equal(OrderStatus.Submitted, order.Status);
+        Assert.Throws<InvalidOperationException>(() =>
+            order.CancelLine(lines[0].Id, "Sin stock", Timestamp.AddMinutes(2))
+        );
 
         order.CancelLine(lines[1].Id, "Sin stock", Timestamp.AddMinutes(2));
         Assert.Equal(OrderStatus.Cancelled, order.Status);
@@ -185,10 +188,13 @@ public sealed class OrderOverallCoverageTests
         );
         order.StartLinePreparation(line.Id, Timestamp.AddMinutes(1));
         Assert.Throws<InvalidOperationException>(() =>
-            order.DispatchLine(line.Id, Timestamp.AddMinutes(2))
+            order.StartLinePreparation(line.Id, Timestamp.AddMinutes(2))
         );
         Assert.Throws<InvalidOperationException>(() =>
-            order.CancelLine(line.Id, "Sin stock", Timestamp.AddMinutes(2))
+            order.DispatchLine(line.Id, Timestamp.AddMinutes(3))
+        );
+        Assert.Throws<InvalidOperationException>(() =>
+            order.CancelLine(line.Id, "Sin stock", Timestamp.AddMinutes(3))
         );
         Assert.Throws<InvalidOperationException>(() => order.Cancel("Pedido duplicado", Timestamp));
     }
@@ -251,6 +257,30 @@ public sealed class OrderOverallCoverageTests
         Assert.Equal(OrderStatus.Cancelled, order.Status);
         Assert.Equal(KitchenTicketStatus.Cancelled, Assert.Single(order.Stations).Status);
         Assert.Throws<InvalidOperationException>(() => order.Cancel("Segundo intento", Timestamp));
+    }
+
+    [Fact]
+    public void Cancel_line_rejects_short_reasons_unknown_lines_and_terminal_orders()
+    {
+        Order order = CreateOrder(lines: [Draft("COCINA"), Draft("BEBIDAS")]);
+        OrderLine line = order.Lines.First();
+
+        Assert.Throws<ArgumentException>(() => order.CancelLine(line.Id, "No", Timestamp));
+        Assert.Throws<InvalidOperationException>(() =>
+            order.CancelLine(Guid.NewGuid(), "Sin stock", Timestamp)
+        );
+
+        Order cancelled = CreateOrder(lines: [Draft("COCINA")]);
+        cancelled.Cancel("Pedido duplicado", Timestamp);
+        Assert.Throws<InvalidOperationException>(() =>
+            cancelled.CancelLine(cancelled.Lines.Single().Id, "Sin stock", Timestamp)
+        );
+
+        Order delivered = CreateOrder(lines: [Draft() with { RequiresKds = false }]);
+        delivered.Submit(Timestamp);
+        Assert.Throws<InvalidOperationException>(() =>
+            delivered.CancelLine(delivered.Lines.Single().Id, "Sin stock", Timestamp)
+        );
     }
 
     [Fact]

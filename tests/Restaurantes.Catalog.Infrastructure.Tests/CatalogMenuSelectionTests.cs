@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Restaurantes.Catalog.Application;
+using Restaurantes.Catalog.Contracts.Responses;
 using Restaurantes.Catalog.Domain;
 using Restaurantes.Catalog.Infrastructure.Persistence.Read;
 using Restaurantes.Catalog.Infrastructure.Persistence.Write;
@@ -62,6 +63,84 @@ public sealed class CatalogMenuSelectionTests
     }
 
     [Fact]
+    public async Task Catalog_lists_local_menu_configuration_and_kitchen_stations_in_order()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        string suffix = Guid.NewGuid().ToString("N");
+        Guid restaurantId = Guid.NewGuid();
+        await using CatalogWriteDbContext write = new(
+            new DbContextOptionsBuilder<CatalogWriteDbContext>()
+                .UseInMemoryDatabase("catalog-write-" + suffix)
+                .Options
+        );
+        await using CatalogReadDbContext read = new(
+            new DbContextOptionsBuilder<CatalogReadDbContext>()
+                .UseInMemoryDatabase("catalog-read-" + suffix)
+                .Options
+        );
+        read.MenuItems.AddRange(
+            new MenuItemReadModel
+            {
+                RestaurantId = restaurantId,
+                ProductId = Guid.NewGuid(),
+                CategoryName = "Pastas",
+                ProductName = "Ziti",
+                Price = 13,
+                RequiresKds = true,
+                PreparationStationCode = "PASTA",
+            },
+            new MenuItemReadModel
+            {
+                RestaurantId = restaurantId,
+                ProductId = Guid.NewGuid(),
+                CategoryName = "Entrantes",
+                ProductName = "Aceitunas",
+                Price = 4,
+                RequiresKds = false,
+                PreparationStationCode = "IGNORAR",
+                PreparationStationName = "Ignorar",
+            }
+        );
+        read.KitchenStations.AddRange(
+            new KitchenStationReadModel
+            {
+                RestaurantId = restaurantId,
+                Code = "Z",
+                Name = "Zona Z",
+                Priority = 2,
+                IsActive = true,
+                ManagesZones = true,
+            },
+            new KitchenStationReadModel
+            {
+                RestaurantId = restaurantId,
+                Code = "A",
+                Name = "Zona A",
+                Priority = 1,
+                IsActive = false,
+            }
+        );
+        await read.SaveChangesAsync(ct);
+
+        CatalogReadStore store = new(read, write);
+        IReadOnlyList<MenuItemResponse> menu = await store.ListMenuConfigurationAsync(
+            restaurantId,
+            ct
+        );
+        IReadOnlyList<KitchenStationResponse> stations = await store.ListStationsAsync(
+            restaurantId,
+            ct
+        );
+
+        Assert.Equal(["Aceitunas", "Ziti"], menu.Select(item => item.ProductName));
+        Assert.Equal("", menu[0].PreparationStationCode);
+        Assert.Equal("PASTA", menu[1].PreparationStationCode);
+        Assert.Equal(["A", "Z"], stations.Select(item => item.Code));
+        Assert.False(stations[0].IsActive);
+        Assert.True(stations[1].ManagesZones);
+    }
+
+    [Fact]
     public async Task Global_menu_is_filtered_by_local_product_availability()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
@@ -92,6 +171,10 @@ public sealed class CatalogMenuSelectionTests
         write.Categories.Add(category);
         write.Products.Add(product);
         write.Products.Add(extra);
+        Guid photoRevision = Guid.NewGuid();
+        write.ProductPhotos.Add(
+            new ProductPhoto { ProductId = product.Id, Revision = photoRevision }
+        );
         write.Taxes.Add(
             new CatalogTax
             {
@@ -173,6 +256,7 @@ public sealed class CatalogMenuSelectionTests
                 DefaultStationName = category.DefaultStationName,
                 IsActive = true,
                 ShowInCommander = false,
+                ShowInCustomerQr = true,
             }
         );
         read.Products.Add(
@@ -193,6 +277,15 @@ public sealed class CatalogMenuSelectionTests
                 Name = extra.Name,
                 CategoryId = category.Id,
                 IsActive = true,
+            }
+        );
+        read.MenuItems.Add(
+            new MenuItemReadModel
+            {
+                RestaurantId = restaurantId,
+                ProductId = product.Id,
+                PreparationStationCode = "PASTA",
+                PreparationStationName = "Pastas",
             }
         );
         await write.SaveChangesAsync(ct);
@@ -219,6 +312,13 @@ public sealed class CatalogMenuSelectionTests
         Assert.Contains(selected.Formats!, x => x.Format == "PLATO" && x.Price == 10);
         Assert.Contains(selected.Formats!, x => x.Format == "RACION" && x.Price == 7);
         Assert.Equal(2, Assert.Single(Assert.Single(selected.ExtraGroups!).Options).Price);
+        Assert.Equal("PASTA", selected.PreparationStationCode);
+        Assert.Equal(
+            $"/api/catalog/products/{product.Id}/photos/thumbnail?v={photoRevision}",
+            selected.PhotoSmallUrl
+        );
+        Assert.Single(await store.ListMenuAsync(restaurantId, CatalogClientChannel.CustomerQr, ct));
+        Assert.Empty(await store.ListMenuAsync(restaurantId, (CatalogClientChannel)999, ct));
 
         product.SetActive(false, DateTime.UtcNow);
         await write.SaveChangesAsync(ct);

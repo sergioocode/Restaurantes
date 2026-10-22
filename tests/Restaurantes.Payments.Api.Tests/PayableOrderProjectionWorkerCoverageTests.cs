@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -102,6 +102,91 @@ public sealed class PayableOrderProjectionWorkerCoverageTests
         Assert.Equal(3, fixture.ChannelProxy.Acknowledgements);
     }
 
+    [Fact]
+    public async Task Duplicate_order_creation_keeps_the_existing_payable_order()
+    {
+        await using WorkerFixture fixture = await WorkerFixture.CreateAsync();
+        Guid orderId = Guid.NewGuid();
+        OrderCreated created = new(
+            orderId,
+            Guid.NewGuid(),
+            null,
+            null,
+            null,
+            "Mesa",
+            "Cliente",
+            "DineIn",
+            "Pos",
+            "OnAccount",
+            1,
+            DateTime.UtcNow,
+            [Line(10m, 1)],
+            []
+        );
+        fixture.Db.PayableOrders.Add(
+            PayableOrder.Create(
+                orderId,
+                created.RestaurantId,
+                null,
+                null,
+                "DineIn",
+                "Pos",
+                10m,
+                DateTime.UtcNow
+            )
+        );
+        await fixture.Db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        await fixture.DeliverAsync(Guid.NewGuid(), typeof(OrderCreated).FullName!, created);
+
+        Assert.Single(fixture.Db.PayableOrders);
+        Assert.Equal(1, fixture.ChannelProxy.Acknowledgements);
+        Assert.Single(fixture.Db.InboxMessages);
+    }
+
+    [Fact]
+    public async Task Message_is_ignored_when_worker_channel_is_unavailable()
+    {
+        await using WorkerFixture fixture = await WorkerFixture.CreateAsync();
+        fixture.ClearWorkerChannel();
+
+        await fixture.DeliverAsync(
+            Guid.NewGuid(),
+            typeof(OrderCreated).FullName!,
+            new OrderCreated(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                null,
+                null,
+                null,
+                "Mesa",
+                "Cliente",
+                "DineIn",
+                "Pos",
+                "OnAccount",
+                1,
+                DateTime.UtcNow,
+                [],
+                []
+            )
+        );
+
+        Assert.Empty(fixture.Db.PayableOrders);
+        Assert.Equal(0, fixture.ChannelProxy.Acknowledgements);
+        Assert.Equal(0, fixture.ChannelProxy.Rejections);
+    }
+
+    [Fact]
+    public async Task Worker_disposal_closes_and_clears_its_channel()
+    {
+        await using WorkerFixture fixture = await WorkerFixture.CreateAsync();
+
+        await fixture.DisposeWorkerResourcesAsync();
+
+        Assert.Equal(1, fixture.ChannelProxy.Disposals);
+        Assert.Null(fixture.WorkerChannel);
+    }
+
     [Theory]
     [InlineData("{guid}", "unknown.event", "{}")]
     [InlineData("{guid}", "Restaurantes.Orders.Contracts.Events.OrderCreated", "null")]
@@ -157,6 +242,93 @@ public sealed class PayableOrderProjectionWorkerCoverageTests
         Assert.Empty(fixture.Db.InboxMessages);
     }
 
+    [Fact]
+    public async Task Invalid_cancelled_amount_is_scheduled_for_retry_without_changing_the_order()
+    {
+        await using WorkerFixture fixture = await WorkerFixture.CreateAsync();
+        PayableOrder payable = PayableOrder.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "DineIn",
+            "Pos",
+            10m,
+            DateTime.UtcNow
+        );
+        fixture.Db.PayableOrders.Add(payable);
+        await fixture.Db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        OrderLineCancelled cancellation = CancelOrderLine(payable.OrderId, -1m);
+
+        await fixture.DeliverAsync(
+            Guid.NewGuid(),
+            typeof(OrderLineCancelled).FullName!,
+            cancellation
+        );
+
+        Assert.Equal(10m, payable.Amount);
+        Assert.Empty(fixture.Db.InboxMessages);
+        Assert.Equal(1, fixture.ChannelProxy.RetryPublications);
+        Assert.Equal(1, fixture.ChannelProxy.Acknowledgements);
+        Assert.Equal(0, fixture.ChannelProxy.Rejections);
+    }
+
+    [Fact]
+    public async Task Invalid_cancelled_amount_is_dead_lettered_after_retry_limit()
+    {
+        await using WorkerFixture fixture = await WorkerFixture.CreateAsync();
+        PayableOrder payable = PayableOrder.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "DineIn",
+            "Pos",
+            10m,
+            DateTime.UtcNow
+        );
+        fixture.Db.PayableOrders.Add(payable);
+        await fixture.Db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        await fixture.DeliverRawAsync(
+            Guid.NewGuid().ToString(),
+            typeof(OrderLineCancelled).FullName!,
+            JsonSerializer.SerializeToUtf8Bytes(CancelOrderLine(payable.OrderId, -1m)),
+            RabbitMqRetry.MaximumAttempts
+        );
+
+        Assert.Equal(10m, payable.Amount);
+        Assert.Empty(fixture.Db.InboxMessages);
+        Assert.Equal(0, fixture.ChannelProxy.RetryPublications);
+        Assert.Equal(0, fixture.ChannelProxy.Acknowledgements);
+        Assert.Equal(1, fixture.ChannelProxy.Rejections);
+    }
+
+    private static OrderLineCancelled CancelOrderLine(Guid orderId, decimal remainingAmount) =>
+        new(
+            orderId,
+            Guid.NewGuid(),
+            null,
+            null,
+            null,
+            "Mesa",
+            "Cliente",
+            "DineIn",
+            "Pos",
+            "OnAccount",
+            Guid.NewGuid(),
+            "COCINA",
+            "Producto cancelado",
+            "Submitted",
+            remainingAmount,
+            2,
+            DateTime.UtcNow,
+            DateTime.UtcNow,
+            DateTime.UtcNow,
+            [],
+            []
+        );
+
     private static OrderLineSnapshot Line(decimal unitPrice, int quantity) =>
         new(
             Guid.NewGuid(),
@@ -194,6 +366,15 @@ public sealed class PayableOrderProjectionWorkerCoverageTests
 
         public PaymentWriteDbContext Db { get; }
         public ChannelProxy ChannelProxy { get; }
+        public object? WorkerChannel =>
+            typeof(PayableOrderProjectionWorker)
+                .GetField("channel", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(worker);
+
+        public void ClearWorkerChannel() =>
+            typeof(PayableOrderProjectionWorker)
+                .GetField("channel", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .SetValue(worker, null);
 
         public static async Task<WorkerFixture> CreateAsync()
         {
@@ -220,16 +401,41 @@ public sealed class PayableOrderProjectionWorkerCoverageTests
             return new WorkerFixture(services, db, worker, channel, proxy);
         }
 
-        public async Task DeliverAsync<TEvent>(Guid messageId, string eventType, TEvent message) =>
-            await DeliverRawAsync(
+        public Task DeliverAsync<TEvent>(Guid messageId, string eventType, TEvent message) =>
+            DeliverRawAsync(
                 messageId.ToString(),
                 eventType,
                 JsonSerializer.SerializeToUtf8Bytes(message)
             );
 
-        public async Task DeliverRawAsync(string messageId, string eventType, byte[] body)
+        public async Task DisposeWorkerResourcesAsync()
         {
-            BasicProperties properties = new() { MessageId = messageId, Type = eventType };
+            MethodInfo dispose = typeof(PayableOrderProjectionWorker).GetMethod(
+                "DisposeResourcesAsync",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            )!;
+            await (Task)dispose.Invoke(worker, null)!;
+        }
+
+        public async Task DeliverRawAsync(
+            string messageId,
+            string eventType,
+            byte[] body,
+            int retryCount = 0
+        )
+        {
+            BasicProperties properties = new()
+            {
+                MessageId = messageId,
+                Type = eventType,
+                Headers =
+                    retryCount == 0
+                        ? null
+                        : new Dictionary<string, object?>
+                        {
+                            ["x-restaurantes-retry-count"] = retryCount,
+                        },
+            };
             BasicDeliverEventArgs args = new(
                 "consumer",
                 (ulong)(ChannelProxy.Acknowledgements + ChannelProxy.Rejections + 1),
@@ -254,6 +460,8 @@ public sealed class PayableOrderProjectionWorkerCoverageTests
     {
         public int Acknowledgements { get; private set; }
         public int Rejections { get; private set; }
+        public int RetryPublications { get; private set; }
+        public int Disposals { get; private set; }
 
         protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
         {
@@ -265,6 +473,16 @@ public sealed class PayableOrderProjectionWorkerCoverageTests
             if (targetMethod?.Name == nameof(IChannel.BasicNackAsync))
             {
                 Rejections++;
+                return ValueTask.CompletedTask;
+            }
+            if (targetMethod?.Name == nameof(IChannel.BasicPublishAsync))
+            {
+                RetryPublications++;
+                return ValueTask.CompletedTask;
+            }
+            if (targetMethod?.Name == nameof(IChannel.DisposeAsync))
+            {
+                Disposals++;
                 return ValueTask.CompletedTask;
             }
             throw new NotSupportedException(targetMethod?.Name);

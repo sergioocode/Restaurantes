@@ -129,6 +129,50 @@ public sealed class CheckoutProcessWorkerCoverageTests
         Assert.Empty(fixture.Store.ProcessedMessages);
     }
 
+    [Fact]
+    public async Task Checkout_failure_at_retry_limit_is_dead_lettered()
+    {
+        await using WorkerFixture fixture = await WorkerFixture.CreateAsync();
+        fixture.Store.Failure = new InvalidOperationException("store unavailable");
+        PaymentCaptured captured = new(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            12m,
+            "Cash",
+            "DineIn",
+            "Pos",
+            "",
+            DateTime.UtcNow
+        );
+
+        await fixture.DeliverRawAsync(
+            Guid.NewGuid().ToString(),
+            typeof(PaymentCaptured).FullName!,
+            JsonSerializer.SerializeToUtf8Bytes(captured),
+            new Dictionary<string, object?> { ["x-restaurantes-retry-count"] = 3 }
+        );
+
+        Assert.Empty(fixture.Store.ProcessedMessages);
+        Assert.Equal(0, fixture.ChannelProxy.Publications);
+        Assert.Equal(0, fixture.ChannelProxy.Acknowledgements);
+        Assert.Equal(1, fixture.ChannelProxy.Rejections);
+    }
+
+    [Fact]
+    public async Task Worker_disposes_and_clears_its_channel_and_connection_resources()
+    {
+        await using WorkerFixture fixture = await WorkerFixture.CreateAsync();
+        IConnection connection = DispatchProxy.Create<IConnection, ConnectionProxy>();
+        ConnectionProxy connectionProxy = (ConnectionProxy)(object)connection;
+
+        await fixture.DisposeWorkerResourcesAsync(connection);
+        await fixture.DisposeWorkerResourcesAsync();
+
+        Assert.Equal(1, fixture.ChannelProxy.Disposals);
+        Assert.Equal(1, connectionProxy.Disposals);
+    }
+
     private sealed class WorkerFixture : IAsyncDisposable
     {
         private readonly ServiceProvider services;
@@ -152,6 +196,21 @@ public sealed class CheckoutProcessWorkerCoverageTests
 
         public ChannelProxy ChannelProxy { get; }
         public InMemorySaleStore Store { get; }
+
+        public async Task DisposeWorkerResourcesAsync(IConnection? connection = null)
+        {
+            if (connection is not null)
+            {
+                typeof(CheckoutProcessWorker)
+                    .GetField("connection", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .SetValue(worker, connection);
+            }
+            MethodInfo dispose = typeof(CheckoutProcessWorker).GetMethod(
+                "DisposeResourcesAsync",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            )!;
+            await (Task)dispose.Invoke(worker, null)!;
+        }
 
         public static Task<WorkerFixture> CreateAsync()
         {
@@ -272,6 +331,7 @@ public sealed class CheckoutProcessWorkerCoverageTests
         public int Acknowledgements { get; private set; }
         public int Rejections { get; private set; }
         public int Publications { get; private set; }
+        public int Disposals { get; private set; }
 
         protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
         {
@@ -288,6 +348,27 @@ public sealed class CheckoutProcessWorkerCoverageTests
             if (targetMethod?.Name == nameof(IChannel.BasicPublishAsync))
             {
                 Publications++;
+                return ValueTask.CompletedTask;
+            }
+            if (targetMethod?.Name == nameof(IChannel.DisposeAsync))
+            {
+                Disposals++;
+                return ValueTask.CompletedTask;
+            }
+
+            throw new NotSupportedException(targetMethod?.Name);
+        }
+    }
+
+    public class ConnectionProxy : DispatchProxy
+    {
+        public int Disposals { get; private set; }
+
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+        {
+            if (targetMethod?.Name == nameof(IConnection.DisposeAsync))
+            {
+                Disposals++;
                 return ValueTask.CompletedTask;
             }
 
