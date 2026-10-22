@@ -5,7 +5,7 @@
 - `develop` es la rama de trabajo e integración; actualízala desde el remoto antes de empezar. `master` es la rama estable y de entrega; no trabajes directamente en ella.
 - Los cambios pequeños pueden hacerse en `develop`. Para trabajos amplios, crea una rama `feature/...` o `fix/...` desde `develop`, intégrala con `git merge --ff-only` y elimínala. No crees pull requests.
 - Tras validar localmente, promueve desde `master` con `git merge --ff-only develop`. Así se incorpora todo el historial sin crear un commit de merge ni un mensaje nuevo. Si no puede avanzarse por fast-forward, detente y revisa la divergencia.
-- Antes de cualquier push, presenta el diff y los commits incluidos y espera el visto bueno explícito. Tras validar `master` y su CI y Quality Gate, actualiza `develop` con `git merge --ff-only master`.
+- Antes de un push, informa el diff y los commits incluidos. Una orden explícita del usuario para subir autoriza el push; no solicites una segunda confirmación. Tras validar `master` y su CI y Quality Gate, actualiza `develop` con `git merge --ff-only master`.
 - Despliega solo desde `master`, con entorno explícito, variables separadas y comprobación de salud. Publica releases solo desde un `master` validado, con versión semántica y notas de alcance, configuración, migraciones y reversión.
 
 ## Cambios y validación
