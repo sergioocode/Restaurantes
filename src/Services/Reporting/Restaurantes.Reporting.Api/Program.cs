@@ -16,6 +16,7 @@ builder.Services.AddSignalR();
 builder.Services.AddScoped<DashboardQueryService>();
 builder.Services.AddScoped<ReportingHealthService>();
 builder.Services.AddSingleton<RabbitMqDeadLetterService>();
+builder.Services.AddSingleton<IRabbitMqConnectionProvider, RabbitMqConnectionProvider>();
 builder.Services.AddHostedService<DeadLetterQueueMonitor>();
 builder.Services.AddRestaurantSecurity(builder.Configuration);
 WorkerHost.ConfigureServices(builder.Services, builder.Configuration);

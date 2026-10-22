@@ -1,5 +1,4 @@
 ﻿using System.Text;
-using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Exceptions;
 using Restaurantes.Messaging.RabbitMq;
@@ -21,7 +20,7 @@ public sealed record DeadLetterReplayResult(
     bool Blocked
 );
 
-public sealed class RabbitMqDeadLetterService(IOptions<RabbitMqOptions> options)
+public sealed class RabbitMqDeadLetterService(IRabbitMqConnectionProvider connectionProvider)
 {
     private const string RetryCountHeader = "x-restaurantes-retry-count";
     private const string OriginalQueueHeader = "x-restaurantes-original-queue";
@@ -73,8 +72,7 @@ public sealed class RabbitMqDeadLetterService(IOptions<RabbitMqOptions> options)
         CancellationToken cancellationToken
     )
     {
-        ConnectionFactory factory = RabbitMqConnectionFactory.Create(options.Value);
-        await using IConnection connection = await factory.CreateConnectionAsync(
+        await using IConnection connection = await connectionProvider.ConnectAsync(
             "reporting-dead-letter-status",
             cancellationToken
         );
@@ -116,8 +114,7 @@ public sealed class RabbitMqDeadLetterService(IOptions<RabbitMqOptions> options)
     )
     {
         HashSet<string> allowedOrigins = QueueOrigins[queue];
-        ConnectionFactory factory = RabbitMqConnectionFactory.Create(options.Value);
-        await using IConnection connection = await factory.CreateConnectionAsync(
+        await using IConnection connection = await connectionProvider.ConnectAsync(
             "reporting-dead-letter-replay",
             cancellationToken
         );
