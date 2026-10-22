@@ -1,3 +1,4 @@
+﻿using System.Globalization;
 using System.Net;
 using System.Reflection;
 using System.Text;
@@ -13,6 +14,12 @@ namespace Restaurantes.Clients.Pwa.Tests;
 
 public sealed class BackofficeCashRegisterReportTests : BunitContext
 {
+    public BackofficeCashRegisterReportTests()
+    {
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("es-ES");
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("es-ES");
+    }
+
     [Fact]
     public async Task Report_paging_requests_following_pages_until_a_short_page_is_returned()
     {
