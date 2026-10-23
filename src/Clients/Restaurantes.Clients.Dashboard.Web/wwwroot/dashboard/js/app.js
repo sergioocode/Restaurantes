@@ -7,7 +7,7 @@ const $ = id => document.getElementById(id),
     }),
     gatewayOrigin = location.origin,
     sessionKey = 'restaurantes.dashboard.login';
-let timer, healthTimer, realtimeRefreshTimer, access, socket, realtimeGeneration = 0, deadLetterRefreshAt = 0, deadLetterRequestGeneration = 0;
+let refreshTimer, realtimeRefreshTimer, access, socket, realtimeGeneration = 0, deadLetterRefreshAt = 0, deadLetterRequestGeneration = 0;
 let dashboardLoadPromise = null, dashboardRefreshPending = false;
 let restaurantNames = new Map();
 let dashboardRestaurantIds = [];
@@ -219,17 +219,6 @@ function lineStatusMarker(status) {
         : '';
 }
 
-function schedule() {
-    clearTimeout(timer);
-    const ms = +$('interval').value;
-    if (!ms) return;
-    const refreshAfterCurrentLoad = async () => {
-        await load();
-        if (+$('interval').value === ms) timer = setTimeout(refreshAfterCurrentLoad, ms);
-    };
-    timer = setTimeout(refreshAfterCurrentLoad, ms);
-}
-$('interval').onchange = () => { schedule(); void load() };
 $('date').onchange = () => { void load() };
 $('orderLimit').onchange = () => { void load() };
 
@@ -256,23 +245,21 @@ async function openDashboard(session) {
     restaurantNames = new Map(restaurants.map(x => [x.id.toLowerCase(), x.name]));
     dashboardRestaurantIds = restaurants.map(x => x.id);
     $('currentUser').textContent = access.user.displayName;
-    schedule();
-    await load();
-    await loadHealth();
-    await loadDeadLetters();
-    scheduleHealthRefresh();
+    await refreshAll();
+    scheduleRefresh();
     realtime()
 }
 
-function scheduleHealthRefresh() {
-    clearTimeout(healthTimer);
+async function refreshAll() {
+    await Promise.all([load(), loadHealth(), loadDeadLetters()]);
+}
+
+function scheduleRefresh() {
+    clearTimeout(refreshTimer);
     if (!access) return;
-    healthTimer = setTimeout(async () => {
-        await load();
-        if (!access) return;
-        await loadHealth();
-        await loadDeadLetters();
-        scheduleHealthRefresh();
+    refreshTimer = setTimeout(async () => {
+        await refreshAll();
+        scheduleRefresh();
     }, 30000);
 }
 
@@ -282,8 +269,7 @@ function logout() {
     socket = null;
     access = null;
     deadLetterRefreshAt = 0;
-    clearTimeout(timer);
-    clearTimeout(healthTimer);
+    clearTimeout(refreshTimer);
     clearTimeout(realtimeRefreshTimer);
     dashboardRefreshPending = false;
     sessionStorage.removeItem(sessionKey);
@@ -315,6 +301,7 @@ async function realtime() {
                     ws.send(JSON.stringify({ type: 1, target: 'JoinRestaurants', arguments: [dashboardRestaurantIds] }) + sep);
                     joined = true;
                     $('state').textContent = 'Conectado';
+                    void load();
                 }
                 if (m.type === 1 && m.target === 'DashboardUpdated') {
                     clearTimeout(realtimeRefreshTimer);

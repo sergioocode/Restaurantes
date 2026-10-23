@@ -190,7 +190,7 @@ async function loadDashboard(session, deadLetters = [], testOptions = {}) {
   });
   const instrumentedSource = appSource.replace(
     /\}\)\(\);\s*$/u,
-    'globalThis.__dashboardTest = { load, logout, openDashboard, loadHealth, loadDeadLetters, schedule };})();'
+    'globalThis.__dashboardTest = { load, logout, openDashboard, loadHealth, loadDeadLetters, schedule: scheduleRefresh };})();'
   );
   vm.runInContext(instrumentedSource, context, { filename: fileURLToPath(appUrl) });
   for (let attempt = 0; attempt < 50 && !getElementById('operations').innerHTML; attempt++) {
