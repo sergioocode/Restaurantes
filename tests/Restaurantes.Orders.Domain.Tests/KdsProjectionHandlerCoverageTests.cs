@@ -64,6 +64,72 @@ public sealed class KdsProjectionHandlerCoverageTests
     }
 
     [Fact]
+    public async Task Kitchen_updates_preserve_the_order_of_product_lines()
+    {
+        await using OrderReadDbContext db = CreateDatabase();
+        KdsProjectionHandler handler = new(db, TimeProvider.System);
+        Guid orderId = Guid.NewGuid();
+        Guid restaurantId = Guid.NewGuid();
+        OrderLineSnapshot[] lines = [Line("Carne 1", 2), Line("Carne 2", 3), Line("Carne 3", 4)];
+        OrderCreated created = new(
+            orderId,
+            restaurantId,
+            null,
+            2,
+            null,
+            "Mesa 1",
+            "",
+            "DineIn",
+            "Pos",
+            "Immediate",
+            1,
+            CreatedAtUtc,
+            lines,
+            [Station("CARNE", "Pending")]
+        );
+        await Project(handler, Guid.NewGuid(), created);
+
+        KitchenTicketPreparationStarted started = new(
+            orderId,
+            restaurantId,
+            null,
+            2,
+            null,
+            "Mesa 1",
+            "",
+            "DineIn",
+            "Pos",
+            "Immediate",
+            "CARNE",
+            2,
+            CreatedAtUtc,
+            CreatedAtUtc.AddMinutes(1),
+            CreatedAtUtc.AddMinutes(2),
+            [
+                lines[2] with
+                {
+                    KitchenStatus = "InPreparation",
+                    PreparationStartedAtUtc = CreatedAtUtc.AddMinutes(2),
+                },
+                lines[0],
+                lines[1],
+            ],
+            [Station("CARNE", "InPreparation", CreatedAtUtc.AddMinutes(2))]
+        );
+        await Project(handler, Guid.NewGuid(), started);
+
+        OrderLineResponse[] projectedLines = JsonSerializer.Deserialize<OrderLineResponse[]>(
+            (await db.KitchenOrders.SingleAsync(TestContext.Current.CancellationToken)).LinesJson
+        )!;
+
+        Assert.Equal(
+            lines.Select(line => line.ProductName),
+            projectedLines.Select(line => line.ProductName)
+        );
+        Assert.Equal("InPreparation", projectedLines[2].KitchenStatus);
+    }
+
+    [Fact]
     public async Task Submitted_and_kitchen_events_map_status_and_affected_stations()
     {
         await using OrderReadDbContext db = CreateDatabase();

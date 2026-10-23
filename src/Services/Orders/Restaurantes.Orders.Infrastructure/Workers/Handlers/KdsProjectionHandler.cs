@@ -75,7 +75,11 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
                 projection.PreparationStartedAtUtc = data.PreparationStartedAtUtc;
                 projection.ReadyAtUtc = data.ReadyAtUtc;
                 projection.DeliveredAtUtc = data.DeliveredAtUtc;
-                projection.LinesJson = JsonSerializer.Serialize(data.Lines);
+                IReadOnlyList<OrderLineResponse> orderedLines = PreserveLineOrder(
+                    projection.LinesJson,
+                    data.Lines
+                );
+                projection.LinesJson = JsonSerializer.Serialize(orderedLines);
                 projection.StationsJson = JsonSerializer.Serialize(data.Stations);
                 shouldNotify = data.Status != DraftStatus;
             }
@@ -469,6 +473,38 @@ public sealed class KdsProjectionHandler(OrderReadDbContext dbContext, TimeProvi
                 line.TaxRate
             ))
             .ToList();
+    }
+
+    private static IReadOnlyList<OrderLineResponse> PreserveLineOrder(
+        string currentLinesJson,
+        IReadOnlyList<OrderLineResponse> incomingLines
+    )
+    {
+        OrderLineResponse[] currentLines =
+            JsonSerializer.Deserialize<OrderLineResponse[]>(currentLinesJson) ?? [];
+        if (currentLines.Length == 0)
+        {
+            return incomingLines;
+        }
+
+        Dictionary<Guid, int> currentPositions = currentLines
+            .Select((line, index) => (line.Id, index))
+            .ToDictionary(item => item.Id, item => item.index);
+
+        return incomingLines
+            .Select(
+                (line, index) =>
+                    new
+                    {
+                        Line = line,
+                        Position = currentPositions.TryGetValue(line.Id, out int position)
+                            ? position
+                            : currentLines.Length + index,
+                    }
+            )
+            .OrderBy(item => item.Position)
+            .Select(item => item.Line)
+            .ToArray();
     }
 
     private static IReadOnlyList<OrderKitchenStationResponse> MapStations(

@@ -153,7 +153,7 @@ export class OrderRenderer {
     lines.className = 'product-lines';
     for (const line of order.lines) {
       if (isPrimary && controlledCodes.has(line.preparationStationCode)) continue;
-      lines.append(this.renderProductLine(order, line, false, false, !isPrimary));
+      lines.append(this.renderProductLine(order, line, isPrimary, false, !isPrimary));
     }
     return lines;
   }
@@ -178,13 +178,13 @@ export class OrderRenderer {
     const item = document.createElement('li');
     item.className = 'product-line';
     item.append(
-      this.renderProductDescription(line),
+      this.renderProductDescription(order, line, isPrimary),
       this.renderProductControls(order, line, isPrimary, blocked, stationActions)
     );
     return item;
   }
 
-  renderProductDescription(line) {
+  renderProductDescription(order, line, isPrimary) {
     const description = document.createElement('div');
     description.className = 'product-description';
     const name = document.createElement('span');
@@ -197,8 +197,12 @@ export class OrderRenderer {
       while (end > 0 && (notes[end - 1] === '·' || notes[end - 1].trim() === '')) end--;
       productNotes = notes.slice(0, end).trim();
     }
+    const preparationStation = isPrimary
+      ? order.stations?.find(station => station.code === line.preparationStationCode)?.name
+      : '';
     name.textContent = line.quantity + ' × ' + line.productName
-      + productFormatLabel(line.format) + ' · ' + line.categoryName
+      + productFormatLabel(line.format)
+      + (preparationStation ? ' · ' + preparationStation : '')
       + (productNotes ? ' — ' + productNotes : '');
     description.append(name);
     if (extrasMarker >= 0) {

@@ -63,6 +63,7 @@ test('station order keeps header, badges, lines, recovery action and collapse st
     assert.equal(headerMeta.children[2].children[1].textContent, 2);
     assert.equal(body.children[1].children.map(child => child.textContent).join(','), 'Chef: Ready,Bebidas: Dispatched');
     assert.equal(body.children[2].children.length, 2);
+    assert.equal(body.children[2].children[1].children[0].children[0].textContent, '1 × Agua');
     const deliverButton = body.children[3].children[0];
     assert.equal(deliverButton.disabled, false);
     deliverButton.listeners.get('click')();
@@ -93,6 +94,7 @@ test('primary station separates controlled passes and disables pending recovery'
     const [title, body] = renderer.element.children[0].children;
     assert.equal(title.children[1].children.length, 2);
     assert.equal(body.children[0].children.length, 1);
+    assert.equal(body.children[0].children[0].children[0].children[0].textContent, '1 × Agua · Bebidas');
     assert.equal(body.children[1].children[0].children[0].children[0].textContent, 'Parrilla · prioridad 1');
     assert.equal(body.children[2].children[0].disabled, true);
   } finally {
@@ -123,13 +125,15 @@ test('product notes and extras are rendered separately as text', () => {
       ['<script>alert(1)</script> · Extras: <b>Queso</b>', '<script>alert(1)</script>', ['<b>Queso</b>']],
       ['', '', []],
     ];
+    const order = { id: 'order-1', stations: [{ code: 'GRILL', name: 'Parrilla' }] };
     for (const [notes, expectedNotes, extras] of cases) {
-      const item = renderer.renderProductLine({ id: 'order-1' }, {
-        notes, quantity: 1, productName: 'Hamburguesa', categoryName: 'Carnes', kitchenStatus: 'Dispatched'
-      }, false, false, false);
+      const item = renderer.renderProductLine(order, {
+        notes, quantity: 1, productName: 'Hamburguesa', categoryName: 'Carnes', kitchenStatus: 'Dispatched',
+        preparationStationCode: 'GRILL'
+      }, true, false, false);
       const description = item.children[0];
       assert.equal(description.children[0].textContent,
-        '1 × Hamburguesa · Carnes' + (expectedNotes ? ' — ' + expectedNotes : ''));
+        '1 × Hamburguesa · Parrilla' + (expectedNotes ? ' — ' + expectedNotes : ''));
       assert.deepEqual(description.children[1]?.children.map(extra => extra.textContent) ?? [], extras);
     }
   } finally {
