@@ -362,6 +362,7 @@ public partial class Home
             return;
         }
         SetModule(selected);
+        sidebarOpen = false;
         if (selected is "orders" or DailyOrdersReport)
         {
             await RefreshOrders();

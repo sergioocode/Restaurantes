@@ -150,12 +150,14 @@ public sealed class BackofficeStartupCoverageTests : BunitContext
         Assert.True(group.Cancel);
         await cut.InvokeAsync(() => Invoke<Task>(cut.Instance, "OnNavigationSelected", group));
         Assert.Equal("catalog-design", GetField<string>(cut.Instance, "module"));
+        Assert.True(GetField<bool>(cut.Instance, "sidebarOpen"));
 
         NodeSelectEventArgs module = Selection("companies");
         await cut.InvokeAsync(() => InvokeAction(cut.Instance, "BeforeNavigationSelect", module));
         Assert.False(module.Cancel);
         await cut.InvokeAsync(() => Invoke<Task>(cut.Instance, "OnNavigationSelected", module));
         Assert.Equal("companies", GetField<string>(cut.Instance, "module"));
+        Assert.False(GetField<bool>(cut.Instance, "sidebarOpen"));
     }
 
     private static NodeSelectEventArgs Selection(string id) =>
