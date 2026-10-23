@@ -1244,7 +1244,15 @@ public partial class Home
             return;
         }
 
-        BackToTables();
+        await Run(
+            async () =>
+            {
+                BackToTables();
+                SetTables(await Api.TablesAsync(restaurantId));
+                await LoadVisibleTableSessionOrdersAsync();
+            },
+            false
+        );
     }
 
     private async Task OpenBill()

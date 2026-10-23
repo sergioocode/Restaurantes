@@ -1238,6 +1238,61 @@ public sealed class PosHomeRenderingTests : BunitContext
     }
 
     [Fact]
+    public async Task Returning_to_tables_refreshes_visible_session_orders()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        Guid zoneId = Guid.NewGuid();
+        Guid tableId = Guid.NewGuid();
+        Guid sessionId = Guid.NewGuid();
+        OperationalRefreshHandler handler = new(restaurantId)
+        {
+            Tables =
+            {
+                new TableResponse(
+                    tableId,
+                    restaurantId,
+                    "B02",
+                    "Barra 02",
+                    true,
+                    "Occupied",
+                    sessionId,
+                    zoneId,
+                    "Barra",
+                    1
+                ),
+            },
+            Session = new DiningSessionResponse(
+                sessionId,
+                restaurantId,
+                tableId,
+                "Pos",
+                "Open",
+                []
+            ),
+        };
+        IRenderedComponent<PosHome> cut = await RenderTakeaway(restaurantId, [], handler);
+        SetField(cut.Instance, "takeawayOpen", false);
+        SetField(cut.Instance, "serviceMode", "DineIn");
+        SetField(cut.Instance, "selectedZoneId", zoneId);
+        SetField(cut.Instance, "selectedTable", handler.Tables[0]);
+        SetField(
+            cut.Instance,
+            "session",
+            new DiningSessionResponse(sessionId, restaurantId, tableId, "Pos", "Open", [])
+        );
+        SetField(cut.Instance, "hasSessionOrders", true);
+
+        await cut.InvokeAsync(() => Invoke(cut.Instance, "BackFromTableOrder"));
+
+        Assert.Null(GetField<TableResponse?>(cut.Instance, "selectedTable"));
+        Assert.Contains($"/api/dining/restaurants/{restaurantId}/tables", handler.Paths);
+        Assert.Equal(1, handler.ActiveSessionReads);
+        Assert.True(
+            GetField<IDictionary>(cut.Instance, "tableSessionOrderSnapshots").Contains(tableId)
+        );
+    }
+
+    [Fact]
     public async Task Showing_pickup_orders_clears_table_filters_and_closing_dialogs_respects_busy_state()
     {
         Guid restaurantId = Guid.NewGuid();
