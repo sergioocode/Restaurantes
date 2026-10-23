@@ -1,22 +1,6 @@
--- Reconstruye el catálogo de desarrollo tras tools/postgres/reset-operational-data.ps1,
--- reemplaza las estaciones KDS de los cinco locales y agrega descuentos de ejemplo.
--- No limpia pedidos; para eso usa tools/postgres/reset-operational-data.sql.
---
--- Antes de empezar:
---   1. Asegúrate de que las migraciones de Identity, RestaurantOperations, Catalog, Orders y Dining
---      estén aplicadas en restaurants_operational.
---   2. Detén todos los servicios y workers de la aplicación.
---   3. Ejecuta .\tools\postgres\reset-operational-data.ps1 -ConfirmReset BORRAR
---      para vaciar los datos operativos y el catálogo en ambas bases y purgar sus colas.
---   4. Desde PowerShell en la raíz del repositorio, copia el archivo al contenedor:
+-- Carga el catálogo de desarrollo. Ejecuta desde PowerShell en la raíz del repositorio:
 --      docker cp .\tools\postgres\seed\01-development-catalog.sql restaurantes-postgres:/tmp/01-development-catalog.sql
---   5. Ejecuta el seed:
 --      docker exec -i restaurantes-postgres psql -U restaurants -d restaurants_operational -v ON_ERROR_STOP=1 -f /tmp/01-development-catalog.sql
---   6. Arranca de nuevo los servicios y workers para que procesen los eventos del outbox
---      y actualicen las proyecciones de lectura.
---
--- El reset elimina también las asociaciones de fotos; los blobs externos no se borran aquí.
--- Ejecuta únicamente en el entorno local de desarrollo.
 
 \set ON_ERROR_STOP on
 
@@ -179,7 +163,7 @@ ON CONFLICT ("Id") DO UPDATE SET
     "Description" = EXCLUDED."Description",
     "IsActive" = EXCLUDED."IsActive";
 
--- Los identificadores del seed son estables; un reset previo elimina los registros de fotos.
+-- Los identificadores del seed son estables para mantener referencias reproducibles.
 WITH inserted AS (
     INSERT INTO categories (
         "Id", "Code", "Name", "DefaultStationCode", "DefaultStationName",
