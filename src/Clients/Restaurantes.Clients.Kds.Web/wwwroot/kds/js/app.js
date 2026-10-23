@@ -1,5 +1,5 @@
 import { KdsApiClient } from './api-client.js';
-import { orderDestinationLabel, OrderRenderer, productFormatLabel } from './order-renderer.js';
+import { OrderRenderer, productFormatLabel } from './order-renderer.js';
 import { KdsRealtimeClient } from './realtime-client.js';
 import { renderKitchenTicket } from './ticket-renderer.js';
 
@@ -152,16 +152,14 @@ async function advanceOrder(order, action, actionButton) {
   for (const button of actionButton.closest('article.order')?.querySelectorAll('button') || []) {
     button.disabled = true;
   }
-  eventText.textContent = 'Enviando comando para ' + orderDestinationLabel(order) + '…';
+  eventText.textContent = '';
   try {
     const updatedOrder = await api.sendOrderCommand(order.id, action.path);
     pending.minimumVersion = Math.max(order.version + 1, updatedOrder.version);
     await showTicketAfterStationCompletion(updatedOrder, action.path);
-    eventText.textContent = 'Comando aceptado; actualizando el pedido…';
   } catch (error) {
     if (error.status === 409) {
       pending.minimumVersion = order.version + 1;
-      eventText.textContent = 'El estado del pedido cambió; esperando la actualización…';
     } else {
       pendingOrders.delete(order.id);
       eventText.textContent = error.message;

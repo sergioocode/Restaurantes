@@ -280,14 +280,14 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
     assert.ok(action);
     await action.listeners.get('click')();
     assert.equal(order.version, 2);
-    assert.equal(element('event').textContent, 'Comando aceptado; actualizando el pedido…');
+    assert.equal(element('event').textContent, '');
 
     action = element('orders').children[0].querySelectorAll('button').find(button => button.textContent === 'Listo');
     assert.ok(action);
     order = { ...order, version: order.version + 1 };
     commandStatus = 409;
     await action.listeners.get('click')();
-    assert.equal(element('event').textContent, 'El estado del pedido cambió; esperando la actualización…');
+    assert.equal(element('event').textContent, '');
     commandStatus = null;
     action = element('orders').children[0].querySelectorAll('button').find(button => button.textContent === 'Listo');
     assert.ok(action);
