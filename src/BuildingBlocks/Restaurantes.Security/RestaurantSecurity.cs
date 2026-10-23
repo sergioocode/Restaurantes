@@ -59,8 +59,6 @@ public static class RestaurantPermissions
             "Admin" =>
             [
                 BackofficeAccess,
-                PosUse,
-                CommanderUse,
                 IdentityManage,
                 TablesRead,
                 TablesManage,
@@ -76,7 +74,6 @@ public static class RestaurantPermissions
                 CashRegisterRead,
                 CatalogManage,
                 CatalogGlobalManage,
-                KdsUse,
                 DashboardRead,
                 FinancialReportsRead,
                 MarketingReportsRead,

@@ -19,8 +19,6 @@ public sealed class RestaurantSecurityAuthorizationTests
                 "Admin",
                 [
                     RestaurantPermissions.BackofficeAccess,
-                    RestaurantPermissions.PosUse,
-                    RestaurantPermissions.CommanderUse,
                     RestaurantPermissions.IdentityManage,
                     RestaurantPermissions.TablesRead,
                     RestaurantPermissions.TablesManage,
@@ -36,7 +34,6 @@ public sealed class RestaurantSecurityAuthorizationTests
                     RestaurantPermissions.CashRegisterRead,
                     RestaurantPermissions.CatalogManage,
                     RestaurantPermissions.CatalogGlobalManage,
-                    RestaurantPermissions.KdsUse,
                     RestaurantPermissions.DashboardRead,
                     RestaurantPermissions.FinancialReportsRead,
                     RestaurantPermissions.MarketingReportsRead,
@@ -211,6 +208,9 @@ public sealed class RestaurantSecurityAuthorizationTests
         Assert.True(
             admin.CanAccessRestaurant(restaurantId, RestaurantPermissions.CashRegisterManage)
         );
+        Assert.False(admin.CanAccessRestaurant(restaurantId, RestaurantPermissions.PosUse));
+        Assert.False(admin.CanAccessRestaurant(restaurantId, RestaurantPermissions.CommanderUse));
+        Assert.False(admin.CanAccessRestaurant(restaurantId, RestaurantPermissions.KdsUse));
         Assert.False(
             unknownRole.CanAccessRestaurant(restaurantId, RestaurantPermissions.CashRegisterManage)
         );
