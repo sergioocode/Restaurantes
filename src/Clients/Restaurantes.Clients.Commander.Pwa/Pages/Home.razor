@@ -39,7 +39,12 @@
     else
     {
         <header class="topbar">
-            <div><p class="eyebrow">COMANDERO</p><strong>@login.User.DisplayName</strong></div>
+            <div class="identity-card">
+                <p class="eyebrow">COMANDERO</p>
+                <div class="identity-details">
+                    <strong>@login.User.DisplayName</strong>
+                </div>
+            </div>
             <div class="topbar-actions">
                 <button class="ghost" @onclick="LoadTables" disabled="@busy">Actualizar mesas</button>
                 <button class="ghost" @onclick="Logout">Salir</button>

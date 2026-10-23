@@ -33,6 +33,10 @@ input:focus, select:focus { border-color: #2f684a; box-shadow: 0 0 0 3px #2f684a
 .topbar, .order-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .topbar { min-height: 64px; padding-block: 9px; border-bottom: 1px solid #d5d5ca; }
 .topbar .eyebrow { margin: 0; }
+.identity-card { display: grid; gap: 2px; min-width: 0; max-width: min(100%, 360px); padding: 7px 11px; border: 1px solid #cbd4ca; border-radius: 9px; background: #fff; }
+.identity-details { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.identity-details strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.identity-details strong { flex: 0 1 auto; }
 .topbar-actions { display: flex; align-items: center; gap: 8px; }
 .topbar-actions .ghost, .order-head > .ghost { min-height: 44px; padding-block: 10px; border: 1px solid #9eac9f; color: #203c2d; background: #fff; box-shadow: 0 2px 5px rgba(32, 60, 45, .12); }
 .topbar-actions .ghost:hover, .topbar-actions .ghost:focus-visible, .order-head > .ghost:hover, .order-head > .ghost:focus-visible { border-color: #254632; background: #e4e9df; outline: 2px solid #25463233; outline-offset: 1px; }
@@ -178,7 +182,15 @@ input:focus, select:focus { border-color: #2f684a; box-shadow: 0 0 0 3px #2f684a
 .loading-progress circle:last-child { stroke: #d45e28; stroke-dasharray: calc(3.141 * var(--blazor-load-percentage, 0%) * .8), 500%; }
 .loading-progress-text { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; font-weight: 800; }
 .loading-progress-text::after { content: var(--blazor-load-percentage-text, "Cargando"); }
-@media (max-width: 620px) { .shell { padding: 14px; }.login-card { padding: 24px; border-radius: 22px; }.topbar { gap: 8px; }.topbar-actions { gap: 6px; }.topbar-actions .ghost { padding-inline: 10px; font-size: 13px; white-space: nowrap; }.topbar > div:first-child { min-width: 0; }.topbar > div:first-child strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.order-head { align-items: end; }.menu-grid { grid-template-columns: 1fr; }.order-submit { right: 12px; left: 12px; width: calc(100% - 24px); }.order-submit .primary { max-width: 55%; }.bill-card { padding: 18px; border-radius: 20px; }.bill-actions { align-items: stretch; flex-direction: column; } }
+@media (max-width: 620px) { .shell { padding: 14px; }.login-card { padding: 24px; border-radius: 22px; }.topbar { gap: 8px; }.topbar-actions { gap: 6px; }.topbar-actions .ghost { padding-inline: 10px; font-size: 13px; white-space: nowrap; }.topbar > .identity-card { flex: 1; }.topbar > .identity-card strong { display: block; }.order-head { align-items: end; }.menu-grid { grid-template-columns: 1fr; }.order-submit { right: 12px; left: 12px; width: calc(100% - 24px); }.order-submit .primary { max-width: 55%; }.bill-card { padding: 18px; border-radius: 20px; }.bill-actions { align-items: stretch; flex-direction: column; } }
+@media (max-width: 620px) {
+    .topbar { align-items: stretch; flex-direction: column; }
+    .topbar > .identity-card { width: 100%; max-width: none; }
+    .identity-card { padding-inline: 3px; }
+    .identity-details { gap: 2px; }
+    .identity-details strong { flex: 1 1 auto; min-width: 0; font-size: 12px; }
+    .topbar-actions { justify-content: flex-end; }
+}
 @media (max-width: 650px) { .payment-dialog-body { grid-template-columns: 1fr; }.payment-keypad { order: 2; } }
 
 @media print {

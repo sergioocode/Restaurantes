@@ -49,7 +49,13 @@ else
             <button class="sidebar-menu-toggle" type="button" aria-label="Abrir o cerrar el menú" aria-expanded="@sidebarOpen" @onclick="ToggleSidebar">
                 <span aria-hidden="true">☰</span>
             </button>
-            <div><p class="eyebrow">RESTAURANTES · BACKOFFICE</p><strong>@login.User.DisplayName</strong></div>
+            <div class="identity-card">
+                <p class="eyebrow">BACKOFFICE</p>
+                <div class="identity-details">
+                    <strong>@login.User.DisplayName</strong>
+                    <span class="identity-email">@login.User.Username</span>
+                </div>
+            </div>
         </div>
         <div class="top-actions">
             <button class="secondary" @onclick="Logout">Salir</button>
