@@ -5,20 +5,28 @@ Herramienta local para generar pedidos en todos los restaurantes configurados a 
 ## Preparar la configuración
 
 1. Copia `simulator.sample.json` como `simulator.local.json`.
-2. Incluye todos los locales de desarrollo que quieras simular. El seed actual configura Madrid Centro, Madrid Norte, Barcelona Centro, Valencia Centro y Sevilla Centro.
+2. Incluye los locales que quieras simular.
 3. Ajusta los productos máximos, los métodos de pago y las propinas.
 4. Configura `OpeningFloat` si quieres un fondo inicial distinto de cero.
-5. Pega un token de una cuenta Admin con alcance `Todos los Locales` en `AccessToken`. Admin tiene permisos para usar TPV, KDS, caja, pedidos, cobros y liberación de mesas en todos los locales.
+5. En cada local, configura `PosAccessToken` y `KdsAccessToken` con cuentas autorizadas para ese local.
 
-`simulator.sample.json` contiene el token vacío. La herramienta lee el token desde `simulator.local.json`, que está excluido de Git; no lo solicita por consola ni lo escribe en logs. Si falta, informa el nombre del campo y se detiene. Si la URL de la API no es local, el programa también se detiene por seguridad; para otra URL hay que cambiar explícitamente `AllowNonLocalApi` en la configuración.
+`simulator.sample.json` deja vacíos ambos tokens. La herramienta los lee desde `simulator.local.json`, que está excluido de Git; no los solicita por consola ni los escribe en logs. Si falta alguno, informa el campo y el local y se detiene. Si la URL de la API no es local, también se detiene; para otra URL hay que cambiar explícitamente `AllowNonLocalApi` en la configuración.
 
-Para obtenerlo en el equipo de desarrollo, inicia sesión como Admin en TPV, abre las herramientas del navegador (F12 → Consola) y ejecuta:
+Para obtener los tokens en el equipo de desarrollo, inicia sesión en cada cliente con una cuenta autorizada para el local, abre F12 → Consola y copia el token correspondiente.
+
+En TPV:
 
 ```javascript
-copy(JSON.parse(sessionStorage.getItem('restaurantes.pos.login')).accessToken)
+copy(JSON.parse(sessionStorage.getItem('restaurantes.pos.login')).AccessToken)
 ```
 
-Pega el valor en `AccessToken`. El mismo token se usa para los flujos de TPV y KDS y para cada restaurante configurado; no necesitas un usuario separado por local.
+En KDS:
+
+```javascript
+copy(JSON.parse(sessionStorage.getItem('restaurantes.kds.login')).accessToken)
+```
+
+Pega cada valor en `PosAccessToken` o `KdsAccessToken` del local correspondiente. El token de TPV ejecuta también las operaciones de pedidos, caja, pagos y liberación de la mesa; por eso debe tener esos permisos en ese local. El token KDS se usa para consultar y avanzar las estaciones. No se requiere un token independiente para cada API.
 
 ## Ejecutar
 

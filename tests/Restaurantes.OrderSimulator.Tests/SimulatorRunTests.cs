@@ -121,15 +121,15 @@ public sealed class SimulatorRunTests
             0m,
             paid ? 0m : 10m,
             paid,
-            delivered && !paid
+            delivered
                 ?
                 [
                     new BillOrderInfo(
                         OrderId,
                         "Delivered",
-                        "Unpaid",
+                        paid ? "Paid" : "Unpaid",
                         10m,
-                        0m,
+                        paid ? 10m : 0m,
                         0m,
                         DateTime.UnixEpoch
                     ),
@@ -213,12 +213,12 @@ public sealed class SimulatorRunTests
             if (path == $"api/dining/sessions/{SessionId}/bill")
             {
                 bool paid = Interlocked.Increment(ref billReads) > 1;
-                return Task.FromResult(Json(HttpStatusCode.OK, Bill(delivered: !paid, paid)));
+                return Task.FromResult(Json(HttpStatusCode.OK, Bill(delivered: true, paid)));
             }
 
             if (path == $"api/dining/sessions/{SessionId}/checkout")
             {
-                return Task.FromResult(Json(HttpStatusCode.OK, Bill(delivered: false, paid: true)));
+                return Task.FromResult(Json(HttpStatusCode.OK, Bill(delivered: true, paid: true)));
             }
 
             if (path == $"api/dining/sessions/{SessionId}/close")

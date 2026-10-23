@@ -6,6 +6,74 @@ namespace Restaurantes.OrderSimulator.Tests;
 
 public sealed class PaymentSimulationTests
 {
+    [Fact]
+    public void Session_is_not_ready_to_close_when_any_active_order_is_unpaid()
+    {
+        BillResponse bill = new(
+            Guid.NewGuid(),
+            20m,
+            2m,
+            0m,
+            true,
+            [
+                new BillOrderInfo(
+                    Guid.NewGuid(),
+                    "Delivered",
+                    "Paid",
+                    10m,
+                    10m,
+                    1m,
+                    DateTime.UtcNow
+                ),
+                new BillOrderInfo(
+                    Guid.NewGuid(),
+                    "Delivered",
+                    "PartiallyPaid",
+                    10m,
+                    9m,
+                    1m,
+                    DateTime.UtcNow
+                ),
+            ]
+        );
+
+        Assert.False(Simulator.IsReadyToClose(bill));
+    }
+
+    [Fact]
+    public void Session_is_ready_to_close_when_every_active_order_is_paid()
+    {
+        BillResponse bill = new(
+            Guid.NewGuid(),
+            20m,
+            2m,
+            0m,
+            true,
+            [
+                new BillOrderInfo(
+                    Guid.NewGuid(),
+                    "Delivered",
+                    "Paid",
+                    10m,
+                    10m,
+                    1m,
+                    DateTime.UtcNow
+                ),
+                new BillOrderInfo(
+                    Guid.NewGuid(),
+                    "Cancelled",
+                    "Unpaid",
+                    10m,
+                    0m,
+                    0m,
+                    DateTime.UtcNow
+                ),
+            ]
+        );
+
+        Assert.True(Simulator.IsReadyToClose(bill));
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData(0)]
@@ -152,5 +220,16 @@ public sealed class PaymentSimulationTests
             "weights",
             Assert.Throws<ArgumentException>(() => Simulator.Allocate(1m, [0m])).ParamName
         );
+    }
+
+    [Fact]
+    public void Tip_allocation_never_creates_negative_payment_tips_for_small_splits()
+    {
+        List<decimal> tips = Simulator.AllocateMoney(0.25m, Enumerable.Repeat(0.25m, 10).ToList());
+
+        Assert.Equal(0.25m, tips.Sum());
+        Assert.All(tips, tip => Assert.True(tip >= 0));
+        Assert.Equal(5, tips.Count(tip => tip == 0.03m));
+        Assert.Equal(5, tips.Count(tip => tip == 0.02m));
     }
 }

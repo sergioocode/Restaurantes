@@ -100,7 +100,6 @@ public sealed class SimulatorValidationTests
             (Options(apiBaseUrl: "https://example.com"), "no es local"),
             (Options(restaurants: []), "al menos un local"),
             (Options(restaurants: [Restaurant(), Restaurant()]), "RestaurantId distinto"),
-            (Options(accessToken: " "), "AccessToken"),
             (Options(ordersPerBatch: 0), "OrdersPerBatch"),
             (Options(maxConcurrentOrders: 0), "MaxConcurrentOrders"),
             (Options(runDurationMinutes: 0), "RunDurationMinutes"),
@@ -123,6 +122,8 @@ public sealed class SimulatorValidationTests
         [
             (Restaurant(id: Guid.Empty), "Name y RestaurantId"),
             (Restaurant(name: " "), "Name y RestaurantId"),
+            (Restaurant(posAccessToken: " "), "PosAccessToken"),
+            (Restaurant(kdsAccessToken: " "), "KdsAccessToken"),
             (Restaurant(openingFloat: -1), "OpeningFloat"),
             (Restaurant(guestCount: new IntRange(1, 10)), "GuestCount"),
             (Restaurant(maxProductsPerOrder: 0), "MaxProductsPerOrder"),
@@ -203,7 +204,6 @@ public sealed class SimulatorValidationTests
 
     private static SimulatorOptions Options(
         string apiBaseUrl = "http://localhost:5001",
-        string accessToken = "test-token",
         List<RestaurantOptions>? restaurants = null,
         int ordersPerBatch = 20,
         int maxConcurrentOrders = 10,
@@ -213,7 +213,6 @@ public sealed class SimulatorValidationTests
         new()
         {
             ApiBaseUrl = apiBaseUrl,
-            AccessToken = accessToken,
             Restaurants = restaurants ?? [Restaurant()],
             OrdersPerBatch = ordersPerBatch,
             MaxConcurrentOrders = maxConcurrentOrders,
@@ -227,12 +226,16 @@ public sealed class SimulatorValidationTests
         decimal openingFloat = 0,
         IntRange? guestCount = null,
         int maxProductsPerOrder = 4,
-        PaymentOptions? payment = null
+        PaymentOptions? payment = null,
+        string posAccessToken = "pos-token",
+        string kdsAccessToken = "kds-token"
     ) =>
         new()
         {
             RestaurantId = id ?? RestaurantId,
             Name = name,
+            PosAccessToken = posAccessToken,
+            KdsAccessToken = kdsAccessToken,
             OpeningFloat = openingFloat,
             GuestCount = guestCount ?? new IntRange(2, 10),
             MaxProductsPerOrder = maxProductsPerOrder,

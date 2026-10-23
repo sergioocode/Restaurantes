@@ -186,7 +186,11 @@ public sealed class SimulatorOrderFlowTests
             canRelease: false,
             [new BillOrderInfo(OrderId, "Delivered", "Unpaid", 10m, 0m, 0m, DateTime.UnixEpoch)]
         );
-        BillResponse paidBill = Bill(outstanding: 0m, canRelease: true, []);
+        BillResponse paidBill = Bill(
+            outstanding: 0m,
+            canRelease: true,
+            [new BillOrderInfo(OrderId, "Delivered", "Paid", 10m, 10m, 1m, DateTime.UnixEpoch)]
+        );
         RecordingHandler handler = new(
             Json(HttpStatusCode.OK, session),
             Json(HttpStatusCode.OK, submittedOrder),
@@ -228,6 +232,46 @@ public sealed class SimulatorOrderFlowTests
         Assert.All(
             handler.Requests,
             request => Assert.Equal("Bearer pos-token", request.Authorization)
+        );
+    }
+
+    [Fact]
+    public async Task Paid_session_retries_release_after_the_api_reports_a_stale_unpaid_order()
+    {
+        BillResponse paidBill = Bill(
+            outstanding: 0m,
+            canRelease: true,
+            [new BillOrderInfo(OrderId, "Delivered", "Paid", 10m, 10m, 0m, DateTime.UnixEpoch)]
+        );
+        RecordingHandler handler = new(
+            Json(HttpStatusCode.OK, paidBill),
+            new HttpResponseMessage(HttpStatusCode.Conflict)
+            {
+                Content = new StringContent(
+                    "{\"detail\":\"All active session orders must be paid before releasing the table.\",\"unpaidOrderIds\":[\"order-id\"]}"
+                ),
+            },
+            Json(HttpStatusCode.OK, paidBill),
+            Json(HttpStatusCode.OK, new SessionInfo(SessionId, RestaurantId, TableId, "Closed"))
+        );
+        using HttpClient client = new(handler) { BaseAddress = new Uri("http://localhost/") };
+
+        await Simulator.ClosePaidSessionAsync(
+            client,
+            SessionId,
+            "pos-token",
+            retryInterval: TimeSpan.Zero,
+            timeout: TimeSpan.FromSeconds(1)
+        );
+
+        Assert.Equal(
+            [
+                (HttpMethod.Get, $"api/dining/sessions/{SessionId}/bill"),
+                (HttpMethod.Post, $"api/dining/sessions/{SessionId}/close"),
+                (HttpMethod.Get, $"api/dining/sessions/{SessionId}/bill"),
+                (HttpMethod.Post, $"api/dining/sessions/{SessionId}/close"),
+            ],
+            handler.Requests.Select(request => (request.Method, request.Path))
         );
     }
 

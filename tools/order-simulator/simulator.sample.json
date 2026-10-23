@@ -1,6 +1,5 @@
 {
   "ApiBaseUrl": "http://localhost:5001",
-  "AccessToken": "",
   "AllowNonLocalApi": false,
   "RandomSeed": null,
   "OrdersPerBatch": 20,
@@ -11,6 +10,8 @@
     {
       "Name": "Barcelona Centro",
       "RestaurantId": "33333333-3333-4333-8333-333333333333",
+      "PosAccessToken": "",
+      "KdsAccessToken": "",
       "OpeningFloat": 0,
       "GuestCount": {
         "Minimum": 2,
@@ -45,6 +46,8 @@
     {
       "Name": "Madrid Centro",
       "RestaurantId": "11111111-1111-4111-8111-111111111111",
+      "PosAccessToken": "",
+      "KdsAccessToken": "",
       "OpeningFloat": 0,
       "GuestCount": {
         "Minimum": 2,
@@ -79,6 +82,8 @@
     {
       "Name": "Madrid Norte",
       "RestaurantId": "22222222-2222-4222-8222-222222222222",
+      "PosAccessToken": "",
+      "KdsAccessToken": "",
       "OpeningFloat": 0,
       "GuestCount": {
         "Minimum": 2,
@@ -113,6 +118,8 @@
     {
       "Name": "Valencia Centro",
       "RestaurantId": "44444444-4444-4444-8444-444444444444",
+      "PosAccessToken": "",
+      "KdsAccessToken": "",
       "OpeningFloat": 0,
       "GuestCount": {
         "Minimum": 2,
@@ -147,6 +154,8 @@
     {
       "Name": "Sevilla Centro",
       "RestaurantId": "55555555-5555-4555-8555-555555555555",
+      "PosAccessToken": "",
+      "KdsAccessToken": "",
       "OpeningFloat": 0,
       "GuestCount": {
         "Minimum": 2,

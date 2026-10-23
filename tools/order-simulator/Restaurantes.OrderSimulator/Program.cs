@@ -13,6 +13,7 @@ namespace Restaurantes.OrderSimulator;
 internal static class Program
 {
     private static readonly TimeSpan DiningProjectionPollInterval = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan DiningProjectionTimeout = TimeSpan.FromMinutes(2);
     private static readonly TimeSpan TableAvailabilityPollInterval = TimeSpan.FromSeconds(1);
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
@@ -27,8 +28,6 @@ internal static class Program
             string configPath = ReadConfigPath(args);
             SimulatorOptions options = await LoadOptions(configPath);
             Validate(options);
-            string accessToken = options.AccessToken.Trim();
-
             using CancellationTokenSource stopCreating = new();
             Console.CancelKeyPress += (_, eventArgs) =>
             {
@@ -52,7 +51,12 @@ internal static class Program
             );
             Task<Exception?>[] preflights = options
                 .Restaurants.Select(restaurant =>
-                    PreflightRestaurantAsync(client, restaurant, accessToken, accessToken)
+                    PreflightRestaurantAsync(
+                        client,
+                        restaurant,
+                        restaurant.PosAccessToken.Trim(),
+                        restaurant.KdsAccessToken.Trim()
+                    )
                 )
                 .ToArray();
             Exception?[] preflightErrors = await Task.WhenAll(preflights);
@@ -76,8 +80,8 @@ internal static class Program
                     RunRestaurantSafelyAsync(
                         client,
                         restaurant,
-                        accessToken,
-                        accessToken,
+                        restaurant.PosAccessToken.Trim(),
+                        restaurant.KdsAccessToken.Trim(),
                         options.OrdersPerBatch,
                         orderScheduler,
                         TimeSpan.FromSeconds(options.KitchenStepDelaySeconds),
@@ -291,12 +295,6 @@ internal static class Program
         {
             throw new InvalidDataException("Cada local debe tener un RestaurantId distinto.");
         }
-        if (string.IsNullOrWhiteSpace(options.AccessToken))
-        {
-            throw new InvalidDataException(
-                "Configura AccessToken con el token de una cuenta Admin con alcance a todos los locales."
-            );
-        }
         if (options.OrdersPerBatch < 1)
         {
             throw new InvalidDataException("OrdersPerBatch debe ser al menos 1.");
@@ -322,6 +320,18 @@ internal static class Program
         if (restaurant.RestaurantId == Guid.Empty || string.IsNullOrWhiteSpace(restaurant.Name))
         {
             throw new InvalidDataException("Cada local necesita Name y RestaurantId.");
+        }
+        if (string.IsNullOrWhiteSpace(restaurant.PosAccessToken))
+        {
+            throw new InvalidDataException(
+                $"{restaurant.Name}: configura PosAccessToken con una cuenta autorizada para TPV y sus operaciones."
+            );
+        }
+        if (string.IsNullOrWhiteSpace(restaurant.KdsAccessToken))
+        {
+            throw new InvalidDataException(
+                $"{restaurant.Name}: configura KdsAccessToken con una cuenta autorizada para KDS."
+            );
         }
         if (restaurant.OpeningFloat is < 0 or > 100000)
         {
@@ -840,7 +850,8 @@ internal static class Program
                 bill =>
                     bill.Orders.Any(sessionOrder =>
                         sessionOrder.OrderId == order.Id && sessionOrder.OrderStatus == "Delivered"
-                    )
+                    ),
+                "la entrega del pedido"
             );
             await SimulatePaymentsAsync(
                 client,
@@ -852,19 +863,7 @@ internal static class Program
                 random,
                 randomLock
             );
-            await WaitForDiningBillAsync(
-                client,
-                sessionId,
-                posToken,
-                bill => bill.Outstanding == 0 && bill.CanRelease
-            );
-            await PostAsync<SessionInfo>(
-                client,
-                $"api/dining/sessions/{sessionId}/close",
-                null,
-                posToken,
-                CancellationToken.None
-            );
+            await ClosePaidSessionAsync(client, sessionId, posToken);
             WriteLog(
                 $"{restaurant.Name} · {table.Label} · {order.Id.ToString("N")[..8]} completado; cuenta pagada y mesa liberada."
             );
@@ -1204,7 +1203,7 @@ internal static class Program
                 order.Total * Pick(restaurant.Payment.TipPercentages, random, randomLock) / 100m
             )
         );
-        List<decimal> tips = Allocate(totalTip, parts.Select(part => part.Amount).ToList());
+        List<decimal> tips = AllocateMoney(totalTip, parts.Select(part => part.Amount).ToList());
         for (int index = 0; index < parts.Count; index++)
         {
             PaymentPart part = parts[index];
@@ -1248,9 +1247,11 @@ internal static class Program
         HttpClient client,
         Guid sessionId,
         string token,
-        Func<BillResponse, bool> condition
+        Func<BillResponse, bool> condition,
+        string description
     )
     {
+        Stopwatch timeout = Stopwatch.StartNew();
         while (true)
         {
             BillResponse bill = await GetAsync<BillResponse>(
@@ -1263,8 +1264,91 @@ internal static class Program
             {
                 return bill;
             }
+            if (timeout.Elapsed >= DiningProjectionTimeout)
+            {
+                string orders = string.Join(
+                    "; ",
+                    bill.Orders.Select(order =>
+                        $"{order.OrderId}: estado={order.OrderStatus}, pago={order.PaymentStatus}, abonado={order.AmountPaid:0.00}/{order.Amount:0.00} €"
+                    )
+                );
+                throw new TimeoutException(
+                    $"Se agotaron 2 minutos esperando {description}. "
+                        + $"Pendiente={bill.Outstanding:0.00} €, CanRelease={bill.CanRelease}. Pedidos: {orders}"
+                );
+            }
             await Task.Delay(DiningProjectionPollInterval);
         }
+    }
+
+    internal static bool IsReadyToClose(BillResponse bill) =>
+        bill.Outstanding == 0
+        && bill.CanRelease
+        && bill.Orders.Count > 0
+        && bill.Orders.All(order =>
+            order.OrderStatus.Equals("Cancelled", StringComparison.OrdinalIgnoreCase)
+            || order.PaymentStatus.Equals("Paid", StringComparison.OrdinalIgnoreCase)
+        );
+
+    internal static async Task ClosePaidSessionAsync(
+        HttpClient client,
+        Guid sessionId,
+        string token,
+        TimeSpan? retryInterval = null,
+        TimeSpan? timeout = null
+    )
+    {
+        TimeSpan interval = retryInterval ?? DiningProjectionPollInterval;
+        TimeSpan maximumWait = timeout ?? DiningProjectionTimeout;
+        Stopwatch elapsed = Stopwatch.StartNew();
+        BillResponse? lastBill = null;
+        string billPath = $"api/dining/sessions/{sessionId}/bill";
+
+        while (elapsed.Elapsed < maximumWait)
+        {
+            lastBill = await GetAsync<BillResponse>(
+                client,
+                billPath,
+                token,
+                CancellationToken.None
+            );
+            if (!IsReadyToClose(lastBill))
+            {
+                await Task.Delay(interval);
+                continue;
+            }
+
+            try
+            {
+                await PostAsync<SessionInfo>(
+                    client,
+                    $"api/dining/sessions/{sessionId}/close",
+                    null,
+                    token,
+                    CancellationToken.None
+                );
+                return;
+            }
+            catch (HttpRequestException exception)
+                when (exception.StatusCode == System.Net.HttpStatusCode.Conflict
+                    && exception.Message.Contains("unpaidOrderIds", StringComparison.Ordinal)
+                )
+            {
+                await Task.Delay(interval);
+            }
+        }
+
+        lastBill ??= await GetAsync<BillResponse>(client, billPath, token, CancellationToken.None);
+        string orders = string.Join(
+            "; ",
+            lastBill.Orders.Select(order =>
+                $"{order.OrderId}: estado={order.OrderStatus}, pago={order.PaymentStatus}, abonado={order.AmountPaid:0.00}/{order.Amount:0.00} €"
+            )
+        );
+        throw new TimeoutException(
+            $"Se agotó el tiempo esperando que Dining confirmara el cierre de la mesa. "
+                + $"Pendiente={lastBill.Outstanding:0.00} €, CanRelease={lastBill.CanRelease}. Pedidos: {orders}"
+        );
     }
 
     internal static List<PaymentPart> CreateGuestPaymentParts(
@@ -1420,6 +1504,47 @@ internal static class Program
             allocated += value;
         }
         return result;
+    }
+
+    internal static List<decimal> AllocateMoney(decimal total, IReadOnlyList<decimal> weights)
+    {
+        if (total < 0 || decimal.Round(total, 2) != total)
+        {
+            throw new ArgumentOutOfRangeException(nameof(total));
+        }
+        if (weights.Count == 0 || weights.Any(weight => weight <= 0))
+        {
+            throw new ArgumentException(
+                "Se necesitan importes positivos para repartir la propina.",
+                nameof(weights)
+            );
+        }
+
+        decimal totalWeight = weights.Sum();
+        long totalCents = decimal.ToInt64(total * 100m);
+        List<long> allocatedCents = [];
+        List<(int Index, decimal Remainder)> remainders = [];
+        long allocatedTotal = 0;
+        for (int index = 0; index < weights.Count; index++)
+        {
+            decimal exactCents = totalCents * weights[index] / totalWeight;
+            long wholeCents = decimal.ToInt64(decimal.Floor(exactCents));
+            allocatedCents.Add(wholeCents);
+            allocatedTotal += wholeCents;
+            remainders.Add((index, exactCents - wholeCents));
+        }
+
+        long remainingCents = totalCents - allocatedTotal;
+        foreach (
+            var remainder in remainders
+                .OrderByDescending(item => item.Remainder)
+                .Take((int)remainingCents)
+        )
+        {
+            allocatedCents[remainder.Index]++;
+        }
+
+        return allocatedCents.Select(cents => cents / 100m).ToList();
     }
 
     private static async Task<T> GetAsync<T>(
@@ -1696,7 +1821,6 @@ internal static class Program
 internal sealed class SimulatorOptions
 {
     public string ApiBaseUrl { get; init; } = "http://localhost:5001";
-    public string AccessToken { get; init; } = "";
     public bool AllowNonLocalApi { get; init; }
     public int? RandomSeed { get; init; }
     public int OrdersPerBatch { get; init; } = 20;
@@ -1710,6 +1834,8 @@ internal sealed class RestaurantOptions
 {
     public string Name { get; init; } = "";
     public Guid RestaurantId { get; init; }
+    public string PosAccessToken { get; init; } = "";
+    public string KdsAccessToken { get; init; } = "";
     public decimal OpeningFloat { get; init; }
     public IntRange GuestCount { get; init; } = new(2, 10);
     public int MaxProductsPerOrder { get; init; } = 4;

@@ -27,10 +27,15 @@ public sealed class SimulatorEntryPointTests
             new
             {
                 ApiBaseUrl = $"http://127.0.0.1:{port}",
-                AccessToken = "preflight-token",
                 Restaurants = new[]
                 {
-                    new { RestaurantId = restaurantId, Name = "Local de prueba" },
+                    new
+                    {
+                        RestaurantId = restaurantId,
+                        Name = "Local de prueba",
+                        PosAccessToken = "pos-preflight-token",
+                        KdsAccessToken = "kds-preflight-token",
+                    },
                 },
             },
             WebJsonOptions
@@ -48,7 +53,7 @@ public sealed class SimulatorEntryPointTests
                 $"GET /api/catalog/restaurants/{restaurantId}/menu HTTP/1.1",
                 request
             );
-            Assert.Contains("Authorization: Bearer preflight-token", request);
+            Assert.Contains("Authorization: Bearer pos-preflight-token", request);
         }
         finally
         {
@@ -72,22 +77,24 @@ public sealed class SimulatorEntryPointTests
         listener.Start();
         int port = ((IPEndPoint)listener.LocalEndpoint).Port;
         using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
-        Task<int> requestCountTask = ReturnPreflightSuccessThenEmptyMenuAsync(
-            listener,
-            restaurantId,
-            timeout.Token
-        );
+        Task<List<(string Path, string? Authorization)>> requestsTask =
+            ReturnPreflightSuccessThenEmptyMenuAsync(listener, restaurantId, timeout.Token);
         string configPath = Path.Combine(Path.GetTempPath(), $"simulator-{Guid.NewGuid():N}.json");
         string configuration = JsonSerializer.Serialize(
             new
             {
                 ApiBaseUrl = $"http://127.0.0.1:{port}",
-                AccessToken = "preflight-token",
                 KitchenStepDelaySeconds = 1,
                 RunDurationMinutes = 1,
                 Restaurants = new[]
                 {
-                    new { RestaurantId = restaurantId, Name = "Local de prueba" },
+                    new
+                    {
+                        RestaurantId = restaurantId,
+                        Name = "Local de prueba",
+                        PosAccessToken = "pos-preflight-token",
+                        KdsAccessToken = "kds-preflight-token",
+                    },
                 },
             },
             WebJsonOptions
@@ -98,10 +105,22 @@ public sealed class SimulatorEntryPointTests
             await File.WriteAllTextAsync(configPath, configuration, timeout.Token);
 
             int exitCode = await Simulator.Main(["--config", configPath]);
-            int requestCount = await requestCountTask;
+            List<(string Path, string? Authorization)> requests = await requestsTask;
 
             Assert.Equal(1, exitCode);
-            Assert.Equal(5, requestCount);
+            Assert.Equal(5, requests.Count);
+            Assert.Equal(
+                "Bearer pos-preflight-token",
+                requests
+                    .First(request => request.Path.Contains("/menu", StringComparison.Ordinal))
+                    .Authorization
+            );
+            Assert.Equal(
+                "Bearer kds-preflight-token",
+                requests
+                    .Single(request => request.Path.Contains("/kds?", StringComparison.Ordinal))
+                    .Authorization
+            );
         }
         finally
         {
@@ -146,13 +165,15 @@ public sealed class SimulatorEntryPointTests
         return request;
     }
 
-    private static async Task<int> ReturnPreflightSuccessThenEmptyMenuAsync(
+    private static async Task<
+        List<(string Path, string? Authorization)>
+    > ReturnPreflightSuccessThenEmptyMenuAsync(
         TcpListener listener,
         Guid restaurantId,
         CancellationToken cancellationToken
     )
     {
-        int requestCount = 0;
+        List<(string Path, string? Authorization)> requests = [];
         int menuRequestCount = 0;
         while (menuRequestCount < 2)
         {
@@ -160,13 +181,20 @@ public sealed class SimulatorEntryPointTests
             NetworkStream stream = client.GetStream();
             string request = await ReadRequestAsync(stream, cancellationToken);
             string path = request.Split(' ', StringSplitOptions.RemoveEmptyEntries)[1];
+            string? authorization = request
+                .Split("\r\n", StringSplitOptions.RemoveEmptyEntries)
+                .FirstOrDefault(header =>
+                    header.StartsWith("Authorization:", StringComparison.OrdinalIgnoreCase)
+                )
+                ?.Split(':', 2)[1]
+                .Trim();
+            requests.Add((path, authorization));
             if (path == $"/api/cash-register/restaurants/{restaurantId}/current")
             {
                 await stream.WriteAsync(
                     "HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n"u8.ToArray(),
                     cancellationToken
                 );
-                requestCount++;
                 continue;
             }
 
@@ -210,10 +238,9 @@ public sealed class SimulatorEntryPointTests
             await stream.WriteAsync(headers, cancellationToken);
             await stream.WriteAsync(body, cancellationToken);
             await stream.FlushAsync(cancellationToken);
-            requestCount++;
         }
 
-        return requestCount;
+        return requests;
     }
 
     private static async Task<string> ReadRequestAsync(
