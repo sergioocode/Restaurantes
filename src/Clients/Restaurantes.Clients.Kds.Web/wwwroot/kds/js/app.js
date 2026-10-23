@@ -4,7 +4,6 @@ import { KdsRealtimeClient } from './realtime-client.js';
 import { renderKitchenTicket } from './ticket-renderer.js';
 
 const sessionKey = 'restaurantes.kds.login';
-const restaurantKey = 'restaurantes.kds.restaurant';
 const apiBaseUrl = window.location.origin;
 const authLoading = document.querySelector('#authLoading');
 const loginPanel = document.querySelector('#loginPanel');
@@ -19,7 +18,7 @@ const ticketDialog = document.querySelector('#ticketDialog');
 const ticketContent = document.querySelector('#ticketContent');
 const closeTicketButton = document.querySelector('#closeTicket');
 const logoutButton = document.querySelector('#logout');
-const restaurantSelect = document.querySelector('#restaurantId');
+const currentUserName = document.querySelector('#currentUserName');
 const stationSelect = document.querySelector('#stationCode');
 const zoneSelect = document.querySelector('#zoneId');
 const status = document.querySelector('#connectionStatus');
@@ -31,7 +30,7 @@ let historyOpen = false;
 const api = new KdsApiClient(apiBaseUrl);
 let login;
 let selectedRestaurantId = '';
-let restaurantAccesses = [];
+let restaurantAccess = null;
 let primaryStationCode = '';
 let stationConfigurations = [];
 let restaurantZones = [];
@@ -53,9 +52,7 @@ const renderer = new OrderRenderer(ordersElement, {
 const realtime = new KdsRealtimeClient(apiBaseUrl, {
   onStatus: setStatus,
   onConnected: loadOrders,
-  onOrderUpdated: async notification => {
-    eventText.textContent = 'Actualización recibida: pedido ' + notification.orderId
-      + ', ' + notification.status + ' v' + notification.version;
+  onOrderUpdated: async () => {
     await new Promise(resolve => window.setTimeout(resolve, 150));
     await loadOrders();
   }
@@ -145,8 +142,7 @@ async function refreshMonitor() {
 
 function canConfirmDelivery(order) {
   if (order.serviceMode !== 'Takeaway' || order.status !== 'Ready') return false;
-  const access = restaurantAccesses.find(item => item.restaurantId === selectedRestaurantId);
-  return Boolean(access?.permissions?.includes('orders.recover'));
+  return Boolean(restaurantAccess?.permissions?.includes('orders.recover'));
 }
 
 async function advanceOrder(order, action, actionButton) {
@@ -323,7 +319,7 @@ async function activateLogin(loginResponse) {
     ? loginResponse.allRestaurantsRoles[0]
     : null;
   const restaurants = await api.getKdsRestaurants();
-  restaurantAccesses = restaurants.map(restaurant => {
+  const accessibleRestaurants = restaurants.map(restaurant => {
     const access = loginAccesses.get(restaurant.id);
     return {
       restaurantId: restaurant.id,
@@ -333,22 +329,13 @@ async function activateLogin(loginResponse) {
       code: restaurant.code
     };
   });
-  if (restaurantAccesses.length === 0) {
+  if (accessibleRestaurants.length === 0) {
+    logout();
     throw new Error('El usuario no tiene acceso KDS en ningún local.');
   }
-  restaurantSelect.replaceChildren();
-  for (const access of restaurantAccesses) {
-    const label = access.name
-      ? access.name + (access.code ? ' · ' + access.code : '')
-      : access.restaurantId + ' · ' + access.role;
-    addOption(restaurantSelect, access.restaurantId, label);
-  }
-  const remembered = localStorage.getItem(restaurantKey);
-  selectedRestaurantId = restaurantAccesses.some(access => access.restaurantId === remembered)
-    ? remembered
-    : restaurantAccesses[0].restaurantId;
-  restaurantSelect.value = selectedRestaurantId;
-  restaurantSelect.disabled = restaurantAccesses.length <= 1;
+  restaurantAccess = accessibleRestaurants[0];
+  selectedRestaurantId = restaurantAccess.restaurantId;
+  currentUserName.textContent = loginResponse.user?.displayName || '';
   await loadStationsAndConnect();
 }
 
@@ -408,7 +395,7 @@ async function loadProvider() {
 function logout() {
   login = null;
   selectedRestaurantId = '';
-  restaurantAccesses = [];
+  restaurantAccess = null;
   restaurantZones = [];
   stationConfigurations = [];
   pendingOrders.clear();
@@ -419,8 +406,7 @@ function logout() {
   loginPanel.classList.remove('hidden');
   monitorPanel.classList.add('hidden');
   refreshButton.disabled = true;
-  restaurantSelect.replaceChildren();
-  restaurantSelect.disabled = true;
+  currentUserName.textContent = '';
   zoneSelect.replaceChildren();
   zoneSelect.disabled = true;
   eventText.textContent = '';
@@ -464,14 +450,6 @@ logoutButton.addEventListener('click', logout);
 closeTicketButton.addEventListener('click', () => ticketDialog.close());
 ticketDialog.addEventListener('click', event => {
   if (event.target === ticketDialog) ticketDialog.close();
-});
-restaurantSelect.addEventListener('change', () => {
-  const restaurantId = restaurantSelect.value;
-  if (!restaurantAccesses.some(access => access.restaurantId === restaurantId)) return;
-  selectedRestaurantId = restaurantId;
-  localStorage.setItem(restaurantKey, restaurantId);
-  pendingOrders.clear();
-  loadStationsAndConnect().catch(error => { eventText.textContent = error.message; });
 });
 stationSelect.addEventListener('change', () => {
   closeHistory();

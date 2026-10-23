@@ -30,7 +30,7 @@ public partial class Home
     private LoginResponse? login;
     private ProviderSettingsResponse? providerSettings;
     private Guid restaurantId;
-    private List<RestaurantResponse> restaurants = [];
+    private RestaurantResponse? restaurant;
     private List<TableResponse> tables = [];
     private Guid? selectedZoneId;
     private string tableFilter = "All";
@@ -359,8 +359,7 @@ public partial class Home
     private bool hasSessionOrders;
     private string CurrentLabel =>
         IsTakeaway ? "Pedido para llevar" : selectedTable?.Label ?? "Ubicación";
-    private RestaurantResponse? CurrentRestaurant =>
-        restaurants.FirstOrDefault(restaurant => restaurant.Id == restaurantId);
+    private RestaurantResponse? CurrentRestaurant => restaurant;
 
     protected override async Task OnInitializedAsync()
     {
@@ -472,7 +471,7 @@ public partial class Home
         kitchenClockRefresh = null;
         Api.AccessToken = null;
         login = null;
-        restaurants = [];
+        restaurant = null;
         cashRegister = null;
         tables = [];
         selectedZoneId = null;
@@ -488,39 +487,17 @@ public partial class Home
 
     private async Task LoadRestaurants()
     {
-        restaurants = await Api.RestaurantsAsync();
-        if (restaurants.Count == 0)
+        List<RestaurantResponse> accessibleRestaurants = await Api.RestaurantsAsync();
+        if (accessibleRestaurants.Count == 0)
         {
+            await Logout();
             throw new InvalidOperationException(
                 "El usuario no tiene permisos para operar el TPV en ningún local."
             );
         }
 
-        if (!restaurants.Any(restaurant => restaurant.Id == restaurantId))
-        {
-            restaurantId = restaurants[0].Id;
-        }
-    }
-
-    private async Task RestaurantChanged(ChangeEventArgs args)
-    {
-        if (
-            !Guid.TryParse(args.Value?.ToString(), out Guid value)
-            || value == restaurantId
-            || restaurants.All(restaurant => restaurant.Id != value)
-        )
-        {
-            return;
-        }
-
-        restaurantId = value;
-        cashRegister = null;
-        selectedZoneId = null;
-        pickupView = false;
-        selectedPickup = null;
-        pickupDetail = null;
-        await Run(LoadOperationalData);
-        await ConnectRealtimeAsync();
+        restaurant = accessibleRestaurants.Single();
+        restaurantId = restaurant.Id;
     }
 
     private async Task LoadOperationalData()

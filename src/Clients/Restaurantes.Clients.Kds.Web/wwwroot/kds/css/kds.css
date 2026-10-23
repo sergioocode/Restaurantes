@@ -22,12 +22,11 @@ h2, p { margin-top: 0; }
 .controls { display: flex; gap: .75rem; padding: 1rem; margin-bottom: 1rem; align-items: center; flex-wrap: wrap; }
 .field { display: grid; gap: .35rem; flex: 1 1 240px; min-width: 0; }
 .field span { color: var(--chip-text); font-size: .8rem; font-weight: 700; }
-.restaurant-field { display: flex; flex: 1 1 260px; align-items: center; gap: .5rem; }
-.restaurant-field > span { flex: 0 0 auto; }
-.restaurant-field select { min-width: 0; }
-.station-field { display: flex; align-items: center; gap: .5rem; }
+.station-field { display: flex; flex: 0 1 440px; align-items: center; gap: .5rem; }
 .station-field > span { flex: 0 0 auto; }
-.station-field select { min-width: 0; }
+.station-field select { width: clamp(260px, 18vw, 340px); min-width: 0; }
+.zone-field { flex-basis: 320px; }
+.zone-field select { width: clamp(200px, 14vw, 260px); }
 input, select { width: 100%; padding: .75rem; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface); color: inherit; }
 select:disabled { opacity: .6; }
 button { padding: .75rem 1rem; border: 0; border-radius: 8px; background: #f97316; color: #111827; font-weight: 700; cursor: pointer; }
@@ -35,8 +34,10 @@ button.secondary { background: #e7ece8; color: var(--text); }
 button.danger { background: #b91c1c; color: #fff; }
 button:disabled { cursor: not-allowed; opacity: .6; }
 .status { display: inline-flex; align-items: center; gap: .5rem; }
-.monitor-state { display: grid; gap: .3rem; min-width: 180px; align-self: center; }
-.identity { margin: 0; color: var(--muted); font-size: .8rem; }
+.monitor-state { display: grid; gap: .3rem; min-width: max-content; align-self: center; }
+.monitor-state .status { white-space: nowrap; }
+.identity { display: flex; flex: 0 1 auto; align-items: baseline; gap: .55rem; width: fit-content; min-width: 0; max-width: min(100%, 480px); margin: 0; padding: .65rem .8rem; overflow: hidden; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--text); }
+.identity strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .9rem; }
 .toolbar { display: flex; gap: .5rem; margin-left: auto; }
 .dot { width: .7rem; height: .7rem; border-radius: 50%; background: #ef4444; }
 .connected .dot { background: #22c55e; }
@@ -74,6 +75,8 @@ small { color: var(--muted); }
   #orders { column-count: 1; }
   .controls { padding: .75rem; gap: .65rem; }
   .field, .monitor-state, .toolbar { flex: 1 1 100%; width: 100%; }
+  .station-field { flex-direction: column; align-items: stretch; }
+  .station-field select, .zone-field select { width: 100%; }
   .toolbar { margin-left: 0; }
   .toolbar button, .controls > button { flex: 1; }
   .order { padding: .85rem; }
@@ -84,6 +87,18 @@ small { color: var(--muted); }
 
 @media (min-width: 641px) and (max-width: 1279px) {
   #orders { column-count: 2; }
+}
+
+@media (min-width: 1280px) and (max-width: 1500px) {
+  .controls { flex-wrap: nowrap; gap: .55rem; padding: .75rem; }
+  .identity { flex: 0 1 auto; max-width: min(100%, 480px); gap: .4rem; padding: .55rem .65rem; }
+  .station-field { flex: 0 1 320px; gap: .35rem; }
+  .station-field select { width: clamp(200px, 17vw, 240px); }
+  .zone-field { flex: 0 1 220px; }
+  .zone-field select { width: clamp(140px, 12vw, 170px); }
+  .monitor-state { flex: 0 0 auto; min-width: max-content; font-size: .9rem; }
+  .toolbar { flex: 0 0 auto; gap: .35rem; }
+  .toolbar button { padding: .65rem .75rem; }
 }
 
 #loginPanel { display: flex; max-width: none; }

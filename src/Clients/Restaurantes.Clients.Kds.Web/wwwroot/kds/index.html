@@ -35,15 +35,14 @@
         </form>
 
         <section id="monitorPanel" class="controls hidden">
-            <label class="field restaurant-field">
-                <span>Local</span>
-                <select id="restaurantId" aria-label="Local" disabled></select>
-            </label>
+            <div class="identity">
+                <strong id="currentUserName"></strong>
+            </div>
             <label class="field station-field">
                 <span>Estación KDS</span>
                 <select id="stationCode" aria-label="Estación KDS" disabled></select>
             </label>
-            <label id="zoneField" class="field station-field">
+            <label id="zoneField" class="field station-field zone-field">
                 <span>Zona</span>
                 <select id="zoneId" aria-label="Zona KDS" disabled></select>
             </label>
@@ -75,7 +74,7 @@
         </section>
     </main>
 
-    <script type="module" src="./js/app.js?v=17"></script>
+    <script type="module" src="./js/app.js?v=21"></script>
 </body>
 
 </html>

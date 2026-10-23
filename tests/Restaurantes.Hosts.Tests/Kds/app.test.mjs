@@ -151,6 +151,7 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
   replaceGlobal('sessionStorage', {
     getItem: () => JSON.stringify({
       accessToken: 'test-token', expiresAtUtc: '2099-01-01T00:00:00Z',
+      user: { displayName: 'Usuario KDS', username: 'kds@example.com' },
       restaurants: [{ restaurantId: 'restaurant-1', role: 'Kds', permissions: ['kds.use', 'orders.recover'] }],
     }),
     setItem() {}, removeItem() {},
@@ -173,7 +174,6 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
     if (path.endsWith('/provider')) return json({ activeProvider: 'Microsoft', microsoftConfigured: true });
     if (path.endsWith('/accessible/kds')) return json([
       { id: 'restaurant-1', name: 'Centro', code: 'CENTRO' },
-      { id: 'restaurant-2', name: 'Norte', code: 'NORTE' },
     ]);
     if (path.endsWith('/zones')) return json([
       { id: 'zone-2', name: 'Terraza', sortOrder: 2, deletedAtUtc: null },
@@ -182,7 +182,7 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
     ]);
     if (path.endsWith('/stations')) {
       if (stationsFailure) throw new Error('stations offline');
-      return json(path.includes('restaurant-2') ? [] : stations);
+      return json(stations);
     }
     if (path.endsWith('/kds-history')) {
       if (historyMode === 'failure') throw new Error('history offline');
@@ -214,7 +214,7 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
   try {
     await import(appUrl.href);
     await until(() => element('stationCode').options.length === 2);
-    assert.equal(element('restaurantId').value, 'restaurant-1');
+    assert.equal(element('currentUserName').textContent, 'Usuario KDS');
     assert.equal(element('stationCode').value, 'GRILL');
     assert.equal(element('zoneId').disabled, false);
     assert.deepEqual(element('zoneId').options.map(option => option.value), ['zone-1', 'zone-2']);
@@ -226,6 +226,9 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
     const separator = String.fromCodePoint(30);
     await socket.listeners.get('open')();
     await socket.listeners.get('message')({ data: '{}' + separator });
+    const orderRequestCount = calls.filter(call =>
+      call.url.includes('/kds?restaurantId=restaurant-1')
+    ).length;
     await socket.listeners.get('message')({
       data: JSON.stringify({
         type: 1,
@@ -233,11 +236,10 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
         arguments: [{ orderId: order.id, status: order.status, version: order.version }],
       }) + separator,
     });
-    assert.equal(
-      element('event').textContent,
-      'Actualización recibida: pedido order-12345678, InPreparation v1',
-    );
-    assert.ok(calls.some(call => call.url.includes('/kds?restaurantId=restaurant-1')));
+    await until(() => calls.filter(call =>
+      call.url.includes('/kds?restaurantId=restaurant-1')
+    ).length > orderRequestCount);
+    assert.equal(element('event').textContent, '');
 
     element('stationCode').value = 'CHEF';
     await element('stationCode').listeners.get('change')();
@@ -312,20 +314,12 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
     await until(() => element('event').textContent === 'history offline');
     assert.equal(element('historyButton').disabled, false);
 
-    element('restaurantId').value = 'restaurant-2';
-    element('restaurantId').listeners.get('change')();
-    await until(() => element('connectionStatus').children[1].textContent === 'Sin estaciones KDS activas');
-    assert.match(element('orders').children[0].textContent, /no tiene estaciones/u);
-    assert.ok(calls.some(call => call.url.includes('/kds-history')));
     stationsFailure = true;
     await element('refresh').listeners.get('click')();
     assert.equal(element('event').textContent, 'stations offline');
     assert.equal(element('refresh').disabled, false);
 
     stationsFailure = false;
-    element('restaurantId').value = 'restaurant-1';
-    element('restaurantId').listeners.get('change')();
-    await until(() => element('stationCode').options.length === 2);
     ordersFailure = true;
     await element('refresh').listeners.get('click')();
     assert.equal(element('event').textContent, 'orders offline');

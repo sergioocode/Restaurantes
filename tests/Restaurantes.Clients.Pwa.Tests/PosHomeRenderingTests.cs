@@ -30,12 +30,11 @@ public sealed class PosHomeRenderingTests : BunitContext
     }
 
     [Fact]
-    public async Task Login_code_loads_the_allowed_restaurant_and_switching_local_reloads_its_tables()
+    public async Task Login_code_loads_the_users_single_restaurant_and_displays_the_user_name()
     {
         await using WebApplication realtimeApp = await StartRealtimeHubAsync();
         TestServer realtimeServer = realtimeApp.GetTestServer();
         Guid firstId = Guid.NewGuid();
-        Guid secondId = Guid.NewGuid();
         TableResponse firstTable = new(
             Guid.NewGuid(),
             firstId,
@@ -48,13 +47,7 @@ public sealed class PosHomeRenderingTests : BunitContext
             "Sala",
             1
         );
-        TableResponse secondTable = firstTable with
-        {
-            Id = Guid.NewGuid(),
-            RestaurantId = secondId,
-            Label = "Mesa 2",
-        };
-        LoginBootstrapHandler handler = new(firstId, secondId, firstTable, secondTable);
+        LoginBootstrapHandler handler = new(firstId, firstTable);
         HttpClient http = new(handler) { BaseAddress = new Uri("https://test.local") };
         PosApi api = new(http);
         Services.AddSingleton(api);
@@ -68,45 +61,14 @@ public sealed class PosHomeRenderingTests : BunitContext
         cut.WaitForState(() => !GetField<bool>(cut.Instance, "initializing"));
 
         Assert.Equal(firstId, GetField<Guid>(cut.Instance, "restaurantId"));
+        Assert.Equal(firstId, GetField<RestaurantResponse>(cut.Instance, "restaurant").Id);
         Assert.Equal(
             firstTable.Id,
             Assert.Single(GetField<List<TableResponse>>(cut.Instance, "tables")).Id
         );
+        Assert.Contains("Cajero", cut.Markup);
+        Assert.DoesNotContain("restaurant-picker", cut.Markup);
         Assert.Contains(handler.Paths, path => path == "/api/identity/auth/exchange");
-
-        int pathsBeforeIgnoredChanges = handler.Paths.Count;
-        await cut.InvokeAsync(() =>
-            InvokeTask(cut.Instance, "RestaurantChanged", new ChangeEventArgs { Value = "invalid" })
-        );
-        await cut.InvokeAsync(() =>
-            InvokeTask(
-                cut.Instance,
-                "RestaurantChanged",
-                new ChangeEventArgs { Value = firstId.ToString() }
-            )
-        );
-        await cut.InvokeAsync(() =>
-            InvokeTask(
-                cut.Instance,
-                "RestaurantChanged",
-                new ChangeEventArgs { Value = Guid.NewGuid().ToString() }
-            )
-        );
-        Assert.Equal(pathsBeforeIgnoredChanges, handler.Paths.Count);
-        Assert.Equal(firstId, GetField<Guid>(cut.Instance, "restaurantId"));
-
-        await cut.InvokeAsync(() =>
-            InvokeTask(
-                cut.Instance,
-                "RestaurantChanged",
-                new ChangeEventArgs { Value = secondId.ToString() }
-            )
-        );
-        Assert.Equal(secondId, GetField<Guid>(cut.Instance, "restaurantId"));
-        Assert.Equal(
-            secondTable.Id,
-            Assert.Single(GetField<List<TableResponse>>(cut.Instance, "tables")).Id
-        );
     }
 
     [Fact]
@@ -205,7 +167,7 @@ public sealed class PosHomeRenderingTests : BunitContext
 
         Assert.Null(api.AccessToken);
         Assert.Null(GetField<LoginResponse?>(cut.Instance, "login"));
-        Assert.Empty(GetField<List<RestaurantResponse>>(cut.Instance, "restaurants"));
+        Assert.Null(GetField<RestaurantResponse?>(cut.Instance, "restaurant"));
         Assert.Empty(GetField<List<TableResponse>>(cut.Instance, "tables"));
         Assert.Null(GetField<Guid?>(cut.Instance, "selectedZoneId"));
         Assert.False(GetField<bool>(cut.Instance, "pickupView"));
@@ -248,7 +210,7 @@ public sealed class PosHomeRenderingTests : BunitContext
             "Sala",
             1
         );
-        LoginBootstrapHandler handler = new(restaurantId, Guid.NewGuid(), table, table);
+        LoginBootstrapHandler handler = new(restaurantId, table);
         HttpClient http = new(handler) { BaseAddress = new Uri("https://test.local") };
         PosApi api = new(http);
         Services.AddSingleton(api);
@@ -313,11 +275,8 @@ public sealed class PosHomeRenderingTests : BunitContext
         SetField(cut.Instance, "restaurantId", restaurantId);
         SetField(
             cut.Instance,
-            "restaurants",
-            new List<RestaurantResponse>
-            {
-                new(restaurantId, "CENTRO", "Centro", "Calle Mayor", true),
-            }
+            "restaurant",
+            new RestaurantResponse(restaurantId, "CENTRO", "Centro", "Calle Mayor", true)
         );
         SetField(
             cut.Instance,
@@ -2605,25 +2564,22 @@ public sealed class PosHomeRenderingTests : BunitContext
         IRenderedComponent<PosHome> cut = await RenderPayment(restaurantId, bill, handler);
         SetField(
             cut.Instance,
-            "restaurants",
-            new List<RestaurantResponse>
-            {
-                new(
-                    restaurantId,
-                    "CENTRO",
-                    "Centro",
-                    "Calle Mayor",
-                    true,
-                    new RestaurantCompanyResponse(
-                        Guid.NewGuid(),
-                        "Restaurantes SL",
-                        "B12345678",
-                        "Calle Fiscal 2",
-                        "910000000",
-                        "caja@example.test"
-                    )
-                ),
-            }
+            "restaurant",
+            new RestaurantResponse(
+                restaurantId,
+                "CENTRO",
+                "Centro",
+                "Calle Mayor",
+                true,
+                new RestaurantCompanyResponse(
+                    Guid.NewGuid(),
+                    "Restaurantes SL",
+                    "B12345678",
+                    "Calle Fiscal 2",
+                    "910000000",
+                    "caja@example.test"
+                )
+            )
         );
         SetField(
             cut.Instance,
@@ -2701,11 +2657,8 @@ public sealed class PosHomeRenderingTests : BunitContext
         Assert.NotNull(GetField<SaleResponse?>(cut.Instance, "salesTicket"));
         SetField(
             cut.Instance,
-            "restaurants",
-            new List<RestaurantResponse>
-            {
-                new(restaurantId, "CENTRO", "Centro", "Calle Mayor 8", true),
-            }
+            "restaurant",
+            new RestaurantResponse(restaurantId, "CENTRO", "Centro", "Calle Mayor 8", true)
         );
         SetField(
             cut.Instance,
@@ -3941,11 +3894,8 @@ public sealed class PosHomeRenderingTests : BunitContext
         SetField(cut.Instance, "restaurantId", restaurantId);
         SetField(
             cut.Instance,
-            "restaurants",
-            new List<RestaurantResponse>
-            {
-                new(restaurantId, "CENTRO", "Centro", "Calle Mayor", true),
-            }
+            "restaurant",
+            new RestaurantResponse(restaurantId, "CENTRO", "Centro", "Calle Mayor", true)
         );
         SetField(cut.Instance, "menu", menu);
         SetField(cut.Instance, "takeawayOpen", true);
@@ -4030,12 +3980,8 @@ public sealed class PosHomeRenderingTests : BunitContext
             );
     }
 
-    private sealed class LoginBootstrapHandler(
-        Guid firstId,
-        Guid secondId,
-        TableResponse firstTable,
-        TableResponse secondTable
-    ) : HttpMessageHandler
+    private sealed class LoginBootstrapHandler(Guid restaurantId, TableResponse table)
+        : HttpMessageHandler
     {
         public List<string> Paths { get; } = [];
 
@@ -4064,15 +4010,12 @@ public sealed class PosHomeRenderingTests : BunitContext
                     Json(
                         new[]
                         {
-                            new RestaurantResponse(firstId, "CENTRO", "Centro", "Mayor", true),
-                            new RestaurantResponse(secondId, "NORTE", "Norte", "Norte", true),
+                            new RestaurantResponse(restaurantId, "CENTRO", "Centro", "Mayor", true),
                         }
                     )
                 );
-            if (path == $"/api/dining/restaurants/{firstId}/tables")
-                return Task.FromResult(Json(new[] { firstTable }));
-            if (path == $"/api/dining/restaurants/{secondId}/tables")
-                return Task.FromResult(Json(new[] { secondTable }));
+            if (path == $"/api/dining/restaurants/{restaurantId}/tables")
+                return Task.FromResult(Json(new[] { table }));
             if (path == "/api/orders/pos")
                 return Task.FromResult(Json(Array.Empty<OrderResponse>()));
             if (path.EndsWith("/current", StringComparison.Ordinal))

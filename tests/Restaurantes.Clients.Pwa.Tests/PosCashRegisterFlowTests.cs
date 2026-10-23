@@ -277,11 +277,8 @@ public sealed class PosCashRegisterFlowTests : BunitContext
         SetField(cut.Instance, "restaurantId", restaurantId);
         SetField(
             cut.Instance,
-            "restaurants",
-            new List<RestaurantResponse>
-            {
-                new(restaurantId, "CENTRO", "Local Centro", "Calle Mayor", true),
-            }
+            "restaurant",
+            new RestaurantResponse(restaurantId, "CENTRO", "Local Centro", "Calle Mayor", true)
         );
         return cut;
     }

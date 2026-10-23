@@ -200,6 +200,22 @@ input, select {
     box-shadow: 0 8px 30px #173c2b30;
 }
 
+.identity-card {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    max-width: min(100%, 360px);
+    padding: 7px 11px;
+    border: 1px solid #ffffff45;
+    border-radius: 9px;
+    background: #ffffff12;
+}
+
+.identity-details { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.identity-details strong, .identity-email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.identity-details strong { flex: 0 1 auto; }
+.identity-email { color: #d5e0d8; font-size: 12px; }
+
     .topbar .eyebrow {
         margin: 0;
         color: #ffad7d;
@@ -211,11 +227,6 @@ input, select {
     gap: 10px;
 }
 
-.restaurant-picker { display: flex; align-items: center; gap: 8px; margin: 0; color: #fff; font-size: 10px; font-weight: 800; }
-.restaurant-picker > span { flex: 0 0 auto; }
-.restaurant-picker select { width: min(300px, 30vw); min-height: 44px; padding: 8px 12px; border: 1px solid #ffffff30; border-radius: 12px; color: #fff; background: #ffffff18; font-size: 13px; font-weight: 800; }
-.restaurant-picker option { color: #202a24; background: #fff; }
-.restaurant-picker select:disabled { opacity: 1; }
 
     .top-actions .ghost {
         color: #fff;
@@ -1648,6 +1659,8 @@ input, select {
         flex-wrap: wrap;
     }
 
+    .topbar > .identity-card { width: 100%; }
+
     .tables-view, .catalog-panel {
         padding: 15px;
     }
@@ -1926,6 +1939,8 @@ input, select {
         padding: 8px 10px;
     }
 
+    .locations-shell .topbar > .identity-card { width: auto; flex: 1; }
+
         .locations-shell .topbar .eyebrow {
             font-size: 9px;
         }
@@ -1939,7 +1954,6 @@ input, select {
         gap: 5px;
     }
 
-        .locations-shell .restaurant-picker select { width: clamp(100px, 30vw, 220px); font-size: 11px; }
 
         .locations-shell .top-actions .cash-status {
             flex-basis: 196px;

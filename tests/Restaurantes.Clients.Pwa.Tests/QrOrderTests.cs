@@ -1809,8 +1809,8 @@ public sealed class QrOrderTests : BunitContext
         SetField(cut.Instance, "restaurantId", restaurantId);
         SetField(
             cut.Instance,
-            "restaurants",
-            new List<PosRestaurant> { new(restaurantId, "CENTRO", "Centro", "Calle Mayor", true) }
+            "restaurant",
+            new PosRestaurant(restaurantId, "CENTRO", "Centro", "Calle Mayor", true)
         );
         SetField(
             cut.Instance,
