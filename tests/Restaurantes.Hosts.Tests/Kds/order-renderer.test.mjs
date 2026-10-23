@@ -58,7 +58,8 @@ test('station order keeps header, badges, lines, recovery action and collapse st
     const [title, body] = article.children;
     const [titleContent, headerMeta, toggle] = title.children;
     assert.equal(article.dataset.status, 'Ready');
-    assert.deepEqual(titleContent.children.map(child => child.textContent), ['Mesa 1', 'order-12']);
+    assert.deepEqual(titleContent.children.map(child => child.textContent), ['order-12']);
+    assert.doesNotMatch(titleContent.textContent, /Mesa 1/u);
     assert.equal(headerMeta.children[0].textContent, 'Origen: POS');
     assert.equal(headerMeta.children[2].children[1].textContent, 2);
     assert.equal(body.children[1].children.map(child => child.textContent).join(','), 'Chef: Ready,Bebidas: Dispatched');
@@ -82,6 +83,27 @@ test('station order keeps header, badges, lines, recovery action and collapse st
   }
 });
 
+test('station card color follows its station status and chef highlights ready passes', () => {
+  const previousDocument = globalThis.document;
+  globalThis.document = { createElement: () => new Element() };
+  try {
+    const order = createOrder();
+    order.status = 'InPreparation';
+    order.stations = order.stations.map(station =>
+      station.code === 'GRILL' ? { ...station, status: 'Ready' } : station
+    );
+    const { renderer } = createRenderer('GRILL');
+    renderer.render([order]);
+    assert.equal(renderer.element.children[0].dataset.status, 'Ready');
+
+    const { renderer: chefRenderer } = createRenderer('CHEF');
+    chefRenderer.render([order]);
+    assert.equal(chefRenderer.element.children[0].dataset.status, 'Ready');
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
 test('primary station separates controlled passes and disables pending recovery', () => {
   const previousDocument = globalThis.document;
   globalThis.document = { createElement: () => new Element() };
@@ -95,8 +117,30 @@ test('primary station separates controlled passes and disables pending recovery'
     assert.equal(title.children[1].children.length, 2);
     assert.equal(body.children[0].children.length, 1);
     assert.equal(body.children[0].children[0].children[0].children[0].textContent, '1 × Agua · Bebidas');
-    assert.equal(body.children[1].children[0].children[0].children[0].textContent, 'Parrilla · prioridad 1');
+    assert.equal(body.children[1].children[0].children[0].children[0].textContent, 'Prioridad 1');
     assert.equal(body.children[2].children[0].disabled, true);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+test('primary station omits the passes area when no manual dispatch is required', () => {
+  const previousDocument = globalThis.document;
+  globalThis.document = { createElement: () => new Element() };
+  try {
+    const order = createOrder();
+    order.stations = order.stations.map(station => ({
+      ...station,
+      requiresPrimaryDispatch: false,
+    }));
+    const { renderer } = createRenderer('CHEF');
+    renderer.render([order]);
+
+    const body = renderer.element.children[0].children[1];
+    assert.equal(body.children.some(child => child.className === 'passes'), false);
+    assert.equal(body.children.some(child =>
+      child.textContent.includes('Este pedido no contiene pases')
+    ), false);
   } finally {
     globalThis.document = previousDocument;
   }

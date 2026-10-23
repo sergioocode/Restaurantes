@@ -16,12 +16,6 @@ export function productFormatLabel(format) {
   return ' [' + (labels[format] || format.replaceAll('_', ' ')) + ']';
 }
 
-export function orderDestinationLabel(order) {
-  return order.tableLabel?.trim()
-    || order.customerName?.trim()
-    || 'Destino sin identificar';
-}
-
 export class OrderRenderer {
   constructor(element, options) {
     this.element = element;
@@ -46,24 +40,33 @@ export class OrderRenderer {
   renderOrder(order) {
     const article = document.createElement('article');
     article.className = 'order';
-    article.dataset.status = order.status;
+    article.dataset.status = this.getDisplayStatus(order);
     const collapsed = this.collapsedOrders.has(order.id);
     const { title, toggleButton } = this.renderOrderHeader(order, collapsed);
     article.append(title, this.renderOrderBody(order, collapsed, toggleButton));
     return article;
   }
 
+  getDisplayStatus(order) {
+    const stationCode = this.options.getStationCode();
+    if (stationCode === this.options.getPrimaryStationCode()) {
+      const readyPass = order.stations.some(
+        station => station.requiresPrimaryDispatch && station.status === 'Ready'
+      );
+      return readyPass ? 'Ready' : order.status;
+    }
+    return order.stations.find(station => station.code === stationCode)?.status || order.status;
+  }
+
   renderOrderHeader(order, collapsed) {
     const title = document.createElement('h2');
     const titleContent = document.createElement('span');
     titleContent.className = 'order-title-content';
-    const destination = document.createElement('span');
-    destination.textContent = orderDestinationLabel(order);
     const shortId = document.createElement('small');
     shortId.className = 'order-short-id';
     shortId.textContent = order.id.slice(0, 8);
     shortId.title = order.id;
-    titleContent.append(destination, shortId);
+    titleContent.append(shortId);
 
     const headerMeta = document.createElement('span');
     headerMeta.className = 'order-header-meta';
@@ -113,7 +116,10 @@ export class OrderRenderer {
     const isPrimary = selectedStationCode === this.options.getPrimaryStationCode();
     if (!isPrimary) body.append(this.renderOtherStations(order, selectedStationCode));
     body.append(this.renderOrderLines(order, isPrimary));
-    if (isPrimary) body.append(this.renderChefPasses(order));
+    if (isPrimary) {
+      const passes = this.renderChefPasses(order);
+      if (passes) body.append(passes);
+    }
     if (this.options.canRecover(order)) body.append(this.renderRecoveryAction(order));
     return body;
   }
@@ -293,24 +299,20 @@ export class OrderRenderer {
   }
 
   renderChefPasses(order) {
-    const container = document.createElement('div');
-    container.className = 'passes';
     const controlled = order.stations
       .filter(station => station.requiresPrimaryDispatch)
       .sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name));
-    if (!controlled.length) {
-      const note = document.createElement('small');
-      note.textContent = 'Este pedido no contiene pases que requieran despacho del KDS principal.';
-      container.append(note);
-      return container;
-    }
+    if (!controlled.length) return null;
+
+    const container = document.createElement('div');
+    container.className = 'passes';
 
     for (const station of controlled) {
       const pass = document.createElement('section');
       pass.className = 'pass';
       const header = document.createElement('header');
       const name = document.createElement('strong');
-      name.textContent = station.name + ' · prioridad ' + station.priority;
+      name.textContent = 'Prioridad ' + station.priority;
       header.append(name);
 
       const blocked = controlled.some(other =>
