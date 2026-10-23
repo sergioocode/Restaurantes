@@ -118,7 +118,7 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
   };
   let order = {
     id: 'order-12345678', version: 1, status: 'InPreparation', source: 'POS',
-    tableLabel: 'Mesa 1 - Sala', customerName: '', serviceMode: 'DineIn',
+    tableLabel: 'Mesa 1 - Sala', zoneId: 'zone-2', customerName: '', serviceMode: 'DineIn',
     submittedAtUtc: '2026-10-19T08:00:00Z',
     stations: [
       { code: 'MAIN', name: 'Principal', isPrimary: true, isActive: true, priority: 0, status: 'Pending' },
@@ -295,6 +295,7 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
     assert.equal(order.version, 4);
     assert.equal(element('ticketDialog').open, true);
     assert.match(element('ticketContent').children[0].textContent, /Parrilla/u);
+    assert.equal(element('ticketContent').children[1].textContent, 'Destino: Mesa 1 · Zona: Terraza');
     element('closeTicket').listeners.get('click')();
     assert.equal(element('ticketDialog').open, false);
 

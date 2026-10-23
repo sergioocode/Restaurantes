@@ -187,7 +187,15 @@ async function showTicketAfterStationCompletion(order, path) {
     const lineId = decodeURIComponent(path.split('/').at(-2) || '');
     const line = order.lines.find(item => item.id === lineId);
     if (!line) return;
-    renderKitchenTicket(ticketContent, order, line, selectedStation, path.endsWith('/dispatch'));
+    const zoneName = restaurantZones.find(zone => zone.id === order.zoneId)?.name || '';
+    renderKitchenTicket(
+      ticketContent,
+      order,
+      line,
+      selectedStation,
+      path.endsWith('/dispatch'),
+      zoneName
+    );
     if (!ticketDialog.open) ticketDialog.showModal();
   } catch (error) {
     console.warn('No se pudo mostrar el ticket KDS.', error);

@@ -42,11 +42,12 @@ test('kitchen ticket renders destination, product details, notes and station tim
       },
       { name: 'Chef', isPrimary: true, code: 'CHEF' },
       true,
+      'Terraza Norte',
     );
 
     assert.equal(ticket.children[0].id, 'ticketTitle');
     assert.equal(ticket.children[0].textContent, 'Chef');
-    assert.equal(ticket.children[1].textContent, 'Mesa: Mesa 4A · Zona: Terraza Norte');
+    assert.equal(ticket.children[1].textContent, 'Destino: Mesa 4A · Zona: Terraza Norte');
     assert.equal(ticket.children[3].textContent, '2 × Hamburguesa · media racion');
     assert.equal(ticket.children[4].textContent, 'Sin cebolla');
     assert.match(ticket.children[5].textContent, /^Llega: \d{2}:\d{2}:\d{2}$/);

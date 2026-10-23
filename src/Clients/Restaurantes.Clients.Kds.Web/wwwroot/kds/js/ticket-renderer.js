@@ -1,10 +1,10 @@
-export function renderKitchenTicket(ticketContent, order, line, station, dispatched) {
+export function renderKitchenTicket(ticketContent, order, line, station, dispatched, zoneName = '') {
   ticketContent.replaceChildren();
   const title = document.createElement('h2');
   title.id = 'ticketTitle';
   title.textContent = station.name;
   const destination = document.createElement('p');
-  const destinationLabel = order.tableLabel || order.customerName || 'Pedido';
+  const destinationLabel = order.tableLabel?.trim() || order.customerName?.trim() || 'Pedido';
   let separatorIndex = destinationLabel.indexOf('-');
   while (
     separatorIndex !== -1
@@ -24,10 +24,11 @@ export function renderKitchenTicket(ticketContent, order, line, station, dispatc
           destinationLabel.slice(0, separatorIndex).trimEnd(),
           destinationLabel.slice(separatorIndex + 1).trimStart(),
         ];
-  destination.textContent =
-    tableParts.length === 2
-      ? 'Mesa: ' + tableParts[0] + ' · Zona: ' + tableParts[1]
-      : 'Destino: ' + tableParts[0];
+  const tableLabel = tableParts[0];
+  const resolvedZoneName = zoneName.trim() || (tableParts.length === 2 ? tableParts[1] : '');
+  destination.textContent = resolvedZoneName
+    ? 'Destino: ' + tableLabel + ' · Zona: ' + resolvedZoneName
+    : 'Destino: ' + tableLabel;
   const separator = document.createElement('hr');
   const product = document.createElement('strong');
   product.className = 'ticket-product';
