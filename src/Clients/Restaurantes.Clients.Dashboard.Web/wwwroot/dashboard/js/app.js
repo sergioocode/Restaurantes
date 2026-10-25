@@ -38,11 +38,32 @@ $('loginMicrosoft').onclick = () => startLogin('Microsoft');
 $('loginGoogle').onclick = () => startLogin('Google');
 
 async function loadProvider() {
-    const response = await fetch(gatewayOrigin + '/api/identity/auth/provider');
-    if (!response.ok) throw new Error('No se pudo consultar el proveedor.');
-    const settings = await response.json();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    let settings;
+    try {
+        const response = await fetch(gatewayOrigin + '/api/identity/auth/provider', {
+            signal: controller.signal
+        });
+        if (!response.ok) throw new Error('No se pudo consultar el proveedor.');
+        settings = await response.json();
+    } catch (error) {
+        if (controller.signal.aborted) throw new Error('La consulta del proveedor tardó demasiado. Reintenta.');
+        throw error;
+    } finally {
+        clearTimeout(timeout);
+    }
     $('loginMicrosoft').disabled = settings.activeProvider !== 'Microsoft' || !settings.microsoftConfigured;
     $('loginGoogle').disabled = settings.activeProvider !== 'Google' || !settings.googleConfigured;
+}
+
+async function prepareLogin(message = '') {
+    showLogin(message);
+    try {
+        await loadProvider();
+    } catch (error) {
+        if (!message) $('loginError').textContent = error.message;
+    }
 }
 
 async function loadOnce() {
@@ -273,7 +294,8 @@ function logout() {
     clearTimeout(realtimeRefreshTimer);
     dashboardRefreshPending = false;
     sessionStorage.removeItem(sessionKey);
-    showLogin()
+    showLogin();
+    void loadProvider().catch(error => { $('loginError').textContent = error.message; });
 }
 
 async function realtime() {
@@ -317,7 +339,6 @@ async function realtime() {
 
 (async function bootstrap() {
     try {
-        await loadProvider();
         const query = new URLSearchParams(window.location.hash.slice(1));
         const code = query.get('login_code');
         if (code) {
@@ -335,12 +356,20 @@ async function realtime() {
         }
         if (query.has('login_error')) {
             history.replaceState(null, '', window.location.pathname);
-            return showLogin('La cuenta no está autorizada o el proveedor rechazó el acceso.');
+            await prepareLogin('La cuenta no está autorizada o el proveedor rechazó el acceso.');
+            return;
         }
         const saved = sessionStorage.getItem(sessionKey);
-        if (!saved) return showLogin();
+        if (!saved) {
+            await prepareLogin();
+            return;
+        }
         const session = JSON.parse(saved);
-        if (new Date(session.expiresAtUtc) <= new Date()) return logout();
+        if (new Date(session.expiresAtUtc) <= new Date()) {
+            sessionStorage.removeItem(sessionKey);
+            await prepareLogin();
+            return;
+        }
         await openDashboard(session);
     } catch (error) {
         if (access) {
@@ -348,7 +377,7 @@ async function realtime() {
             $('state').textContent = error.message;
         } else {
             sessionStorage.removeItem(sessionKey);
-            showLogin(error.message);
+            await prepareLogin(error.message);
         }
     }
 })();
