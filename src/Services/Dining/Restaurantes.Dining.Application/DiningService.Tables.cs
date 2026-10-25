@@ -144,6 +144,21 @@ public sealed partial class DiningService
         );
     }
 
+    public async Task<DiningResult> ListOpenTakeawaySessions(
+        Guid restaurantId,
+        ClaimsPrincipal principal,
+        CancellationToken ct
+    )
+    {
+        if (!access.CanAccessRestaurant(principal, restaurantId, DiningPermission.TablesRead))
+        {
+            return DiningResults.Forbid();
+        }
+
+        List<DiningSession> sessions = await db.ReadOpenTakeawaySessionsAsync(restaurantId, ct);
+        return DiningResults.Ok(sessions.Select(SessionResponse));
+    }
+
     public async Task<DiningResult> RotateQr(
         Guid tableId,
         ClaimsPrincipal principal,

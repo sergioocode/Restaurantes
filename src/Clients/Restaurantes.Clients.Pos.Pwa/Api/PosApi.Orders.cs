@@ -56,6 +56,7 @@ public sealed partial class PosApi
 
     public Task<OrderResponse> CreateAndSubmitTakeawayAsync(
         Guid restaurantId,
+        Guid sessionId,
         string customerName,
         IReadOnlyList<PosCartLine> lines
     )
@@ -64,8 +65,8 @@ public sealed partial class PosApi
         {
             restaurantId,
             tableId = (Guid?)null,
-            diningSessionId = (Guid?)null,
-            tableLabel = "PARA LLEVAR",
+            diningSessionId = sessionId,
+            tableLabel = customerName,
             customerName,
             serviceMode = "Takeaway",
             source = "Pos",
@@ -88,23 +89,6 @@ public sealed partial class PosApi
         );
         using HttpResponseMessage submitResponse = await http.SendAsync(submit);
         return await ReadAsync<OrderResponse>(submitResponse);
-    }
-
-    public async Task<OrderResponse> DeliverPickupAsync(Guid orderId)
-    {
-        return await RetryAsync(
-            async () =>
-            {
-                using HttpRequestMessage deliver = Authorized(
-                    HttpMethod.Post,
-                    $"/api/orders/{orderId}/deliver"
-                );
-                return await http.SendAsync(deliver);
-            },
-            [409],
-            "El pago no se proyectó en Orders a tiempo.",
-            ReadAsync<OrderResponse>
-        );
     }
 
     private static IEnumerable<object> OrderLines(IReadOnlyList<PosCartLine> lines)

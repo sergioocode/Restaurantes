@@ -3,10 +3,12 @@
 public sealed record DiningSessionResponse(
     Guid Id,
     Guid RestaurantId,
-    Guid TableId,
+    Guid? TableId,
     string Source,
     string Status,
     List<DiningSessionOrderResponse> Orders,
     bool RequestGuestCount = false,
-    int? GuestCount = null
+    int? GuestCount = null,
+    string CustomerName = "",
+    DateTime OpenedAtUtc = default
 );

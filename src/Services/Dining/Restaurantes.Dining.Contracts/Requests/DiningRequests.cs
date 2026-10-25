@@ -29,6 +29,12 @@ public sealed class OpenSessionRequest
     public string Source { get; init; } = "Comandero";
 }
 
+public sealed class OpenTakeawaySessionRequest
+{
+    [Required, StringLength(80, MinimumLength = 1)]
+    public string CustomerName { get; init; } = string.Empty;
+}
+
 public sealed class CheckoutSessionRequest
 {
     public Guid IdempotencyKey { get; init; }

@@ -349,17 +349,13 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
             PaymentCaptured capture =
                 JsonSerializer.Deserialize<PaymentCaptured>(body.Span)
                 ?? throw new JsonException("PaymentCaptured is empty.");
-            return capture.ServiceMode == "Takeaway"
-                ? null
-                : new PaymentUpdate(status, capture.OrderId, capture.CapturedAtUtc, capture);
+            return new PaymentUpdate(status, capture.OrderId, capture.CapturedAtUtc, capture);
         }
 
         PaymentRefunded refund =
             JsonSerializer.Deserialize<PaymentRefunded>(body.Span)
             ?? throw new JsonException("PaymentRefunded is empty.");
-        return refund.ServiceMode == "Takeaway"
-            ? null
-            : new PaymentUpdate(status, refund.OrderId, refund.RefundedAtUtc, null);
+        return new PaymentUpdate(status, refund.OrderId, refund.RefundedAtUtc, null);
     }
 
     private static async Task ApplyPaymentToOrderAsync(

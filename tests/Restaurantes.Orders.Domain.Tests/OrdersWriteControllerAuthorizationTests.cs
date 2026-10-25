@@ -472,6 +472,7 @@ public sealed class OrdersWriteControllerAuthorizationTests
         new()
         {
             RestaurantId = restaurantId,
+            DiningSessionId = Guid.NewGuid(),
             TableLabel = tableLabel,
             CustomerName = "Cliente de prueba",
             Source = source,
@@ -503,6 +504,7 @@ public sealed class OrdersWriteControllerAuthorizationTests
         private readonly InterfaceProxy writeStoreProxy;
         private readonly InterfaceProxy catalogProxy;
         private readonly InterfaceProxy cashRegisterProxy;
+        private readonly InterfaceProxy diningProxy;
 
         public Fixture()
         {
@@ -511,7 +513,11 @@ public sealed class OrdersWriteControllerAuthorizationTests
             IOrderPaymentStore payments = Proxy<IOrderPaymentStore>(
                 out InterfaceProxy paymentProxy
             );
-            IDiningSessionStore dining = Proxy<IDiningSessionStore>(out _);
+            IDiningSessionStore dining = Proxy<IDiningSessionStore>(out diningProxy);
+            diningProxy.Handler = (method, _) =>
+                method.Name == nameof(IDiningSessionStore.EnsureOpenAsync)
+                    ? Task.FromResult(new DiningSessionValidation(null, null))
+                    : throw new NotSupportedException(method.Name);
             IOrderCashRegister cashRegister = Proxy<IOrderCashRegister>(out cashRegisterProxy);
             OrderCommandService commands = new(
                 store,

@@ -1,10 +1,65 @@
 ﻿using System.Security.Claims;
+using Restaurantes.Dining.Contracts.Requests;
 using Restaurantes.Dining.Domain;
 
 namespace Restaurantes.Dining.Application;
 
 public sealed partial class DiningService
 {
+    public async Task<DiningResult> OpenTakeawaySession(
+        Guid restaurantId,
+        OpenTakeawaySessionRequest request,
+        ClaimsPrincipal principal,
+        CancellationToken ct
+    )
+    {
+        string customerName = request.CustomerName.Trim();
+        if (restaurantId == Guid.Empty || customerName.Length is < 1 or > 80)
+        {
+            return DiningResults.BadRequest(
+                new { detail = "RestaurantId and customer name are required." }
+            );
+        }
+        if (!access.CanAccessRestaurant(principal, restaurantId, DiningPermission.OrdersCreate))
+        {
+            return DiningResults.Forbid();
+        }
+        if (
+            !Guid.TryParse(
+                principal.FindFirst(ClaimTypes.NameIdentifier)?.Value,
+                out Guid openedByUserId
+            )
+        )
+        {
+            return DiningResults.Forbid();
+        }
+        try
+        {
+            await cashRegister.EnsureOpenAsync(restaurantId, ct);
+        }
+        catch (DiningCashRegisterClosedException exception)
+        {
+            return DiningResults.Conflict(new { detail = exception.Message });
+        }
+
+        DiningSession session = new()
+        {
+            Id = Guid.NewGuid(),
+            RestaurantId = restaurantId,
+            TableId = null,
+            CustomerName = customerName,
+            OpenedByUserId = openedByUserId,
+            Source = "Pos",
+            OpenedAtUtc = time.GetUtcNow().UtcDateTime,
+        };
+        db.Add(session);
+        await db.SaveChangesAsync(ct);
+        return DiningResults.Created(
+            $"/api/dining/sessions/{session.Id}",
+            SessionResponse(session)
+        );
+    }
+
     public async Task<DiningResult> OpenSession(
         Guid tableId,
         OpenSessionRequest request,
@@ -118,7 +173,7 @@ public sealed partial class DiningService
     public async Task<DiningResult> ValidateSession(
         Guid sessionId,
         Guid restaurantId,
-        Guid tableId,
+        Guid? tableId,
         string? source,
         string? serviceMode,
         DiningRequest httpContext,
@@ -142,7 +197,9 @@ public sealed partial class DiningService
         if (valid)
         {
             // Bar remains accepted for historical orders; locations no longer have types.
-            valid = serviceMode is "DineIn" or "Bar";
+            valid = session!.TableId is null
+                ? serviceMode == "Takeaway" && source == "Pos" && session.CustomerName.Length > 0
+                : serviceMode is "DineIn" or "Bar";
         }
         if (valid && string.Equals(source, "CustomerQr", StringComparison.Ordinal))
         {
@@ -152,7 +209,10 @@ public sealed partial class DiningService
                 && TokenEquals(session.CustomerAccessToken, customerAccessToken);
         }
 
-        Guid? zoneId = valid ? await db.ReadTableZoneIdAsync(restaurantId, tableId, ct) : null;
+        Guid? zoneId =
+            valid && tableId is Guid id
+                ? await db.ReadTableZoneIdAsync(restaurantId, id, ct)
+                : null;
         return valid
             ? DiningResults.NoContent(session!.GuestCount, zoneId)
             : DiningResults.Conflict(

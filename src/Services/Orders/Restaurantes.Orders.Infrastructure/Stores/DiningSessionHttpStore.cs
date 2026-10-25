@@ -8,7 +8,7 @@ public sealed class DiningSessionHttpStore(HttpClient client) : IDiningSessionSt
     public async Task<DiningSessionValidation> EnsureOpenAsync(
         Guid diningSessionId,
         Guid restaurantId,
-        Guid tableId,
+        Guid? tableId,
         string source,
         string serviceMode,
         string customerAccessToken,
@@ -17,7 +17,8 @@ public sealed class DiningSessionHttpStore(HttpClient client) : IDiningSessionSt
     {
         string path =
             $"/api/dining/sessions/{diningSessionId}/validate"
-            + $"?restaurantId={restaurantId}&tableId={tableId}"
+            + $"?restaurantId={restaurantId}"
+            + (tableId is Guid id ? $"&tableId={id}" : "")
             + $"&source={Uri.EscapeDataString(source)}"
             + $"&serviceMode={Uri.EscapeDataString(serviceMode)}";
         HttpResponseMessage response;

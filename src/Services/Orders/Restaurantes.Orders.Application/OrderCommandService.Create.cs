@@ -26,19 +26,21 @@ public sealed partial class OrderCommandService
 
         int? guestCount = null;
         Guid? zoneId = null;
-        if (serviceMode is ServiceMode.DineIn or ServiceMode.Bar)
+        if (request.DiningSessionId is not null)
         {
-            if (request.TableId is null || request.DiningSessionId is null)
+            if (
+                (serviceMode is ServiceMode.DineIn or ServiceMode.Bar)
+                    != (request.TableId is not null)
+                || (serviceMode == ServiceMode.Takeaway && request.Source != "Pos")
+            )
             {
-                throw new ArgumentException(
-                    "DineIn and Bar orders require a location and DiningSessionId."
-                );
+                throw new ArgumentException("The order location does not match its service mode.");
             }
 
             DiningSessionValidation validation = await dining.EnsureOpenAsync(
                 request.DiningSessionId.Value,
                 request.RestaurantId,
-                request.TableId.Value,
+                request.TableId,
                 request.Source,
                 request.ServiceMode,
                 customerAccessToken,
@@ -46,10 +48,14 @@ public sealed partial class OrderCommandService
             );
             guestCount = validation.GuestCount;
             zoneId = validation.ZoneId;
-            if (zoneId is null || zoneId == Guid.Empty)
+            if (request.TableId is not null && (zoneId is null || zoneId == Guid.Empty))
             {
                 throw new InvalidOperationException("The dining table zone could not be resolved.");
             }
+        }
+        else if (serviceMode != ServiceMode.Takeaway || request.TableId is not null)
+        {
+            throw new ArgumentException("Orders require an open dining session.");
         }
         Guid[] ids = request.Lines.Select(x => x.ProductId).Distinct().ToArray();
         IReadOnlyDictionary<Guid, OrderCatalogProduct> products = await catalog.FindAsync(

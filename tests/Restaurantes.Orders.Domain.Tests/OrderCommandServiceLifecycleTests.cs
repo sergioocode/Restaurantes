@@ -166,7 +166,7 @@ public sealed class OrderCommandServiceLifecycleTests
         public Task<DiningSessionValidation> EnsureOpenAsync(
             Guid diningSessionId,
             Guid restaurantId,
-            Guid tableId,
+            Guid? tableId,
             string source,
             string serviceMode,
             string customerAccessToken,

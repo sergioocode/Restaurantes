@@ -43,9 +43,35 @@ public sealed partial class PosApi
         return await ReadAsync<DiningSessionResponse>(response);
     }
 
+    public async Task<DiningSessionResponse> OpenTakeawaySessionAsync(
+        Guid restaurantId,
+        string customerName
+    )
+    {
+        using HttpRequestMessage request = Authorized(
+            HttpMethod.Post,
+            $"/api/dining/restaurants/{restaurantId}/takeaway-sessions"
+        );
+        request.Content = JsonContent.Create(new { customerName });
+        using HttpResponseMessage response = await http.SendAsync(request);
+        return await ReadAsync<DiningSessionResponse>(response);
+    }
+
     public Task<DiningSessionResponse> ActiveSessionAsync(Guid tableId)
     {
         return GetAsync<DiningSessionResponse>($"/api/dining/tables/{tableId}/active-session");
+    }
+
+    public Task<List<DiningSessionResponse>> TakeawaySessionsAsync(Guid restaurantId)
+    {
+        return GetAsync<List<DiningSessionResponse>>(
+            $"/api/dining/restaurants/{restaurantId}/takeaway-sessions"
+        );
+    }
+
+    public Task<DiningSessionResponse> SessionAsync(Guid sessionId)
+    {
+        return GetAsync<DiningSessionResponse>($"/api/dining/sessions/{sessionId}");
     }
 
     public Task<SessionBillResponse> BillAsync(Guid sessionId)

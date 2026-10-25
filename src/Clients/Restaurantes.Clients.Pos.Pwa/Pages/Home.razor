@@ -58,12 +58,12 @@
             </div>
         </header>
 
-        @if (selectedTable is null && !takeawayOpen)
+        @if (selectedTable is null && !takeawayOpen && !pickupBillOpen)
         {
             <section class="tables-view">
                 <div class="tables-toolbar">
                     <button class="quick-mode" @onclick="BeginTakeaway" disabled="@(!CashRegisterOpen)">Nuevo para llevar</button>
-                    <button class="ghost" @onclick="ShowPickupOrders" disabled="@busy">Recogidas (@pickupOrders.Count)</button>
+                    <button class="ghost" @onclick="ShowPickupOrders" disabled="@busy">Recogidas (@pickupSessions.Count)</button>
                     @foreach (var zone in DiningZones())
                     {
                         <button class="@ZoneClass(zone.Key.ZoneId)" @onclick="() => SelectZone(zone.Key.ZoneId)">
@@ -83,18 +83,18 @@
 
                 @if (pickupView)
                 {
-                    <div class="tables-content pickup-list">
-                        @foreach (OrderResponse pickup in pickupOrders)
+                    <div class="tables-content pickup-list dining-table-grid">
+                        @foreach (DiningSessionResponse pickup in pickupSessions)
                         {
-                            <article class="table-card occupied pickup-card">
-                                <span class="table-status">@OrderProgress.PickupLabel(pickup.Status)</span>
+                            <article class="table-card dining-location occupied pickup-card">
+                                <span class="table-status">@PickupSessionLabel(pickup)</span>
                                 <strong>@pickup.CustomerName</strong>
-                                <small>@pickup.Id.ToString()[..8] · @pickup.CreatedAtUtc.ToLocalTime().ToString("HH:mm")</small>
-                                <em>@PickupPaymentLabel(pickupPaymentStatuses.GetValueOrDefault(pickup.Id) ?? "ProjectionPending") · @pickup.Total.ToString("0.00") €</em>
+                                <small>@pickup.Id.ToString()[..8] · @pickup.OpenedAtUtc.ToLocalTime().ToString("HH:mm")</small>
+                                <em>@PickupSessionTotal(pickup).ToString("0.00") €</em>
                                 <button class="primary" @onclick="() => OpenPickup(pickup)" disabled="@busy">Ver pedido</button>
                             </article>
                         }
-                        @if (pickupOrders.Count == 0 && !busy) { <p class="empty">No hay pedidos pendientes de recogida.</p> }
+                        @if (pickupSessions.Count == 0 && !busy) { <p class="empty">No hay pedidos pendientes de recogida.</p> }
                     </div>
                 }
                 else if (selectedZoneId is Guid)
@@ -425,7 +425,7 @@
                                 @if (bill.CanRelease)
                                 {
                                     <button class="primary" @onclick="ReleaseSession" disabled="@busy">
-                                        @(busy ? "Liberando…" : "Liberar mesa")
+                                        @(busy ? "Liberando…" : "Liberar")
                                     </button>
                                 }
                                 else if (bill.Outstanding > 0)
@@ -667,92 +667,6 @@
                     </section>
                 </div>
             }
-        }
-
-        @if (pickupBillOpen)
-        {
-            <div class="modal-backdrop" @onclick="ClosePickup">
-                <section class="bill-card" @onclick:stopPropagation>
-                    <div class="bill-title">
-                        <div><p class="eyebrow">PEDIDO PARA LLEVAR</p><h2>@selectedPickup?.CustomerName</h2></div>
-                        <button class="ghost" @onclick="ClosePickup">Cerrar</button>
-                    </div>
-                    @if (pickupDetail is null)
-                    {
-                        <p class="muted">@(busy ? "Cargando pedido…" : message ?? "No se pudo cargar el pedido.")</p>
-                    }
-                    else
-                    {
-                        <div class="pickup-order-status">
-                            <span>Comanda @pickupDetail.Id.ToString()[..8]</span>
-                            <span>@OrderProgress.PickupLabel(pickupDetail.Status)</span>
-                            <span>@PickupPaymentLabel(pickupPaymentStatus)</span>
-                        </div>
-                        <div class="bill-orders">
-                            <article>
-                                <div class="bill-lines">
-                                    @foreach (OrderLineDetailResponse line in pickupDetail.Lines)
-                                    {
-                                        <div class="bill-line @(line.Status == "Cancelled" ? "cancelled" : "")">
-                                            @if (line.Status != "Cancelled")
-                                            {
-                                                <span>@line.Quantity × @line.ProductName@(!string.IsNullOrEmpty(line.Format) ? $" · {FormatLabel(line.Format)}" : "")@(!string.IsNullOrWhiteSpace(line.PreparationStationName) ? $" · {line.PreparationStationName}" : "") <small class="line-kitchen @KitchenLineStatusClass(line.KitchenStatus)" title="@KitchenLineStatusLabel(line.KitchenStatus)" aria-label="@KitchenLineStatusLabel(line.KitchenStatus)">@KitchenLineStatusIcon(line.KitchenStatus)</small></span>
-                                            }
-                                            else
-                                            {
-                                                <span>@line.Quantity × @line.ProductName@(!string.IsNullOrEmpty(line.Format) ? $" · {FormatLabel(line.Format)}" : "")@(!string.IsNullOrWhiteSpace(line.PreparationStationName) ? $" · {line.PreparationStationName}" : "")</span>
-                                            }
-                                            @if (CanCancelPickupLine(line))
-                                            {
-                                                <button class="danger" disabled="@busy" @onclick="() => CancelPickupLine(line)">Cancelar</button>
-                                            }
-                                            else if (line.Status == "Cancelled")
-                                            {
-                                                <small>Cancelado · @line.CancellationReason</small>
-                                            }
-                                        </div>
-                                    }
-                                </div>
-                            </article>
-                        </div>
-                        <div class="bill-total"><span>Total</span><strong>@pickupDetail.Total.ToString("0.00") €</strong></div>
-                        @if (pickupPaymentStatus == "Open")
-                        {
-                            <label>Método de pago
-                                <select @bind="paymentMethod"><option value="Card">Tarjeta</option><option value="Cash">Efectivo</option></select>
-                            </label>
-                            @if (paymentMethod == "Cash" && !CashRegisterOpen)
-                            {
-                                <p class="warning">Abre la caja diaria antes de cobrar este pedido.</p>
-                            }
-                            <label>Referencia (opcional)<input @bind="paymentReference" placeholder="Ticket de caja o datáfono" /></label>
-                        }
-                        else if (pickupPaymentStatus == "ProjectionPending")
-                        {
-                            <p class="warning">El estado del pago aún no está disponible. Actualiza el pedido antes de cobrar.</p>
-                        }
-                        else if (pickupPaymentStatus == "Paid" && !OrderProgress.IsReady(pickupDetail.Status))
-                        {
-                            <p class="muted">Pedido pagado. Se podrá entregar cuando cocina lo marque listo.</p>
-                        }
-                        <div class="bill-actions">
-                            <button class="ghost" @onclick="RefreshPickup" disabled="@busy">Actualizar</button>
-                            @if (pickupPaymentStatus == "Open")
-                            {
-                                <button class="primary" @onclick="CapturePickup" disabled="@(busy || !CashRegisterOpen || pickupDetail.Total <= 0)">
-                                    @(busy ? "Cobrando…" : "Cobrar pedido")
-                                </button>
-                            }
-                            else if (pickupPaymentStatus == "Paid" && OrderProgress.IsReady(pickupDetail.Status))
-                            {
-                                <button class="primary" @onclick="DeliverPickup" disabled="@busy">
-                                    @(busy ? "Entregando…" : "Entregar al cliente")
-                                </button>
-                            }
-                        </div>
-                    }
-                </section>
-            </div>
         }
 
         @if (cashPanelOpen || cashCloseTicketOpen)

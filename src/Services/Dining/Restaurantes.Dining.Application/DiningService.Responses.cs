@@ -98,6 +98,7 @@ public sealed partial class DiningService
             session.Id,
             session.RestaurantId,
             session.TableId,
+            session.CustomerName,
             session.OpenedByUserId,
             session.RequestGuestCount,
             session.GuestCount,

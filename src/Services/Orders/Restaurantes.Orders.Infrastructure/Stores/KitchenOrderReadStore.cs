@@ -62,7 +62,7 @@ public sealed class KitchenOrderReadStore(OrderReadDbContext dbContext) : IKitch
                 bool fullyDispatched = stations
                     .Where(station => station.Status != "Cancelled")
                     .All(station => station.Status == "Dispatched");
-                if (item.Status == "Ready" && item.ServiceMode != "Takeaway" && fullyDispatched)
+                if (item.Status == "Ready" && fullyDispatched)
                 {
                     return null;
                 }

@@ -528,15 +528,22 @@ public sealed class DiningIntegrationPaymentTests
     }
 
     [Fact]
-    public async Task Takeaway_payment_does_not_create_a_dining_projection()
+    public async Task Takeaway_payment_before_order_creation_is_applied_to_the_pending_payment_projection()
     {
         IDiningStore store = CreateStore();
         DiningStoreProxy proxy = GetProxy(store);
-        PaymentCaptured payment = Captured(Guid.NewGuid(), serviceMode: "Takeaway");
+        PaymentCaptured payment = Captured(
+            Guid.NewGuid(),
+            amountPaid: 25m,
+            tipAmountPaid: 2m,
+            serviceMode: "Takeaway"
+        );
 
         await ProcessAsync(store, payment);
 
-        Assert.Null(proxy.PendingPayment);
+        Assert.Equal(payment.AmountPaid, proxy.PendingPayment?.AmountPaid);
+        Assert.Equal(payment.TipAmountPaid, proxy.PendingPayment?.TipPaid);
+        Assert.Equal("Paid", proxy.PendingPayment?.Status);
         Assert.Null(proxy.Order);
         Assert.True(proxy.MessageWasMarkedProcessed);
     }

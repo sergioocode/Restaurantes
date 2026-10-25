@@ -17,12 +17,13 @@ public sealed class OrderOverallCoverageTests
     )
     {
         bool hasDiningLocation = serviceMode is ServiceMode.DineIn or ServiceMode.Bar;
+        bool hasDiningSession = hasDiningLocation || serviceMode == ServiceMode.Takeaway;
 
         Order order = Order.Create(
             Guid.NewGuid(),
             hasDiningLocation ? Guid.NewGuid() : null,
             2,
-            hasDiningLocation ? Guid.NewGuid() : null,
+            hasDiningSession ? Guid.NewGuid() : null,
             " Mesa 1 ",
             serviceMode == ServiceMode.Takeaway ? " Ana " : string.Empty,
             serviceMode,

@@ -61,6 +61,11 @@ namespace Restaurantes.Dining.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CancelledByUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CustomerName")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
                     b.Property<Guid?>("CheckoutIdempotencyKey")
                         .HasColumnType("uuid");
 
@@ -110,7 +115,7 @@ namespace Restaurantes.Dining.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
-                    b.Property<Guid>("TableId")
+                    b.Property<Guid?>("TableId")
                         .HasColumnType("uuid");
 
                     b.Property<int>("Version")

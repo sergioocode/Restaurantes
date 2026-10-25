@@ -48,6 +48,7 @@ public sealed class DiningDbContext(DbContextOptions<DiningDbContext> options) :
         session.ToTable("dining_sessions");
         session.HasKey(x => x.Id);
         session.Property(x => x.Source).HasMaxLength(30).IsRequired();
+        session.Property(x => x.CustomerName).HasMaxLength(80).IsRequired();
         session.Property(x => x.Status).HasMaxLength(20).IsRequired();
         session.Property(x => x.PaymentMethod).HasMaxLength(30);
         session.Property(x => x.DiscountPercentage).HasPrecision(5, 2);

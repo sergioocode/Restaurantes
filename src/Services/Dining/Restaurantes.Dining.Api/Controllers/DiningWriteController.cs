@@ -46,6 +46,16 @@ public sealed class DiningWriteController(DiningService service, IConfiguration 
         return Execute(() => service.OpenSession(tableId, request, User, ct));
     }
 
+    [HttpPost("restaurants/{restaurantId:guid}/takeaway-sessions")]
+    public Task<IActionResult> OpenTakeawaySession(
+        Guid restaurantId,
+        OpenTakeawaySessionRequest request,
+        CancellationToken ct
+    )
+    {
+        return Execute(() => service.OpenTakeawaySession(restaurantId, request, User, ct));
+    }
+
     [HttpPost("tables/{tableId:guid}/qr/rotate")]
     public Task<IActionResult> RotateQr(Guid tableId, CancellationToken ct)
     {

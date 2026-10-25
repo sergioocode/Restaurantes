@@ -40,12 +40,8 @@ public partial class Home
     private bool takeawayOpen;
     private List<OrderResponse> activeOrders = [];
     private Dictionary<Guid, TableSessionOrderSnapshot> tableSessionOrderSnapshots = [];
-    private List<OrderResponse> pickupOrders = [];
-    private OrderResponse? selectedPickup;
-    private OrderDetailResponse? pickupDetail;
-    private Dictionary<Guid, string> pickupPaymentStatuses = [];
-    private string pickupPaymentStatus = ProjectionPendingStatus;
-    private Guid pickupPaymentKey;
+    private List<DiningSessionResponse> pickupSessions = [];
+    private DiningSessionResponse? selectedPickup;
     private bool pickupBillOpen;
     private TableResponse? selectedTable;
     private TableResponse? guestCountTable;
@@ -358,7 +354,9 @@ public partial class Home
     private bool IsTakeaway => serviceMode == "Takeaway";
     private bool hasSessionOrders;
     private string CurrentLabel =>
-        IsTakeaway ? "Pedido para llevar" : selectedTable?.Label ?? "Ubicación";
+        pickupBillOpen ? selectedPickup?.CustomerName ?? "Pedido para llevar"
+        : IsTakeaway ? "Pedido para llevar"
+        : selectedTable?.Label ?? "Ubicación";
     private RestaurantResponse? CurrentRestaurant => restaurant;
 
     protected override async Task OnInitializedAsync()
@@ -657,37 +655,33 @@ public partial class Home
             _ => source,
         };
 
+    private static string PickupSessionLabel(DiningSessionResponse pickup)
+    {
+        string[] statuses = pickup.Orders.Select(order => order.OrderStatus).Distinct().ToArray();
+        return statuses.Length == 1
+            ? OrderProgress.PickupLabel(statuses[0])
+            : OrderProgress.Summarize(statuses);
+    }
+
+    private static decimal PickupSessionTotal(DiningSessionResponse pickup) =>
+        pickup
+            .Orders.Where(order => order.OrderStatus != CancelledStatus)
+            .Sum(order => order.Amount);
+
     private async Task LoadPickupOrdersCore()
     {
         activeOrders = await Api.OrdersAsync(restaurantId);
-        pickupOrders = activeOrders
-            .Where(x => x.ServiceMode == "Takeaway")
-            .OrderBy(x => x.CreatedAtUtc)
-            .ToList();
-        pickupPaymentStatuses = [];
-        foreach (Guid[] orderIds in pickupOrders.Select(x => x.Id).Chunk(500))
-        {
-            foreach (
-                OrderPaymentStatusResponse status in await Api.PaymentStatusesAsync(
-                    restaurantId,
-                    orderIds
-                )
-            )
-            {
-                pickupPaymentStatuses[status.OrderId] = status.Status;
-            }
-        }
+        pickupSessions = await Api.TakeawaySessionsAsync(restaurantId);
         if (
             pickupBillOpen
             && selectedPickup is not null
-            && pickupOrders.FirstOrDefault(order => order.Id == selectedPickup.Id)
-                is OrderResponse updated
+            && pickupSessions.FirstOrDefault(pickup => pickup.Id == selectedPickup.Id)
+                is DiningSessionResponse updated
         )
         {
             selectedPickup = updated;
-            pickupPaymentStatus =
-                pickupPaymentStatuses.GetValueOrDefault(updated.Id) ?? ProjectionPendingStatus;
-            await RefreshPickup();
+            session = updated;
+            await LoadBill();
         }
     }
 
@@ -1015,9 +1009,13 @@ public partial class Home
                 {
                     session = await Api.SetGuestCountAsync(session.Id, guestCount ?? 0);
                 }
+                DiningSessionResponse? takeawaySession = IsTakeaway
+                    ? await Api.OpenTakeawaySessionAsync(restaurantId, customerName.Trim())
+                    : null;
                 OrderResponse order = IsTakeaway
                     ? await Api.CreateAndSubmitTakeawayAsync(
                         restaurantId,
+                        takeawaySession!.Id,
                         customerName.Trim(),
                         cart
                     )
@@ -1035,12 +1033,12 @@ public partial class Home
                 hasSessionOrders = HasLocation;
                 success = true;
                 message = IsTakeaway
-                    ? $"Recogida {order.Id.ToString()[..8]} enviada a cocina para {order.CustomerName}; el cobro se registra al pagar o entregar."
+                    ? $"Recogida {order.Id.ToString()[..8]} enviada a cocina para {order.CustomerName}."
                     : $"Comanda {order.Id.ToString()[..8]} enviada a cocina.";
                 if (IsTakeaway)
                 {
                     BackToTables();
-                    await Task.Delay(400, realtimeRefresh?.Token ?? CancellationToken.None);
+                    await Task.Delay(400, CancellationToken.None);
                     await LoadPickupOrdersCore();
                 }
             },
@@ -1048,171 +1046,40 @@ public partial class Home
         );
     }
 
-    private async Task OpenPickup(OrderResponse pickup)
+    private async Task OpenPickup(DiningSessionResponse pickup)
     {
         selectedPickup = pickup;
-        pickupDetail = null;
-        pickupPaymentStatus =
-            pickupPaymentStatuses.GetValueOrDefault(pickup.Id) ?? ProjectionPendingStatus;
-        pickupPaymentKey = Guid.Empty;
         paymentMethod = "Card";
         paymentReference = string.Empty;
         pickupBillOpen = true;
-        await Run(RefreshPickup);
-    }
+        billOpen = true;
+        session = pickup;
+        hasSessionOrders = false;
+        bill = null;
+        billOrders = [];
+        billLoadError = null;
+        await InvokeAsync(StateHasChanged);
 
-    private async Task RefreshPickup()
-    {
-        if (selectedPickup is null)
+        await Run(async () =>
         {
-            return;
+            hasSessionOrders = true;
+            await LoadBill();
+        });
+        if (bill is null && billLoadError is null)
+        {
+            billLoadError = message ?? "No se pudo cargar la cuenta.";
         }
-
-        OrderResponse pickup = selectedPickup;
-        OrderDetailResponse detail = await Api.OrderAsync(pickup.Id);
-        pickupDetail = detail;
-        List<OrderPaymentStatusResponse> statuses = await Api.PaymentStatusesAsync(
-            restaurantId,
-            pickup.Id
-        );
-        pickupPaymentStatus = statuses.FirstOrDefault()?.Status ?? ProjectionPendingStatus;
-        pickupPaymentStatuses[pickup.Id] = pickupPaymentStatus;
-        selectedPickup = pickup with { Status = detail.Status, Total = detail.Total };
     }
 
     private void ClosePickup()
     {
         pickupBillOpen = false;
         selectedPickup = null;
-        pickupDetail = null;
-        pickupPaymentKey = Guid.Empty;
-    }
-
-    private bool CanCancelPickupLine(OrderLineDetailResponse line)
-    {
-        return selectedPickup is not null
-            && pickupDetail is not null
-            && pickupPaymentStatus != "Paid"
-            && line.Status == "Active"
-            && OrderProgress.CanCancelBeforePreparation(pickupDetail.Status)
-            && line.KitchenStatus == "Pending";
-    }
-
-    private async Task CancelPickupLine(OrderLineDetailResponse line)
-    {
-        if (selectedPickup is null)
-        {
-            return;
-        }
-
-        string? reason = await Js.InvokeAsync<string?>(
-            "prompt",
-            $"Motivo para cancelar {line.Quantity} × {line.ProductName}:"
-        );
-        if (string.IsNullOrWhiteSpace(reason))
-        {
-            return;
-        }
-
-        bool confirmed = await Js.InvokeAsync<bool>(
-            "confirm",
-            "La línea desaparecerá del KDS si cocina todavía no comenzó. ¿Continuar?"
-        );
-        if (!confirmed)
-        {
-            return;
-        }
-
-        Guid orderId = selectedPickup.Id;
-        OrderResponse pickup = selectedPickup;
-        await Run(
-            async () =>
-            {
-                OrderDetailResponse detail = await Api.CancelOrderLineAsync(
-                    orderId,
-                    line.Id,
-                    reason.Trim()
-                );
-                pickupDetail = detail;
-                pickupPaymentStatus =
-                    (await Api.PaymentStatusesAsync(restaurantId, orderId)).FirstOrDefault()?.Status
-                    ?? ProjectionPendingStatus;
-                pickupPaymentStatuses[orderId] = pickupPaymentStatus;
-                selectedPickup = pickup with { Status = detail.Status, Total = detail.Total };
-                success = true;
-                message = $"{line.ProductName} cancelado antes de preparación.";
-            },
-            false
-        );
-    }
-
-    private async Task CapturePickup()
-    {
-        if (selectedPickup is null || pickupPaymentStatus != "Open" || busy)
-        {
-            return;
-        }
-        if (!CashRegisterOpen)
-        {
-            message = "Debes abrir la caja antes de registrar el cobro.";
-            return;
-        }
-
-        Guid orderId = selectedPickup.Id;
-        pickupPaymentKey = pickupPaymentKey == Guid.Empty ? Guid.NewGuid() : pickupPaymentKey;
-        await Run(
-            async () =>
-            {
-                await Api.CapturePickupAsync(
-                    orderId,
-                    paymentMethod,
-                    cashRegister?.Id,
-                    paymentReference,
-                    pickupPaymentKey
-                );
-                pickupPaymentStatus =
-                    (await Api.PaymentStatusesAsync(restaurantId, orderId)).FirstOrDefault()?.Status
-                    ?? ProjectionPendingStatus;
-                pickupPaymentStatuses[orderId] = pickupPaymentStatus;
-                success = true;
-                message = $"Cobro registrado para {selectedPickup?.CustomerName}.";
-            },
-            false
-        );
-    }
-
-    private async Task DeliverPickup()
-    {
-        if (selectedPickup is null || pickupPaymentStatus != "Paid" || busy)
-        {
-            return;
-        }
-
-        Guid orderId = selectedPickup.Id;
-        string name = selectedPickup.CustomerName;
-        await Run(
-            async () =>
-            {
-                await Api.DeliverPickupAsync(orderId);
-                success = true;
-                message = $"Pedido entregado a {name}.";
-                ClosePickup();
-                await Task.Delay(400, realtimeRefresh?.Token ?? CancellationToken.None);
-                await LoadPickupOrdersCore();
-            },
-            false
-        );
-    }
-
-    private static string PickupPaymentLabel(string status)
-    {
-        return status switch
-        {
-            "Open" => "Pendiente",
-            "Paid" => "Pagado",
-            "Refunded" => "Reembolsado",
-            _ => "Sin sincronizar",
-        };
+        session = null;
+        hasSessionOrders = false;
+        bill = null;
+        billOrders = [];
+        billOpen = false;
     }
 
     private async Task CancelSession()
@@ -1413,6 +1280,11 @@ public partial class Home
 
     private void CloseBill()
     {
+        if (pickupBillOpen)
+        {
+            ClosePickup();
+            return;
+        }
         accountPreviewOpen = false;
         salesTicketOpen = false;
         paymentDialogOpen = false;
@@ -1731,12 +1603,27 @@ public partial class Home
         await Run(
             async () =>
             {
-                await Api.ReleaseSessionAsync(session.Id);
+                Guid releasedSessionId = session.Id;
+                await Api.ReleaseSessionAsync(releasedSessionId);
+                bool wasPickup = pickupBillOpen;
+                if (wasPickup)
+                {
+                    pickupSessions.RemoveAll(pickup => pickup.Id == releasedSessionId);
+                    ClosePickup();
+                }
                 await Realtime.NotifyDiningTableUpdatedAsync();
                 success = true;
-                message = "Mesa liberada desde TPV.";
-                BackToTables();
-                await LoadOperationalData();
+                if (wasPickup)
+                {
+                    message = "Cuenta de recogida cerrada.";
+                    await LoadPickupOrdersCore();
+                }
+                else
+                {
+                    message = "Mesa liberada desde TPV.";
+                    BackToTables();
+                    await LoadOperationalData();
+                }
             },
             false
         );
@@ -2274,7 +2161,19 @@ public partial class Home
     private async Task RefreshActiveSessionAfterOrderEventAsync()
     {
         DiningSessionResponse currentSession = session!;
-        TableResponse? current = tables.FirstOrDefault(x => x.Id == currentSession.TableId);
+        if (currentSession.TableId is not Guid tableId)
+        {
+            DiningSessionResponse refreshedSession = await Api.SessionAsync(currentSession.Id);
+            session = refreshedSession;
+            hasSessionOrders = refreshedSession.Orders.Count > 0;
+            if (billOpen)
+            {
+                await LoadBill();
+            }
+            return;
+        }
+
+        TableResponse? current = tables.FirstOrDefault(x => x.Id == tableId);
         if (current?.ActiveSessionId != currentSession.Id)
         {
             BackToTables();

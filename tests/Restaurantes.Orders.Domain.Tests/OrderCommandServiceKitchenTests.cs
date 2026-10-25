@@ -134,7 +134,7 @@ public sealed class OrderCommandServiceKitchenTests
             Guid.NewGuid(),
             null,
             null,
-            null,
+            Guid.NewGuid(),
             "Pedido",
             "Ana",
             ServiceMode.Takeaway,
@@ -212,7 +212,7 @@ public sealed class OrderCommandServiceKitchenTests
         public Task<DiningSessionValidation> EnsureOpenAsync(
             Guid diningSessionId,
             Guid restaurantId,
-            Guid tableId,
+            Guid? tableId,
             string source,
             string serviceMode,
             string customerAccessToken,

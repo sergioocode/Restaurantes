@@ -14,19 +14,19 @@ public sealed class OrderLifecycleTests
     }
 
     [Fact]
-    public void Takeaway_pos_order_is_independent_of_dining_locations()
+    public void Takeaway_pos_order_uses_a_virtual_session_without_a_physical_table()
     {
         Order order = CreateOrder(OrderSource.Pos, ServiceMode.Takeaway, PaymentTiming.OnAccount);
 
         Assert.Equal(PaymentTiming.OnAccount, order.PaymentTiming);
         Assert.Equal(ServiceMode.Takeaway, order.ServiceMode);
         Assert.Null(order.TableId);
-        Assert.Null(order.DiningSessionId);
+        Assert.NotNull(order.DiningSessionId);
         Assert.Equal("PARA LLEVAR", order.TableLabel);
     }
 
     [Fact]
-    public void Takeaway_order_rejects_a_physical_table_or_dining_session()
+    public void Takeaway_order_rejects_a_physical_table()
     {
         Assert.Throws<ArgumentException>(() =>
             Order.Create(
@@ -96,7 +96,7 @@ public sealed class OrderLifecycleTests
             Guid.NewGuid(),
             serviceMode == ServiceMode.Takeaway ? null : Guid.NewGuid(),
             null,
-            serviceMode == ServiceMode.Takeaway ? null : Guid.NewGuid(),
+            Guid.NewGuid(),
             serviceMode == ServiceMode.Takeaway ? "PARA LLEVAR" : "Ubicación de prueba",
             serviceMode == ServiceMode.Takeaway ? "Cliente" : string.Empty,
             serviceMode,

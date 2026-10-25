@@ -3,7 +3,7 @@
 public sealed record SessionBillResponse(
     Guid Id,
     Guid RestaurantId,
-    Guid TableId,
+    Guid? TableId,
     string Status,
     string PaymentMethod,
     DateTime? PaidAtUtc,
@@ -16,5 +16,6 @@ public sealed record SessionBillResponse(
     int? GuestCount = null,
     decimal TipTotal = 0,
     decimal DiscountPercentage = 0,
-    decimal DiscountAmount = 0
+    decimal DiscountAmount = 0,
+    string CustomerName = ""
 );

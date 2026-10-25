@@ -15,6 +15,12 @@ public sealed class DiningReadController(DiningService service, IConfiguration c
         return Execute(() => service.ListTables(restaurantId, User, ct));
     }
 
+    [HttpGet("restaurants/{restaurantId:guid}/takeaway-sessions")]
+    public Task<IActionResult> ListOpenTakeawaySessions(Guid restaurantId, CancellationToken ct)
+    {
+        return Execute(() => service.ListOpenTakeawaySessions(restaurantId, User, ct));
+    }
+
     [AllowAnonymous]
     [HttpGet("qr/{qrCode}")]
     public Task<IActionResult> PreviewQr(string qrCode, CancellationToken ct)
@@ -50,7 +56,7 @@ public sealed class DiningReadController(DiningService service, IConfiguration c
     public Task<IActionResult> ValidateSession(
         Guid sessionId,
         Guid restaurantId,
-        Guid tableId,
+        Guid? tableId,
         string? source,
         string? serviceMode,
         CancellationToken ct

@@ -145,15 +145,17 @@ public sealed class Order
                 nameof(tableLabel)
             );
         }
-        bool requiresDiningLocation = serviceMode is ServiceMode.DineIn or ServiceMode.Bar;
-        if (
-            requiresDiningLocation
-                ? tableId is null || diningSessionId is null || diningSessionId == Guid.Empty
-                : tableId is not null || diningSessionId is not null
-        )
+        bool validLocation = serviceMode switch
+        {
+            ServiceMode.DineIn or ServiceMode.Bar => tableId is not null
+                && diningSessionId is not null,
+            ServiceMode.Takeaway => tableId is null && diningSessionId is not null,
+            _ => false,
+        };
+        if (!validLocation || diningSessionId == Guid.Empty)
         {
             throw new ArgumentException(
-                "DineIn and Bar orders require a location and DiningSessionId; Takeaway orders are independent of dining locations."
+                "DineIn and Bar orders require a location and session; Takeaway orders require a virtual session."
             );
         }
         if (serviceMode == ServiceMode.Takeaway && normalizedCustomerName.Length is < 1 or > 80)

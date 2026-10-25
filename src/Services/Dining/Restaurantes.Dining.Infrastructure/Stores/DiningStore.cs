@@ -81,8 +81,27 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
     {
         return db
             .Sessions.AsNoTracking()
-            .Where(x => x.RestaurantId == restaurantId && x.Status == "Open")
-            .ToDictionaryAsync(x => x.TableId, ct);
+            .Where(x => x.RestaurantId == restaurantId && x.Status == "Open" && x.TableId != null)
+            .ToDictionaryAsync(x => x.TableId!.Value, ct);
+    }
+
+    public Task<List<DiningSession>> ReadOpenTakeawaySessionsAsync(
+        Guid restaurantId,
+        CancellationToken ct
+    )
+    {
+        return db
+            .Sessions.AsNoTracking()
+            .Include(x => x.Orders)
+            .Where(x =>
+                x.RestaurantId == restaurantId
+                && x.Status == "Open"
+                && x.TableId == null
+                && x.Source == "Pos"
+                && x.Orders.Any()
+            )
+            .OrderBy(x => x.OpenedAtUtc)
+            .ToListAsync(ct);
     }
 
     public Task<List<RestaurantTable>> ListTablesAsync(Guid restaurantId, CancellationToken ct)
@@ -131,7 +150,7 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
     public Task<DiningSession?> ReadValidatedSessionAsync(
         Guid sessionId,
         Guid restaurantId,
-        Guid tableId,
+        Guid? tableId,
         CancellationToken ct
     )
     {

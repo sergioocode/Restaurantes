@@ -209,7 +209,7 @@ public sealed class OrderCommandServiceCreateTests
         );
 
         Assert.True(stores.CatalogCalled);
-        Assert.False(stores.DiningCalled);
+        Assert.True(stores.DiningCalled);
         Assert.Equal("RACION", Assert.Single(response.Lines).Format);
         Assert.Equal(7m, Assert.Single(response.Lines).UnitPrice);
         Assert.Equal(5m, Assert.Single(response.Lines).BaseUnitPrice);
@@ -232,8 +232,10 @@ public sealed class OrderCommandServiceCreateTests
                 service.CreateAsync(
                     Request(
                         source: "CustomerQr",
-                        serviceMode: "Takeaway",
-                        paymentTiming: "Immediate"
+                        serviceMode: "DineIn",
+                        paymentTiming: "Immediate",
+                        tableId: Guid.NewGuid(),
+                        diningSessionId: Guid.NewGuid()
                     ),
                     "token",
                     CashSession,
@@ -247,8 +249,10 @@ public sealed class OrderCommandServiceCreateTests
             service.CreateAsync(
                 Request(
                     source: "CustomerQr",
-                    serviceMode: "Takeaway",
+                    serviceMode: "DineIn",
                     paymentTiming: "Immediate",
+                    tableId: Guid.NewGuid(),
+                    diningSessionId: Guid.NewGuid(),
                     lines: [new CreateOrderLineRequest { ProductId = productId, Format = "TAPA" }]
                 ),
                 "token",
@@ -504,7 +508,8 @@ public sealed class OrderCommandServiceCreateTests
         {
             RestaurantId = Guid.NewGuid(),
             TableId = tableId,
-            DiningSessionId = diningSessionId,
+            DiningSessionId =
+                diningSessionId ?? (serviceMode == "Takeaway" ? Guid.NewGuid() : null),
             TableLabel = "Mesa 1",
             CustomerName = serviceMode == "Takeaway" ? "Ana" : "",
             ServiceMode = serviceMode,
@@ -591,7 +596,7 @@ public sealed class OrderCommandServiceCreateTests
         public Task<DiningSessionValidation> EnsureOpenAsync(
             Guid diningSessionId,
             Guid restaurantId,
-            Guid tableId,
+            Guid? tableId,
             string source,
             string serviceMode,
             string customerAccessToken,

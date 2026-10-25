@@ -58,13 +58,6 @@ public sealed partial class OrderCommandService
             return null;
         }
 
-        if (o.ServiceMode == ServiceMode.Takeaway && !await payments.IsPaidAsync(id, ct))
-        {
-            throw new InvalidOperationException(
-                "Takeaway orders must be paid before they can be handed to the customer."
-            );
-        }
-
         DateTime now = time.GetUtcNow().UtcDateTime;
         o.Deliver(now);
         await store.SaveWithEventAsync(o, DeliveredEvent(o, now), ct);

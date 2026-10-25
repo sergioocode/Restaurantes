@@ -665,14 +665,10 @@ input, select {
     margin-top: 34px;
 }
 
-.pickup-card {
-    min-height: 210px;
+.pickup-card .primary {
+    align-self: end;
+    width: 100%;
 }
-
-    .pickup-card .primary {
-        align-self: end;
-        width: 100%;
-    }
 
 .pickup-order-status {
     display: flex;

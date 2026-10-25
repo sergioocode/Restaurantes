@@ -6,7 +6,8 @@ public sealed class DiningSession
     public int? GuestCount { get; set; }
     public Guid Id { get; set; }
     public Guid RestaurantId { get; set; }
-    public Guid TableId { get; set; }
+    public Guid? TableId { get; set; }
+    public string CustomerName { get; set; } = string.Empty;
     public Guid? OpenedByUserId { get; set; }
     public string Source { get; set; } = string.Empty;
     public string Status { get; set; } = "Open";
