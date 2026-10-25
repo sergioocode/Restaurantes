@@ -144,7 +144,7 @@ public sealed class KitchenOrderReadStoreTests
     }
 
     [Fact]
-    public async Task Chef_queue_hides_fully_dispatched_ready_dine_in_orders_but_keeps_takeaway()
+    public async Task Chef_queue_hides_fully_dispatched_ready_orders_for_all_service_modes()
     {
         await using OrderReadDbContext db = CreateDatabase();
         Guid restaurantId = Guid.NewGuid();
@@ -170,10 +170,11 @@ public sealed class KitchenOrderReadStoreTests
         );
 
         Assert.Equal(
-            new[] { readyTakeaway.Id, pending.Id }.OrderBy(id => id),
+            new[] { pending.Id }.OrderBy(id => id),
             result.Select(order => order.Id).OrderBy(id => id)
         );
         Assert.DoesNotContain(result, order => order.Id == readyDineIn.Id);
+        Assert.DoesNotContain(result, order => order.Id == readyTakeaway.Id);
     }
 
     private static OrderReadDbContext CreateDatabase() =>

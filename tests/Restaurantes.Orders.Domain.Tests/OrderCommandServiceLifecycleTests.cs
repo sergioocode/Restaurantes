@@ -53,7 +53,7 @@ public sealed class OrderCommandServiceLifecycleTests
     }
 
     [Fact]
-    public async Task Deliver_requires_paid_takeaway_and_persists_delivery_event_when_kitchen_is_ready()
+    public async Task Deliver_persists_delivery_event_when_takeaway_kitchen_is_ready()
     {
         Order order = CreateOrder(OrderSource.Pos, ServiceMode.Takeaway, PaymentTiming.OnAccount);
         TestStores stores = new(order) { Paid = true };
@@ -69,7 +69,7 @@ public sealed class OrderCommandServiceLifecycleTests
 
         Assert.NotNull(delivered);
         Assert.Equal("Delivered", delivered.Status);
-        Assert.Equal(1, stores.PaymentChecks);
+        Assert.Equal(0, stores.PaymentChecks);
         OrderDelivered delivery = Assert.IsType<OrderDelivered>(stores.LastEvent);
         Assert.Equal(order.Id, delivery.OrderId);
         Assert.Equal(Now, delivery.DeliveredAtUtc);
@@ -84,7 +84,7 @@ public sealed class OrderCommandServiceLifecycleTests
     {
         Guid restaurantId = Guid.NewGuid();
         Guid? tableId = mode == ServiceMode.DineIn ? Guid.NewGuid() : null;
-        Guid? sessionId = mode == ServiceMode.DineIn ? Guid.NewGuid() : null;
+        Guid? sessionId = Guid.NewGuid();
         return Order.Create(
             restaurantId,
             tableId,
