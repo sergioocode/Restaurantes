@@ -43,10 +43,8 @@ let lastAppliedRequestNumber = 0;
 const renderer = new OrderRenderer(ordersElement, {
   getStationCode: () => stationSelect.value,
   getPrimaryStationCode: () => primaryStationCode,
-  canRecover: canConfirmDelivery,
   isOrderPending: orderId => pendingOrders.has(orderId),
-  onAdvance: advanceOrder,
-  onRecover: recoverDelivery
+  onAdvance: advanceOrder
 });
 
 const realtime = new KdsRealtimeClient(apiBaseUrl, {
@@ -140,11 +138,6 @@ async function refreshMonitor() {
   }
 }
 
-function canConfirmDelivery(order) {
-  if (order.serviceMode !== 'Takeaway' || order.status !== 'Ready') return false;
-  return Boolean(restaurantAccess?.permissions?.includes('orders.recover'));
-}
-
 async function advanceOrder(order, action, actionButton) {
   if (pendingOrders.has(order.id)) return;
   const pending = { minimumVersion: null };
@@ -200,11 +193,6 @@ async function showTicketAfterStationCompletion(order, path) {
   } catch (error) {
     console.warn('No se pudo mostrar el ticket KDS.', error);
   }
-}
-
-async function recoverDelivery(order, button) {
-  if (!confirm('Confirma que el pedido de ' + (order.customerName || 'este cliente') + ' ya fue entregado.')) return;
-  await advanceOrder(order, { path: 'deliver', label: button.textContent }, button);
 }
 
 function connect() {

@@ -72,7 +72,9 @@ export class OrderRenderer {
     headerMeta.className = 'order-header-meta';
     const sourceBadge = document.createElement('span');
     sourceBadge.className = 'station';
-    sourceBadge.textContent = 'Origen: ' + order.source;
+    const origin = order.source === 'Pos' ? 'TPV' : order.source;
+    const serviceMode = order.serviceMode === 'Takeaway' ? 'Para llevar' : '';
+    sourceBadge.textContent = [origin, serviceMode].filter(Boolean).join(' · ');
     headerMeta.append(sourceBadge, this.renderKitchenClock(order, this.options.getStationCode()));
     this.appendGuestCount(headerMeta, order.guestCount);
 
@@ -120,7 +122,6 @@ export class OrderRenderer {
       const passes = this.renderChefPasses(order);
       if (passes) body.append(passes);
     }
-    if (this.options.canRecover(order)) body.append(this.renderRecoveryAction(order));
     return body;
   }
 
@@ -162,17 +163,6 @@ export class OrderRenderer {
       lines.append(this.renderProductLine(order, line, isPrimary, false, !isPrimary));
     }
     return lines;
-  }
-
-  renderRecoveryAction(order) {
-    const actions = document.createElement('div');
-    actions.className = 'actions';
-    const deliverButton = document.createElement('button');
-    deliverButton.textContent = 'Entregado · resolver incidencia';
-    deliverButton.disabled = this.options.isOrderPending(order.id);
-    deliverButton.addEventListener('click', () => this.options.onRecover(order, deliverButton));
-    actions.append(deliverButton);
-    return actions;
   }
 
   showEmpty(message) {

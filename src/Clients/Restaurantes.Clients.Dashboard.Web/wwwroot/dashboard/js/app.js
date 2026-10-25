@@ -203,7 +203,7 @@ function renderOrder(o) {
     const label = o.serviceMode === 'DineIn' ? o.tableLabel : o.serviceMode === 'Bar' ? (o.tableLabel || 'Barra') : ('Para llevar · ' + (o.customerName || 'Sin nombre'));
     let methods = o.paymentMethods || [];
     if (!methods.length && o.paymentMethod) methods = [o.paymentMethod];
-    return `<article class="order"><div class="order-head"><strong>${escapeHtml(label)}</strong><small>${short(o.orderId)}</small></div><div class="badges">${badge(o.serviceMode)}${badge(o.source)}${badge(o.orderStatus)}${badge(o.paymentStatus)}${methods.map(badge).join('')}</div><ul>${lines}</ul><strong>${money.format(o.total)}</strong></article>`
+    return `<article class="order"><div class="order-head"><strong>${escapeHtml(label)}</strong><small>${short(o.orderId)}</small></div><div class="badges">${badge(o.serviceMode)}${badge(o.source === 'Pos' ? 'TPV' : o.source)}${badge(o.orderStatus)}${badge(o.paymentStatus)}${methods.map(badge).join('')}</div><ul>${lines}</ul><strong>${money.format(o.total)}</strong></article>`
 }
 
 function lineStatusMarker(status) {
