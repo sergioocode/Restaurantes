@@ -398,21 +398,22 @@
                                 <div class="bill-total"><span>Cambio del último cobro</span><strong>@lastChange.ToString("0.00") €</strong></div>
                             }
                             <div class="bill-total outstanding"><span>Cuenta pendiente</span><strong>@bill.Outstanding.ToString("0.00") €</strong></div>
-                            @if (bill.CanRelease)
+                            @if (bill.CanRelease && bill.Total == 0)
                             {
-                                <p class="muted">@(bill.Total == 0 ? "No hay productos activos ni importes pendientes." : "Cuenta pagada y pedidos entregados. La mesa está lista para liberarse.")</p>
+                                <p class="muted">No hay productos activos ni importes pendientes.</p>
                             }
-                            else if (bill.Outstanding == 0)
+                            else if (!bill.CanRelease && bill.Outstanding == 0)
                             {
                                 <p class="warning">@(bill.Total == 0 ? "No hay importe pendiente. Esperando la confirmación de cancelación o el fin de cocina para liberar la mesa." : "Cuenta pagada. La mesa seguirá ocupada hasta que cocina termine y los pedidos se entreguen o cancelen.")</p>
                             }
-                            @if (bill.Outstanding == 0 && bill.Total > 0 && readyTicketSessionId != bill.Id)
+                            @if (bill.Outstanding == 0 && bill.Total > 0
+                                && readyTicketSessionId != bill.Id && ticketAvailabilityError is not null)
                             {
-                                <p class="muted">@(ticketAvailabilityError is null ? "Preparando ticket de venta…" : "No se pudo comprobar el ticket. Pulsa Actualizar para volver a consultarlo.")</p>
+                                <p class="muted">No se pudo comprobar el ticket. Pulsa Actualizar para volver a consultarlo.</p>
                             }
                             <div class="bill-actions">
                                 <button class="ghost" @onclick="OpenAccountPreview" disabled="@busy">Ver cuenta</button>
-                                <button class="ghost" @onclick="OpenDiscountDialog" disabled="@(busy || bill.Orders.Any(order => order.AmountPaid > 0))">Descuento</button>
+                                <button class="ghost" @onclick="OpenDiscountDialog" disabled="@(busy || bill.CanRelease || bill.Orders.Any(order => order.AmountPaid > 0))">Descuento</button>
                                 @if (bill.Outstanding == 0 && bill.Total > 0 && readyTicketSessionId == bill.Id && salesTicket is not null)
                                 {
                                     <button class="ghost account-preview-icon-button" @onclick="OpenSalesTicket" aria-label="Ver ticket de venta" title="Ver ticket de venta">

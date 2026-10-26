@@ -2446,7 +2446,7 @@ public sealed class PosHomeRenderingTests : BunitContext
 
         await Rerender(cut);
         Assert.Contains("Incluye 3,00 € de propina", cut.Markup);
-        Assert.Contains("Preparando ticket de venta…", cut.Markup);
+        Assert.DoesNotContain("Preparando ticket de venta…", cut.Markup);
         Assert.DoesNotContain("aria-label=\"Ver ticket de venta\"", cut.Markup);
 
         await cut.InvokeAsync(() => InvokeTask(cut.Instance, "RefreshSalesTicketAsync", bill.Id));
@@ -2522,7 +2522,7 @@ public sealed class PosHomeRenderingTests : BunitContext
         await Rerender(cut);
 
         Assert.DoesNotContain("aria-label=\"Ver ticket de venta\"", cut.Markup);
-        Assert.Contains("Preparando ticket de venta", cut.Markup);
+        Assert.DoesNotContain("Preparando ticket de venta", cut.Markup);
         Assert.DoesNotContain("API 404", cut.Markup);
 
         handler.Ready = true;

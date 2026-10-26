@@ -1178,7 +1178,12 @@ public partial class Home
 
     private void OpenDiscountDialog()
     {
-        if (bill is null || busy || bill.Orders.Any(order => order.AmountPaid > 0))
+        if (
+            bill is null
+            || busy
+            || bill.CanRelease
+            || bill.Orders.Any(order => order.AmountPaid > 0)
+        )
             return;
         discountPercentageInput =
             bill.DiscountPercentage > 0
@@ -1194,7 +1199,13 @@ public partial class Home
 
     private async Task ApplyDiscountPercentage(decimal percentage)
     {
-        if (bill is null || session is null || busy || percentage is < 0 or > 99.99m)
+        if (
+            bill is null
+            || session is null
+            || busy
+            || bill.CanRelease
+            || percentage is < 0 or > 99.99m
+        )
             return;
         if (percentage == 0 && bill.DiscountPercentage == 0)
         {
