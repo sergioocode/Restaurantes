@@ -231,6 +231,8 @@ Incluye información procedente de distintos servicios:
 - origen del pedido;
 - modalidad temporal del pago.
 
+En un pedido para llevar, `ServiceMode` es `Takeaway`, `Source` sigue siendo `Pos` y no hay mesa física; `CustomerName` identifica al cliente. El Dashboard muestra «Para llevar · {nombre}» como ubicación y mantiene el origen TPV como badge. Esto diferencia la modalidad de servicio del canal que creó el pedido y deja el campo `Source` disponible para futuros canales de venta cuando estén implementados.
+
 ### Estado operativo
 
 - estado del pedido;
@@ -658,6 +660,8 @@ Cada elemento incluye:
 - última actualización;
 - estaciones;
 - líneas.
+
+Los pedidos para llevar conservan la misma información operativa que los demás pedidos; su tarjeta identifica al cliente en lugar de una mesa. La etiqueta de modalidad y el badge de origen se muestran por separado.
 
 ## Reporting en tiempo real
 

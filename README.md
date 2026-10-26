@@ -17,7 +17,9 @@
 
 **Restaurantes** es una plataforma distribuida para la operación y gestión de una cadena de restaurantes, construida sobre **.NET 10** y diseñada alrededor de dominios independientes, separación de lectura y escritura, mensajería asíncrona y persistencia aislada por servicio.
 
-La solución modela distintos puntos de la operación real: configuración de restaurantes, catálogo, sala y mesas, pedidos, cocina, pagos, caja, ventas, identidad y reporting. Sobre estos servicios se apoyan aplicaciones específicas para cliente QR, camarero, TPV, KDS, backoffice y dashboard.
+La solución modela distintos puntos de la operación real: configuración de restaurantes, catálogo, sala, ubicaciones y sesiones, pedidos, cocina, pagos, caja, ventas, identidad y reporting. Sobre estos servicios se apoyan aplicaciones específicas para cliente QR, camarero, TPV, KDS, backoffice y dashboard.
+
+En el TPV, un pedido para llevar sigue el mismo ciclo operativo de un pedido normal: se crea y se envía a cocina, se prepara, se cobra y se entrega. La sesión se libera cuando cumple las condiciones normales de pago y entrega. La diferencia es que no ocupa una mesa física: Dining registra una sesión virtual con el nombre del cliente. El origen técnico sigue siendo `Pos` y la modalidad de servicio es `Takeaway`; por eso KDS y Dashboard pueden mostrar «TPV · Para llevar» sin tratar Takeaway como un origen de venta distinto.
 
 > [!IMPORTANT]
 > El proyecto se encuentra en **desarrollo activo**. La arquitectura backend y varios flujos de negocio ya están implementados, mientras que algunas interfaces, integraciones externas, automatización de despliegue y cobertura de pruebas continúan evolucionando. El objetivo del repositorio es mostrar una arquitectura extensible y cercana a un escenario real, no presentar un producto comercial terminado.
@@ -298,8 +300,8 @@ Cada servicio es propietario de sus datos. Un servicio no consulta directamente 
 | --- | --- | --- | --- |
 | Cliente | **Customer QR** | Pago online obligatorio antes de enviar el pedido a cocina y seguimiento desde el QR asociado a una mesa/sesión. | Blazor WebAssembly PWA |
 | Camarero | **Comandero** | Atención de mesas, registro y seguimiento de pedidos. | Blazor WebAssembly PWA |
-| Caja | **TPV / POS** | Operación de pedidos, cuentas y caja. | Blazor WebAssembly PWA |
-| Cocina | **KDS** | Preparación por estación y seguimiento del ciclo de cocina. | ASP.NET Core Web |
+| Caja | **TPV / POS** | Pedidos de sala, barra y para llevar; consulta y cobro de cuentas y operación de caja. Takeaway usa una sesión virtual con el nombre del cliente, sin mesa física. | Blazor WebAssembly PWA |
+| Cocina | **KDS** | Preparación por estación y seguimiento del ciclo de cocina. Las reglas de prioridad y despacho se aplican según la configuración de cada estación, con independencia de que el pedido sea para llevar o de sala. | ASP.NET Core Web |
 | Administración | **Backoffice** | Administración de restaurantes, catálogo, sala y usuarios según los permisos del perfil. | Blazor WebAssembly PWA |
 | Oficina | **Dashboard** | Visualización en tiempo real de ventas, actividad operativa y estado de salud de los endpoints. | ASP.NET Core Web |
 
@@ -328,11 +330,21 @@ sequenceDiagram
         Client->>Orders: submit
         Orders-->>MQ: OrderSubmitted
         MQ-->>KDS: actualizar proyección operativa
-    else Comandero / POS
+    else Comandero / POS en mesa o barra
         Client->>Orders: crear pedido Draft (OnAccount)
         Client->>Orders: submit
         Orders-->>MQ: OrderSubmitted
         MQ-->>KDS: actualizar proyección operativa
+    else POS para llevar
+        Client->>Dining: abrir sesión virtual con CustomerName
+        Client->>Orders: crear pedido Draft (Pos, Takeaway, OnAccount)
+        Client->>Orders: submit
+        Orders-->>MQ: OrderSubmitted
+        MQ-->>KDS: actualizar proyección operativa
+        Client->>Dining: checkout de la cuenta
+        Dining->>Payments: capturar pago
+        Payments-->>Dining: pago confirmado
+        Client->>Dining: cerrar sesión tras pago y entrega
     end
 ```
 

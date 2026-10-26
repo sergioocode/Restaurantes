@@ -181,9 +181,11 @@ Customer QR siempre usa `Immediate`; Orders rechaza otras modalidades para ese o
 
 `Takeaway`:
 
-- no puede referenciar mesa ni sesión de Dining;
+- no referencia una mesa física, pero requiere una sesión virtual abierta en Dining;
 - requiere `CustomerName`;
-- puede operar con pago inmediato o a cuenta según el flujo del POS.
+- se crea desde el TPV con origen `Pos` y pago `OnAccount`.
+
+La sesión virtual identifica al cliente y permite asociar el pedido a una cuenta de Dining sin ocupar una ubicación de sala. En la interfaz actual del TPV, cada nuevo pedido para llevar abre su propia sesión; puede haber varias sesiones de recogida abiertas al mismo tiempo.
 
 ## Creación de un pedido
 
@@ -288,11 +290,11 @@ La proyección permite aplicar reglas operativas sin consultar de forma síncron
 Reglas actuales:
 
 - un pedido `Immediate` debe estar pagado antes de enviarse a cocina;
-- un `Takeaway` debe estar pagado antes de entregarse al cliente;
-- TPV puede registrar el pago de un `Takeaway` antes o después de que KDS termine; la entrega solo se habilita cuando esté listo;
 - las líneas de un pedido impagado pueden cancelarse individualmente mientras su estación siga `Pending`;
 - una línea de un pedido pagado no puede cancelarse mediante el flujo operativo normal;
-- un takeaway pagado debe haber sido reembolsado antes de poder cancelarse.
+- un pedido pagado no se puede cancelar mediante el flujo operativo normal; cualquier devolución corresponde al flujo de Backoffice / Payments.
+
+Takeaway no tiene una regla distinta de preparación o despacho en Orders/KDS. La sesión virtual se puede liberar cuando todos sus pedidos estén pagados y entregados o cancelados, conforme a las reglas de Dining.
 
 Los reembolsos completos y otros procesos administrativos pertenecen al flujo de Backoffice / Payments, no al agregado Orders.
 
@@ -534,6 +536,8 @@ La proyección contiene, entre otros:
 
 Esta estructura está pensada para responder a las necesidades del KDS sin hacer joins sobre el modelo transaccional ni consultar el esquema `orders_write`.
 
+En la vista KDS, el origen `Pos` se presenta como «TPV» y la modalidad `Takeaway` añade «Para llevar». La modalidad no altera la asignación de estaciones ni las reglas de prioridad/despacho configuradas en Catalog.
+
 ## SignalR
 
 La API de lectura expone un canal de monitor exclusivo para KDS y otro canal para notificaciones de pedidos consumidas por Comandero y TPV:
@@ -568,7 +572,7 @@ Ruta base:
 | `POST` | `/api/orders/{id}/stations/{stationCode}/ready` | Marcar estación como lista. |
 | `POST` | `/api/orders/{id}/stations/{stationCode}/dispatch` | Despachar una estación que requiere pase explícito. |
 | `POST` | `/api/orders/{id}/deliver` | Marcar pedido como entregado. |
-| `POST` | `/api/orders/{id}/cancel` | Cancelación operacional de takeaway. |
+| `POST` | `/api/orders/{id}/cancel` | Cancelar un pedido que todavía pueda cancelarse según sus estados y reglas de pago. |
 | `POST` | `/api/orders/{id}/lines/{lineId}/cancel` | Cancelar una línea antes de iniciar su estación. |
 
 Las operaciones de escritura devuelven `202 Accepted` cuando la transición se acepta.

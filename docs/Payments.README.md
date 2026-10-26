@@ -21,6 +21,8 @@ No actúa como un simple CRUD de pagos. Su estado operativo se construye a parti
 
 El servicio **no consulta directamente las tablas de Orders** para averiguar qué debe cobrarse. Mantiene su propio modelo `PayableOrder`, alimentado asíncronamente por eventos de `Orders`.
 
+Los pedidos para llevar del TPV llegan a Payments como pedidos de origen `Pos`, modalidad `Takeaway` y pago `OnAccount`. Payments los cobra mediante el mismo flujo de captura manual que los demás pedidos del TPV; no existe un proveedor o ciclo de pago separado para takeaway. El cierre/liberación de la sesión virtual corresponde a Dining, una vez cumplidas las condiciones de pago y entrega.
+
 ## Proyectos
 
 El servicio se organiza en proyectos por responsabilidad. La API es el punto de entrada ejecutable;

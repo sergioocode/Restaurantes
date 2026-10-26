@@ -1,6 +1,6 @@
 # Dining
 
-El servicio **Dining** administra la ocupación y configuración operativa de sala dentro de la plataforma Restaurantes: zonas, ubicaciones, sesiones de mesa, comensales, acceso mediante QR y cierre de cuentas asociadas a una sesión.
+El servicio **Dining** administra la configuración operativa de sala y las cuentas asociadas a sesiones: zonas, ubicaciones, sesiones de mesa, sesiones virtuales para pedidos para llevar, comensales, acceso mediante QR y cierre de cuentas.
 
 Dining mantiene una única base operacional PostgreSQL. La API expone HTTP y SignalR; `Infrastructure` contiene el worker que procesa eventos de **Orders** y **Payments**.
 
@@ -11,6 +11,7 @@ Dining es responsable de:
 - administrar zonas de sala por restaurante;
 - administrar ubicaciones operativas y su asociación a una zona;
 - abrir una única sesión activa por ubicación;
+- abrir y listar sesiones virtuales de takeaway del TPV, sin ocupar una ubicación física;
 - registrar opcionalmente el número de comensales de una sesión;
 - mantener el estado de los pedidos pertenecientes a una sesión;
 - mantener el estado de pago proyectado de esos pedidos;
@@ -141,13 +142,14 @@ Customer QR siempre requiere pago online antes de enviar el pedido a cocina. Est
 
 ### `DiningSession`
 
-Representa la ocupación operativa de una ubicación.
+Representa una cuenta/sesión operativa. En sala se asocia a una ubicación; para takeaway puede ser virtual y no tener ubicación física.
 
 Campos relevantes:
 
 - `Id`;
 - `RestaurantId`;
 - `TableId`;
+- `CustomerName` para sesiones virtuales de takeaway;
 - `Source`;
 - `Status`;
 - `RequestGuestCount`;
@@ -163,7 +165,7 @@ Campos relevantes:
 - datos de cancelación;
 - pedidos asociados.
 
-Existe como máximo una sesión `Open` por ubicación mediante un índice único parcial en PostgreSQL.
+Existe como máximo una sesión `Open` por ubicación física mediante un índice único parcial en PostgreSQL. Las sesiones virtuales de takeaway no tienen `TableId`, por lo que pueden coexistir y no ocupan una mesa ni cambian la disponibilidad de sala.
 
 ### Estados
 
@@ -251,6 +253,18 @@ Antes de abrirla, Dining comprueba:
 5. que no exista ya otra sesión `Open` para la misma ubicación.
 
 Cuando la sesión se crea correctamente, Dining notifica mediante SignalR que la ubicación pasa a `Occupied`.
+
+### Sesiones virtuales para llevar
+
+El TPV abre una sesión virtual mediante:
+
+```http
+POST /api/dining/restaurants/{restaurantId}/takeaway-sessions
+```
+
+La sesión guarda el nombre del cliente, el origen `Pos` y `TableId = null`. El TPV la usa al crear el pedido `Takeaway`; Orders valida la sesión de forma síncrona y publica los mismos eventos de creación, preparación, despacho y entrega que para los demás pedidos. La sesión se muestra en la lista de recogidas del TPV y se puede consultar/cobrar como una cuenta. En el flujo actual, cada nuevo pedido para llevar abre una sesión propia, y varias sesiones pueden permanecer abiertas a la vez.
+
+Takeaway no ocupa ni libera una ubicación física. La acción de cierre libera la sesión virtual después de que sus pedidos estén pagados y entregados o cancelados, igual que Dining verifica esas condiciones para cerrar una sesión de mesa.
 
 ## Número de comensales
 
@@ -448,7 +462,7 @@ Si no se proporciona `ExternalReference`, se utiliza:
 DINING-{sessionId}
 ```
 
-Cada cobro aceptado actualiza el importe pagado del pedido y los datos del pago en la sesión. El checkout no cierra la sesión ni libera la ubicación. Para liberar la mesa se usa `POST /api/dining/sessions/{sessionId}/close`, que exige que todos los pedidos estén pagados y entregados o cancelados; entonces la sesión pasa a `Closed` y la ubicación queda disponible.
+Cada cobro aceptado actualiza el importe pagado del pedido y los datos del pago en la sesión. El checkout no cierra la sesión ni libera la ubicación. Para cerrar la sesión se usa `POST /api/dining/sessions/{sessionId}/close`, que exige que todos los pedidos estén pagados y entregados o cancelados. Entonces la sesión pasa a `Closed`; si estaba asociada a una ubicación física, esta queda disponible. Una sesión virtual de takeaway no cambia la ocupación de sala.
 
 ### Idempotencia del checkout
 
@@ -641,7 +655,7 @@ Dining consume eventos procedentes de Orders y Payments.
 | `OrderDelivered` | Actualiza `OrderStatus` a `Delivered`. |
 | `OrderLineCancelled` | Actualiza estado e importe después de una cancelación de línea. |
 
-Los pedidos `Takeaway` se ignoran porque no pertenecen a una sesión de mesa de Dining.
+Dining proyecta los eventos de los pedidos que tienen `DiningSessionId`, incluidos los pedidos `Takeaway` asociados a una sesión virtual. Solo ignora los eventos de pedidos sin una sesión de Dining.
 
 #### Payments
 
@@ -763,6 +777,8 @@ Ruta base:
 | Método | Endpoint | Operación |
 | --- | --- | --- |
 | `POST` | `/tables/{tableId}/sessions` | Abrir sesión. |
+| `POST` | `/restaurants/{restaurantId}/takeaway-sessions` | Abrir sesión virtual de takeaway para el TPV. |
+| `GET` | `/restaurants/{restaurantId}/takeaway-sessions` | Listar sesiones virtuales de takeaway abiertas. |
 | `GET` | `/tables/{tableId}/active-session` | Obtener sesión activa. |
 | `GET` | `/sessions/{sessionId}` | Consultar sesión. |
 | `PUT` | `/sessions/{sessionId}/guests` | Registrar número de comensales. |
