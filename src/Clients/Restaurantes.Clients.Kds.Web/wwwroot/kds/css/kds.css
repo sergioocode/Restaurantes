@@ -43,15 +43,18 @@ button:disabled { cursor: not-allowed; opacity: .6; }
 .connected .dot { background: #22c55e; }
 #event { margin: 0 0 .75rem; color: #a34d0b; }
 #event:empty { display: none; }
-#orders { display: flex; align-items: flex-start; gap: 1rem; overflow-x: auto; padding-bottom: .75rem; overscroll-behavior-inline: contain; scroll-snap-type: x proximity; }
-.order { display: block; flex: 0 0 clamp(320px, 27vw, 390px); width: auto; max-width: none; margin: 0; padding: 1rem; break-inside: auto; scroll-snap-align: start; border-left: 5px solid #f97316; }
+#orders { display: grid; grid-template-columns: repeat(var(--order-column-count, 1), minmax(0, 1fr)); align-items: start; gap: 1rem; padding-bottom: .75rem; }
+.order-column { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+.order { display: block; flex: 0 0 auto; width: 100%; max-width: none; margin: 0; padding: 1rem; break-inside: auto; border-left: 5px solid #f97316; }
 .order[data-status="InPreparation"] { border-left-color: #3b82f6; }
 .order[data-status="Ready"] { border-left-color: #22c55e; }
-.order h2 { display: flex; align-items: center; gap: .65rem; margin-bottom: 1rem; }
-.order-title-content { display: inline-flex; align-items: baseline; gap: .5rem; min-width: 0; }
-.order-short-id, .order-age { color: var(--muted); font-size: .75rem; font-weight: 400; }
-.order-header-meta { display: inline-flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
-.order-collapse { flex: 0 0 auto; width: 2rem; min-height: 2rem; margin-left: auto; padding: 0; font-size: 1.2rem; line-height: 1; }
+.order { min-width: 0; }
+.order h2 { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 0 .65rem; margin-bottom: 1rem; }
+.order-title-content { display: inline-flex; grid-column: 1; grid-row: 1; align-items: baseline; gap: .5rem; min-width: 0; }
+.order-short-id, .order-location, .order-age { color: var(--muted); font-size: .75rem; font-weight: 400; }
+.order-location { grid-column: 1 / -1; grid-row: 2; min-width: 0; overflow-wrap: anywhere; }
+.order-header-meta { display: inline-flex; grid-column: 2; grid-row: 1; align-items: center; gap: .4rem; flex-wrap: wrap; }
+.order-collapse { grid-column: 3; grid-row: 1; flex: 0 0 auto; width: 2rem; min-height: 2rem; margin-left: 0; padding: 0; font-size: 1.2rem; line-height: 1; }
 .order-body[hidden] { display: none !important; }
 ul { padding-left: 1.25rem; margin-bottom: 0; }
 small { color: var(--muted); }
@@ -67,7 +70,7 @@ small { color: var(--muted); }
 .pass header { display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
 .pass ul { margin: 0; }
 .pass .actions { margin-top: .25rem; }
-.empty { color: var(--muted); flex: 0 0 100%; }
+.empty { color: var(--muted); grid-column: 1 / -1; }
 .hidden, #loginPanel.hidden { display: none; }
 
 @media (max-width: 640px) {
@@ -77,10 +80,8 @@ small { color: var(--muted); }
   .station-field select, .zone-field select { width: 100%; }
   .toolbar { margin-left: 0; }
   .toolbar button, .controls > button { flex: 1; }
-  .order { flex-basis: min(88vw, 380px); padding: .85rem; }
-  .order h2, .pass header { flex-wrap: wrap; }
-  .order-header-meta { order: 3; flex-basis: calc(100% - 2.65rem); }
-  .order-collapse { order: 2; }
+  .order { padding: .85rem; }
+  .pass header { flex-wrap: wrap; }
 }
 
 @media (min-width: 1280px) and (max-width: 1500px) {
@@ -138,11 +139,11 @@ small { color: var(--muted); }
 .line-controls { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .line-state, .line-clock { padding: 4px 8px; border-radius: 999px; background: var(--chip-bg); color: var(--chip-text); white-space: nowrap; }
 .line-state.InPreparation { background: #e6eff9; color: #285781; }
-.line-state.Ready { background: #fff1cf; color: #805500; }
+.line-state.Ready { background: #dcfce7; color: #166534; }
 .line-state.Dispatched { background: #e0f0e5; color: #205d3f; }
 .line-clock { font-variant-numeric: tabular-nums; }
 .line-action { flex: 0 0 auto; width: auto; min-height: 32px; padding: 5px 10px; font-size: .9rem; }
-.line-waiting { color: #805500; }
+.line-waiting { background: #fff1cf; color: #805500; }
 .pass-lines { padding-left: 0; list-style: none; }
 @media (max-width: 760px) {
   .product-line { grid-template-columns: 1fr auto; }

@@ -12,6 +12,7 @@ class Element {
     this.dataset = {};
     this.value = '';
     this.textContent = '';
+    this.style = { setProperty() {} };
     this.disabled = false;
     this.hidden = false;
     this.open = false;
@@ -86,6 +87,12 @@ async function until(predicate) {
   assert.fail('KDS did not reach the expected state');
 }
 
+function firstOrderCard(ordersElement) {
+  return ordersElement.children
+    .flatMap(column => column.children)
+    .find(child => child.classes.has('order'));
+}
+
 test('KDS restores a session, advances an order, shows its ticket and changes stations', async () => {
   const original = new Map();
   const replaceGlobal = (name, value) => {
@@ -110,7 +117,6 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
   let historyMode = 'order';
   let stationsFailure = false;
   let ordersFailure = false;
-  let confirmDelivery = false;
   const line = {
     id: 'line-1', quantity: 1, productName: 'Tortilla', categoryName: 'Tapas',
     kitchenStatus: 'Pending', preparationStationCode: 'GRILL', format: 'TAPA',
@@ -135,6 +141,7 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
     addEventListener() {},
   });
   replaceGlobal('window', {
+    innerWidth: 1366,
     location: {
       origin: 'https://kds.test', hash: '', pathname: '/kds/',
       assign: url => assigned.push(url),
@@ -161,7 +168,7 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
     setItem: (key, value) => saved.set(key, value),
   });
   replaceGlobal('history', { replaceState() {} });
-  replaceGlobal('confirm', () => confirmDelivery);
+  replaceGlobal('confirm', () => false);
   replaceGlobal('WebSocket', class {
     constructor(url) { this.url = url; this.listeners = new Map(); sockets.push(this); }
     addEventListener(name, listener) { this.listeners.set(name, listener); }
@@ -194,10 +201,6 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
     if (path.endsWith('/kds')) {
       if (ordersFailure) throw new Error('orders offline');
       return json([order]);
-    }
-    if (path.endsWith('/deliver')) {
-      order = { ...order, version: order.version + 1, status: 'Delivered' };
-      return json(order);
     }
     if (path.includes('/lines/line-1/')) {
       if (commandStatus !== null) return new Response('command rejected', { status: commandStatus });
@@ -262,7 +265,7 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
     await element('zoneId').listeners.get('change')();
 
     await element('refresh').listeners.get('click')();
-    let orderCard = element('orders').children[0];
+    let orderCard = firstOrderCard(element('orders'));
     assert.equal(orderCard.classes.has('order'), true);
     let action = orderCard.querySelectorAll('button').find(button => button.textContent === 'Iniciar');
     assert.ok(action);
@@ -275,21 +278,21 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
     );
     ordersFailure = false;
     commandStatus = null;
-    orderCard = element('orders').children[0];
+    orderCard = firstOrderCard(element('orders'));
     action = orderCard.querySelectorAll('button').find(button => button.textContent === 'Iniciar');
     assert.ok(action);
     await action.listeners.get('click')();
     assert.equal(order.version, 2);
     assert.equal(element('event').textContent, '');
 
-    action = element('orders').children[0].querySelectorAll('button').find(button => button.textContent === 'Listo');
+    action = firstOrderCard(element('orders')).querySelectorAll('button').find(button => button.textContent === 'Listo');
     assert.ok(action);
     order = { ...order, version: order.version + 1 };
     commandStatus = 409;
     await action.listeners.get('click')();
     assert.equal(element('event').textContent, '');
     commandStatus = null;
-    action = element('orders').children[0].querySelectorAll('button').find(button => button.textContent === 'Listo');
+    action = firstOrderCard(element('orders')).querySelectorAll('button').find(button => button.textContent === 'Listo');
     assert.ok(action);
     await action.listeners.get('click')();
     assert.equal(order.version, 4);
@@ -335,16 +338,12 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
       lines: [{ ...line, kitchenStatus: 'Ready' }],
     };
     await element('refresh').listeners.get('click')();
-    let delivery = element('orders').children[0].querySelectorAll('button')
-      .find(button => button.textContent === 'Entregado · resolver incidencia');
-    assert.ok(delivery);
-    const deliveryCallsBeforeCancel = calls.filter(call => call.url.endsWith('/deliver')).length;
-    await delivery.listeners.get('click')();
-    assert.equal(calls.filter(call => call.url.endsWith('/deliver')).length, deliveryCallsBeforeCancel);
-    confirmDelivery = true;
-    await delivery.listeners.get('click')();
-    assert.equal(calls.filter(call => call.url.endsWith('/deliver')).length, deliveryCallsBeforeCancel + 1);
-    assert.equal(order.status, 'Delivered');
+    const takeawayCard = firstOrderCard(element('orders'));
+    assert.ok(takeawayCard);
+    assert.equal(takeawayCard.querySelectorAll('button').some(button =>
+      button.textContent === 'Entregado · resolver incidencia'
+    ), false);
+    assert.equal(calls.some(call => call.url.endsWith('/deliver')), false);
 
     element('logout').listeners.get('click')();
     assert.equal(element('loginPanel').classList.contains('hidden'), false);

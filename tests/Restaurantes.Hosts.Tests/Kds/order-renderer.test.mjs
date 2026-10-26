@@ -1,11 +1,19 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import { OrderRenderer } from '../../../src/Clients/Restaurantes.Clients.Kds.Web/wwwroot/kds/js/order-renderer.js';
+
+const originalWindow = globalThis.window;
+globalThis.window = { innerWidth: 1366 };
+after(() => {
+  if (originalWindow === undefined) delete globalThis.window;
+  else globalThis.window = originalWindow;
+});
 
 class Element {
   children = [];
   dataset = {};
   textContent = '';
+  style = { setProperty() {} };
   listeners = new Map();
   attributes = new Map();
   classList = { toggle() {} };
@@ -17,7 +25,7 @@ class Element {
 
 function createOrder() {
   return {
-    id: 'order-12345678', status: 'Ready', source: 'POS', tableLabel: 'Mesa 1',
+    id: 'order-12345678', status: 'Ready', source: 'Pos', tableLabel: 'Mesa 1',
     readyAtUtc: '2026-10-17T00:00:00Z', guestCount: 2,
     stations: [
       { code: 'CHEF', name: 'Chef', status: 'Ready', priority: 0, requiresPrimaryDispatch: false },
@@ -31,52 +39,50 @@ function createOrder() {
   };
 }
 
-function createRenderer(stationCode, pending = false, recover = false) {
+function createRenderer(stationCode, pending = false) {
   const renderer = Object.create(OrderRenderer.prototype);
-  const recovered = [];
   renderer.element = new Element();
   renderer.collapsedOrders = new Set();
   renderer.options = {
     getStationCode: () => stationCode,
     getPrimaryStationCode: () => 'CHEF',
-    canRecover: () => recover,
     isOrderPending: () => pending,
-    onRecover: (order, button) => recovered.push({ order, button }),
     onAdvance: () => {},
   };
-  return { renderer, recovered };
+  return { renderer };
 }
 
-test('station order keeps header, badges, lines, recovery action and collapse state', () => {
+function firstRenderedOrder(renderer) {
+  return renderer.element.children
+    .flatMap(column => column.children)
+    .find(child => child.className === 'order');
+}
+
+test('station order keeps header, badges, lines and collapse state', () => {
   const previousDocument = globalThis.document;
   globalThis.document = { createElement: () => new Element() };
   try {
     const order = createOrder();
-    const { renderer, recovered } = createRenderer('GRILL', false, true);
+    const { renderer } = createRenderer('GRILL');
     renderer.render([order]);
-    const article = renderer.element.children[0];
+    const article = firstRenderedOrder(renderer);
     const [title, body] = article.children;
     const [titleContent, headerMeta, toggle] = title.children;
     assert.equal(article.dataset.status, 'Ready');
     assert.deepEqual(titleContent.children.map(child => child.textContent), ['order-12']);
     assert.doesNotMatch(titleContent.textContent, /Mesa 1/u);
-    assert.equal(headerMeta.children[0].textContent, 'Origen: POS');
+    assert.equal(headerMeta.children[0].textContent, 'TPV');
     assert.equal(headerMeta.children[2].children[1].textContent, 2);
     assert.equal(body.children[1].children.map(child => child.textContent).join(','), 'Chef: Ready,Bebidas: Dispatched');
     assert.equal(body.children[2].children.length, 2);
     assert.equal(body.children[2].children[1].children[0].children[0].textContent, '1 × Agua');
-    const deliverButton = body.children[3].children[0];
-    assert.equal(deliverButton.disabled, false);
-    deliverButton.listeners.get('click')();
-    assert.deepEqual(recovered, [{ order, button: deliverButton }]);
-
     toggle.listeners.get('click')();
     assert.equal(body.hidden, true);
     assert.equal(toggle.attributes.get('aria-expanded'), 'false');
     assert.equal(renderer.collapsedOrders.has(order.id), true);
     renderer.render([order]);
-    assert.equal(renderer.element.children[0].children[1].hidden, true);
-    renderer.element.children[0].children[0].children[2].listeners.get('click')();
+    assert.equal(firstRenderedOrder(renderer).children[1].hidden, true);
+    firstRenderedOrder(renderer).children[0].children[2].listeners.get('click')();
     assert.equal(renderer.collapsedOrders.has(order.id), false);
   } finally {
     globalThis.document = previousDocument;
@@ -94,31 +100,41 @@ test('station card color follows its station status and chef highlights ready pa
     );
     const { renderer } = createRenderer('GRILL');
     renderer.render([order]);
-    assert.equal(renderer.element.children[0].dataset.status, 'Ready');
+    assert.equal(firstRenderedOrder(renderer).dataset.status, 'Ready');
 
     const { renderer: chefRenderer } = createRenderer('CHEF');
     chefRenderer.render([order]);
-    assert.equal(chefRenderer.element.children[0].dataset.status, 'Ready');
+    assert.equal(firstRenderedOrder(chefRenderer).dataset.status, 'Ready');
   } finally {
     globalThis.document = previousDocument;
   }
 });
 
-test('primary station separates controlled passes and disables pending recovery', () => {
+test('primary station separates controlled passes and disables dispatch while pending', () => {
   const previousDocument = globalThis.document;
   globalThis.document = { createElement: () => new Element() };
   try {
     const order = createOrder();
     order.guestCount = 0;
     order.readyAtUtc = null;
-    const { renderer } = createRenderer('CHEF', true, true);
+    order.stations = [
+      ...order.stations,
+      { code: 'PASTA', name: 'Pastas', status: 'Pending', priority: 3, requiresPrimaryDispatch: true },
+    ];
+    order.lines = [
+      ...order.lines,
+      { id: 'line-3', quantity: 1, productName: 'Pasta', categoryName: 'Carta', kitchenStatus: 'Pending', preparationStationCode: 'PASTA' },
+    ];
+    const { renderer } = createRenderer('CHEF', true);
     renderer.render([order]);
-    const [title, body] = renderer.element.children[0].children;
+    const [title, body] = firstRenderedOrder(renderer).children;
     assert.equal(title.children[1].children.length, 2);
     assert.equal(body.children[0].children.length, 1);
     assert.equal(body.children[0].children[0].children[0].children[0].textContent, '1 × Agua · Bebidas');
     assert.equal(body.children[1].children[0].children[0].children[0].textContent, 'Prioridad 1');
-    assert.equal(body.children[2].children[0].disabled, true);
+    const dispatchButton = body.children[1].children[0].children[1].children[0].children[1].children[2];
+    assert.equal(dispatchButton.textContent, 'Servir');
+    assert.equal(dispatchButton.disabled, true);
   } finally {
     globalThis.document = previousDocument;
   }
@@ -136,7 +152,7 @@ test('primary station omits the passes area when no manual dispatch is required'
     const { renderer } = createRenderer('CHEF');
     renderer.render([order]);
 
-    const body = renderer.element.children[0].children[1];
+    const body = firstRenderedOrder(renderer).children[1];
     assert.equal(body.children.some(child => child.className === 'passes'), false);
     assert.equal(body.children.some(child =>
       child.textContent.includes('Este pedido no contiene pases')
@@ -201,21 +217,24 @@ test('chef dispatch waits for earlier passes and station actions follow line sta
       renderer.renderProductLine(order, { ...line, kitchenStatus: status }, isPrimary, blocked, stationActions).children[1];
 
     const readyChef = controls('Ready', true);
-    assert.deepEqual(readyChef.children.map(child => child.textContent), ['🕓 —', '🕓 —', 'Despachar']);
+    assert.deepEqual(readyChef.children.map(child => child.textContent), ['🕓 —', '🕓 —', 'Servir']);
+    assert.equal(readyChef.children[2].attributes.get('aria-label'), 'Despachar');
     readyChef.children[2].listeners.get('click')();
 
     const waitingChef = controls('Ready', true, true);
-    assert.equal(waitingChef.children[2].textContent, 'Esperando un pase anterior.');
-    assert.equal(controls('Pending', true).children.length, 3);
+    assert.equal(waitingChef.children[2].textContent, '⌛');
+    assert.equal(waitingChef.children[2].title, 'Esperando un pase anterior');
+    assert.equal(waitingChef.children[2].attributes.get('aria-label'), 'Esperando un pase anterior');
+    assert.equal(controls('Pending', true).children.length, 2);
 
     const pendingStation = controls('Pending', false);
-    assert.equal(pendingStation.children[2].textContent, 'Iniciar');
-    pendingStation.children[2].listeners.get('click')();
+    assert.equal(pendingStation.children[1].textContent, 'Iniciar');
+    pendingStation.children[1].listeners.get('click')();
     const preparingStation = controls('InPreparation', false);
     assert.equal(preparingStation.children[2].textContent, 'Listo');
     preparingStation.children[2].listeners.get('click')();
     assert.equal(controls('Ready', false).children.length, 2);
-    assert.equal(controls('Pending', false, false, false).children.length, 2);
+    assert.equal(controls('Pending', false, false, false).children.length, 1);
     assert.deepEqual(advances, [
       'lines/line-1/dispatch',
       'lines/line-1/start-preparation',

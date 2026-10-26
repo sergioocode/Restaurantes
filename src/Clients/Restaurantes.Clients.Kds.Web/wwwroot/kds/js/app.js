@@ -1,5 +1,5 @@
 import { KdsApiClient } from './api-client.js';
-import { OrderRenderer, productFormatLabel } from './order-renderer.js';
+import { OrderRenderer, productFormatLabel } from './order-renderer.js?v=35';
 import { KdsRealtimeClient } from './realtime-client.js';
 import { renderKitchenTicket } from './ticket-renderer.js';
 
@@ -43,6 +43,7 @@ let lastAppliedRequestNumber = 0;
 const renderer = new OrderRenderer(ordersElement, {
   getStationCode: () => stationSelect.value,
   getPrimaryStationCode: () => primaryStationCode,
+  getZoneName: zoneId => restaurantZones.find(zone => zone.id === zoneId)?.name || '',
   isOrderPending: orderId => pendingOrders.has(orderId),
   onAdvance: advanceOrder
 });
@@ -258,8 +259,12 @@ async function loadStationsAndConnect() {
     const activeStations = stations
       .filter(item => item.isActive)
       .sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name));
-    const zones = activeStations.some(station => station.managesZones)
-      ? await api.getZones(restaurantId) : [];
+    let zones = [];
+    try {
+      zones = await api.getZones(restaurantId);
+    } catch (error) {
+      if (activeStations.some(station => station.managesZones)) throw error;
+    }
     if (restaurantId !== selectedRestaurantId) return;
     stationConfigurations = stations;
     restaurantZones = zones;

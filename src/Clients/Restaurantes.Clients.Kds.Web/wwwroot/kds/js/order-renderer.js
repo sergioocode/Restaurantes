@@ -21,19 +21,48 @@ export class OrderRenderer {
     this.element = element;
     this.options = options;
     this.collapsedOrders = new Set();
+    this.orders = [];
+    this.columnCount = this.getColumnCount();
+    window.addEventListener('resize', () => {
+      const columnCount = this.getColumnCount();
+      if (columnCount !== this.columnCount) this.render(this.orders);
+    });
     window.setInterval(() => this.refreshKitchenClocks(), 1000);
     document.addEventListener('visibilitychange', () => this.refreshKitchenClocks());
   }
 
+  getColumnCount() {
+    if (window.innerWidth >= 1600) return 4;
+    if (window.innerWidth >= 1100) return 3;
+    if (window.innerWidth >= 641) return 2;
+    return 1;
+  }
+
   render(orders) {
+    this.orders = orders;
+    const columnCount = this.getColumnCount();
+    this.columnCount = columnCount;
+    this.element.style.setProperty('--order-column-count', String(this.columnCount));
     this.element.replaceChildren();
     if (!orders.length) {
       this.showEmpty('No hay pedidos enviados a cocina.');
       return;
     }
 
-    for (const order of orders) {
-      this.element.append(this.renderOrder(order));
+    const columns = Array.from({ length: this.columnCount }, () => {
+      const column = document.createElement('div');
+      column.className = 'order-column';
+      return column;
+    });
+    this.element.append(...columns);
+
+    const oldestFirst = [...orders].sort((left, right) => {
+      const leftTime = Date.parse(left.submittedAtUtc || left.createdAtUtc) || 0;
+      const rightTime = Date.parse(right.submittedAtUtc || right.createdAtUtc) || 0;
+      return leftTime - rightTime || left.id.localeCompare(right.id);
+    });
+    for (const [index, order] of oldestFirst.entries()) {
+      columns[index % this.columnCount].append(this.renderOrder(order));
     }
   }
 
@@ -68,6 +97,16 @@ export class OrderRenderer {
     shortId.title = order.id;
     titleContent.append(shortId);
 
+    const locationLabel = order.tableLabel?.trim() || order.customerName?.trim();
+    let location;
+    if (locationLabel) {
+      location = document.createElement('small');
+      location.className = 'order-location';
+      const zoneName = order.zoneId ? this.options.getZoneName?.(order.zoneId) : '';
+      location.textContent = [locationLabel, zoneName].filter(Boolean).join(' · ');
+      location.title = location.textContent;
+    }
+
     const headerMeta = document.createElement('span');
     headerMeta.className = 'order-header-meta';
     const sourceBadge = document.createElement('span');
@@ -83,6 +122,7 @@ export class OrderRenderer {
     toggleButton.type = 'button';
     this.updateToggleButton(toggleButton, collapsed);
     title.append(titleContent, headerMeta, toggleButton);
+    if (location) title.append(location);
     return { title, toggleButton };
   }
 
@@ -116,9 +156,10 @@ export class OrderRenderer {
 
     const selectedStationCode = this.options.getStationCode();
     const isPrimary = selectedStationCode === this.options.getPrimaryStationCode();
+    const separateChefPasses = isPrimary && this.hasMultipleChefPriorities(order);
     if (!isPrimary) body.append(this.renderOtherStations(order, selectedStationCode));
-    body.append(this.renderOrderLines(order, isPrimary));
-    if (isPrimary) {
+    body.append(this.renderOrderLines(order, isPrimary, separateChefPasses));
+    if (separateChefPasses) {
       const passes = this.renderChefPasses(order);
       if (passes) body.append(passes);
     }
@@ -152,10 +193,10 @@ export class OrderRenderer {
     return stations;
   }
 
-  renderOrderLines(order, isPrimary) {
-    const controlledCodes = new Set(order.stations
-      .filter(station => station.requiresPrimaryDispatch)
-      .map(station => station.code));
+  renderOrderLines(order, isPrimary, separateChefPasses = false) {
+    const controlledCodes = new Set(
+      separateChefPasses ? this.getControlledStations(order).map(station => station.code) : []
+    );
     const lines = document.createElement('ul');
     lines.className = 'product-lines';
     for (const line of order.lines) {
@@ -218,12 +259,18 @@ export class OrderRenderer {
   }
 
   renderProductControls(order, line, isPrimary, blocked, stationActions) {
-    const state = document.createElement('small');
-    state.className = 'line-state ' + (line.kitchenStatus || 'Pending');
-    state.textContent = kitchenStatusLabel(line.kitchenStatus);
     const controls = document.createElement('div');
     controls.className = 'line-controls';
-    if (!(isPrimary && line.kitchenStatus === 'Ready')) controls.append(state);
+    if (line.kitchenStatus !== 'Pending' && !(isPrimary && line.kitchenStatus === 'Ready')) {
+      const state = document.createElement('small');
+      state.className = 'line-state ' + (line.kitchenStatus || 'Pending');
+      state.textContent = kitchenStatusLabel(line.kitchenStatus);
+      if (line.kitchenStatus === 'Ready') {
+        state.setAttribute('aria-label', 'Listo para despacho');
+        state.title = 'Listo para despacho';
+      }
+      controls.append(state);
+    }
 
     if (isPrimary) {
       this.appendPrimaryControls(controls, order, line, blocked);
@@ -241,11 +288,13 @@ export class OrderRenderer {
     if (line.kitchenStatus !== 'Ready') return;
     if (blocked) {
       const note = document.createElement('small');
-      note.className = 'line-waiting';
-      note.textContent = 'Esperando un pase anterior.';
+      note.className = 'line-state line-waiting';
+      note.textContent = '⌛';
+      note.title = 'Esperando un pase anterior';
+      note.setAttribute('aria-label', note.title);
       controls.append(note);
     } else {
-      controls.append(this.createLineAction(order, line, 'dispatch', 'Despachar'));
+      controls.append(this.createLineAction(order, line, 'dispatch', 'Servir', 'Despachar'));
     }
   }
 
@@ -260,14 +309,16 @@ export class OrderRenderer {
     }
   }
 
-  createLineAction(order, line, action, label) {
+  createLineAction(order, line, action, label, accessibleLabel = label) {
     const button = document.createElement('button');
     button.className = 'line-action';
     button.textContent = label;
+    button.title = accessibleLabel;
+    button.setAttribute('aria-label', accessibleLabel);
     button.disabled = this.options.isOrderPending(order.id);
     button.addEventListener('click', () => this.options.onAdvance(order, {
       path: 'lines/' + encodeURIComponent(line.id) + '/' + action,
-      label
+      label: accessibleLabel
     }, button));
     return button;
   }
@@ -289,10 +340,9 @@ export class OrderRenderer {
   }
 
   renderChefPasses(order) {
-    const controlled = order.stations
-      .filter(station => station.requiresPrimaryDispatch)
+    const controlled = this.getControlledStations(order)
       .sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name));
-    if (!controlled.length) return null;
+    if (new Set(controlled.map(station => station.priority)).size < 2) return null;
 
     const container = document.createElement('div');
     container.className = 'passes';
@@ -320,6 +370,17 @@ export class OrderRenderer {
       container.append(pass);
     }
     return container;
+  }
+
+  hasMultipleChefPriorities(order) {
+    return new Set(this.getControlledStations(order).map(station => station.priority)).size > 1;
+  }
+
+  getControlledStations(order) {
+    const stationCodesWithLines = new Set(order.lines.map(line => line.preparationStationCode));
+    return order.stations.filter(station =>
+      station.requiresPrimaryDispatch && stationCodesWithLines.has(station.code)
+    );
   }
 
   renderKitchenClock(order, stationCode) {
@@ -367,7 +428,7 @@ function kitchenStatusLabel(status) {
   return ({
     Pending: 'Pendiente',
     InPreparation: 'Preparando',
-    Ready: 'Listo para despacho',
+    Ready: '✓ Listo',
     Dispatched: 'Despachado'
   })[status] || 'Pendiente';
 }
