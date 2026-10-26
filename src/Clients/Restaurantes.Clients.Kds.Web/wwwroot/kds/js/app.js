@@ -244,6 +244,15 @@ function configureZoneSelector() {
   }
 }
 
+async function loadZonesForStations(restaurantId, activeStations) {
+  try {
+    return await api.getZones(restaurantId);
+  } catch (error) {
+    if (activeStations.some(station => station.managesZones)) throw error;
+    return [];
+  }
+}
+
 async function loadStationsAndConnect() {
   const restaurantId = selectedRestaurantId;
   if (!restaurantId) return;
@@ -259,12 +268,7 @@ async function loadStationsAndConnect() {
     const activeStations = stations
       .filter(item => item.isActive)
       .sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name));
-    let zones = [];
-    try {
-      zones = await api.getZones(restaurantId);
-    } catch (error) {
-      if (activeStations.some(station => station.managesZones)) throw error;
-    }
+    const zones = await loadZonesForStations(restaurantId, activeStations);
     if (restaurantId !== selectedRestaurantId) return;
     stationConfigurations = stations;
     restaurantZones = zones;

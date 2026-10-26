@@ -45,10 +45,9 @@ button:disabled { cursor: not-allowed; opacity: .6; }
 #event:empty { display: none; }
 #orders { display: grid; grid-template-columns: repeat(var(--order-column-count, 1), minmax(0, 1fr)); align-items: start; gap: 1rem; padding-bottom: .75rem; }
 .order-column { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
-.order { display: block; flex: 0 0 auto; width: 100%; max-width: none; margin: 0; padding: 1rem; break-inside: auto; border-left: 5px solid #f97316; }
+.order { display: block; flex: 0 0 auto; width: 100%; min-width: 0; max-width: none; margin: 0; padding: 1rem; break-inside: auto; border-left: 5px solid #f97316; }
 .order[data-status="InPreparation"] { border-left-color: #3b82f6; }
 .order[data-status="Ready"] { border-left-color: #22c55e; }
-.order { min-width: 0; }
 .order h2 { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 0 .65rem; margin-bottom: 1rem; }
 .order-title-content { display: inline-flex; grid-column: 1; grid-row: 1; align-items: baseline; gap: .5rem; min-width: 0; }
 .order-short-id, .order-location, .order-age { color: var(--muted); font-size: .75rem; font-weight: 400; }

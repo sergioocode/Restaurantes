@@ -15,48 +15,15 @@ public sealed partial class OrderCommandService
         Guid? createdByUserId = null
     )
     {
-        if (
-            !Enum.TryParse(request.Source, false, out OrderSource source)
-            || !Enum.TryParse(request.PaymentTiming, false, out PaymentTiming timing)
-            || !Enum.TryParse(request.ServiceMode, false, out ServiceMode serviceMode)
-        )
-        {
-            throw new ArgumentException("Order source or payment timing is invalid.");
-        }
-
-        int? guestCount = null;
-        Guid? zoneId = null;
-        if (request.DiningSessionId is not null)
-        {
-            if (
-                (serviceMode is ServiceMode.DineIn or ServiceMode.Bar)
-                    != (request.TableId is not null)
-                || (serviceMode == ServiceMode.Takeaway && request.Source != "Pos")
-            )
-            {
-                throw new ArgumentException("The order location does not match its service mode.");
-            }
-
-            DiningSessionValidation validation = await dining.EnsureOpenAsync(
-                request.DiningSessionId.Value,
-                request.RestaurantId,
-                request.TableId,
-                request.Source,
-                request.ServiceMode,
-                customerAccessToken,
-                ct
-            );
-            guestCount = validation.GuestCount;
-            zoneId = validation.ZoneId;
-            if (request.TableId is not null && (zoneId is null || zoneId == Guid.Empty))
-            {
-                throw new InvalidOperationException("The dining table zone could not be resolved.");
-            }
-        }
-        else if (serviceMode != ServiceMode.Takeaway || request.TableId is not null)
-        {
-            throw new ArgumentException("Orders require an open dining session.");
-        }
+        (OrderSource source, PaymentTiming timing, ServiceMode serviceMode) = ParseOrderTypes(
+            request
+        );
+        (int? guestCount, Guid? zoneId) = await ValidateDiningSessionAsync(
+            request,
+            serviceMode,
+            customerAccessToken,
+            ct
+        );
         Guid[] ids = request.Lines.Select(x => x.ProductId).Distinct().ToArray();
         IReadOnlyDictionary<Guid, OrderCatalogProduct> products = await catalog.FindAsync(
             request.RestaurantId,
@@ -115,6 +82,67 @@ public sealed partial class OrderCommandService
             ct
         );
         return Map(order);
+    }
+
+    private static (
+        OrderSource Source,
+        PaymentTiming Timing,
+        ServiceMode ServiceMode
+    ) ParseOrderTypes(CreateOrderRequest request)
+    {
+        if (
+            !Enum.TryParse(request.Source, false, out OrderSource source)
+            || !Enum.TryParse(request.PaymentTiming, false, out PaymentTiming timing)
+            || !Enum.TryParse(request.ServiceMode, false, out ServiceMode serviceMode)
+        )
+        {
+            throw new ArgumentException("Order source or payment timing is invalid.");
+        }
+
+        return (source, timing, serviceMode);
+    }
+
+    private async Task<(int? GuestCount, Guid? ZoneId)> ValidateDiningSessionAsync(
+        CreateOrderRequest request,
+        ServiceMode serviceMode,
+        string customerAccessToken,
+        CancellationToken ct
+    )
+    {
+        if (request.DiningSessionId is null)
+        {
+            if (serviceMode != ServiceMode.Takeaway || request.TableId is not null)
+                throw new ArgumentException("Orders require an open dining session.");
+
+            return (null, null);
+        }
+
+        if (
+            (serviceMode is ServiceMode.DineIn or ServiceMode.Bar) != (request.TableId is not null)
+            || (serviceMode == ServiceMode.Takeaway && request.Source != "Pos")
+        )
+        {
+            throw new ArgumentException("The order location does not match its service mode.");
+        }
+
+        DiningSessionValidation validation = await dining.EnsureOpenAsync(
+            request.DiningSessionId.Value,
+            request.RestaurantId,
+            request.TableId,
+            request.Source,
+            request.ServiceMode,
+            customerAccessToken,
+            ct
+        );
+        if (
+            request.TableId is not null
+            && (validation.ZoneId is null || validation.ZoneId == Guid.Empty)
+        )
+        {
+            throw new InvalidOperationException("The dining table zone could not be resolved.");
+        }
+
+        return (validation.GuestCount, validation.ZoneId);
     }
 
     private static OrderLineDraft BuildLineDraft(

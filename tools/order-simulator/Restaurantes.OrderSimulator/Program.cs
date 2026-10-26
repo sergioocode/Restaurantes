@@ -12,6 +12,7 @@ namespace Restaurantes.OrderSimulator;
 
 internal static class Program
 {
+    private const string CancelledOrderStatus = "Cancelled";
     private static readonly TimeSpan DiningProjectionPollInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan DiningProjectionTimeout = TimeSpan.FromMinutes(2);
     private static readonly TimeSpan TableAvailabilityPollInterval = TimeSpan.FromSeconds(1);
@@ -1004,7 +1005,7 @@ internal static class Program
     {
         foreach (
             OrderLineResponse submittedLine in order.Lines.Where(line =>
-                line.Status != "Cancelled"
+                line.Status != CancelledOrderStatus
                 && !string.IsNullOrWhiteSpace(line.PreparationStationCode)
             )
         )
@@ -1117,7 +1118,7 @@ internal static class Program
         await Task.Delay(kitchenStepDelay);
         Guid[] lineIds = order
             .Lines.Where(line =>
-                line.Status != "Cancelled"
+                line.Status != CancelledOrderStatus
                 && line.PreparationStationCode.Equals(
                     station.Code,
                     StringComparison.OrdinalIgnoreCase
@@ -1162,7 +1163,7 @@ internal static class Program
         }
         OrderLineResponse[] undispatchedLines = order
             .Lines.Where(line =>
-                line.Status != "Cancelled"
+                line.Status != CancelledOrderStatus
                 && !line.KitchenStatus.Equals("Dispatched", StringComparison.OrdinalIgnoreCase)
             )
             .ToArray();
@@ -1286,7 +1287,7 @@ internal static class Program
         && bill.CanRelease
         && bill.Orders.Count > 0
         && bill.Orders.All(order =>
-            order.OrderStatus.Equals("Cancelled", StringComparison.OrdinalIgnoreCase)
+            order.OrderStatus.Equals(CancelledOrderStatus, StringComparison.OrdinalIgnoreCase)
             || order.PaymentStatus.Equals("Paid", StringComparison.OrdinalIgnoreCase)
         );
 

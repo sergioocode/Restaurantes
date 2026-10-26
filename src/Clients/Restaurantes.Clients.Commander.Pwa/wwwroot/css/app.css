@@ -35,8 +35,7 @@ input:focus, select:focus { border-color: #2f684a; box-shadow: 0 0 0 3px #2f684a
 .topbar .eyebrow { margin: 0; }
 .identity-card { display: grid; gap: 2px; min-width: 0; max-width: min(100%, 360px); padding: 7px 11px; border: 1px solid #cbd4ca; border-radius: 9px; background: #fff; }
 .identity-details { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
-.identity-details strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.identity-details strong { flex: 0 1 auto; }
+.identity-details strong { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .topbar-actions { display: flex; align-items: center; gap: 8px; }
 .topbar-actions .ghost, .order-head > .ghost { min-height: 44px; padding-block: 10px; border: 1px solid #9eac9f; color: #203c2d; background: #fff; box-shadow: 0 2px 5px rgba(32, 60, 45, .12); }
 .topbar-actions .ghost:hover, .topbar-actions .ghost:focus-visible, .order-head > .ghost:hover, .order-head > .ghost:focus-visible { border-color: #254632; background: #e4e9df; outline: 2px solid #25463233; outline-offset: 1px; }

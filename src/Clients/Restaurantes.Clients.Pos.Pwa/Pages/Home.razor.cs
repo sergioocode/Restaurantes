@@ -9,7 +9,6 @@ namespace Restaurantes.Clients.Pos.Pwa.Pages;
 
 public partial class Home
 {
-    private const string ProjectionPendingStatus = "ProjectionPending";
     private const string DefaultProductFormat = "PLATO";
     private const string CancelledStatus = "Cancelled";
     private const string ChargeKeypadTarget = "Charge";
@@ -353,10 +352,17 @@ public partial class Home
     private bool HasLocation => selectedTable is not null && session is not null;
     private bool IsTakeaway => serviceMode == "Takeaway";
     private bool hasSessionOrders;
-    private string CurrentLabel =>
-        pickupBillOpen ? selectedPickup?.CustomerName ?? "Pedido para llevar"
-        : IsTakeaway ? "Pedido para llevar"
-        : selectedTable?.Label ?? "Ubicación";
+    private string CurrentLabel
+    {
+        get
+        {
+            if (pickupBillOpen)
+                return selectedPickup?.CustomerName ?? "Pedido para llevar";
+            if (IsTakeaway)
+                return "Pedido para llevar";
+            return selectedTable?.Label ?? "Ubicación";
+        }
+    }
     private RestaurantResponse? CurrentRestaurant => restaurant;
 
     protected override async Task OnInitializedAsync()
@@ -992,15 +998,8 @@ public partial class Home
             message = "Debes abrir la caja antes de tomar pedidos.";
             return;
         }
-        if (!IsTakeaway && !HasLocation)
-        {
+        if (!CanSendOrder())
             return;
-        }
-
-        if (IsTakeaway && string.IsNullOrWhiteSpace(customerName))
-        {
-            return;
-        }
 
         await Run(
             async () =>
@@ -1045,6 +1044,9 @@ public partial class Home
             false
         );
     }
+
+    private bool CanSendOrder() =>
+        (IsTakeaway || HasLocation) && (!IsTakeaway || !string.IsNullOrWhiteSpace(customerName));
 
     private async Task OpenPickup(DiningSessionResponse pickup)
     {
