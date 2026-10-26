@@ -241,7 +241,16 @@ public sealed class CatalogProjectionWorker(
                 }
             );
         }
-        else if (station.Version < e.Version)
+        else if (station.Id != e.StationId && station.UpdatedAtUtc < e.OccurredAtUtc)
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            db.KitchenStationConfigurations.Remove(station);
+            await db.SaveChangesAsync();
+            db.KitchenStationConfigurations.Add(CreateKitchenStationConfiguration(e));
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+        }
+        else if (station.Id == e.StationId && station.Version < e.Version)
         {
             station.Name = e.Name;
             station.IsPrimary = e.IsPrimary;
@@ -251,6 +260,25 @@ public sealed class CatalogProjectionWorker(
             station.Version = e.Version;
             station.UpdatedAtUtc = e.OccurredAtUtc;
         }
+    }
+
+    private static OrderKitchenStationConfiguration CreateKitchenStationConfiguration(
+        KitchenStationChanged e
+    )
+    {
+        return new OrderKitchenStationConfiguration
+        {
+            Id = e.StationId,
+            RestaurantId = e.RestaurantId,
+            Code = e.Code,
+            Name = e.Name,
+            IsPrimary = e.IsPrimary,
+            RequiresPrimaryDispatch = e.RequiresPrimaryDispatch,
+            Priority = e.Priority,
+            IsActive = e.IsActive,
+            Version = e.Version,
+            UpdatedAtUtc = e.OccurredAtUtc,
+        };
     }
 
     private static DateTime EnsureUtc(DateTime value)
