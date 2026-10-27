@@ -19,7 +19,7 @@ public sealed class CatalogReadControllerCoverageTests
         CatalogReadController controller = CreateController(out ReadStoreProxy store);
         CancellationToken ct = TestContext.Current.CancellationToken;
 
-        Assert.IsType<OkObjectResult>((await controller.Categories(ct)).Result);
+        Assert.IsType<OkObjectResult>((await controller.Categories(null, ct)).Result);
         Assert.IsType<OkObjectResult>((await controller.Products(ct)).Result);
         Assert.IsType<OkObjectResult>(
             (await controller.Menu(restaurantId, ct, CatalogClientChannel.CustomerQr)).Result

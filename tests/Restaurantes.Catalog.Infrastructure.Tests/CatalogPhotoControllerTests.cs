@@ -2,7 +2,9 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Restaurantes.Catalog.Api.Controllers;
+using Restaurantes.Catalog.Api.Realtime;
 using Restaurantes.Catalog.Domain;
 using Restaurantes.Catalog.Infrastructure.Media;
 using Restaurantes.Catalog.Infrastructure.Persistence.Write;
@@ -245,7 +247,7 @@ public sealed class CatalogPhotoControllerTests
         CatalogWriteDbContext db,
         RecordingStorage storage
     ) =>
-        new(db, storage)
+        new(db, storage, new CatalogNotifications(null!, NullLogger<CatalogNotifications>.Instance))
         {
             ControllerContext = new ControllerContext
             {

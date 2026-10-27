@@ -5,9 +5,12 @@ namespace Restaurantes.Clients.Backoffice.Pwa.Api;
 
 public sealed partial class BackofficeApi
 {
-    public Task<List<CategoryResponse>> CategoriesAsync()
+    public Task<List<CategoryResponse>> CategoriesAsync(Guid? restaurantId = null)
     {
-        return GetAsync<List<CategoryResponse>>("/api/catalog/categories");
+        string path = restaurantId is Guid id
+            ? $"/api/catalog/categories?restaurantId={id}"
+            : "/api/catalog/categories";
+        return GetAsync<List<CategoryResponse>>(path);
     }
 
     public Task<List<ProductResponse>> ProductsAsync()
@@ -122,15 +125,27 @@ public sealed partial class BackofficeApi
             new
             {
                 item.Name,
-                item.DefaultStationCode,
-                item.DefaultStationName,
-                item.RequiresKds,
                 item.IsActive,
                 item.ShowInPos,
                 item.ShowInCommander,
                 item.ShowInCustomerQr,
             }
         );
+        using HttpResponseMessage response = await http.SendAsync(request);
+        return await ReadAsync<CategoryResponse>(response);
+    }
+
+    public async Task<CategoryResponse> ConfigureCategoryPreparationAsync(
+        Guid restaurantId,
+        Guid categoryId,
+        string stationCode
+    )
+    {
+        using HttpRequestMessage request = Authorized(
+            HttpMethod.Put,
+            $"/api/catalog/restaurants/{restaurantId}/categories/{categoryId}/preparation"
+        );
+        request.Content = JsonContent.Create(new { stationCode });
         using HttpResponseMessage response = await http.SendAsync(request);
         return await ReadAsync<CategoryResponse>(response);
     }

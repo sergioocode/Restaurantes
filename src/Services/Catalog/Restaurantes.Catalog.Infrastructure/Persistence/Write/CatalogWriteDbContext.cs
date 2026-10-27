@@ -11,6 +11,8 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
     public DbSet<Product> Products => Set<Product>();
     public DbSet<RestaurantMenuItem> MenuItems => Set<RestaurantMenuItem>();
     public DbSet<RestaurantKitchenStation> KitchenStations => Set<RestaurantKitchenStation>();
+    public DbSet<RestaurantCategoryPreparation> CategoryPreparations =>
+        Set<RestaurantCategoryPreparation>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<CatalogTax> Taxes => Set<CatalogTax>();
     public DbSet<CatalogAllergen> Allergens => Set<CatalogAllergen>();
@@ -79,6 +81,14 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
         s.HasIndex(x => x.RestaurantId)
             .HasFilter("\"IsPrimary\" = TRUE AND \"IsActive\" = TRUE")
             .IsUnique();
+        EntityTypeBuilder<RestaurantCategoryPreparation> categoryPreparation =
+            modelBuilder.Entity<RestaurantCategoryPreparation>();
+        categoryPreparation.ToTable("restaurant_category_preparations");
+        categoryPreparation.HasKey(x => new { x.RestaurantId, x.CategoryId });
+        categoryPreparation.Property(x => x.StationCode).HasMaxLength(40).IsRequired();
+        categoryPreparation.Property(x => x.StationName).HasMaxLength(80).IsRequired();
+        categoryPreparation.Property(x => x.Version).IsConcurrencyToken();
+        categoryPreparation.HasOne<Category>().WithMany().HasForeignKey(x => x.CategoryId);
         EntityTypeBuilder<OutboxMessage> o = modelBuilder.Entity<OutboxMessage>();
         o.ToTable("outbox_messages");
         o.HasKey(x => x.Id);

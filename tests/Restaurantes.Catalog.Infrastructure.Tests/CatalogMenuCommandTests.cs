@@ -87,13 +87,7 @@ public sealed class CatalogMenuCommandTests
         var result = await service.ConfigureMenuItemAsync(
             restaurantId,
             product.Id,
-            new ConfigureMenuItemRequest
-            {
-                Price = 2.25m,
-                IsAvailable = false,
-                PreparationStationCode = "CUSTOM",
-                PreparationStationName = "Custom station",
-            },
+            new ConfigureMenuItemRequest { Price = 2.25m, IsAvailable = false },
             ct
         );
 
@@ -105,8 +99,8 @@ public sealed class CatalogMenuCommandTests
         Assert.Equal("", result.PreparationStationName);
         Assert.Equal(10m, result.TaxRate);
         RestaurantMenuItem saved = Assert.Single(db.MenuItems);
-        Assert.Equal("BAR", saved.PreparationStationCode);
-        Assert.Equal("Barra", saved.PreparationStationName);
+        Assert.Equal("", saved.PreparationStationCode);
+        Assert.Equal("", saved.PreparationStationName);
         CatalogItemChanged change = JsonSerializer.Deserialize<CatalogItemChanged>(
             Assert.Single(db.OutboxMessages).Payload
         )!;
@@ -138,19 +132,14 @@ public sealed class CatalogMenuCommandTests
         await db.SaveChangesAsync(ct);
         CatalogCommandService service = new(new CatalogWriteStore(db), TimeProvider.System);
 
-        Assert.Null(
-            await service.ConfigureMenuItemAsync(
-                restaurantId,
-                product.Id,
-                new ConfigureMenuItemRequest
-                {
-                    Price = 12m,
-                    PreparationStationCode = "MISSING",
-                    PreparationStationName = "Missing",
-                },
-                ct
-            )
+        var configured = await service.ConfigureMenuItemAsync(
+            restaurantId,
+            product.Id,
+            new ConfigureMenuItemRequest { Price = 12m },
+            ct
         );
+        Assert.NotNull(configured);
+        Assert.Equal("CHEF", configured.PreparationStationCode);
         db.KitchenStations.Single().SetActive(false, DateTime.UtcNow);
         Assert.Null(
             await service.ConfigureMenuItemAsync(
@@ -160,11 +149,11 @@ public sealed class CatalogMenuCommandTests
                 ct
             )
         );
-        Assert.Empty(db.OutboxMessages);
+        Assert.Single(db.OutboxMessages);
     }
 
     [Fact]
-    public async Task ConfigureMenuItem_updates_existing_item_and_uses_requested_active_station()
+    public async Task ConfigureMenuItem_updates_existing_item_using_category_station()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         await using CatalogWriteDbContext db = CreateDatabase();
@@ -173,8 +162,8 @@ public sealed class CatalogMenuCommandTests
         Guid restaurantId = Guid.NewGuid();
         RestaurantKitchenStation station = RestaurantKitchenStation.Create(
             restaurantId,
-            "GRILL",
-            "Parrilla",
+            "CHEF",
+            "Chef",
             new RestaurantKitchenStation.Configuration(false, false, 1),
             DateTime.UtcNow
         );
@@ -197,21 +186,15 @@ public sealed class CatalogMenuCommandTests
         var result = await service.ConfigureMenuItemAsync(
             restaurantId,
             product.Id,
-            new ConfigureMenuItemRequest
-            {
-                Price = 14m,
-                IsAvailable = false,
-                PreparationStationCode = " grill ",
-                PreparationStationName = "Ignored name",
-            },
+            new ConfigureMenuItemRequest { Price = 14m, IsAvailable = false },
             ct
         );
 
         Assert.NotNull(result);
         Assert.Equal(existing.Id, db.MenuItems.Single().Id);
         Assert.Equal(2, result.Version);
-        Assert.Equal("GRILL", result.PreparationStationCode);
-        Assert.Equal("Parrilla", result.PreparationStationName);
+        Assert.Equal("CHEF", result.PreparationStationCode);
+        Assert.Equal("Chef", result.PreparationStationName);
         Assert.False(result.IsAvailable);
         Assert.Null(result.TaxRate);
     }

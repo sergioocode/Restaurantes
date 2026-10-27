@@ -78,11 +78,14 @@ public sealed class CatalogMenuSelectionTests
                 .UseInMemoryDatabase("catalog-read-" + suffix)
                 .Options
         );
+        Guid noKdsCategoryId = Guid.NewGuid();
+        Guid pastaCategoryId = Guid.NewGuid();
         read.MenuItems.AddRange(
             new MenuItemReadModel
             {
                 RestaurantId = restaurantId,
                 ProductId = Guid.NewGuid(),
+                CategoryId = pastaCategoryId,
                 CategoryName = "Pastas",
                 ProductName = "Ziti",
                 Price = 13,
@@ -93,12 +96,23 @@ public sealed class CatalogMenuSelectionTests
             {
                 RestaurantId = restaurantId,
                 ProductId = Guid.NewGuid(),
+                CategoryId = noKdsCategoryId,
                 CategoryName = "Entrantes",
                 ProductName = "Aceitunas",
                 Price = 4,
                 RequiresKds = false,
                 PreparationStationCode = "IGNORAR",
                 PreparationStationName = "Ignorar",
+            }
+        );
+        read.Categories.Add(
+            new CategoryReadModel
+            {
+                Id = pastaCategoryId,
+                DefaultStationCode = "PASTA",
+                DefaultStationName = "Pastas",
+                RequiresKds = true,
+                IsActive = true,
             }
         );
         read.KitchenStations.AddRange(
@@ -157,7 +171,14 @@ public sealed class CatalogMenuSelectionTests
                 .Options
         );
         DateTime now = DateTime.UtcNow;
-        Category category = Category.Create("MAIN", "Principales", "GENERAL", "General", now);
+        Category category = Category.Create(
+            "MAIN",
+            "Principales",
+            "GENERAL",
+            "General",
+            now,
+            showInCommander: false
+        );
         Product product = Product.Create("PASTA", "Pasta", category.Id, now);
         Product extra = Product.Create("EXTRA", "Ingrediente", category.Id, now);
         Guid taxId = Guid.NewGuid();
@@ -169,6 +190,9 @@ public sealed class CatalogMenuSelectionTests
             IsActive = true,
         };
         write.Categories.Add(category);
+        write.CategoryPreparations.Add(
+            RestaurantCategoryPreparation.Create(restaurantId, category.Id, "PASTA", "Pastas", now)
+        );
         write.Products.Add(product);
         write.Products.Add(extra);
         Guid photoRevision = Guid.NewGuid();

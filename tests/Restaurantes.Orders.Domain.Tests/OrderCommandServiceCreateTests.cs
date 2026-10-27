@@ -575,6 +575,7 @@ public sealed class OrderCommandServiceCreateTests
         public Task<IReadOnlyDictionary<Guid, OrderCatalogProduct>> FindAsync(
             Guid restaurantId,
             IReadOnlyCollection<Guid> productIds,
+            IReadOnlyDictionary<Guid, int> minimumCatalogVersions,
             CancellationToken ct
         )
         {

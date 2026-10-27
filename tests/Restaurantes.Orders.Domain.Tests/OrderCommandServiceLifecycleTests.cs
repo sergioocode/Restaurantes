@@ -148,6 +148,7 @@ public sealed class OrderCommandServiceLifecycleTests
         public Task<IReadOnlyDictionary<Guid, OrderCatalogProduct>> FindAsync(
             Guid restaurantId,
             IReadOnlyCollection<Guid> productIds,
+            IReadOnlyDictionary<Guid, int> minimumCatalogVersions,
             CancellationToken ct
         ) =>
             Task.FromResult<IReadOnlyDictionary<Guid, OrderCatalogProduct>>(

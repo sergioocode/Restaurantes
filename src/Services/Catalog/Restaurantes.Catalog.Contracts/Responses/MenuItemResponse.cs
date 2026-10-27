@@ -21,5 +21,6 @@ public sealed record MenuItemResponse(
     IReadOnlyList<ProductExtraGroup>? ExtraGroups = null,
     IReadOnlyList<MenuItemFormatPrice>? Formats = null,
     bool RequiresKds = true,
-    decimal? TaxRate = null
+    decimal? TaxRate = null,
+    int CatalogVersion = 0
 );

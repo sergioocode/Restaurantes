@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Restaurantes.Catalog.Contracts.Responses;
 using Restaurantes.Orders.Application;
@@ -11,13 +11,37 @@ public sealed class OrderCatalogStore(OrderWriteDbContext dbContext) : IOrderCat
     public async Task<IReadOnlyDictionary<Guid, OrderCatalogProduct>> FindAsync(
         Guid restaurantId,
         IReadOnlyCollection<Guid> productIds,
+        IReadOnlyDictionary<Guid, int> minimumCatalogVersions,
         CancellationToken ct
     )
     {
-        List<OrderCatalogItem> items = await dbContext
-            .CatalogItems.AsNoTracking()
-            .Where(item => item.RestaurantId == restaurantId && productIds.Contains(item.ProductId))
-            .ToListAsync(ct);
+        List<OrderCatalogItem> items = [];
+        for (int attempt = 0; attempt < 50; attempt++)
+        {
+            items = await dbContext
+                .CatalogItems.AsNoTracking()
+                .Where(item =>
+                    item.RestaurantId == restaurantId && productIds.Contains(item.ProductId)
+                )
+                .ToListAsync(ct);
+            if (
+                minimumCatalogVersions.All(expected =>
+                    items.Any(item =>
+                        item.ProductId == expected.Key && item.Version >= expected.Value
+                    )
+                )
+            )
+            {
+                break;
+            }
+
+            if (attempt == 49)
+            {
+                throw new OrderCatalogProjectionNotReadyException();
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(100), ct);
+        }
         string[] stationCodes = items.Select(item => item.StationCode).Distinct().ToArray();
         Dictionary<string, OrderKitchenStationConfiguration> configurations = await dbContext
             .KitchenStationConfigurations.AsNoTracking()
@@ -46,7 +70,7 @@ public sealed class OrderCatalogStore(OrderWriteDbContext dbContext) : IOrderCat
                     MapExtraGroups(item.ExtraGroupsJson),
                     item.DefaultFormat,
                     MapFormats(item.FormatsJson, item.DefaultFormat, item.Price),
-                    item.RequiresKds,
+                    item.RequiresKds && !string.IsNullOrWhiteSpace(item.StationCode),
                     item.TaxRate
                 );
             }

@@ -64,6 +64,7 @@ public sealed class BackofficeNavigationTests
 
         Assert.Contains("stations", nodes);
         Assert.Contains("catalog-design", nodes);
+        Assert.Contains("categories", nodes);
         Assert.Contains("cash-registers-report", nodes);
         Assert.Contains("kitchen-times-report", nodes);
         Assert.Contains("refunds", nodes);
@@ -95,7 +96,7 @@ public sealed class BackofficeNavigationTests
         Assert.Contains("companies", nodes);
         Assert.Contains("restaurants", nodes);
         Assert.Contains("users", nodes);
-        Assert.DoesNotContain("stations", nodes);
+        Assert.Contains("stations", nodes);
     }
 
     [Theory]

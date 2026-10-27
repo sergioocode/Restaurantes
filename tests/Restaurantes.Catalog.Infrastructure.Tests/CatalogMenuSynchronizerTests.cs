@@ -70,7 +70,7 @@ public sealed class CatalogMenuSynchronizerTests
         Assert.Same(existing, Assert.Single(db.MenuItems));
         Assert.False(existing.IsAvailable);
         Assert.Equal(9, existing.Price);
-        Assert.Equal("BAR", existing.PreparationStationCode);
+        Assert.Equal("KITCHEN", existing.PreparationStationCode);
         CatalogItemChanged changed = ReadEvent(Assert.Single(db.OutboxMessages));
         Assert.False(changed.IsAvailable);
         Assert.Equal(9, changed.Price);

@@ -5,6 +5,10 @@ namespace Restaurantes.Catalog.Application;
 public interface ICatalogReadStore
 {
     Task<IReadOnlyList<CategoryResponse>> ListCategoriesAsync(CancellationToken ct);
+    Task<IReadOnlyList<CategoryResponse>> ListCategoriesAsync(
+        Guid restaurantId,
+        CancellationToken ct
+    ) => ListCategoriesAsync(ct);
     Task<IReadOnlyList<ProductResponse>> ListProductsAsync(CancellationToken ct);
     Task<IReadOnlyList<MenuItemResponse>> ListMenuAsync(
         Guid restaurantId,

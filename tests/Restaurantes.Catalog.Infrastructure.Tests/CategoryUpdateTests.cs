@@ -37,7 +37,6 @@ public sealed class CategoryUpdateTests
                 ShowInPos = true,
                 ShowInCommander = false,
                 ShowInCustomerQr = false,
-                RequiresKds = false,
             },
             ct
         );
@@ -47,7 +46,7 @@ public sealed class CategoryUpdateTests
         Assert.True(result.ShowInPos);
         Assert.False(result.ShowInCommander);
         Assert.False(result.ShowInCustomerQr);
-        Assert.False(result.RequiresKds);
+        Assert.True(result.RequiresKds);
         CategoryChanged change = JsonSerializer.Deserialize<CategoryChanged>(
             Assert.Single(db.OutboxMessages).Payload
         )!;

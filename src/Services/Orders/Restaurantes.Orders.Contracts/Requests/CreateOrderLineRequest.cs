@@ -6,6 +6,9 @@ public sealed class CreateOrderLineRequest
 {
     public Guid ProductId { get; init; }
 
+    [Range(0, int.MaxValue)]
+    public int CatalogVersion { get; init; }
+
     [StringLength(40)]
     public string? Format { get; init; }
 

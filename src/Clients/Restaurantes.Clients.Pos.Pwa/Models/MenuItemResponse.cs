@@ -15,7 +15,8 @@ public sealed record MenuItemResponse(
     string PhotoSmallUrl = "",
     IReadOnlyList<ProductExtraGroup>? ExtraGroups = null,
     string DefaultFormat = "PLATO",
-    IReadOnlyList<MenuItemFormatPrice>? Formats = null
+    IReadOnlyList<MenuItemFormatPrice>? Formats = null,
+    int CatalogVersion = 0
 );
 
 public sealed record MenuItemFormatPrice(string Format, decimal Price);
@@ -42,6 +43,7 @@ public sealed class PosCartLine
     public string Format { get; init; } = "PLATO";
     public decimal BasePrice { get; init; }
     public decimal ExpectedUnitPrice { get; set; }
+    public int CatalogVersion { get; set; }
     public int Quantity { get; set; } = 1;
     public string Notes { get; set; } = string.Empty;
     public List<PosCartExtra> Extras { get; init; } = [];

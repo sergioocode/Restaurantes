@@ -19,7 +19,7 @@ namespace Restaurantes.Orders.Domain.Tests;
 public sealed class CatalogProjectionWorkerCoverageTests
 {
     [Fact]
-    public async Task Category_changes_update_kds_requirement_and_fill_missing_station()
+    public async Task Category_changes_do_not_override_restaurant_station_assignments()
     {
         await using ProjectionFixture fixture = await ProjectionFixture.CreateAsync();
         Guid categoryId = Guid.NewGuid();
@@ -42,9 +42,8 @@ public sealed class CatalogProjectionWorkerCoverageTests
             )
         );
 
-        Assert.True(missingStation.RequiresKds);
-        Assert.Equal("KITCHEN", missingStation.StationCode);
-        Assert.Equal("Cocina", missingStation.StationName);
+        Assert.False(missingStation.RequiresKds);
+        Assert.Equal("", missingStation.StationCode);
         Assert.True(existingStation.RequiresKds);
         Assert.Equal("BAR", existingStation.StationCode);
 
@@ -63,7 +62,9 @@ public sealed class CatalogProjectionWorkerCoverageTests
         );
 
         Assert.False(missingStation.RequiresKds);
-        Assert.Equal("KITCHEN", missingStation.StationCode);
+        Assert.Equal("", missingStation.StationCode);
+        Assert.True(existingStation.RequiresKds);
+        Assert.Equal("BAR", existingStation.StationCode);
         Assert.Equal(2, fixture.ChannelProxy.Acknowledgements);
     }
 
@@ -249,6 +250,7 @@ public sealed class CatalogProjectionWorkerCoverageTests
             CategoryId = categoryId,
             StationCode = stationCode,
             StationName = stationCode,
+            RequiresKds = !string.IsNullOrWhiteSpace(stationCode),
             IsAvailable = true,
             UpdatedAtUtc = DateTime.UtcNow,
         };

@@ -172,7 +172,7 @@ public sealed class CatalogProjectionWorker(
             Name = e.Name,
             DefaultStationCode = e.DefaultStationCode,
             DefaultStationName = e.DefaultStationName,
-            RequiresKds = e.RequiresKds,
+            RequiresKds = e.RequiresKds && !string.IsNullOrWhiteSpace(e.DefaultStationCode),
             IsActive = e.IsActive,
             ShowInPos = e.ShowInPos,
             ShowInCommander = e.ShowInCommander,
@@ -188,7 +188,7 @@ public sealed class CatalogProjectionWorker(
         category.Name = e.Name;
         category.DefaultStationCode = e.DefaultStationCode;
         category.DefaultStationName = e.DefaultStationName;
-        category.RequiresKds = e.RequiresKds;
+        category.RequiresKds = e.RequiresKds && !string.IsNullOrWhiteSpace(e.DefaultStationCode);
         category.IsActive = e.IsActive;
         category.ShowInPos = e.ShowInPos;
         category.ShowInCommander = e.ShowInCommander;
@@ -209,7 +209,7 @@ public sealed class CatalogProjectionWorker(
         {
             item.CategoryCode = e.Code;
             item.CategoryName = e.Name;
-            item.RequiresKds = e.RequiresKds;
+            item.RequiresKds = e.RequiresKds && !string.IsNullOrWhiteSpace(e.DefaultStationCode);
             item.UpdatedAtUtc = e.OccurredAtUtc;
         }
     }
@@ -305,7 +305,7 @@ public sealed class CatalogProjectionWorker(
             IsAvailable = e.IsAvailable,
             PreparationStationCode = e.PreparationStationCode,
             PreparationStationName = e.PreparationStationName,
-            RequiresKds = e.RequiresKds,
+            RequiresKds = e.RequiresKds && !string.IsNullOrWhiteSpace(e.PreparationStationCode),
             Version = e.Version,
             UpdatedAtUtc = e.OccurredAtUtc,
         };
@@ -322,7 +322,7 @@ public sealed class CatalogProjectionWorker(
         item.IsAvailable = e.IsAvailable;
         item.PreparationStationCode = e.PreparationStationCode;
         item.PreparationStationName = e.PreparationStationName;
-        item.RequiresKds = e.RequiresKds;
+        item.RequiresKds = e.RequiresKds && !string.IsNullOrWhiteSpace(e.PreparationStationCode);
         item.Version = e.Version;
         item.UpdatedAtUtc = e.OccurredAtUtc;
     }

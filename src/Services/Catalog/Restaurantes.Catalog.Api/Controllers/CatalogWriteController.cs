@@ -1,10 +1,12 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Restaurantes.Catalog.Api.Realtime;
 using Restaurantes.Catalog.Api.Services;
 using Restaurantes.Catalog.Application;
 using Restaurantes.Catalog.Contracts.Requests;
 using Restaurantes.Catalog.Contracts.Responses;
+using Restaurantes.Catalog.Domain;
 using Restaurantes.Catalog.Infrastructure.Persistence.Write;
 using Restaurantes.Security;
 
@@ -74,7 +76,101 @@ public sealed class CatalogWriteController(
             return NotFound();
         await synchronizer.SyncAffectedMenus(Guid.Empty, ct);
         await transaction.CommitAsync(ct);
+        await notifications.MenuChanged(Guid.Empty);
         return Accepted($"/api/catalog/categories/{id}", item);
+    }
+
+    [HttpPut("restaurants/{restaurantId:guid}/categories/{categoryId:guid}/preparation")]
+    public async Task<ActionResult<CategoryResponse>> ConfigureCategoryPreparation(
+        Guid restaurantId,
+        Guid categoryId,
+        ConfigureCategoryPreparationRequest request,
+        CancellationToken ct
+    )
+    {
+        if (!User.CanAccessRestaurant(restaurantId, RestaurantPermissions.CatalogManage))
+        {
+            return Forbid();
+        }
+
+        Category? category = await db.Categories.SingleOrDefaultAsync(
+            item => item.Id == categoryId,
+            ct
+        );
+        if (category is null)
+        {
+            return NotFound();
+        }
+
+        string stationCode = request.StationCode?.Trim().ToUpperInvariant() ?? "";
+        string stationName = "";
+        if (!string.IsNullOrWhiteSpace(stationCode))
+        {
+            RestaurantKitchenStation? station = await db.KitchenStations.SingleOrDefaultAsync(
+                item =>
+                    item.RestaurantId == restaurantId
+                    && item.Code == stationCode
+                    && item.IsActive
+                    && !item.IsPrimary,
+                ct
+            );
+            if (station is null)
+            {
+                return BadRequest(
+                    new ProblemDetails
+                    {
+                        Title = "La estación KDS no está activa en este local.",
+                        Status = StatusCodes.Status400BadRequest,
+                    }
+                );
+            }
+            stationName = station.Name;
+        }
+
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        RestaurantCategoryPreparation? preparation =
+            await db.CategoryPreparations.SingleOrDefaultAsync(
+                item => item.RestaurantId == restaurantId && item.CategoryId == categoryId,
+                ct
+            );
+        DateTime now = DateTime.UtcNow;
+        if (preparation is null)
+        {
+            preparation = RestaurantCategoryPreparation.Create(
+                restaurantId,
+                categoryId,
+                stationCode,
+                stationName,
+                now
+            );
+            db.CategoryPreparations.Add(preparation);
+        }
+        else
+        {
+            preparation.Configure(stationCode, stationName, now);
+        }
+
+        await db.SaveChangesAsync(ct);
+        await synchronizer.SyncAffectedMenus(restaurantId, ct);
+        await transaction.CommitAsync(ct);
+        await notifications.MenuChanged(restaurantId);
+        return Accepted(
+            $"/api/catalog/restaurants/{restaurantId}/categories/{categoryId}/preparation",
+            new CategoryResponse(
+                category.Id,
+                category.Code,
+                category.Name,
+                preparation.StationCode,
+                preparation.StationName,
+                category.IsActive,
+                category.Version,
+                preparation.UpdatedAtUtc,
+                category.ShowInPos,
+                category.ShowInCommander,
+                category.ShowInCustomerQr,
+                !string.IsNullOrWhiteSpace(preparation.StationCode)
+            )
+        );
     }
 
     [HttpPut("products/{id:guid}")]
@@ -117,6 +213,7 @@ public sealed class CatalogWriteController(
             return NotFound();
         await synchronizer.SyncAffectedMenus(Guid.Empty, ct);
         await transaction.CommitAsync(ct);
+        await notifications.MenuChanged(Guid.Empty);
         return Accepted($"/api/catalog/products/{id}", item);
     }
 
@@ -138,6 +235,7 @@ public sealed class CatalogWriteController(
             return NotFound();
         await synchronizer.SyncAffectedMenus(Guid.Empty, ct);
         await transaction.CommitAsync(ct);
+        await notifications.MenuChanged(Guid.Empty);
         return Accepted($"/api/catalog/products/{id}", item);
     }
 
@@ -351,7 +449,9 @@ public sealed class CatalogWriteController(
     }
 
     private bool CanManageStation(Guid restaurantId) =>
-        !User.IsInRole("Admin")
-        && User.HasClaim(RestaurantClaimTypes.RestaurantRole, $"{restaurantId:N}:Manager")
-        && User.CanAccessRestaurant(restaurantId, RestaurantPermissions.CatalogManage);
+        User.IsInRole("Admin")
+        || (
+            User.HasClaim(RestaurantClaimTypes.RestaurantRole, $"{restaurantId:N}:Manager")
+            && User.CanAccessRestaurant(restaurantId, RestaurantPermissions.CatalogManage)
+        );
 }

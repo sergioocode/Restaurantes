@@ -10,10 +10,23 @@ public sealed class CatalogReadController(ICatalogReadStore store) : ControllerB
 {
     [HttpGet("categories")]
     public async Task<ActionResult<IReadOnlyList<CategoryResponse>>> Categories(
+        [FromQuery] Guid? restaurantId,
         CancellationToken ct
     )
     {
-        return Ok(await store.ListCategoriesAsync(ct));
+        if (
+            restaurantId is Guid id
+            && !User.CanAccessRestaurant(id, RestaurantPermissions.CatalogManage)
+        )
+        {
+            return Forbid();
+        }
+
+        return Ok(
+            restaurantId is Guid restaurant
+                ? await store.ListCategoriesAsync(restaurant, ct)
+                : await store.ListCategoriesAsync(ct)
+        );
     }
 
     [HttpGet("products")]

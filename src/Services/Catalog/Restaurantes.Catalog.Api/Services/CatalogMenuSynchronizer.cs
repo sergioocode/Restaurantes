@@ -106,6 +106,10 @@ public sealed class CatalogMenuSynchronizer(CatalogWriteDbContext db)
             .Categories.AsNoTracking()
             .Where(x => categoryIds.Contains(x.Id))
             .ToArrayAsync(ct);
+        Dictionary<Guid, RestaurantCategoryPreparation> categoryPreparations = await db
+            .CategoryPreparations.AsNoTracking()
+            .Where(x => x.RestaurantId == restaurantId && categoryIds.Contains(x.CategoryId))
+            .ToDictionaryAsync(x => x.CategoryId, ct);
         Guid[] extraProductIds = extraOptions.Select(x => x.ProductId).Distinct().ToArray();
         CatalogMenuPrice[] extraPrices =
             menu is null || extraProductIds.Length == 0
@@ -131,6 +135,7 @@ public sealed class CatalogMenuSynchronizer(CatalogWriteDbContext db)
             products,
             activeTaxRates,
             categories,
+            categoryPreparations,
             extraPriceByProduct
         );
     }
@@ -156,7 +161,27 @@ public sealed class CatalogMenuSynchronizer(CatalogWriteDbContext db)
         if (item is null && !available)
             return;
 
-        item = SaveRestaurantMenuItem(restaurantId, product, category, price, item, available, now);
+        data.CategoryPreparations.TryGetValue(
+            category.Id,
+            out RestaurantCategoryPreparation? localPreparation
+        );
+        string stationCode =
+            localPreparation?.StationCode
+            ?? (category.RequiresKds ? category.DefaultStationCode : "");
+        string stationName =
+            localPreparation?.StationName
+            ?? (category.RequiresKds ? category.DefaultStationName : "");
+        bool requiresKds = !string.IsNullOrWhiteSpace(stationCode);
+        item = SaveRestaurantMenuItem(
+            restaurantId,
+            product,
+            price,
+            item,
+            available,
+            stationCode,
+            stationName,
+            now
+        );
         decimal? taxRate = GetTaxRate(product, data.ActiveTaxRates);
         CatalogItemChanged changed = new(
             restaurantId,
@@ -168,8 +193,8 @@ public sealed class CatalogMenuSynchronizer(CatalogWriteDbContext db)
             category.Name,
             item.Price,
             item.IsAvailable,
-            item.PreparationStationCode,
-            item.PreparationStationName,
+            stationCode,
+            stationName,
             item.Version,
             now,
             BuildExtraGroups(product.Id, data),
@@ -177,7 +202,7 @@ public sealed class CatalogMenuSynchronizer(CatalogWriteDbContext db)
             data.Prices.Where(x => x.ProductId == product.Id)
                 .Select(x => new MenuItemFormatPrice(x.Format, x.Amount))
                 .ToArray(),
-            RequiresKds: category.RequiresKds,
+            RequiresKds: requiresKds,
             TaxRate: taxRate
         );
         db.OutboxMessages.Add(
@@ -208,15 +233,14 @@ public sealed class CatalogMenuSynchronizer(CatalogWriteDbContext db)
     private RestaurantMenuItem SaveRestaurantMenuItem(
         Guid restaurantId,
         Product product,
-        Category category,
         CatalogMenuPrice? price,
         RestaurantMenuItem? item,
         bool available,
+        string stationCode,
+        string stationName,
         DateTime now
     )
     {
-        string stationCode = item?.PreparationStationCode ?? category.DefaultStationCode;
-        string stationName = item?.PreparationStationName ?? category.DefaultStationName;
         if (item is null)
         {
             RestaurantMenuItem created = RestaurantMenuItem.Create(
@@ -289,6 +313,7 @@ public sealed class CatalogMenuSynchronizer(CatalogWriteDbContext db)
         Product[] Products,
         Dictionary<Guid, decimal> ActiveTaxRates,
         Category[] Categories,
+        Dictionary<Guid, RestaurantCategoryPreparation> CategoryPreparations,
         Dictionary<Guid, decimal> ExtraPriceByProduct
     );
 }

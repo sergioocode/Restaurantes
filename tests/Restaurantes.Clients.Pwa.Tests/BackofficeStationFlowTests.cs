@@ -10,6 +10,7 @@ using Microsoft.JSInterop;
 using Restaurantes.Clients.Backoffice.Pwa.Api;
 using Restaurantes.Clients.Backoffice.Pwa.Components;
 using Restaurantes.Clients.Backoffice.Pwa.Models;
+using Restaurantes.Clients.Backoffice.Pwa.Realtime;
 using Restaurantes.Clients.Backoffice.Pwa.Security;
 using Syncfusion.Blazor;
 using Xunit;
@@ -19,6 +20,13 @@ namespace Restaurantes.Clients.Pwa.Tests;
 
 public sealed class BackofficeStationFlowTests : BunitContext
 {
+    public BackofficeStationFlowTests()
+    {
+        BackofficeTestServices.AddTablesRealtime(this);
+        Services.AddSyncfusionBlazor();
+        JSInterop.Mode = JSRuntimeMode.Loose;
+    }
+
     [Theory]
     [InlineData("Admin", "Administrador")]
     [InlineData("Gerente", "Gerencia")]
@@ -83,6 +91,16 @@ public sealed class BackofficeStationFlowTests : BunitContext
         KitchenStationResponse existing = Station(restaurantId);
         StationHandler handler = new(existing);
         IRenderedComponent<BackofficeHome> cut = RenderHome(restaurantId, handler, existing);
+        Assert.True(
+            (bool)
+                typeof(BackofficeHome)
+                    .GetProperty(
+                        "CanManageStations",
+                        BindingFlags.Instance | BindingFlags.NonPublic
+                    )!
+                    .GetValue(cut.Instance)!
+        );
+        Assert.False(GetField<bool>(cut.Instance, "busy"));
         SetField(
             cut.Instance,
             "stationDraft",
@@ -126,8 +144,6 @@ public sealed class BackofficeStationFlowTests : BunitContext
     [Fact]
     public async Task Stations_module_saves_name_priority_and_zone_management_flag()
     {
-        Services.AddSyncfusionBlazor();
-        JSInterop.Mode = JSRuntimeMode.Loose;
         Guid restaurantId = Guid.NewGuid();
         KitchenStationResponse station = Station(restaurantId);
         station.RequiresPrimaryDispatch = false;
@@ -379,11 +395,10 @@ public sealed class BackofficeStationFlowTests : BunitContext
         JSInterop
             .Setup<string?>("sessionStorage.getItem", _ => true)
             .SetResult(JsonSerializer.Serialize(login));
-        Services.AddSingleton(
-            new BackofficeApi(
-                new HttpClient(handler) { BaseAddress = new Uri("https://test.local") }
-            )
+        BackofficeApi api = new(
+            new HttpClient(handler) { BaseAddress = new Uri("https://test.local") }
         );
+        Services.AddSingleton(api);
         Services.AddSingleton(new SessionAuthenticationStateProvider());
 
         IRenderedComponent<BackofficeHome> cut = Render<BackofficeHome>();
@@ -417,7 +432,13 @@ public sealed class BackofficeStationFlowTests : BunitContext
                 new RestaurantAccess(
                     restaurantId,
                     "Manager",
-                    ["backoffice.access", "catalog.manage", "kds.use"]
+                    [
+                        "backoffice.access",
+                        "catalog.manage",
+                        "kds.use",
+                        "tables.read",
+                        "tables.manage",
+                    ]
                 ),
             ]
         );
@@ -600,6 +621,15 @@ public sealed class BackofficeStationFlowTests : BunitContext
         IRenderedComponent<BackofficeHome> cut = RenderHome(restaurantId, handler, station);
         SetField(
             cut.Instance,
+            "login",
+            GetField<LoginResponse>(cut.Instance, "login") with
+            {
+                AllRestaurantsRoles = ["Admin"],
+                AllRestaurantsPermissions = ["catalog.global.manage"],
+            }
+        );
+        SetField(
+            cut.Instance,
             "categoryDraft",
             new CategoryDraft
             {
@@ -637,6 +667,7 @@ public sealed class BackofficeStationFlowTests : BunitContext
             string.Empty,
             handler.CreatedCategory.Value.GetProperty("defaultStationName").GetString()
         );
+        Assert.Empty(handler.Categories[^1].DefaultStationCode);
         Assert.Contains("Categoría agregada", GetField<string>(cut.Instance, "message"));
 
         SetField(
@@ -654,14 +685,8 @@ public sealed class BackofficeStationFlowTests : BunitContext
         await cut.InvokeAsync(() => Invoke(cut.Instance, "CreateCategory"));
 
         Assert.Equal(2, handler.CategoriesCreated);
-        Assert.Equal(
-            station.Code,
-            handler.CreatedCategory!.Value.GetProperty("defaultStationCode").GetString()
-        );
-        Assert.Equal(
-            station.Name,
-            handler.CreatedCategory.Value.GetProperty("defaultStationName").GetString()
-        );
+        Assert.Equal(station.Code, handler.Categories[^1].DefaultStationCode);
+        Assert.Equal(station.Name, handler.Categories[^1].DefaultStationName);
     }
 
     [Fact]
@@ -785,6 +810,14 @@ public sealed class BackofficeStationFlowTests : BunitContext
         StationHandler handler = new(station);
         handler.Categories.Add(category);
         IRenderedComponent<BackofficeHome> cut = RenderHome(restaurantId, handler, station);
+        SetField(
+            cut.Instance,
+            "login",
+            GetField<LoginResponse>(cut.Instance, "login") with
+            {
+                AllRestaurantsPermissions = ["catalog.global.manage"],
+            }
+        );
 
         await cut.InvokeAsync(() => Invoke(cut.Instance, "SaveCategory", category));
 
@@ -840,7 +873,8 @@ public sealed class BackofficeStationFlowTests : BunitContext
 
         Assert.Contains("Nueva categoría", module.Markup);
         Assert.Contains("Comida", module.Markup);
-        Assert.Contains("Estación KDS", module.Markup);
+        Assert.Contains("Preparación KDS", module.Markup);
+        Assert.Contains("No requiere KDS", module.Markup);
 
         module.Find(".category-name-editor input").Change("Comida nueva");
         await module.Find(".category-name-editor button").ClickAsync();
@@ -873,14 +907,10 @@ public sealed class BackofficeStationFlowTests : BunitContext
         );
 
         await module.InvokeAsync(() =>
-            Invoke(
-                module.Instance,
-                "SetRequiresKds",
-                projected,
-                new ChangeEventArgs { Value = false }
-            )
+            Invoke(module.Instance, "SetStation", projected, new ChangeEventArgs { Value = "" })
         );
         Assert.False(projected.RequiresKds);
+        Assert.Equal("", projected.DefaultStationCode);
 
         await module.InvokeAsync(() =>
             Invoke(
@@ -890,10 +920,12 @@ public sealed class BackofficeStationFlowTests : BunitContext
                 new ChangeEventArgs { Value = "MISSING" }
             )
         );
-        Assert.Equal("OVEN", projected.DefaultStationCode);
+        Assert.Equal("", projected.DefaultStationCode);
         await module.InvokeAsync(() =>
             Invoke(module.Instance, "SetStation", projected, new ChangeEventArgs { Value = "OVEN" })
         );
+        Assert.True(projected.RequiresKds);
+        Assert.Equal("OVEN", projected.DefaultStationCode);
 
         CategoryResponse categoryWithoutStation = new()
         {
@@ -911,9 +943,9 @@ public sealed class BackofficeStationFlowTests : BunitContext
         await module.InvokeAsync(() =>
             Invoke(
                 module.Instance,
-                "SetRequiresKds",
+                "SetStation",
                 categoryWithoutStation,
-                new ChangeEventArgs { Value = true }
+                new ChangeEventArgs { Value = "OVEN" }
             )
         );
         Assert.False(categoryWithoutStation.RequiresKds);
@@ -933,19 +965,71 @@ public sealed class BackofficeStationFlowTests : BunitContext
     }
 
     [Fact]
-    public void Categories_module_shows_access_message_without_global_catalog_permission()
+    public async Task Categories_module_is_read_only_for_manager_and_uses_their_local_categories()
     {
         Guid restaurantId = Guid.NewGuid();
         KitchenStationResponse station = Station(restaurantId);
         StationHandler handler = new(station);
+        handler.Categories.Add(
+            new CategoryResponse
+            {
+                Id = Guid.NewGuid(),
+                Code = "FOOD",
+                Name = "Comida",
+                DefaultStationCode = station.Code,
+                DefaultStationName = station.Name,
+                RequiresKds = true,
+                IsActive = true,
+            }
+        );
         IRenderedComponent<BackofficeHome> home = RenderHome(restaurantId, handler, station);
+        SetField(
+            home.Instance,
+            "login",
+            GetField<LoginResponse>(home.Instance, "login") with
+            {
+                Restaurants =
+                [
+                    new RestaurantAccess(
+                        restaurantId,
+                        "Manager",
+                        [
+                            "backoffice.access",
+                            "catalog.manage",
+                            "kds.use",
+                            "tables.read",
+                            "tables.manage",
+                        ]
+                    ),
+                ],
+            }
+        );
+        await home.InvokeAsync(() =>
+            (Task)
+                typeof(BackofficeHome)
+                    .GetMethod("LoadLocalCore", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .Invoke(home.Instance, null)!
+        );
 
         IRenderedComponent<CategoriesModule> module = Render<CategoriesModule>(parameters =>
             parameters.Add(component => component.Host, home.Instance)
         );
 
-        Assert.Contains("Sin acceso de edición", module.Markup);
+        Assert.Contains("Comida", module.Markup);
         Assert.DoesNotContain("Nueva categoría", module.Markup);
+        Assert.Empty(module.FindAll(".category-name-editor button"));
+        Assert.Contains("disabled", module.Find(".category-name-editor input").OuterHtml);
+        Assert.Contains("disabled", module.Find(".category-kds-select select").OuterHtml);
+        Assert.All(
+            module.FindAll(".category-row input[type='checkbox']"),
+            input => Assert.Contains("disabled", input.OuterHtml)
+        );
+        Assert.Contains(
+            handler.RequestUris,
+            uri =>
+                uri.AbsolutePath == "/api/catalog/categories"
+                && uri.Query == $"?restaurantId={restaurantId}"
+        );
     }
 
     [Fact]
@@ -1319,7 +1403,13 @@ public sealed class BackofficeStationFlowTests : BunitContext
                     new RestaurantAccess(
                         restaurantId,
                         "Manager",
-                        ["backoffice.access", "catalog.manage", "kds.use"]
+                        [
+                            "backoffice.access",
+                            "catalog.manage",
+                            "kds.use",
+                            "tables.read",
+                            "tables.manage",
+                        ]
                     ),
                 ]
             )
@@ -1339,6 +1429,7 @@ public sealed class BackofficeStationFlowTests : BunitContext
         );
         SetField(cut.Instance, "restaurantId", restaurantId);
         SetField(cut.Instance, "stations", new List<KitchenStationResponse> { station });
+        SetField(cut.Instance, "module", "stations");
         return cut;
     }
 
@@ -1402,6 +1493,7 @@ public sealed class BackofficeStationFlowTests : BunitContext
         public List<KitchenStationResponse> Stations { get; } = [station];
         public bool FailNextUpdate { get; set; }
         public List<string> Paths { get; } = [];
+        public List<Uri> RequestUris { get; } = [];
         public int StationReads { get; private set; }
         public int CategoriesCreated { get; private set; }
         public int CategoryProjectionReads { get; private set; }
@@ -1432,6 +1524,7 @@ public sealed class BackofficeStationFlowTests : BunitContext
         {
             string path = request.RequestUri!.AbsolutePath;
             Paths.Add(path);
+            RequestUris.Add(request.RequestUri);
             if (request.Method == HttpMethod.Post && path == "/api/identity/auth/exchange")
                 return ExchangeLogin is null
                     ? new HttpResponseMessage(HttpStatusCode.Unauthorized)
@@ -1822,14 +1915,38 @@ public sealed class BackofficeStationFlowTests : BunitContext
                 );
                 CreatedCategory = body.RootElement.Clone();
                 CategoriesCreated++;
-                return Json(
-                    new CategoryResponse
-                    {
-                        Id = Guid.NewGuid(),
-                        Code = "OTHER",
-                        Name = "Otros",
-                    }
+                CategoryResponse created = new()
+                {
+                    Id = Guid.NewGuid(),
+                    Code = body.RootElement.GetProperty("code").GetString()!,
+                    Name = body.RootElement.GetProperty("name").GetString()!,
+                };
+                Categories.Add(created);
+                return Json(created);
+            }
+            if (
+                request.Method == HttpMethod.Put
+                && path.EndsWith("/preparation", StringComparison.Ordinal)
+            )
+            {
+                Guid categoryId = Guid.Parse(path.Split('/')[6]);
+                CategoryResponse? category = Categories.FirstOrDefault(item =>
+                    item.Id == categoryId
                 );
+                if (category is null)
+                    return new HttpResponseMessage(HttpStatusCode.NotFound);
+                using JsonDocument body = JsonDocument.Parse(
+                    await request.Content!.ReadAsStringAsync(cancellationToken)
+                );
+                category.DefaultStationCode = body
+                    .RootElement.GetProperty("stationCode")
+                    .GetString()!;
+                category.DefaultStationName =
+                    Stations.FirstOrDefault(item => item.Code == category.DefaultStationCode)?.Name
+                    ?? "";
+                category.RequiresKds = !string.IsNullOrWhiteSpace(category.DefaultStationCode);
+                category.Version++;
+                return Json(category);
             }
             if (
                 request.Method == HttpMethod.Put
@@ -1847,13 +1964,6 @@ public sealed class BackofficeStationFlowTests : BunitContext
                 );
                 JsonElement updated = body.RootElement;
                 category.Name = updated.GetProperty("name").GetString()!;
-                category.DefaultStationCode = updated
-                    .GetProperty("defaultStationCode")
-                    .GetString()!;
-                category.DefaultStationName = updated
-                    .GetProperty("defaultStationName")
-                    .GetString()!;
-                category.RequiresKds = updated.GetProperty("requiresKds").GetBoolean();
                 category.IsActive = updated.GetProperty("isActive").GetBoolean();
                 category.ShowInPos = updated.GetProperty("showInPos").GetBoolean();
                 category.ShowInCommander = updated.GetProperty("showInCommander").GetBoolean();

@@ -25,9 +25,14 @@ public sealed partial class OrderCommandService
             ct
         );
         Guid[] ids = request.Lines.Select(x => x.ProductId).Distinct().ToArray();
+        Dictionary<Guid, int> minimumCatalogVersions = request
+            .Lines.Where(line => line.CatalogVersion > 0)
+            .GroupBy(line => line.ProductId)
+            .ToDictionary(group => group.Key, group => group.Max(line => line.CatalogVersion));
         IReadOnlyDictionary<Guid, OrderCatalogProduct> products = await catalog.FindAsync(
             request.RestaurantId,
             ids,
+            minimumCatalogVersions,
             ct
         );
         List<Guid> unavailable = ids.Where(id =>

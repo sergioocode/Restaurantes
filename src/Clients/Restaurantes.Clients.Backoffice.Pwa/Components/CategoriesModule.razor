@@ -1,22 +1,20 @@
-﻿@if (!Host.HasGlobalPermission("catalog.global.manage")) { <NoAccessPanel /> }
+﻿@if (!Host.CanViewCategories) { <NoAccessPanel /> }
 else
 {
+    @if (Host.CanManageCategories)
+    {
     <details class="admin-panel" open><summary>Nueva categoría</summary>
         <form class="inline-form category-create-form" @onsubmit="Host.CreateCategory" @onsubmit:preventDefault>
             <input placeholder="Código" @bind="Host.categoryDraft.Code" /><input placeholder="Nombre" @bind="Host.categoryDraft.Name" />
-            <div class="category-kds-config">
-                <label class="availability"><input type="checkbox" @bind="Host.categoryDraft.RequiresKds" /> Requiere KDS</label>
-                @if (Host.categoryDraft.RequiresKds)
-                {
-                    <select aria-label="Estación KDS" value="@Host.categoryDraft.DefaultStationCode" @onchange="Host.SelectDraftCategoryStation" disabled="@(Host.stations.Count(x => x.IsActive) == 0)">
-                        <option value="">Estación KDS</option>
-                        @foreach (KitchenStationResponse station in Host.stations.Where(x => x.IsActive && !x.IsPrimary).OrderBy(x => x.Name))
-                        {
-                            <option value="@station.Code">@station.Name</option>
-                        }
-                    </select>
-                }
-            </div>
+            <label class="category-kds-select">Preparación KDS
+                <select aria-label="Preparación KDS" value="@Host.categoryDraft.DefaultStationCode" @onchange="Host.SelectDraftCategoryStation">
+                    <option value="">No requiere KDS</option>
+                    @foreach (KitchenStationResponse station in Host.stations.Where(x => x.IsActive && !x.IsPrimary).OrderBy(x => x.Name))
+                    {
+                        <option value="@station.Code">@station.Name</option>
+                    }
+                </select>
+            </label>
             <div class="category-visibility">
                 <label><input type="checkbox" @bind="Host.categoryDraft.ShowInPos" /> TPV</label>
                 <label><input type="checkbox" @bind="Host.categoryDraft.ShowInCommander" /> Comandero</label>
@@ -25,43 +23,42 @@ else
             <button class="primary" disabled="@Host.busy">Agregar Categoría</button>
         </form>
     </details>
+    }
     <div class="maintenance-list">
         @foreach (CategoryResponse item in Host.categories.OrderBy(x => x.Name))
         {
             <article class="maintenance-row category-row @(item.IsActive ? "" : "inactive")">
                 <div><strong>@item.Code</strong></div>
                 <div class="category-name-editor">
-                    <label>Nombre<input @bind="nameDrafts[item.Id].Value" disabled="@Host.busy" /></label>
+                    <label>Nombre<input @bind="nameDrafts[item.Id].Value" disabled="@(!Host.CanManageCategories || Host.busy)" /></label>
+                    @if (Host.CanManageCategories)
+                    {
                     <button class="primary product-name-save" @onclick="() => SaveName(item)" disabled="@Host.busy" aria-label="Guardar nombre de categoría" title="Guardar nombre">
                         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
                             <path d="M4 3h13l3 3v15H4z" />
                             <path d="M7 3v6h10V3M7 21v-8h10v8M14 3v4" />
                         </svg>
                     </button>
-                </div>
-                <label class="availability"><input type="checkbox" checked="@item.RequiresKds" @onchange="args => SetRequiresKds(item, args)" disabled="@Host.busy" /> Requiere KDS</label>
-                @if (item.RequiresKds)
-                {
-                    <label>Estación KDS<select value="@item.DefaultStationCode" @onchange="args => SetStation(item, args)" disabled="@Host.busy">
-                    @if (!Host.stations.Any(x => x.Code == item.DefaultStationCode))
-                    {
-                        <option value="@item.DefaultStationCode">@item.DefaultStationName (no disponible en este local)</option>
                     }
-                    @foreach (KitchenStationResponse station in Host.stations.Where(x => (!x.IsPrimary && x.IsActive) || x.Code == item.DefaultStationCode).OrderBy(x => x.Name))
+                </div>
+                <label class="category-kds-select">Preparación KDS<select value="@(item.RequiresKds ? item.DefaultStationCode : "")" @onchange="args => SetStation(item, args)" disabled="@(!Host.CanManageCategories || Host.busy)">
+                    <option value="">No requiere KDS</option>
+                    @if (item.RequiresKds && !Host.stations.Any(x =>
+                        x.IsActive && !x.IsPrimary && x.Code == item.DefaultStationCode
+                    ))
+                    {
+                        <option value="@item.DefaultStationCode" disabled>@item.DefaultStationName (no disponible en este local)</option>
+                    }
+                    @foreach (KitchenStationResponse station in Host.stations.Where(x => x.IsActive && !x.IsPrimary).OrderBy(x => x.Name))
                     {
                         <option value="@station.Code">@station.Name</option>
                     }
-                    </select></label>
-                }
-                else
-                {
-                    <span class="muted">Sin preparación KDS</span>
-                }
-                <label class="availability"><input type="checkbox" checked="@item.IsActive" @onchange="args => SetFlag(item, args, () => item.IsActive, value => item.IsActive = value)" disabled="@Host.busy" /> Activa</label>
+                </select></label>
+                <label class="availability"><input type="checkbox" checked="@item.IsActive" @onchange="args => SetFlag(item, args, () => item.IsActive, value => item.IsActive = value)" disabled="@(!Host.CanManageCategories || Host.busy)" /> Activa</label>
                 <div class="category-visibility">
-                    <label><input type="checkbox" checked="@item.ShowInPos" @onchange="args => SetFlag(item, args, () => item.ShowInPos, value => item.ShowInPos = value)" disabled="@Host.busy" /> TPV</label>
-                    <label><input type="checkbox" checked="@item.ShowInCommander" @onchange="args => SetFlag(item, args, () => item.ShowInCommander, value => item.ShowInCommander = value)" disabled="@Host.busy" /> Comandero</label>
-                    <label><input type="checkbox" checked="@item.ShowInCustomerQr" @onchange="args => SetFlag(item, args, () => item.ShowInCustomerQr, value => item.ShowInCustomerQr = value)" disabled="@Host.busy" /> Cliente QR</label>
+                    <label><input type="checkbox" checked="@item.ShowInPos" @onchange="args => SetFlag(item, args, () => item.ShowInPos, value => item.ShowInPos = value)" disabled="@(!Host.CanManageCategories || Host.busy)" /> TPV</label>
+                    <label><input type="checkbox" checked="@item.ShowInCommander" @onchange="args => SetFlag(item, args, () => item.ShowInCommander, value => item.ShowInCommander = value)" disabled="@(!Host.CanManageCategories || Host.busy)" /> Comandero</label>
+                    <label><input type="checkbox" checked="@item.ShowInCustomerQr" @onchange="args => SetFlag(item, args, () => item.ShowInCustomerQr, value => item.ShowInCustomerQr = value)" disabled="@(!Host.CanManageCategories || Host.busy)" /> Cliente QR</label>
                 </div>
             </article>
         }
@@ -117,40 +114,37 @@ else
         }
 
         string? selectedCode = args.Value?.ToString();
-        KitchenStationResponse? station = Host.stations.FirstOrDefault(x => x.Code == selectedCode);
-        if (station is null || station.Code == item.DefaultStationCode)
+        KitchenStationResponse? station = string.IsNullOrWhiteSpace(selectedCode)
+            ? null
+            : Host.stations.FirstOrDefault(x =>
+                x.IsActive && !x.IsPrimary && x.Code == selectedCode
+            );
+        if (!string.IsNullOrWhiteSpace(selectedCode) && station is null)
+        {
+            return;
+        }
+
+        bool requiresKds = station is not null;
+        if (
+            item.RequiresKds == requiresKds
+            && item.DefaultStationCode == (station?.Code ?? "")
+        )
         {
             return;
         }
 
         string previousCode = item.DefaultStationCode;
         string previousName = item.DefaultStationName;
-        item.DefaultStationCode = station.Code;
-        item.DefaultStationName = station.Name;
-        if (!await Host.SaveCategory(item))
+        bool previousRequiresKds = item.RequiresKds;
+        item.DefaultStationCode = station?.Code ?? "";
+        item.DefaultStationName = station?.Name ?? "";
+        item.RequiresKds = station is not null;
+        if (!await Host.SaveCategoryPreparation(item, station?.Code ?? ""))
         {
             item.DefaultStationCode = previousCode;
             item.DefaultStationName = previousName;
+            item.RequiresKds = previousRequiresKds;
         }
-    }
-
-    private async Task SetRequiresKds(CategoryResponse item, ChangeEventArgs args)
-    {
-        bool selected = args.Value is bool value && value;
-        if (selected && string.IsNullOrWhiteSpace(item.DefaultStationCode))
-        {
-            KitchenStationResponse? station = Host.stations.FirstOrDefault(x =>
-                x.IsActive && !x.IsPrimary
-            );
-            if (station is null)
-            {
-                return;
-            }
-            item.DefaultStationCode = station.Code;
-            item.DefaultStationName = station.Name;
-        }
-
-        await SetFlag(item, args, () => item.RequiresKds, value => item.RequiresKds = value);
     }
 
     private async Task SetFlag(

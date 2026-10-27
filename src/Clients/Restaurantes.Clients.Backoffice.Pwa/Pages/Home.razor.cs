@@ -88,7 +88,7 @@ public partial class Home
             locationChildren.Add(new("tables", "Mesas", "group-locations"));
             locationChildren.Add(new("zones", "Zonas", "group-locations"));
         }
-        if (IsCurrentRestaurantManager)
+        if (CanManageStations)
         {
             locationChildren.Add(new("stations", "Estaciones KDS", "group-locations"));
         }
@@ -98,6 +98,7 @@ public partial class Home
         if (IsCurrentRestaurantManager)
         {
             productChildren.Add(new("catalog-design", "Carta del local", "group-products"));
+            productChildren.Add(new("categories", "Categorías", "group-products"));
         }
         if (IsAdmin)
         {
@@ -155,6 +156,9 @@ public partial class Home
         !IsAdmin
         && CurrentRoleFor(restaurantId) == "Manager"
         && HasLocalPermission("catalog.manage");
+    internal bool CanManageCategories => HasGlobalPermission("catalog.global.manage");
+    internal bool CanViewCategories => CanManageCategories || IsCurrentRestaurantManager;
+    internal bool CanManageStations => IsAdmin || IsCurrentRestaurantManager;
     internal Guid? CurrentUserId => login?.User.Id;
     private bool HasBackofficeAccess =>
         HasGlobalPermission("backoffice.access")
@@ -302,7 +306,7 @@ public partial class Home
     private bool ShowRestaurantContextSelector =>
         (module == DailyOrdersReport && HasMultiRestaurantReportAccess)
         || (module == CashRegistersReport && HasMultiRestaurantCashRegisterAccess)
-        || (IsAdmin && module is ("users" or "categories" or "tables" or "zones"));
+        || (IsAdmin && module is ("users" or "categories" or "tables" or "zones" or "stations"));
 
     private string? RefreshLabel =>
         module switch
@@ -311,13 +315,12 @@ public partial class Home
             "orders" when OrderRestaurants().Count > 0 => "Consultar pedidos",
             DailyOrdersReport when ReportRestaurants().Count > 0 => "Consultar pedidos",
             CashRegistersReport when CashRegisterReportRestaurants().Count > 0 => "Consultar cajas",
-            "stations" when IsCurrentRestaurantManager => "Actualizar estaciones",
+            "stations" when CanManageStations => "Actualizar estaciones",
             "tables" when HasLocalPermission("tables.manage") => "Actualizar mesas",
             "zones" when HasLocalPermission("tables.manage") => "Actualizar zonas",
             "restaurants" when CanViewCompanySettings => "Actualizar locales",
             "companies" when CanViewCompanySettings => "Actualizar empresas",
-            "categories" when HasGlobalPermission("catalog.global.manage") =>
-                "Actualizar categorías",
+            "categories" when CanViewCategories => "Actualizar categorías",
             "products" when HasGlobalPermission("catalog.global.manage") => "Recargar",
             "taxes" when HasGlobalPermission("catalog.global.manage") => "Actualizar impuestos",
             "allergens" when HasGlobalPermission("catalog.global.manage") => "Actualizar alérgenos",
@@ -786,9 +789,10 @@ public partial class Home
 
     private async Task RefreshCategoriesCore()
     {
-        categories = await Api.CategoriesAsync();
+        categories = await Api.CategoriesAsync(restaurantId);
         stations =
-            SelectableRestaurants().Count > 0 && HasLocalPermission("kds.use")
+            SelectableRestaurants().Count > 0
+            && (CanViewCategories || HasLocalPermission("kds.use"))
                 ? await Api.StationsAsync(restaurantId)
                 : [];
     }
@@ -843,8 +847,12 @@ public partial class Home
             zones = [];
             return;
         }
+        if (CanViewCategories)
+        {
+            categories = await Api.CategoriesAsync(restaurantId);
+        }
         stations =
-            HasLocalPermission("kds.use") || IsCurrentRestaurantManager
+            IsAdmin || HasLocalPermission("kds.use") || IsCurrentRestaurantManager
                 ? await Api.StationsAsync(restaurantId)
                 : [];
         tables = HasLocalPermission("tables.read") ? await Api.TablesAsync(restaurantId) : [];
@@ -870,7 +878,7 @@ public partial class Home
 
     internal async Task<bool> SaveStationName(KitchenStationResponse item, string name)
     {
-        if (!IsCurrentRestaurantManager || busy)
+        if (!CanManageStations || busy)
         {
             return false;
         }
@@ -889,7 +897,7 @@ public partial class Home
 
     internal async Task<bool> SaveStationPriority(KitchenStationResponse item, int priority)
     {
-        if (!IsCurrentRestaurantManager || busy || item.IsPrimary)
+        if (!CanManageStations || busy || item.IsPrimary)
         {
             return false;
         }
@@ -908,7 +916,7 @@ public partial class Home
 
     internal async Task SetStationFlag(KitchenStationResponse item, string field, bool selected)
     {
-        if (!IsCurrentRestaurantManager || busy)
+        if (!CanManageStations || busy)
         {
             return;
         }
@@ -1000,12 +1008,19 @@ public partial class Home
 
     internal async Task CreateCategory()
     {
+        if (!CanManageCategories)
+        {
+            return;
+        }
+
         await Run(
             async () =>
             {
                 if (
                     categoryDraft.RequiresKds
-                    && !stations.Any(x => x.IsActive && x.Code == categoryDraft.DefaultStationCode)
+                    && !stations.Any(x =>
+                        x.IsActive && !x.IsPrimary && x.Code == categoryDraft.DefaultStationCode
+                    )
                 )
                 {
                     throw new InvalidOperationException(
@@ -1013,13 +1028,20 @@ public partial class Home
                     );
                 }
 
-                if (!categoryDraft.RequiresKds)
-                {
-                    categoryDraft.DefaultStationCode = "";
-                    categoryDraft.DefaultStationName = "";
-                }
-
-                await Api.CreateCategoryAsync(categoryDraft);
+                string stationCode = categoryDraft.RequiresKds
+                    ? categoryDraft.DefaultStationCode
+                    : string.Empty;
+                CategoryResponse created = await Api.CreateCategoryAsync(
+                    new CategoryDraft
+                    {
+                        Code = categoryDraft.Code,
+                        Name = categoryDraft.Name,
+                        ShowInPos = categoryDraft.ShowInPos,
+                        ShowInCommander = categoryDraft.ShowInCommander,
+                        ShowInCustomerQr = categoryDraft.ShowInCustomerQr,
+                    }
+                );
+                await Api.ConfigureCategoryPreparationAsync(restaurantId, created.Id, stationCode);
                 categoryDraft = new();
                 await RefreshCatalogProjection();
                 ok = true;
@@ -1032,7 +1054,7 @@ public partial class Home
 
     internal async Task<bool> SaveCategory(CategoryResponse item)
     {
-        if (busy)
+        if (!CanManageCategories || busy)
         {
             return false;
         }
@@ -1141,9 +1163,28 @@ public partial class Home
     private async Task RefreshCatalogProjection()
     {
         await Task.Delay(800);
-        categories = await Api.CategoriesAsync();
+        categories = await Api.CategoriesAsync(restaurantId);
         products = await Api.ProductsAsync();
         await LoadLocalCore();
+    }
+
+    internal async Task<bool> SaveCategoryPreparation(CategoryResponse item, string stationCode)
+    {
+        if (!CanManageCategories || busy || restaurantId == Guid.Empty)
+        {
+            return false;
+        }
+
+        await Run(
+            async () =>
+            {
+                await Api.ConfigureCategoryPreparationAsync(restaurantId, item.Id, stationCode);
+                await RefreshCatalogProjection();
+                ok = true;
+            },
+            true
+        );
+        return ok;
     }
 
     internal async Task CreateRestaurant()
@@ -1560,24 +1601,26 @@ public partial class Home
 
     internal void SelectDraftCategoryStation(ChangeEventArgs args)
     {
-        KitchenStationResponse? station = stations.FirstOrDefault(x =>
-            x.Code == args.Value?.ToString()
-        );
-        if (station is null)
+        string? selectedCode = args.Value?.ToString();
+        KitchenStationResponse? station = string.IsNullOrWhiteSpace(selectedCode)
+            ? null
+            : stations.FirstOrDefault(x => x.IsActive && !x.IsPrimary && x.Code == selectedCode);
+        if (!string.IsNullOrWhiteSpace(selectedCode) && station is null)
         {
             return;
         }
 
-        categoryDraft.DefaultStationCode = station.Code;
-        categoryDraft.DefaultStationName = station.Name;
+        categoryDraft.DefaultStationCode = station?.Code ?? "";
+        categoryDraft.DefaultStationName = station?.Name ?? "";
+        categoryDraft.RequiresKds = station is not null;
     }
 
     private async Task ConfirmCategoryProjection(CategoryResponse expected)
     {
         for (int attempt = 0; attempt < 20; attempt++)
         {
-            CategoryResponse? current = (await Api.CategoriesAsync()).FirstOrDefault(x =>
-                x.Id == expected.Id && x.Version >= expected.Version
+            CategoryResponse? current = (await Api.CategoriesAsync(restaurantId)).FirstOrDefault(
+                x => x.Id == expected.Id && x.Version >= expected.Version
             );
             if (current is not null)
             {

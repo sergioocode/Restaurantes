@@ -1,6 +1,7 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Restaurantes.Catalog.Application;
 using Restaurantes.Catalog.Contracts.Responses;
+using Restaurantes.Catalog.Domain;
 using Restaurantes.Catalog.Infrastructure.Persistence.Read;
 using Restaurantes.Catalog.Infrastructure.Persistence.Write;
 
@@ -26,9 +27,36 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
                 x.ShowInPos,
                 x.ShowInCommander,
                 x.ShowInCustomerQr,
-                x.RequiresKds
+                x.RequiresKds && x.DefaultStationCode != ""
             ))
             .ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<CategoryResponse>> ListCategoriesAsync(
+        Guid restaurantId,
+        CancellationToken ct
+    )
+    {
+        CategoryResponse[] categories = (await ListCategoriesAsync(ct)).ToArray();
+        Dictionary<Guid, RestaurantCategoryPreparation> preparations = await writeDb
+            .CategoryPreparations.AsNoTracking()
+            .Where(item => item.RestaurantId == restaurantId)
+            .ToDictionaryAsync(item => item.CategoryId, ct);
+        return categories
+            .Select(category =>
+                preparations.TryGetValue(
+                    category.Id,
+                    out RestaurantCategoryPreparation? preparation
+                )
+                    ? category with
+                    {
+                        DefaultStationCode = preparation.StationCode,
+                        DefaultStationName = preparation.StationName,
+                        RequiresKds = !string.IsNullOrWhiteSpace(preparation.StationCode),
+                    }
+                    : category
+            )
+            .ToArray();
     }
 
     public async Task<IReadOnlyList<ProductResponse>> ListProductsAsync(CancellationToken ct)
@@ -87,6 +115,10 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
             .OrderBy(x => x.SortOrder)
             .ToArrayAsync(ct);
         Guid[] ids = entries.Select(x => x.ProductId).ToArray();
+        Dictionary<Guid, int> catalogVersions = await writeDb
+            .MenuItems.AsNoTracking()
+            .Where(x => x.RestaurantId == restaurantId && ids.Contains(x.ProductId))
+            .ToDictionaryAsync(x => x.ProductId, x => x.Version, ct);
         CatalogMenuPrice[] prices = await writeDb
             .CatalogMenuPrices.AsNoTracking()
             .Where(x => x.MenuId == menuId && x.Channel == "LOCAL" && ids.Contains(x.ProductId))
@@ -105,12 +137,12 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
             )
             .Select(x => x.Id)
             .ToArrayAsync(ct);
-        var products = await db
+        var products = await writeDb
             .Products.AsNoTracking()
             .Where(x => taxedIds.Contains(x.Id))
             .ToDictionaryAsync(x => x.Id, ct);
         Guid[] categoryIds = products.Values.Select(x => x.CategoryId).Distinct().ToArray();
-        IQueryable<CategoryReadModel> categoryQuery = db
+        IQueryable<Category> categoryQuery = writeDb
             .Categories.AsNoTracking()
             .Where(x => categoryIds.Contains(x.Id) && x.IsActive);
         categoryQuery = channel switch
@@ -121,10 +153,10 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
             _ => categoryQuery.Where(x => false),
         };
         var categories = await categoryQuery.ToDictionaryAsync(x => x.Id, ct);
-        var stations = await db
-            .MenuItems.AsNoTracking()
-            .Where(x => x.RestaurantId == restaurantId && ids.Contains(x.ProductId))
-            .ToDictionaryAsync(x => x.ProductId, ct);
+        Dictionary<Guid, RestaurantCategoryPreparation> categoryPreparations = await writeDb
+            .CategoryPreparations.AsNoTracking()
+            .Where(x => x.RestaurantId == restaurantId && categoryIds.Contains(x.CategoryId))
+            .ToDictionaryAsync(x => x.CategoryId, ct);
         ProductOptionGroup[] groups = await writeDb
             .ProductOptionGroups.AsNoTracking()
             .Where(x => ids.Contains(x.ParentProductId) && x.Kind == "Extra")
@@ -141,8 +173,8 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
         Guid[] extraIds = options.Select(x => x.ProductId).Distinct().ToArray();
         var extraProducts =
             extraIds.Length == 0
-                ? new Dictionary<Guid, ProductReadModel>()
-                : await db
+                ? new Dictionary<Guid, Product>()
+                : await writeDb
                     .Products.AsNoTracking()
                     .Where(x => extraIds.Contains(x.Id) && x.IsActive)
                     .ToDictionaryAsync(x => x.Id, ct);
@@ -169,9 +201,10 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
             restaurantId,
             entries,
             prices,
+            catalogVersions,
             products,
             categories,
-            stations,
+            categoryPreparations,
             photos,
             extraGroupsByParent
         );
@@ -180,7 +213,7 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
     private static Dictionary<Guid, ProductExtraGroup[]> BuildExtraGroups(
         ProductOptionGroup[] groups,
         ProductOption[] options,
-        Dictionary<Guid, ProductReadModel> extraProducts,
+        Dictionary<Guid, Product> extraProducts,
         Dictionary<Guid, decimal> extraPriceByProduct
     )
     {
@@ -199,7 +232,7 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
                                 .OrderBy(option => option.SortOrder)
                                 .Select(option =>
                                 {
-                                    ProductReadModel extra = extraProducts[option.ProductId];
+                                    Product extra = extraProducts[option.ProductId];
                                     return new ProductExtraOption(
                                         extra.Id,
                                         extra.Sku,
@@ -227,8 +260,8 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
         foreach (CatalogMenuEntry entry in data.Entries)
         {
             if (
-                !data.Products.TryGetValue(entry.ProductId, out ProductReadModel? product)
-                || !data.Categories.TryGetValue(product.CategoryId, out CategoryReadModel? category)
+                !data.Products.TryGetValue(entry.ProductId, out Product? product)
+                || !data.Categories.TryGetValue(product.CategoryId, out Category? category)
             )
                 continue;
             CatalogMenuPrice? price = data.Prices.FirstOrDefault(x =>
@@ -244,15 +277,23 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
     private static MenuItemResponse CreateMenuItemResponse(
         MenuProjectionData data,
         CatalogMenuEntry entry,
-        ProductReadModel product,
-        CategoryReadModel category,
+        Product product,
+        Category category,
         CatalogMenuPrice price
     )
     {
-        data.Stations.TryGetValue(entry.ProductId, out MenuItemReadModel? station);
         data.Photos.TryGetValue(entry.ProductId, out ProductPhoto? photo);
         string photoRoot = photo is null ? "" : $"/api/catalog/products/{product.Id}/photos/";
         string photoVersion = photo is null ? "" : $"?v={photo.Revision}";
+        data.CategoryPreparations.TryGetValue(
+            category.Id,
+            out RestaurantCategoryPreparation? preparation
+        );
+        string stationCode =
+            preparation?.StationCode ?? (category.RequiresKds ? category.DefaultStationCode : "");
+        string stationName =
+            preparation?.StationName ?? (category.RequiresKds ? category.DefaultStationName : "");
+        bool requiresKds = !string.IsNullOrWhiteSpace(stationCode);
         return new MenuItemResponse(
             data.RestaurantId,
             product.Id,
@@ -263,12 +304,8 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
             category.Name,
             price.Amount,
             true,
-            category.RequiresKds
-                ? station?.PreparationStationCode ?? category.DefaultStationCode
-                : "",
-            category.RequiresKds
-                ? station?.PreparationStationName ?? category.DefaultStationName
-                : "",
+            stationCode,
+            stationName,
             product.Version,
             product.UpdatedAtUtc,
             entry.DefaultFormat,
@@ -279,7 +316,8 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
             data.Prices.Where(itemPrice => itemPrice.ProductId == product.Id)
                 .Select(itemPrice => new MenuItemFormatPrice(itemPrice.Format, itemPrice.Amount))
                 .ToArray(),
-            category.RequiresKds
+            requiresKds,
+            CatalogVersion: data.CatalogVersions.GetValueOrDefault(product.Id)
         );
     }
 
@@ -287,9 +325,10 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
         Guid RestaurantId,
         CatalogMenuEntry[] Entries,
         CatalogMenuPrice[] Prices,
-        Dictionary<Guid, ProductReadModel> Products,
-        Dictionary<Guid, CategoryReadModel> Categories,
-        Dictionary<Guid, MenuItemReadModel> Stations,
+        Dictionary<Guid, int> CatalogVersions,
+        Dictionary<Guid, Product> Products,
+        Dictionary<Guid, Category> Categories,
+        Dictionary<Guid, RestaurantCategoryPreparation> CategoryPreparations,
         Dictionary<Guid, ProductPhoto> Photos,
         Dictionary<Guid, ProductExtraGroup[]> ExtraGroupsByParent
     );
@@ -299,34 +338,49 @@ public sealed class CatalogReadStore(CatalogReadDbContext db, CatalogWriteDbCont
         CancellationToken ct
     )
     {
-        return await db
+        List<MenuItemReadModel> items = await db
             .MenuItems.AsNoTracking()
             .Where(x => x.RestaurantId == restaurantId)
             .OrderBy(x => x.CategoryName)
             .ThenBy(x => x.ProductName)
-            .Select(x => new MenuItemResponse(
-                x.RestaurantId,
-                x.ProductId,
-                x.Sku,
-                x.ProductName,
-                x.CategoryId,
-                x.CategoryCode,
-                x.CategoryName,
-                x.Price,
-                x.IsAvailable,
-                x.RequiresKds ? x.PreparationStationCode : "",
-                x.RequiresKds ? x.PreparationStationName : "",
-                x.Version,
-                x.UpdatedAtUtc,
-                "PLATO",
-                "",
-                "",
-                "",
-                null,
-                null,
-                x.RequiresKds
-            ))
             .ToListAsync(ct);
+        Guid[] categoryIds = items.Select(x => x.CategoryId).Distinct().ToArray();
+        Dictionary<Guid, CategoryReadModel> categories = await db
+            .Categories.AsNoTracking()
+            .Where(x => categoryIds.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id, ct);
+        return items
+            .Select(x =>
+            {
+                categories.TryGetValue(x.CategoryId, out CategoryReadModel? category);
+                bool requiresKds =
+                    category is not null
+                    && category.RequiresKds
+                    && !string.IsNullOrWhiteSpace(category.DefaultStationCode);
+                return new MenuItemResponse(
+                    x.RestaurantId,
+                    x.ProductId,
+                    x.Sku,
+                    x.ProductName,
+                    x.CategoryId,
+                    x.CategoryCode,
+                    x.CategoryName,
+                    x.Price,
+                    x.IsAvailable,
+                    requiresKds ? category!.DefaultStationCode : "",
+                    requiresKds ? category!.DefaultStationName : "",
+                    x.Version,
+                    x.UpdatedAtUtc,
+                    "PLATO",
+                    "",
+                    "",
+                    "",
+                    null,
+                    null,
+                    requiresKds
+                );
+            })
+            .ToArray();
     }
 
     public async Task<IReadOnlyList<KitchenStationResponse>> ListStationsAsync(

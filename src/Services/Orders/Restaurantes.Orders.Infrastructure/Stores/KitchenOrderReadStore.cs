@@ -56,9 +56,14 @@ public sealed class KitchenOrderReadStore(OrderReadDbContext dbContext) : IKitch
             JsonSerializer.Deserialize<List<OrderKitchenStationResponse>>(item.StationsJson) ?? [];
         if (!string.IsNullOrWhiteSpace(stationCode))
         {
-            lines = lines.Where(line => line.Status != "Cancelled").ToList();
             if (stationCode == "CHEF")
             {
+                lines = lines
+                    .Where(line =>
+                        line.Status != "Cancelled"
+                        && !string.IsNullOrWhiteSpace(line.PreparationStationCode)
+                    )
+                    .ToList();
                 bool fullyDispatched = stations
                     .Where(station => station.Status != "Cancelled")
                     .All(station => station.Status == "Dispatched");
@@ -69,6 +74,7 @@ public sealed class KitchenOrderReadStore(OrderReadDbContext dbContext) : IKitch
             }
             else
             {
+                lines = lines.Where(line => line.Status != "Cancelled").ToList();
                 OrderKitchenStationResponse? selected = stations.FirstOrDefault(station =>
                     station.Code == stationCode
                 );

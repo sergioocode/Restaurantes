@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Restaurantes.Catalog.Api.Realtime;
 using Restaurantes.Catalog.Infrastructure.Media;
 using Restaurantes.Catalog.Infrastructure.Persistence.Write;
 using Restaurantes.Security;
@@ -8,8 +9,11 @@ using Restaurantes.Security;
 namespace Restaurantes.Catalog.Api.Controllers;
 
 [ApiController, Route("api/catalog/products/{productId:guid}/photos")]
-public sealed class CatalogPhotoController(CatalogWriteDbContext db, IProductImageStorage storage)
-    : ControllerBase
+public sealed class CatalogPhotoController(
+    CatalogWriteDbContext db,
+    IProductImageStorage storage,
+    CatalogNotifications notifications
+) : ControllerBase
 {
     private const int MaxRequestBytes = 8_000_000;
 
@@ -55,6 +59,7 @@ public sealed class CatalogPhotoController(CatalogWriteDbContext db, IProductIma
             photo.Revision = revision;
             photo.OriginalContentType = processed.OriginalContentType;
             await db.SaveChangesAsync(ct);
+            await notifications.MenuChanged(Guid.Empty);
             if (oldRevision != Guid.Empty)
             {
                 try

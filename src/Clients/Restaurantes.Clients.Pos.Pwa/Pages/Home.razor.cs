@@ -834,6 +834,7 @@ public partial class Home
         if (existing is not null)
         {
             existing.Quantity = Math.Min(99, existing.Quantity + 1);
+            existing.CatalogVersion = product.CatalogVersion;
             return;
         }
 
@@ -843,6 +844,7 @@ public partial class Home
             Format = format,
             BasePrice = price,
             ExpectedUnitPrice = expectedUnitPrice,
+            CatalogVersion = product.CatalogVersion,
             Extras = extras,
         };
         cart.Add(line);
@@ -2115,6 +2117,17 @@ public partial class Home
                 if (version == menuRefreshVersion && currentRestaurantId == restaurantId)
                 {
                     menu = updated;
+                    Dictionary<Guid, int> versions = updated.ToDictionary(
+                        item => item.ProductId,
+                        item => item.CatalogVersion
+                    );
+                    foreach (PosCartLine line in cart)
+                    {
+                        if (versions.TryGetValue(line.ProductId, out int catalogVersion))
+                        {
+                            line.CatalogVersion = catalogVersion;
+                        }
+                    }
                     StateHasChanged();
                 }
             }

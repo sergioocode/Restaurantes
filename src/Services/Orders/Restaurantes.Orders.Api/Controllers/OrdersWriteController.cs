@@ -102,6 +102,18 @@ public sealed class OrdersWriteController(
                 }
             );
         }
+        catch (OrderCatalogProjectionNotReadyException exception)
+        {
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new ProblemDetails
+                {
+                    Title = "La configuración de la carta aún se está sincronizando",
+                    Detail = exception.Message,
+                    Status = StatusCodes.Status503ServiceUnavailable,
+                }
+            );
+        }
         catch (InvalidOperationException exception)
         {
             return Conflict(

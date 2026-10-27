@@ -230,6 +230,22 @@ namespace Restaurantes.Catalog.Infrastructure.Persistence.Write.Migrations
                     b.ToTable("restaurant_menu_items", (string)null);
                 });
 
+            modelBuilder.Entity("Restaurantes.Catalog.Domain.RestaurantCategoryPreparation", b =>
+                {
+                    b.Property<Guid>("RestaurantId").HasColumnType("uuid");
+                    b.Property<Guid>("CategoryId").HasColumnType("uuid");
+                    b.Property<string>("StationCode").IsRequired().HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+                    b.Property<string>("StationName").IsRequired().HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+                    b.Property<DateTime>("UpdatedAtUtc").HasColumnType("timestamp with time zone");
+                    b.Property<int>("Version").IsConcurrencyToken().HasColumnType("integer");
+                    b.HasKey("RestaurantId", "CategoryId");
+                    b.HasIndex("CategoryId");
+                    b.ToTable("restaurant_category_preparations", (string)null);
+                });
+
+
             modelBuilder.Entity("Restaurantes.Catalog.Infrastructure.Persistence.OutboxMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -581,6 +597,15 @@ namespace Restaurantes.Catalog.Infrastructure.Persistence.Write.Migrations
                         .WithMany()
                         .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Restaurantes.Catalog.Domain.RestaurantCategoryPreparation", b =>
+                {
+                    b.HasOne("Restaurantes.Catalog.Domain.Category", null)
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

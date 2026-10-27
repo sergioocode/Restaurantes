@@ -48,8 +48,8 @@ public sealed partial class CatalogCommandService
         DateTime now = timeProvider.GetUtcNow().UtcDateTime;
         item.Update(
             request.Name,
-            request.DefaultStationCode,
-            request.DefaultStationName,
+            request.DefaultStationCode ?? item.DefaultStationCode,
+            request.DefaultStationName ?? item.DefaultStationName,
             request.IsActive,
             now,
             request.ShowInPos ?? item.ShowInPos,

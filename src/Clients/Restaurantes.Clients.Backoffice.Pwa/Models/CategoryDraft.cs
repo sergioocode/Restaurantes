@@ -6,7 +6,7 @@ public sealed class CategoryDraft
     public string Name { get; set; } = string.Empty;
     public string DefaultStationCode { get; set; } = string.Empty;
     public string DefaultStationName { get; set; } = string.Empty;
-    public bool RequiresKds { get; set; } = true;
+    public bool RequiresKds { get; set; }
     public bool ShowInPos { get; set; } = true;
     public bool ShowInCommander { get; set; } = true;
     public bool ShowInCustomerQr { get; set; } = true;

@@ -83,7 +83,7 @@ public sealed class CatalogProjectionWorker(
             OrderWriteDbContext db = s.ServiceProvider.GetRequiredService<OrderWriteDbContext>();
             if (ea.BasicProperties.Type == typeof(CategoryChanged).FullName)
             {
-                await ProjectCategoryAsync(db, ea.Body);
+                await ProjectCategoryAsync(ea.Body);
             }
             else if (ea.BasicProperties.Type == typeof(CatalogItemChanged).FullName)
             {
@@ -125,26 +125,12 @@ public sealed class CatalogProjectionWorker(
         }
     }
 
-    private static async Task ProjectCategoryAsync(
-        OrderWriteDbContext db,
-        ReadOnlyMemory<byte> body
-    )
+    private static Task ProjectCategoryAsync(ReadOnlyMemory<byte> body)
     {
-        CategoryChanged e =
+        _ =
             JsonSerializer.Deserialize<CategoryChanged>(body.Span)
             ?? throw new JsonException("Empty category");
-        List<OrderCatalogItem> products = await db
-            .CatalogItems.Where(item => item.CategoryId == e.CategoryId)
-            .ToListAsync();
-        foreach (OrderCatalogItem product in products)
-        {
-            product.RequiresKds = e.RequiresKds;
-            if (e.RequiresKds && string.IsNullOrWhiteSpace(product.StationCode))
-            {
-                product.StationCode = e.DefaultStationCode;
-                product.StationName = e.DefaultStationName;
-            }
-        }
+        return Task.CompletedTask;
     }
 
     private static async Task ProjectCatalogItemAsync(
@@ -159,6 +145,9 @@ public sealed class CatalogProjectionWorker(
         OrderCatalogItem? item = await db.CatalogItems.SingleOrDefaultAsync(x =>
             x.RestaurantId == e.RestaurantId && x.ProductId == e.ProductId
         );
+        bool requiresKds = e.RequiresKds && !string.IsNullOrWhiteSpace(e.PreparationStationCode);
+        string stationCode = requiresKds ? e.PreparationStationCode.Trim() : "";
+        string stationName = requiresKds ? e.PreparationStationName : "";
         if (item is null)
         {
             db.CatalogItems.Add(
@@ -174,9 +163,9 @@ public sealed class CatalogProjectionWorker(
                     FormatsJson = JsonSerializer.Serialize(e.Formats ?? []),
                     CategoryId = e.CategoryId,
                     CategoryName = e.CategoryName,
-                    StationCode = e.PreparationStationCode,
-                    StationName = e.PreparationStationName,
-                    RequiresKds = e.RequiresKds,
+                    StationCode = stationCode,
+                    StationName = stationName,
+                    RequiresKds = requiresKds,
                     IsAvailable = e.IsAvailable,
                     ExtraGroupsJson = JsonSerializer.Serialize(e.ExtraGroups ?? []),
                     Version = e.Version,
@@ -193,9 +182,9 @@ public sealed class CatalogProjectionWorker(
             item.FormatsJson = JsonSerializer.Serialize(e.Formats ?? []);
             item.CategoryId = e.CategoryId;
             item.CategoryName = e.CategoryName;
-            item.StationCode = e.PreparationStationCode;
-            item.StationName = e.PreparationStationName;
-            item.RequiresKds = e.RequiresKds;
+            item.StationCode = stationCode;
+            item.StationName = stationName;
+            item.RequiresKds = requiresKds;
             item.IsAvailable = e.IsAvailable;
             item.ExtraGroupsJson = JsonSerializer.Serialize(e.ExtraGroups ?? []);
             item.Version = e.Version;

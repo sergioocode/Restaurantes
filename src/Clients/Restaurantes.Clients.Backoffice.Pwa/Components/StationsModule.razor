@@ -1,4 +1,4 @@
-@if (!Host.IsCurrentRestaurantManager) { <NoAccessPanel /> }
+@if (!Host.CanManageStations) { <NoAccessPanel /> }
 else
 {
     <details class="admin-panel" open><summary>Nueva estación KDS</summary>

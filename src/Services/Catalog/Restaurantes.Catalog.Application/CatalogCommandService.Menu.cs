@@ -27,13 +27,11 @@ public sealed partial class CatalogCommandService
         }
         decimal? taxRate = await store.FindActiveTaxRateAsync(product.TaxId, ct);
 
-        string stationCode = string.IsNullOrWhiteSpace(request.PreparationStationCode)
-            ? category.DefaultStationCode
-            : request.PreparationStationCode;
-        string stationName = string.IsNullOrWhiteSpace(request.PreparationStationName)
-            ? category.DefaultStationName
-            : request.PreparationStationName;
-        if (category.RequiresKds)
+        bool requiresKds =
+            category.RequiresKds && !string.IsNullOrWhiteSpace(category.DefaultStationCode);
+        string stationCode = requiresKds ? category.DefaultStationCode.Trim() : "";
+        string stationName = requiresKds ? category.DefaultStationName : "";
+        if (requiresKds)
         {
             RestaurantKitchenStation? station = await store.FindStationByCodeAsync(
                 restaurantId,
@@ -49,8 +47,8 @@ public sealed partial class CatalogCommandService
         }
         else
         {
-            stationCode = category.DefaultStationCode;
-            stationName = category.DefaultStationName;
+            stationCode = "";
+            stationName = "";
         }
         DateTime now = timeProvider.GetUtcNow().UtcDateTime;
         RestaurantMenuItem? item = await store.FindMenuItemAsync(restaurantId, productId, ct);
@@ -85,7 +83,7 @@ public sealed partial class CatalogCommandService
             item.PreparationStationName,
             item.Version,
             now,
-            RequiresKds: category.RequiresKds,
+            RequiresKds: requiresKds,
             TaxRate: taxRate
         );
         await store.SaveWithEventAsync(item, message, ct);
@@ -99,11 +97,11 @@ public sealed partial class CatalogCommandService
             category.Name,
             item.Price,
             item.IsAvailable,
-            category.RequiresKds ? item.PreparationStationCode : "",
-            category.RequiresKds ? item.PreparationStationName : "",
+            requiresKds ? item.PreparationStationCode : "",
+            requiresKds ? item.PreparationStationName : "",
             item.Version,
             now,
-            RequiresKds: category.RequiresKds,
+            RequiresKds: requiresKds,
             TaxRate: taxRate
         );
     }

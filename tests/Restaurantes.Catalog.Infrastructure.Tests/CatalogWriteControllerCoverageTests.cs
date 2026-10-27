@@ -292,7 +292,7 @@ public sealed class CatalogWriteControllerCoverageTests
     }
 
     [Fact]
-    public async Task Station_routes_enforce_manager_scope_and_create_update_and_change_station()
+    public async Task Station_routes_allow_admin_and_enforce_manager_scope_for_station_changes()
     {
         await using CatalogWriteDbContext db = CreateDatabase();
         Guid restaurantId = Guid.NewGuid();
@@ -302,7 +302,7 @@ public sealed class CatalogWriteControllerCoverageTests
             new CreateKitchenStationRequest { Code = "COCINA", Name = "Cocina" },
             CancellationToken.None
         );
-        Assert.IsType<ForbidResult>(adminForbidden.Result);
+        Assert.IsType<AcceptedResult>(adminForbidden.Result);
 
         CatalogWriteController controller = CreateController(
             db,
@@ -314,8 +314,8 @@ public sealed class CatalogWriteControllerCoverageTests
             restaurantId,
             new CreateKitchenStationRequest
             {
-                Code = "COCINA",
-                Name = "Cocina",
+                Code = "COCINA-MANAGER",
+                Name = "Cocina de manager",
                 Priority = 1,
             },
             CancellationToken.None
@@ -323,6 +323,7 @@ public sealed class CatalogWriteControllerCoverageTests
         KitchenStationResponse station = Assert.IsType<KitchenStationResponse>(
             Assert.IsType<AcceptedResult>(created.Result).Value
         );
+        Assert.Equal("COCINA-MANAGER", station.Code);
         var duplicate = await controller.CreateStation(
             restaurantId,
             new CreateKitchenStationRequest { Code = "cocina", Name = "Duplicada" },

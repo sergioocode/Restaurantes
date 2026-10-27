@@ -74,7 +74,7 @@ public sealed class OrderCatalogStoreTests
 
         IReadOnlyDictionary<Guid, OrderCatalogProduct> result = await new OrderCatalogStore(
             db
-        ).FindAsync(restaurantId, [productId], ct);
+        ).FindAsync(restaurantId, [productId], new Dictionary<Guid, int>(), ct);
 
         OrderCatalogProduct item = Assert.Single(result).Value;
         Assert.Equal(productId, item.ProductId);
@@ -123,7 +123,14 @@ public sealed class OrderCatalogStoreTests
         await db.SaveChangesAsync(ct);
 
         OrderCatalogProduct item = Assert
-            .Single(await new OrderCatalogStore(db).FindAsync(restaurantId, [productId], ct))
+            .Single(
+                await new OrderCatalogStore(db).FindAsync(
+                    restaurantId,
+                    [productId],
+                    new Dictionary<Guid, int>(),
+                    ct
+                )
+            )
             .Value;
 
         Assert.False(item.RequiresPrimaryDispatch);
@@ -134,7 +141,14 @@ public sealed class OrderCatalogStoreTests
         OrderCatalogFormat format = Assert.Single(item.Formats);
         Assert.Equal("VASO", format.Format);
         Assert.Equal(2m, format.Price);
-        Assert.Empty(await new OrderCatalogStore(db).FindAsync(restaurantId, [], ct));
+        Assert.Empty(
+            await new OrderCatalogStore(db).FindAsync(
+                restaurantId,
+                [],
+                new Dictionary<Guid, int>(),
+                ct
+            )
+        );
     }
 
     private static OrderWriteDbContext CreateDatabase() =>
