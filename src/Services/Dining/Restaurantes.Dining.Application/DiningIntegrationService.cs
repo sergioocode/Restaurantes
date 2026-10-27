@@ -167,7 +167,9 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
         {
             throw new JsonException($"Dining order '{e.OrderId}' does not exist.");
         }
-        order.OrderStatus = AllKitchenStationsDispatched(e.Stations) ? "Delivered" : "Ready";
+        order.OrderStatus = AllKitchenStationsDispatched(e.Lines, e.Stations)
+            ? "Delivered"
+            : "Ready";
         order.Amount = e
             .Lines.Where(x => x.Status != "Cancelled")
             .Sum(x => x.UnitPrice * x.Quantity);
@@ -187,7 +189,9 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
         DiningSessionOrder order =
             await db.FindOrderAsync(e.OrderId)
             ?? throw new JsonException($"Dining order ''{e.OrderId}'' does not exist.");
-        order.OrderStatus = AllKitchenStationsDispatched(e.Stations) ? "Delivered" : e.Status;
+        order.OrderStatus = AllKitchenStationsDispatched(e.Lines, e.Stations)
+            ? "Delivered"
+            : e.Status;
         order.Amount = e
             .Lines.Where(x => x.Status != "Cancelled")
             .Sum(x => x.UnitPrice * x.Quantity);
@@ -210,7 +214,9 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
         DiningSessionOrder order =
             await db.FindOrderAsync(e.OrderId)
             ?? throw new JsonException($"Dining order ''{e.OrderId}'' does not exist.");
-        order.OrderStatus = AllKitchenStationsDispatched(e.Stations) ? "Delivered" : e.Status;
+        order.OrderStatus = AllKitchenStationsDispatched(e.Lines, e.Stations)
+            ? "Delivered"
+            : e.Status;
         order.Amount = e.Total;
         order.UpdatedAtUtc = e.CancelledAtUtc;
         return e.DiningSessionId;
@@ -301,7 +307,9 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
         DiningSessionOrder order =
             await db.FindOrderAsync(e.OrderId)
             ?? throw new JsonException($"Dining order '{e.OrderId}' does not exist.");
-        order.OrderStatus = AllKitchenStationsDispatched(e.Stations) ? "Delivered" : "Ready";
+        order.OrderStatus = AllKitchenStationsDispatched(e.Lines, e.Stations)
+            ? "Delivered"
+            : "Ready";
         order.Amount = e
             .Lines.Where(x => x.Status != "Cancelled")
             .Sum(x => x.UnitPrice * x.Quantity);
@@ -310,13 +318,26 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
     }
 
     private static bool AllKitchenStationsDispatched(
+        IReadOnlyList<OrderLineSnapshot> lines,
         IReadOnlyList<OrderKitchenStationSnapshot> stations
     )
     {
+        HashSet<string> activeKitchenStationCodes = lines
+            .Where(line =>
+                line.Status != "Cancelled"
+                && !string.IsNullOrWhiteSpace(line.PreparationStationCode)
+            )
+            .Select(line => line.PreparationStationCode)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (activeKitchenStationCodes.Count == 0)
+        {
+            return true;
+        }
+
         OrderKitchenStationSnapshot[] activeStations = stations
-            .Where(station => station.Status != "Cancelled")
+            .Where(station => activeKitchenStationCodes.Contains(station.Code))
             .ToArray();
-        return activeStations.Length > 0
+        return activeStations.Length == activeKitchenStationCodes.Count
             && activeStations.All(station => station.Status == "Dispatched");
     }
 

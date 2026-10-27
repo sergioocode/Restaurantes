@@ -277,7 +277,7 @@ public sealed partial class DiningService
             return DiningResults.Forbid();
         }
 
-        DiningResult? releaseValidation = ValidateSessionRelease(session, allOrdersCancelled);
+        DiningResult? releaseValidation = ValidateSessionRelease(session);
         if (releaseValidation is not null)
         {
             return releaseValidation;
@@ -288,10 +288,7 @@ public sealed partial class DiningService
         return DiningResults.Ok(SessionResponse(session));
     }
 
-    private static DiningResult? ValidateSessionRelease(
-        DiningSession session,
-        bool allOrdersCancelled
-    )
+    private static DiningResult? ValidateSessionRelease(DiningSession session)
     {
         if (session.Status != "Open")
         {
@@ -303,12 +300,13 @@ public sealed partial class DiningService
             return DiningResults.Conflict(new { detail = "The dining session has no orders." });
         }
 
-        if (
-            !allOrdersCancelled
-            && !session.Orders.Any(order =>
-                order.OrderStatus != "Cancelled" && order.AmountPaid > 0
-            )
-        )
+        decimal chargeableTotal = session
+            .Orders.Where(order => order.OrderStatus != "Cancelled")
+            .Sum(session.ChargeableAmount);
+        bool hasRecordedPayment = session.Orders.Any(order =>
+            order.OrderStatus != "Cancelled" && order.AmountPaid > 0
+        );
+        if (chargeableTotal > 0 && !hasRecordedPayment)
         {
             return DiningResults.Conflict(
                 new { detail = "The table can only be released after a payment has been recorded." }
