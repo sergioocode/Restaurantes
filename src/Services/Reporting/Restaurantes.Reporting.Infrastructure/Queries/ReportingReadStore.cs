@@ -105,7 +105,9 @@ public sealed class ReportingReadStore(ReportingReadDbContext db) : IReportingRe
                 x.Quantity,
                 x.CategoryName,
                 x.PreparationStationCode,
-                x.KitchenStatus
+                x.KitchenStatus,
+                x.Status,
+                x.CancellationReason
             ))
             .ToList();
         return new(
@@ -144,6 +146,8 @@ public sealed class ReportingReadStore(ReportingReadDbContext db) : IReportingRe
         string CategoryName,
         string PreparationStationCode,
         string PreparationStationName,
-        string KitchenStatus
+        string KitchenStatus,
+        string Status = "Active",
+        string CancellationReason = ""
     );
 }

@@ -65,7 +65,9 @@ public sealed record OperationalLine(
     int Quantity,
     string CategoryName,
     string PreparationStationCode,
-    string KitchenStatus
+    string KitchenStatus,
+    string Status = "Active",
+    string CancellationReason = ""
 );
 
 public sealed record DailyReportingSnapshot(

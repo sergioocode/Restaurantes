@@ -329,6 +329,17 @@ ul {
     margin: 7px 0
 }
 
+.operation-line.cancelled .operation-product {
+    text-decoration: line-through;
+}
+
+.line-cancelled-marker {
+    color: #ff6b6b;
+    display: inline-block;
+    width: 1.25em;
+    text-align: center;
+}
+
 .line-complete-marker {
     color: #74e29a;
     font-weight: 800;

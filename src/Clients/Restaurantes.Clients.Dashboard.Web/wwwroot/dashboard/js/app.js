@@ -218,8 +218,9 @@ $('operations').innerHTML = Object.entries(groups).map(([local, orders]) => `<se
 
 function renderOrder(o) {
     const lines = o.lines.map(l => {
-        const marker = lineStatusMarker(l.kitchenStatus);
-        return `<li class="operation-line">${marker}${l.quantity} × ${escapeHtml(l.productName)} <small>${escapeHtml(l.categoryName)} · ${escapeHtml(l.preparationStationCode)}</small></li>`;
+        const cancelled = l.status === 'Cancelled';
+        const marker = lineStatusMarker(l.kitchenStatus, l.status);
+        return `<li class="operation-line${cancelled ? ' cancelled' : ''}">${marker}<span class="operation-product">${l.quantity} × ${escapeHtml(l.productName)}</span> <small>${escapeHtml(l.categoryName)} · ${escapeHtml(l.preparationStationCode)}</small></li>`;
     }).join('');
     const label = o.serviceMode === 'DineIn' ? o.tableLabel : o.serviceMode === 'Bar' ? (o.tableLabel || 'Barra') : ('Para llevar · ' + (o.customerName || 'Sin nombre'));
     let methods = o.paymentMethods || [];
@@ -227,7 +228,10 @@ function renderOrder(o) {
     return `<article class="order"><div class="order-head"><strong>${escapeHtml(label)}</strong><small>${short(o.orderId)}</small></div><div class="badges">${badge(o.serviceMode)}${badge(o.source === 'Pos' ? 'TPV' : o.source)}${badge(o.orderStatus)}${badge(o.paymentStatus)}${methods.map(badge).join('')}</div><ul>${lines}</ul><strong>${money.format(o.total)}</strong></article>`
 }
 
-function lineStatusMarker(status) {
+function lineStatusMarker(status, lineStatus) {
+    if (lineStatus === 'Cancelled') {
+        return '<span class="line-cancelled-marker" role="img" aria-label="Producto cancelado">✕</span> ';
+    }
     const markers = {
         Pending: ['⏳', 'Pendiente', 'line-pending-marker'],
         InPreparation: ['🍴', 'En preparación', 'line-preparing-marker'],
