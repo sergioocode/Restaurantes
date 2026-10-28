@@ -81,8 +81,7 @@ public partial class Home
                 return [];
             }
 
-            SortedDictionary<decimal, decimal> grossByRate = [];
-            bool hasUnratedLines = false;
+            List<(decimal? TaxRate, decimal GrossAmount)> amounts = [];
             foreach (
                 SessionBillOrderResponse order in bill.Orders.Where(x =>
                     x.OrderStatus != "Cancelled"
@@ -91,80 +90,30 @@ public partial class Home
             {
                 if (!billOrders.TryGetValue(order.OrderId, out OrderDetailResponse? detail))
                 {
-                    hasUnratedLines = true;
+                    amounts.Add((null, 0));
                     continue;
                 }
                 foreach (
                     OrderLineDetailResponse line in detail.Lines.Where(x => x.Status != "Cancelled")
                 )
                 {
-                    AddTaxableAmount(
-                        grossByRate,
-                        ref hasUnratedLines,
-                        line.TaxRate,
-                        (line.BaseUnitPrice ?? line.UnitPrice) * line.Quantity
+                    amounts.Add(
+                        (line.TaxRate, (line.BaseUnitPrice ?? line.UnitPrice) * line.Quantity)
                     );
                     foreach (OrderLineExtraResponse extra in line.Extras ?? [])
                     {
-                        AddTaxableAmount(
-                            grossByRate,
-                            ref hasUnratedLines,
-                            extra.TaxRate,
-                            line.Quantity * extra.Quantity * extra.UnitPrice
+                        amounts.Add(
+                            (extra.TaxRate, line.Quantity * extra.Quantity * extra.UnitPrice)
                         );
                     }
                 }
             }
-            return BuildTaxBreakdown(
-                grossByRate,
-                hasUnratedLines,
+            return TaxBreakdownCalculator.Calculate(
+                amounts,
                 salesTicket?.DiscountPercentage ?? bill.DiscountPercentage
             );
         }
     }
-
-    private static void AddTaxableAmount(
-        SortedDictionary<decimal, decimal> grossByRate,
-        ref bool hasUnratedLines,
-        decimal? taxRate,
-        decimal amount
-    )
-    {
-        if (taxRate is not decimal rate)
-        {
-            hasUnratedLines = true;
-            return;
-        }
-        grossByRate[rate] = grossByRate.GetValueOrDefault(rate) + amount;
-    }
-
-    private static IReadOnlyList<TaxBreakdownLine> BuildTaxBreakdown(
-        SortedDictionary<decimal, decimal> grossByRate,
-        bool hasUnratedLines,
-        decimal discountPercentage
-    )
-    {
-        if (hasUnratedLines || grossByRate.Count == 0)
-        {
-            return [];
-        }
-
-        decimal factor = 1m - (discountPercentage / 100m);
-        return grossByRate
-            .Select(pair =>
-            {
-                decimal gross = Math.Round(pair.Value * factor, 2, MidpointRounding.AwayFromZero);
-                decimal tax = Math.Round(
-                    gross * pair.Key / (100m + pair.Key),
-                    2,
-                    MidpointRounding.AwayFromZero
-                );
-                return new TaxBreakdownLine(pair.Key, gross - tax, tax);
-            })
-            .ToArray();
-    }
-
-    private sealed record TaxBreakdownLine(decimal Rate, decimal TaxableBase, decimal TaxAmount);
 
     private decimal CommanderOutstanding =>
         bill?.Orders.Where(order => IsOwnCommanderOrder(order) && order.OrderStatus != "Cancelled")

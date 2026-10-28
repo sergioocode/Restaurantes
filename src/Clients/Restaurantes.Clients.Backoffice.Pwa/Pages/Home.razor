@@ -1,10 +1,12 @@
 ﻿@page "/"
 @using System.Text.Json
+@implements IAsyncDisposable
 @using Syncfusion.Blazor.Navigations
 @inject BackofficeApi Api
 @inject IJSRuntime Js
 @inject NavigationManager Nav
 @inject Restaurantes.Clients.Backoffice.Pwa.Security.SessionAuthenticationStateProvider AuthState
+@inject Restaurantes.Clients.Backoffice.Pwa.Realtime.ITablesRealtimeClient TablesRealtime
 
 <PageTitle>Backoffice · Restaurantes</PageTitle>
 
@@ -359,6 +361,11 @@ else
                 @if (sale.DiscountAmount > 0)
                 {
                     <div class="account-preview-discount"><span>Descuento (@sale.DiscountPercentage.ToString("0.##") %)</span><strong>-@sale.DiscountAmount.ToString("0.00") €</strong></div>
+                }
+                @foreach (var tax in SaleTaxBreakdown(sale))
+                {
+                    <div class="account-preview-tax"><span>Base imponible (@tax.Rate.ToString("0.##") %)</span><strong>@tax.TaxableBase.ToString("0.00") €</strong></div>
+                    <div class="account-preview-tax"><span>IVA (@tax.Rate.ToString("0.##") %)</span><strong>@tax.TaxAmount.ToString("0.00") €</strong></div>
                 }
                 <span>Total (IVA incluido)</span><strong>@sale.Total.ToString("0.00") €</strong>
             </div>

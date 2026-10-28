@@ -7,14 +7,16 @@ public sealed record ManagementOrderLineResponse(
     string Status,
     string Format = "",
     decimal? BaseUnitPrice = null,
-    IReadOnlyList<ManagementOrderExtraResponse>? Extras = null
+    IReadOnlyList<ManagementOrderExtraResponse>? Extras = null,
+    decimal? TaxRate = null
 );
 
 public sealed record ManagementOrderExtraResponse(
     Guid ProductId,
     string ProductName,
     decimal UnitPrice,
-    int Quantity
+    int Quantity,
+    decimal? TaxRate = null
 );
 
 public sealed record ManagementOrderResponse(

@@ -84,7 +84,8 @@ public sealed class ManagementOrderQuery(OrderWriteDbContext db, TimeZoneInfo ti
                                 extra.Quantity,
                                 extra.TaxRate
                             ))
-                            .ToList()
+                            .ToList(),
+                        line.TaxRate
                     ))
                     .ToList(),
                 order.GuestCount

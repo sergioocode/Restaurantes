@@ -199,6 +199,7 @@ input[type="checkbox"] { width: 18px; height: 18px; min-height: 18px; padding: 0
 .sales-receipt .account-preview-header .eyebrow { margin: 14px 0 0; color: #bf5427; font-family: inherit; font-size: 11px; font-weight: 950; letter-spacing: .14em; }
 .sales-receipt .account-preview-lines { display: grid; gap: 8px; padding: 14px 0; border-top: 1px dashed #414943; border-bottom: 1px dashed #414943; }
 .sales-receipt .account-preview-line, .sales-receipt .account-preview-total, .sales-receipt .account-preview-tips > div { display: flex; justify-content: space-between; gap: 12px; }
+.sales-receipt .account-preview-tax { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 1rem; color: #626c65; font-size: .9em; }
 .sales-receipt .account-preview-extra { display: flex; justify-content: space-between; gap: 12px; margin: -4px 0 0 1.25rem; color: #626c65; font-size: .9em; }
 .sales-receipt .account-preview-extra strong { white-space: nowrap; }
 .sales-receipt .account-preview-line strong, .sales-receipt .account-preview-total strong, .sales-receipt .account-preview-tips strong { white-space: nowrap; }

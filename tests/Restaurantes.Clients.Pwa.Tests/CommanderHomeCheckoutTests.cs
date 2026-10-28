@@ -9,6 +9,7 @@ using Restaurantes.Clients.Commander.Pwa.Api;
 using Restaurantes.Clients.Commander.Pwa.Models;
 using Restaurantes.Clients.Commander.Pwa.Pages;
 using Restaurantes.Clients.Commander.Pwa.Realtime;
+using Restaurantes.Clients.Shared.Operations;
 using Xunit;
 
 namespace Restaurantes.Clients.Pwa.Tests;
@@ -22,29 +23,20 @@ public sealed class CommanderHomeCheckoutTests : BunitContext
     public void Tax_breakdown_applies_the_discount_before_extracting_each_rate()
     {
         SortedDictionary<decimal, decimal> grossByRate = new() { [10m] = 110m, [21m] = 121m };
-        MethodInfo build = typeof(Home).GetMethod(
-            "BuildTaxBreakdown",
-            BindingFlags.Static | PrivateInstance
-        )!;
+        IReadOnlyList<TaxBreakdownLine> lines = TaxBreakdownCalculator.Calculate(
+            [(10m, grossByRate[10m]), (21m, grossByRate[21m])],
+            10m
+        );
 
-        object[] lines = (
-            (System.Collections.IEnumerable)build.Invoke(null, [grossByRate, false, 10m])!
-        )
-            .Cast<object>()
-            .ToArray();
-
-        Assert.Equal(2, lines.Length);
+        Assert.Equal(2, lines.Count);
         Assert.Equal(10m, lines[0].GetType().GetProperty("Rate")!.GetValue(lines[0]));
         Assert.Equal(90m, lines[0].GetType().GetProperty("TaxableBase")!.GetValue(lines[0]));
         Assert.Equal(9m, lines[0].GetType().GetProperty("TaxAmount")!.GetValue(lines[0]));
         Assert.Equal(21m, lines[1].GetType().GetProperty("Rate")!.GetValue(lines[1]));
         Assert.Equal(90m, lines[1].GetType().GetProperty("TaxableBase")!.GetValue(lines[1]));
         Assert.Equal(18.9m, lines[1].GetType().GetProperty("TaxAmount")!.GetValue(lines[1]));
-        Assert.Empty((System.Collections.IEnumerable)build.Invoke(null, [grossByRate, true, 10m])!);
-        Assert.Empty(
-            (System.Collections.IEnumerable)
-                build.Invoke(null, [new SortedDictionary<decimal, decimal>(), false, 0m])!
-        );
+        Assert.Empty(TaxBreakdownCalculator.Calculate([(10m, 110m), (null, 0m)], 10m));
+        Assert.Empty(TaxBreakdownCalculator.Calculate([], 0m));
     }
 
     [Fact]

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Restaurantes.Clients.Backoffice.Pwa.Components;
 using Restaurantes.Clients.Backoffice.Pwa.Models;
+using Restaurantes.Clients.Shared.Operations;
 
 namespace Restaurantes.Clients.Backoffice.Pwa.Pages;
 
@@ -679,6 +680,55 @@ public partial class Home
             .Where(order => sale.OrderIds.Contains(order.Id))
             .OrderBy(order => order.CreatedAtUtc)
             .FirstOrDefault();
+
+    internal IReadOnlyList<TaxBreakdownLine> SaleTaxBreakdown(SaleResponse sale)
+    {
+        List<(decimal? TaxRate, decimal GrossAmount)> saleAmounts = [];
+        foreach (SaleLineSnapshot line in sale.Lines)
+        {
+            saleAmounts.Add((line.TaxRate, line.Quantity * (line.BaseUnitPrice ?? line.UnitPrice)));
+            saleAmounts.AddRange(
+                (line.Extras ?? []).Select(extra =>
+                    (extra.TaxRate, line.Quantity * extra.Quantity * extra.UnitPrice)
+                )
+            );
+        }
+
+        IReadOnlyList<TaxBreakdownLine> saleBreakdown = TaxBreakdownCalculator.Calculate(
+            saleAmounts,
+            sale.DiscountPercentage
+        );
+        if (saleBreakdown.Count > 0)
+        {
+            return saleBreakdown;
+        }
+
+        List<(decimal? TaxRate, decimal GrossAmount)> orderAmounts = [];
+        foreach (
+            ManagementOrderResponse order in historyOrders.Where(item =>
+                sale.OrderIds.Contains(item.Id)
+            )
+        )
+        {
+            foreach (
+                ManagementOrderLineResponse line in order.Lines.Where(item =>
+                    item.Status != "Cancelled"
+                )
+            )
+            {
+                orderAmounts.Add(
+                    (line.TaxRate, line.Quantity * (line.BaseUnitPrice ?? line.UnitPrice))
+                );
+                orderAmounts.AddRange(
+                    (line.Extras ?? []).Select(extra =>
+                        (extra.TaxRate, line.Quantity * extra.Quantity * extra.UnitPrice)
+                    )
+                );
+            }
+        }
+
+        return TaxBreakdownCalculator.Calculate(orderAmounts, sale.DiscountPercentage);
+    }
 
     internal Task ShowSaleTicket(SaleResponse sale)
     {
