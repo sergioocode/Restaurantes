@@ -24,6 +24,7 @@ public sealed class BackofficeStartupCoverageTests : BunitContext
 
     public BackofficeStartupCoverageTests()
     {
+        BackofficeTestServices.AddTablesRealtime(this);
         Services.AddSyncfusionBlazor();
         api = new(new HttpClient(handler) { BaseAddress = new Uri("https://test.local") });
         Services.AddSingleton(api);

@@ -165,13 +165,14 @@ public sealed class OrdersSignalRWorkerCoverageTests
                     {
                         OrdersHub.CommanderGroup(restaurantId),
                         OrdersHub.PosGroup(restaurantId),
+                        OrdersHub.TablesGroup(restaurantId),
                     },
                     2
                 )
                 .SelectMany(groups => groups),
-            clients.RecordedGroups.TakeLast(4)
+            clients.RecordedGroups.TakeLast(6)
         );
-        Assert.Equal(Enumerable.Repeat(restaurantId, 4), clients.DiningTableUpdates);
+        Assert.Equal(Enumerable.Repeat(restaurantId, 6), clients.DiningTableUpdates);
     }
 
     [Theory]

@@ -15,6 +15,9 @@ namespace Restaurantes.Clients.Pwa.Tests;
 
 public sealed class BackofficeProductsModuleCoverageTests : BunitContext
 {
+    public BackofficeProductsModuleCoverageTests() =>
+        BackofficeTestServices.AddTablesRealtime(this);
+
     [Fact]
     public async Task Catalog_design_groups_products_and_rolls_back_a_failed_local_availability_change()
     {

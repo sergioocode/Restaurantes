@@ -16,6 +16,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Restaurantes.Clients.Shared.Operations\Restaurantes.Clients.Shared.Operations.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ServiceWorker
       Include="wwwroot\service-worker.js"
       PublishedContent="wwwroot\service-worker.published.js"

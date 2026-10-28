@@ -8,6 +8,8 @@ namespace Restaurantes.Clients.Pwa.Tests;
 
 public sealed class AsyncEventDispatcherTests : BunitContext
 {
+    public AsyncEventDispatcherTests() => BackofficeTestServices.AddTablesRealtime(this);
+
     [Fact]
     public async Task InvokeAsync_awaits_each_subscriber_in_registration_order()
     {
@@ -232,6 +234,12 @@ public sealed class AsyncEventDispatcherTests : BunitContext
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic
             )!
             .SetValue(home, new Restaurantes.Clients.Backoffice.Pwa.Api.BackofficeApi(http));
+        home.GetType()
+            .GetProperty(
+                "TablesRealtime",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic
+            )!
+            .SetValue(home, BackofficeTestServices.CreateTablesRealtime());
         SetField(
             home,
             "stations",

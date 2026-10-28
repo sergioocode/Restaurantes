@@ -393,6 +393,7 @@ public partial class Home
 
     protected override async Task OnInitializedAsync()
     {
+        TablesRealtime.DiningTableUpdated += HandleDiningTableUpdated;
         try
         {
             providerSettings = await Api.ProviderAsync();
@@ -490,6 +491,7 @@ public partial class Home
 
     private async Task Logout()
     {
+        await TablesRealtime.DisconnectAsync();
         await Js.InvokeVoidAsync("sessionStorage.removeItem", SessionKey);
         Api.AccessToken = null;
         login = null;
@@ -842,6 +844,7 @@ public partial class Home
     {
         if (SelectableRestaurants().Count == 0)
         {
+            await TablesRealtime.DisconnectAsync();
             stations = [];
             tables = [];
             zones = [];
@@ -855,10 +858,58 @@ public partial class Home
             IsAdmin || HasLocalPermission("kds.use") || IsCurrentRestaurantManager
                 ? await Api.StationsAsync(restaurantId)
                 : [];
+        await ConnectTablesRealtimeAsync();
         tables = HasLocalPermission("tables.read") ? await Api.TablesAsync(restaurantId) : [];
         zones = HasLocalPermission("tables.read") ? await Api.ZonesAsync(restaurantId) : [];
         tableDraft = new() { ZoneId = zones.FirstOrDefault()?.Id ?? Guid.Empty };
         zoneDraft = new();
+    }
+
+    private async Task ConnectTablesRealtimeAsync()
+    {
+        if (restaurantId == Guid.Empty || !HasLocalPermission("tables.read"))
+        {
+            await TablesRealtime.DisconnectAsync();
+            return;
+        }
+
+        try
+        {
+            await TablesRealtime.ConnectAsync(restaurantId);
+        }
+        catch (Exception exception)
+        {
+            message =
+                $"No se pudo conectar la actualización de mesas en tiempo real: {exception.Message}";
+        }
+    }
+
+    private Task HandleDiningTableUpdated(Guid changedRestaurantId)
+    {
+        if (login is null || changedRestaurantId != restaurantId)
+        {
+            return Task.CompletedTask;
+        }
+
+        return InvokeAsync(async () =>
+        {
+            try
+            {
+                tables = await Api.TablesAsync(restaurantId);
+            }
+            catch (Exception exception)
+            {
+                message = $"No se pudo actualizar el estado de las mesas: {exception.Message}";
+            }
+
+            StateHasChanged();
+        });
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        TablesRealtime.DiningTableUpdated -= HandleDiningTableUpdated;
+        await TablesRealtime.DisconnectAsync();
     }
 
     internal async Task CreateStation()

@@ -27,6 +27,16 @@ public sealed class OrdersHub : Hub<IKdsClient>
         return Groups.RemoveFromGroupAsync(Context.ConnectionId, PosGroup(restaurantId));
     }
 
+    public Task JoinTables(Guid restaurantId)
+    {
+        return Join(restaurantId, RestaurantPermissions.TablesRead, TablesGroup(restaurantId));
+    }
+
+    public Task LeaveTables(Guid restaurantId)
+    {
+        return Groups.RemoveFromGroupAsync(Context.ConnectionId, TablesGroup(restaurantId));
+    }
+
     public Task NotifyDiningTableUpdated(Guid restaurantId)
     {
         if (
@@ -43,7 +53,8 @@ public sealed class OrdersHub : Hub<IKdsClient>
 
         return Task.WhenAll(
             Clients.Group(CommanderGroup(restaurantId)).DiningTableUpdated(restaurantId),
-            Clients.Group(PosGroup(restaurantId)).DiningTableUpdated(restaurantId)
+            Clients.Group(PosGroup(restaurantId)).DiningTableUpdated(restaurantId),
+            Clients.Group(TablesGroup(restaurantId)).DiningTableUpdated(restaurantId)
         );
     }
 
@@ -68,5 +79,10 @@ public sealed class OrdersHub : Hub<IKdsClient>
     public static string PosGroup(Guid restaurantId)
     {
         return $"restaurant:{restaurantId:N}:pos-orders";
+    }
+
+    public static string TablesGroup(Guid restaurantId)
+    {
+        return $"restaurant:{restaurantId:N}:tables";
     }
 }

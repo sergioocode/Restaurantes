@@ -16,6 +16,7 @@ public sealed class BackofficeCashRegisterReportTests : BunitContext
 {
     public BackofficeCashRegisterReportTests()
     {
+        BackofficeTestServices.AddTablesRealtime(this);
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("es-ES");
         CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("es-ES");
     }

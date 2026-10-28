@@ -23,6 +23,7 @@ public sealed class BackofficeTablesModuleCoverageTests : BunitContext
 
     public BackofficeTablesModuleCoverageTests()
     {
+        BackofficeTestServices.AddTablesRealtime(this);
         Services.AddSyncfusionBlazor();
         JSInterop.Mode = JSRuntimeMode.Loose;
         Services.AddSingleton(

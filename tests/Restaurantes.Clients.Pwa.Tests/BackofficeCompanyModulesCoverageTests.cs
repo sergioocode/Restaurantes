@@ -21,6 +21,7 @@ public sealed class BackofficeCompanyModulesCoverageTests : BunitContext
 
     public BackofficeCompanyModulesCoverageTests()
     {
+        BackofficeTestServices.AddTablesRealtime(this);
         Services.AddSyncfusionBlazor();
         Services.AddSingleton(
             new BackofficeApi(

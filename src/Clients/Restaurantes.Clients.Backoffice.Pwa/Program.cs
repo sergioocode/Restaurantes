@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Restaurantes.Clients.Backoffice.Pwa;
 using Restaurantes.Clients.Backoffice.Pwa.Api;
+using Restaurantes.Clients.Backoffice.Pwa.Realtime;
 using Restaurantes.Clients.Backoffice.Pwa.Security;
 using Syncfusion.Blazor;
 using Syncfusion.Licensing;
@@ -23,6 +24,10 @@ builder.Services.AddScoped(_ => new HttpClient
     BaseAddress = new Uri(applicationUri.GetLeftPart(UriPartial.Authority)),
 });
 builder.Services.AddScoped<BackofficeApi>();
+builder.Services.AddScoped<TablesRealtimeClient>();
+builder.Services.AddScoped<ITablesRealtimeClient>(sp =>
+    sp.GetRequiredService<TablesRealtimeClient>()
+);
 builder.Services.AddAuthorizationCore();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<SessionAuthenticationStateProvider>();
