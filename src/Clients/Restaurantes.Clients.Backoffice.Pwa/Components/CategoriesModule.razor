@@ -30,8 +30,8 @@ else
             <article class="maintenance-row category-row @(item.IsActive ? "" : "inactive")">
                 <div><strong>@item.Code</strong></div>
                 <div class="category-name-editor">
-                    <label>Nombre<input @bind="nameDrafts[item.Id].Value" disabled="@(!Host.CanManageCategories || Host.busy)" /></label>
-                    @if (Host.CanManageCategories)
+                    <label>Nombre<input @bind="nameDrafts[item.Id].Value" disabled="@(!Host.CanManageCategorySettings || Host.busy)" /></label>
+                    @if (Host.CanManageCategorySettings)
                     {
                     <button class="primary product-name-save" @onclick="() => SaveName(item)" disabled="@Host.busy" aria-label="Guardar nombre de categoría" title="Guardar nombre">
                         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
@@ -54,11 +54,11 @@ else
                         <option value="@station.Code">@station.Name</option>
                     }
                 </select></label>
-                <label class="availability"><input type="checkbox" checked="@item.IsActive" @onchange="args => SetFlag(item, args, () => item.IsActive, value => item.IsActive = value)" disabled="@(!Host.CanManageCategories || Host.busy)" /> Activa</label>
+                <label class="availability"><input type="checkbox" checked="@item.IsActive" @onchange='args => SetFlag(item, nameof(CategoryResponse.IsActive), args)' disabled="@(!Host.CanManageCategorySettings || Host.busy)" /> Activa</label>
                 <div class="category-visibility">
-                    <label><input type="checkbox" checked="@item.ShowInPos" @onchange="args => SetFlag(item, args, () => item.ShowInPos, value => item.ShowInPos = value)" disabled="@(!Host.CanManageCategories || Host.busy)" /> TPV</label>
-                    <label><input type="checkbox" checked="@item.ShowInCommander" @onchange="args => SetFlag(item, args, () => item.ShowInCommander, value => item.ShowInCommander = value)" disabled="@(!Host.CanManageCategories || Host.busy)" /> Comandero</label>
-                    <label><input type="checkbox" checked="@item.ShowInCustomerQr" @onchange="args => SetFlag(item, args, () => item.ShowInCustomerQr, value => item.ShowInCustomerQr = value)" disabled="@(!Host.CanManageCategories || Host.busy)" /> Cliente QR</label>
+                    <label><input type="checkbox" checked="@item.ShowInPos" @onchange='args => SetFlag(item, nameof(CategoryResponse.ShowInPos), args)' disabled="@(!Host.CanManageCategorySettings || Host.busy)" /> TPV</label>
+                    <label><input type="checkbox" checked="@item.ShowInCommander" @onchange='args => SetFlag(item, nameof(CategoryResponse.ShowInCommander), args)' disabled="@(!Host.CanManageCategorySettings || Host.busy)" /> Comandero</label>
+                    <label><input type="checkbox" checked="@item.ShowInCustomerQr" @onchange='args => SetFlag(item, nameof(CategoryResponse.ShowInCustomerQr), args)' disabled="@(!Host.CanManageCategorySettings || Host.busy)" /> Cliente QR</label>
                 </div>
             </article>
         }
@@ -88,21 +88,6 @@ else
 
                 draft.SavedValue = item.Name;
             }
-        }
-    }
-
-    private async Task SaveName(CategoryResponse item)
-    {
-        CategoryNameDraft draft = nameDrafts[item.Id];
-        string previous = item.Name;
-        item.Name = draft.Value;
-        if (await Host.SaveCategory(item))
-        {
-            draft.SavedValue = draft.Value;
-        }
-        else
-        {
-            item.Name = previous;
         }
     }
 
@@ -147,29 +132,69 @@ else
         }
     }
 
-    private async Task SetFlag(
-        CategoryResponse item,
-        ChangeEventArgs args,
-        Func<bool> getValue,
-        Action<bool> setValue
-    )
+    private async Task SetFlag(CategoryResponse item, string field, ChangeEventArgs args)
     {
-        if (Host.busy)
+        if (!Host.CanManageCategorySettings || Host.busy)
         {
             return;
         }
 
-        bool previous = getValue();
+        bool previous = GetFlag(item, field);
         bool selected = args.Value is bool value && value;
         if (selected == previous)
         {
             return;
         }
 
-        setValue(selected);
+        SetFlagValue(item, field, selected);
         if (!await Host.SaveCategory(item))
         {
-            setValue(previous);
+            SetFlagValue(item, field, previous);
+        }
+    }
+
+    private static bool GetFlag(CategoryResponse item, string field) =>
+        field switch
+        {
+            nameof(CategoryResponse.IsActive) => item.IsActive,
+            nameof(CategoryResponse.ShowInPos) => item.ShowInPos,
+            nameof(CategoryResponse.ShowInCommander) => item.ShowInCommander,
+            nameof(CategoryResponse.ShowInCustomerQr) => item.ShowInCustomerQr,
+            _ => false,
+        };
+
+    private static void SetFlagValue(CategoryResponse item, string field, bool value)
+    {
+        switch (field)
+        {
+            case nameof(CategoryResponse.IsActive):
+                item.IsActive = value;
+                break;
+            case nameof(CategoryResponse.ShowInPos):
+                item.ShowInPos = value;
+                break;
+            case nameof(CategoryResponse.ShowInCommander):
+                item.ShowInCommander = value;
+                break;
+            case nameof(CategoryResponse.ShowInCustomerQr):
+                item.ShowInCustomerQr = value;
+                break;
+        }
+    }
+
+    private async Task SaveName(CategoryResponse item)
+    {
+        CategoryNameDraft draft = nameDrafts[item.Id];
+        string previousName = item.Name;
+        item.Name = nameDrafts[item.Id].Value;
+
+        if (await Host.SaveCategory(item))
+        {
+            draft.SavedValue = draft.Value;
+        }
+        else
+        {
+            item.Name = previousName;
         }
     }
 
@@ -178,4 +203,5 @@ else
         public string Value { get; set; } = name;
         public string SavedValue { get; set; } = name;
     }
+
 }

@@ -161,6 +161,7 @@ public partial class Home
     internal bool CanViewCategories => CanManageCategories || IsCurrentRestaurantManager;
     internal bool CanManageStations => IsAdmin || IsCurrentRestaurantManager;
     internal bool CanManageCategoryPreparation => CanManageStations;
+    internal bool CanManageCategorySettings => CanManageCategories || IsCurrentRestaurantManager;
     internal Guid? CurrentUserId => login?.User.Id;
     private bool HasBackofficeAccess =>
         HasGlobalPermission("backoffice.access")
@@ -1156,7 +1157,7 @@ public partial class Home
 
     internal async Task<bool> SaveCategory(CategoryResponse item)
     {
-        if (!CanManageCategories || busy)
+        if (!CanManageCategorySettings || busy || restaurantId == Guid.Empty)
         {
             return false;
         }
@@ -1164,7 +1165,7 @@ public partial class Home
         await Run(
             async () =>
             {
-                CategoryResponse accepted = await Api.UpdateCategoryAsync(item);
+                CategoryResponse accepted = await Api.UpdateCategoryAsync(item, restaurantId);
                 await ConfirmCategoryProjection(accepted);
                 await RefreshCatalogProjection();
                 ok = true;

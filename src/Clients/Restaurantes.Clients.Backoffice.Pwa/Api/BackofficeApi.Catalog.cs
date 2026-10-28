@@ -115,7 +115,10 @@ public sealed partial class BackofficeApi
         return await ReadAsync<ProductResponse>(response);
     }
 
-    public async Task<CategoryResponse> UpdateCategoryAsync(CategoryResponse item)
+    public async Task<CategoryResponse> UpdateCategoryAsync(
+        CategoryResponse item,
+        Guid restaurantId
+    )
     {
         using HttpRequestMessage request = Authorized(
             HttpMethod.Put,
@@ -124,6 +127,7 @@ public sealed partial class BackofficeApi
         request.Content = JsonContent.Create(
             new
             {
+                restaurantId,
                 item.Name,
                 item.IsActive,
                 item.ShowInPos,

@@ -65,13 +65,33 @@ public sealed class CatalogWriteController(
         CancellationToken ct
     )
     {
-        if (!User.HasAnyRestaurantPermission(RestaurantPermissions.CatalogGlobalManage))
+        bool canManageGlobalCatalog = User.HasAnyRestaurantPermission(
+            RestaurantPermissions.CatalogGlobalManage
+        );
+        if (
+            !canManageGlobalCatalog
+            && (
+                request.RestaurantId is not Guid restaurantId
+                || !User.CanAccessRestaurant(restaurantId, RestaurantPermissions.CatalogManage)
+            )
+        )
         {
             return Forbid();
         }
 
+        UpdateCategoryRequest update = canManageGlobalCatalog
+            ? request
+            : new UpdateCategoryRequest
+            {
+                Name = request.Name,
+                IsActive = request.IsActive,
+                ShowInPos = request.ShowInPos,
+                ShowInCommander = request.ShowInCommander,
+                ShowInCustomerQr = request.ShowInCustomerQr,
+            };
+
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        CategoryResponse? item = await service.UpdateCategoryAsync(id, request, ct);
+        CategoryResponse? item = await service.UpdateCategoryAsync(id, update, ct);
         if (item is null)
             return NotFound();
         await synchronizer.SyncAffectedMenus(Guid.Empty, ct);

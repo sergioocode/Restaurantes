@@ -956,16 +956,15 @@ public sealed class BackofficeStationFlowTests : BunitContext
                 module.Instance,
                 "SetFlag",
                 projected,
-                new ChangeEventArgs { Value = false },
-                new Func<bool>(() => projected.IsActive),
-                new Action<bool>(value => projected.IsActive = value)
+                nameof(CategoryResponse.IsActive),
+                new ChangeEventArgs { Value = false }
             )
         );
         Assert.True(projected.IsActive);
     }
 
     [Fact]
-    public async Task Categories_module_is_read_only_for_manager_and_uses_their_local_categories()
+    public async Task Categories_module_allows_manager_to_edit_categories_but_not_create_them()
     {
         Guid restaurantId = Guid.NewGuid();
         KitchenStationResponse station = Station(restaurantId);
@@ -1017,12 +1016,16 @@ public sealed class BackofficeStationFlowTests : BunitContext
 
         Assert.Contains("Comida", module.Markup);
         Assert.DoesNotContain("Nueva categoría", module.Markup);
-        Assert.Empty(module.FindAll(".category-name-editor button"));
-        Assert.Contains("disabled", module.Find(".category-name-editor input").OuterHtml);
-        Assert.Contains("disabled", module.Find(".category-kds-select select").OuterHtml);
+        Assert.Single(module.FindAll(".category-name-editor button"));
+        Assert.DoesNotContain("disabled", module.Find(".category-name-editor input").OuterHtml);
+        Assert.DoesNotContain("disabled", module.Find(".category-kds-select select").OuterHtml);
         Assert.All(
             module.FindAll(".category-row input[type='checkbox']"),
-            input => Assert.Contains("disabled", input.OuterHtml)
+            input => Assert.DoesNotContain("disabled", input.OuterHtml)
+        );
+        Assert.Equal(
+            "Guardar nombre de categoría",
+            module.Find(".category-name-editor button").GetAttribute("aria-label")
         );
         Assert.Contains(
             handler.RequestUris,

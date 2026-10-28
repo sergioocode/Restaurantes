@@ -4,6 +4,8 @@ namespace Restaurantes.Catalog.Contracts.Requests;
 
 public sealed class UpdateCategoryRequest : IValidatableObject
 {
+    public Guid? RestaurantId { get; init; }
+
     [Required, StringLength(120)]
     public string Name { get; init; } = "";
 
