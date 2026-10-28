@@ -1,4 +1,4 @@
-namespace Restaurantes.Clients.Shared.Operations;
+﻿namespace Restaurantes.Clients.Shared.Operations;
 
 public sealed record TaxBreakdownLine(decimal Rate, decimal TaxableBase, decimal TaxAmount);
 

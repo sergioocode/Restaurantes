@@ -1,4 +1,4 @@
-using Restaurantes.Orders.Domain;
+﻿using Restaurantes.Orders.Domain;
 using Xunit;
 
 namespace Restaurantes.Clients.Pwa.Tests;

@@ -1,4 +1,4 @@
-using Restaurantes.Clients.Backoffice.Pwa.Api;
+﻿using Restaurantes.Clients.Backoffice.Pwa.Api;
 using Restaurantes.Clients.Shared.Operations;
 
 namespace Restaurantes.Clients.Backoffice.Pwa.Realtime;

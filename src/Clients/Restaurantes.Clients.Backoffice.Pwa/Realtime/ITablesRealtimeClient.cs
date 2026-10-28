@@ -1,4 +1,4 @@
-namespace Restaurantes.Clients.Backoffice.Pwa.Realtime;
+﻿namespace Restaurantes.Clients.Backoffice.Pwa.Realtime;
 
 public interface ITablesRealtimeClient : IAsyncDisposable
 {

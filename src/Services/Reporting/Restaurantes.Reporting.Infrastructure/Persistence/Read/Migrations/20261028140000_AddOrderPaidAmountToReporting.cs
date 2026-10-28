@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore.Migrations;
+﻿using Microsoft.EntityFrameworkCore.Migrations;
 using Restaurantes.Reporting.Infrastructure.Persistence.Read;
 
 #nullable disable

@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Security.Claims;
 using Restaurantes.Dining.Application;
 using Restaurantes.Dining.Contracts.Requests;

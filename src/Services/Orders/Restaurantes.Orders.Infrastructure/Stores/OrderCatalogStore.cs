@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Restaurantes.Catalog.Contracts.Responses;
 using Restaurantes.Orders.Application;

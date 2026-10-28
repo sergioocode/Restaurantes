@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Restaurantes.Catalog.Application;
 using Restaurantes.Catalog.Contracts.Responses;
 using Restaurantes.Catalog.Domain;

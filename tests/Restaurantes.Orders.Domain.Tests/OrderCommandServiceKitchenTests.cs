@@ -1,4 +1,4 @@
-using Restaurantes.Orders.Application;
+﻿using Restaurantes.Orders.Application;
 using Restaurantes.Orders.Contracts.Events;
 using Restaurantes.Orders.Domain;
 using Xunit;

@@ -1,4 +1,4 @@
-using Bunit;
+﻿using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using Restaurantes.Clients.Backoffice.Pwa.Realtime;
 
