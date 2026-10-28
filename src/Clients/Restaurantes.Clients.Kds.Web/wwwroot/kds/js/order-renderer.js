@@ -282,18 +282,18 @@ export class OrderRenderer {
 
   appendPrimaryControls(controls, order, line, blocked) {
     controls.append(
-      this.renderLineClock('Preparación', line.preparationStartedAtUtc, line.readyAtUtc),
-      this.renderLineClock('Principal', line.readyAtUtc, line.dispatchedAtUtc)
+      this.renderLineClock('Preparación', line.preparationStartedAtUtc, line.readyAtUtc)
     );
+    const station = order.stations?.find(
+      item => item.code === line.preparationStationCode
+    );
+    if (station?.requiresPrimaryDispatch === true) {
+      controls.append(
+        this.renderLineClock('Principal', line.readyAtUtc, line.dispatchedAtUtc)
+      );
+    }
     if (line.kitchenStatus !== 'Ready') return;
-    if (blocked) {
-      const note = document.createElement('small');
-      note.className = 'line-state line-waiting';
-      note.textContent = '⌛';
-      note.title = 'Esperando un pase anterior';
-      note.setAttribute('aria-label', note.title);
-      controls.append(note);
-    } else {
+    if (!blocked) {
       controls.append(this.createLineAction(order, line, 'dispatch', 'Servir', 'Despachar'));
     }
   }

@@ -142,7 +142,6 @@ small { color: var(--muted); }
 .line-state.Dispatched { background: #e0f0e5; color: #205d3f; }
 .line-clock { font-variant-numeric: tabular-nums; }
 .line-action { flex: 0 0 auto; width: auto; min-height: 32px; padding: 5px 10px; font-size: .9rem; }
-.line-waiting { background: #fff1cf; color: #805500; }
 .pass-lines { padding-left: 0; list-style: none; }
 @media (max-width: 760px) {
   .product-line { grid-template-columns: 1fr auto; }
