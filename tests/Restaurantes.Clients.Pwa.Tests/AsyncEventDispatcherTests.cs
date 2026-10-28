@@ -93,7 +93,7 @@ public sealed class AsyncEventDispatcherTests : BunitContext
         Guid restaurantId = Guid.NewGuid();
         SetField(client, "restaurantId", restaurantId);
         List<Guid> received = [];
-        client.MenuChanged += changedRestaurantId =>
+        client.CatalogChanged += changedRestaurantId =>
         {
             received.Add(changedRestaurantId);
             return Task.CompletedTask;

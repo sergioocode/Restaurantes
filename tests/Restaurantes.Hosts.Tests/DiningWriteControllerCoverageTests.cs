@@ -3,8 +3,11 @@ using System.Reflection;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Restaurantes.Dining.Api.Controllers;
+using Restaurantes.Dining.Api.Realtime;
 using Restaurantes.Dining.Application;
 using Restaurantes.Dining.Contracts.Requests;
 using Restaurantes.Dining.Domain;
@@ -101,7 +104,12 @@ public sealed class DiningWriteControllerCoverageTests
                     : new Dictionary<string, string?>()
             )
             .Build();
-        DiningWriteController controller = new(service, configuration)
+        IHubContext<DiningHub, IDiningRealtimeClient> hub = DispatchProxy.Create<
+            IHubContext<DiningHub, IDiningRealtimeClient>,
+            EmptyDiningHubContextProxy
+        >();
+        DiningNotifications notifications = new(hub, NullLogger<DiningNotifications>.Instance);
+        DiningWriteController controller = new(service, configuration, notifications)
         {
             ControllerContext = new ControllerContext
             {
@@ -113,6 +121,11 @@ public sealed class DiningWriteControllerCoverageTests
             },
         };
         return controller;
+    }
+
+    public class EmptyDiningHubContextProxy : DispatchProxy
+    {
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) => null;
     }
 
     public class EmptyStoreProxy : DispatchProxy

@@ -84,7 +84,7 @@ public sealed class OrdersSignalRWorkerCoverageTests
     }
 
     [Fact]
-    public async Task Orders_hub_requires_scoped_permissions_and_notifies_both_client_groups()
+    public async Task Orders_hub_requires_scoped_permissions_for_client_group_membership()
     {
         Guid restaurantId = Guid.NewGuid();
         ClaimsPrincipal user = new(
@@ -115,9 +115,7 @@ public sealed class OrdersSignalRWorkerCoverageTests
         await hub.LeavePos(restaurantId);
         await Assert.ThrowsAsync<HubException>(() => hub.JoinCommander(restaurantId));
         await Assert.ThrowsAsync<HubException>(() => hub.JoinPos(Guid.Empty));
-        await Assert.ThrowsAsync<HubException>(() => hub.NotifyDiningTableUpdated(Guid.Empty));
 
-        await hub.NotifyDiningTableUpdated(restaurantId);
         hub.Context = new TestHubCallerContext(
             new ClaimsPrincipal(
                 new ClaimsIdentity(
@@ -136,7 +134,6 @@ public sealed class OrdersSignalRWorkerCoverageTests
         );
         await hub.JoinCommander(restaurantId);
         await hub.LeaveCommander(restaurantId);
-        await hub.NotifyDiningTableUpdated(restaurantId);
 
         OrdersHub anonymousHub = new()
         {
@@ -145,9 +142,6 @@ public sealed class OrdersSignalRWorkerCoverageTests
             Groups = groupManager,
         };
         await Assert.ThrowsAsync<HubException>(() => anonymousHub.JoinPos(restaurantId));
-        await Assert.ThrowsAsync<HubException>(() =>
-            anonymousHub.NotifyDiningTableUpdated(restaurantId)
-        );
 
         Assert.Equal(
             [
@@ -158,21 +152,8 @@ public sealed class OrdersSignalRWorkerCoverageTests
             ],
             groups.Calls
         );
-        Assert.Equal(
-            Enumerable
-                .Repeat(
-                    new[]
-                    {
-                        OrdersHub.CommanderGroup(restaurantId),
-                        OrdersHub.PosGroup(restaurantId),
-                        OrdersHub.TablesGroup(restaurantId),
-                    },
-                    2
-                )
-                .SelectMany(groups => groups),
-            clients.RecordedGroups.TakeLast(6)
-        );
-        Assert.Equal(Enumerable.Repeat(restaurantId, 6), clients.DiningTableUpdates);
+        Assert.Empty(clients.RecordedGroups);
+        Assert.Empty(clients.DiningTableUpdates);
     }
 
     [Theory]
@@ -206,6 +187,7 @@ public sealed class OrdersSignalRWorkerCoverageTests
         [
             KdsHub.StationGroup(restaurantId, "CHEF"),
             KdsHub.StationGroup(restaurantId, "BEBIDAS"),
+            OrdersHub.TablesGroup(restaurantId),
         ];
         if (expectPos)
         {
@@ -216,6 +198,7 @@ public sealed class OrdersSignalRWorkerCoverageTests
             expectedGroups.Add(OrdersHub.CommanderGroup(restaurantId));
         }
         Assert.Equal(expectedGroups, clients.RecordedGroups);
+        Assert.Equal([restaurantId], clients.DiningTableUpdates);
         Assert.Equal(
             2 + Convert.ToInt32(expectPos) + Convert.ToInt32(expectCommander),
             clients.Notifications.Count

@@ -1968,11 +1968,13 @@ public sealed class PosHomeRenderingTests : BunitContext
         );
         IRenderedComponent<PosHome> cut = await RenderTakeaway(restaurantId, [], handler);
 
-        await cut.InvokeAsync(() => InvokeTask(cut.Instance, "HandleMenuChanged", Guid.NewGuid()));
+        await cut.InvokeAsync(() =>
+            InvokeTask(cut.Instance, "HandleCatalogChanged", Guid.NewGuid())
+        );
         Assert.Empty(GetField<List<MenuItemResponse>>(cut.Instance, "menu"));
         Assert.Equal(0, handler.MenuReads);
 
-        await cut.InvokeAsync(() => InvokeTask(cut.Instance, "HandleMenuChanged", restaurantId));
+        await cut.InvokeAsync(() => InvokeTask(cut.Instance, "HandleCatalogChanged", restaurantId));
         Assert.Equal(
             "Café",
             Assert.Single(GetField<List<MenuItemResponse>>(cut.Instance, "menu")).ProductName
@@ -1981,12 +1983,12 @@ public sealed class PosHomeRenderingTests : BunitContext
         Assert.Equal(1, handler.MenuReads);
 
         SetField(cut.Instance, "takeawayOpen", false);
-        await cut.InvokeAsync(() => InvokeTask(cut.Instance, "HandleMenuChanged", restaurantId));
+        await cut.InvokeAsync(() => InvokeTask(cut.Instance, "HandleCatalogChanged", restaurantId));
         Assert.Equal(1, handler.MenuReads);
 
         SetField(cut.Instance, "takeawayOpen", true);
         handler.FailMenu = true;
-        await cut.InvokeAsync(() => InvokeTask(cut.Instance, "HandleMenuChanged", restaurantId));
+        await cut.InvokeAsync(() => InvokeTask(cut.Instance, "HandleCatalogChanged", restaurantId));
         Assert.Contains(
             "No se pudo actualizar la carta",
             GetField<string>(cut.Instance, "message")

@@ -64,15 +64,12 @@ public sealed class OrderRealtimeConnectionTests
             )
         );
         await client.ConnectAsync(firstRestaurantId);
-        await client.NotifyDiningTableUpdatedAsync();
         await client.ConnectAsync(secondRestaurantId);
         await client.DisconnectAsync();
-        await client.NotifyDiningTableUpdatedAsync();
 
         Assert.Equal(
             [
                 $"JoinPos:{firstRestaurantId}",
-                $"NotifyDiningTableUpdated:{firstRestaurantId}",
                 $"LeavePos:{firstRestaurantId}",
                 $"JoinPos:{secondRestaurantId}",
             ],
@@ -141,12 +138,6 @@ public sealed class OrderRealtimeConnectionTests
         public Task LeaveCommander(Guid restaurantId)
         {
             calls.Add($"LeaveCommander:{restaurantId}");
-            return Task.CompletedTask;
-        }
-
-        public Task NotifyDiningTableUpdated(Guid restaurantId)
-        {
-            calls.Add($"NotifyDiningTableUpdated:{restaurantId}");
             return Task.CompletedTask;
         }
     }
