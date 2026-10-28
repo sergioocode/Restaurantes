@@ -18,7 +18,7 @@ GET {{diningUrl}}/api/dining/qr/{{rotateQr.response.body.$.qrCode}}
 
 ### Confirmar el primer pedido: abre una sesion CustomerQr o recupera la propia
 # @name openQrSession
-POST {{diningUrl}}/api/dining/qr/{{rotateQr.response.body.$.qrCode}}/sessions?guestCount=2
+POST {{diningUrl}}/api/dining/qr/{{rotateQr.response.body.$.qrCode}}/sessions
 
 ### Crear una zona; el nombre y las ubicaciones los configura el usuario
 # @name createZone

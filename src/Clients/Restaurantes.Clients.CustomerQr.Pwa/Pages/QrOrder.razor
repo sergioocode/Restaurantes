@@ -33,20 +33,6 @@ else if (context is not null && !context.IsRestaurantOpen)
 }
 else if (context is not null)
 {
-    @if (NeedsGuestCount)
-    {
-        <section class="guest-count">
-            <label>¿Cuántos comensales van a comer?
-                <input type="number" min="1" max="999" placeholder="Cantidad de comensales" @bind="guestCount" disabled="@busy" />
-            </label>
-            <p>Indica la cantidad antes de enviar el primer pedido.</p>
-            @if (guestError is not null) { <p role="alert">@guestError</p> }
-        </section>
-    }
-    else if (context.Session?.GuestCount is int savedGuestCount)
-    {
-        <p class="guest-count">Comensales: @savedGuestCount</p>
-    }
     <header class="customer-header">
         <div>
             <span class="eyebrow">Pedido por QR</span>

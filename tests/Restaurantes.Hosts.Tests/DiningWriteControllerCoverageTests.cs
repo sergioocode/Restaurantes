@@ -32,7 +32,7 @@ public sealed class DiningWriteControllerCoverageTests
             await controller.OpenSession(id, new OpenSessionRequest(), ct)
         );
         Assert.IsType<NotFoundObjectResult>(await controller.RotateQr(id, ct));
-        Assert.IsType<NotFoundObjectResult>(await controller.OpenQrSession("qr-code", 2, ct));
+        Assert.IsType<NotFoundObjectResult>(await controller.OpenQrSession("qr-code", ct));
         Assert.IsType<NotFoundObjectResult>(
             await controller.SetGuestCount(id, new SetGuestCountRequest(2), ct)
         );
@@ -62,7 +62,7 @@ public sealed class DiningWriteControllerCoverageTests
         DiningWriteController controller = CreateController(allowQrNetwork: false);
 
         ObjectResult denied = Assert.IsType<ObjectResult>(
-            await controller.OpenQrSession("qr-code", null, TestContext.Current.CancellationToken)
+            await controller.OpenQrSession("qr-code", TestContext.Current.CancellationToken)
         );
 
         Assert.Equal(StatusCodes.Status403Forbidden, denied.StatusCode);

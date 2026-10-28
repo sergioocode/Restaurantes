@@ -358,7 +358,3 @@ button:disabled {
     .customer-order-card { align-items: stretch; flex-direction: column; gap: 10px; }
     .friendly-status { text-align: left; }
 }
-
-.guest-count { padding: 16px; margin: 12px 0; background: #f1f6f2; border-radius: 12px; }
-.guest-count label { display: grid; gap: 8px; font-weight: 600; }
-.guest-count input { max-width: 260px; padding: 10px; }

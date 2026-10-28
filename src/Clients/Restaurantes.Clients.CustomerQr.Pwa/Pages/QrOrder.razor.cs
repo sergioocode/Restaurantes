@@ -9,9 +9,6 @@ namespace Restaurantes.Clients.CustomerQr.Pwa.Pages;
 
 public partial class QrOrder
 {
-    private int? guestCount;
-    private string? guestError;
-
     [Parameter]
     public string QrCode { get; set; } = string.Empty;
 
@@ -36,14 +33,6 @@ public partial class QrOrder
             .OrderBy(x => x.CategoryName)
             .ThenBy(x => x.ProductName)
             .GroupBy(x => x.CategoryName);
-
-    private bool NeedsGuestCount =>
-        context is not null
-        && (
-            context.Session is null
-                ? context.Table.RequestGuestCount
-                : context.Session.RequestGuestCount && context.Session.GuestCount is null
-        );
 
     private int ItemCount => quantities.Values.Sum();
     private decimal Total => menu.Sum(x => x.Price * Quantity(x.ProductId));
@@ -81,15 +70,12 @@ public partial class QrOrder
             {
                 quantities.Clear();
                 notes.Clear();
-                guestCount = null;
             }
             if (previousSessionId != context.Session?.Id)
             {
                 pendingOrder = null;
                 pendingPaymentKey = Guid.Empty;
-                guestCount = null;
             }
-            guestCount = context.Session?.GuestCount ?? guestCount;
 
             restaurant = await Api.RestaurantAsync(context.Table.RestaurantId);
             menu = await Api.MenuAsync(context.Table.RestaurantId);
@@ -165,12 +151,6 @@ public partial class QrOrder
             return;
         }
 
-        guestError = null;
-        if (NeedsGuestCount && guestCount is null or < 1 or > 999)
-        {
-            guestError = "Indica entre 1 y 999 comensales.";
-            return;
-        }
         busy = true;
         error = string.Empty;
         success = string.Empty;
@@ -178,7 +158,7 @@ public partial class QrOrder
         {
             progress = "Validando presencia…";
             Guid? previousSessionId = context.Session?.Id;
-            context = await Api.OpenSessionAsync(QrCode, context.CustomerAccessToken, guestCount);
+            context = await Api.OpenSessionAsync(QrCode, context.CustomerAccessToken);
             if (context.Session is null)
             {
                 throw new InvalidOperationException("No se pudo abrir la sesión.");
@@ -195,18 +175,6 @@ public partial class QrOrder
                 customerOrders = [];
             }
             ordersStorageKey = $"restaurantes.qr.orders.{context.Session.Id:N}";
-            if (NeedsGuestCount)
-            {
-                context = context with
-                {
-                    Session = await Api.SetGuestCountAsync(
-                        context.Session.Id,
-                        guestCount ?? 0,
-                        context.CustomerAccessToken
-                    ),
-                };
-            }
-
             OrderResponse order;
             if (pendingOrder is null)
             {

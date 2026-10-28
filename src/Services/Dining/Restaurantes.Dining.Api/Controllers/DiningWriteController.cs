@@ -64,18 +64,13 @@ public sealed class DiningWriteController(DiningService service, IConfiguration 
 
     [AllowAnonymous]
     [HttpPost("qr/{qrCode}/sessions")]
-    public Task<IActionResult> OpenQrSession(string qrCode, int? guestCount, CancellationToken ct)
+    public Task<IActionResult> OpenQrSession(string qrCode, CancellationToken ct)
     {
         ObjectResult? denied = QrNetworkAccess.DeniedResult(HttpContext, configuration);
         return denied is not null
             ? Task.FromResult<IActionResult>(denied)
             : Execute(() =>
-                service.OpenQrSession(
-                    qrCode,
-                    guestCount,
-                    DiningRequestContext.FromHttpContext(HttpContext),
-                    ct
-                )
+                service.OpenQrSession(qrCode, DiningRequestContext.FromHttpContext(HttpContext), ct)
             );
     }
 

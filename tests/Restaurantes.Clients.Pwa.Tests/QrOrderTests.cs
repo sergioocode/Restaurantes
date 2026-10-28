@@ -283,7 +283,7 @@ public sealed class QrOrderTests : BunitContext
     }
 
     [Fact]
-    public async Task Guest_count_is_validated_before_opening_a_session()
+    public async Task Qr_does_not_request_guest_count_before_opening_a_session()
     {
         Guid restaurantId = Guid.NewGuid();
         Guid sessionId = Guid.NewGuid();
@@ -291,8 +291,8 @@ public sealed class QrOrderTests : BunitContext
         Guid productId = Guid.NewGuid();
         List<string> requests = [];
         QrSessionEnvelope envelope = new(
-            new QrTableResponse(tableId, restaurantId, "MESA-G", "Mesa", true),
-            new QrDiningSessionResponse(sessionId, restaurantId, tableId, "Open", true),
+            new QrTableResponse(tableId, restaurantId, "MESA-G", "Mesa"),
+            new QrDiningSessionResponse(sessionId, restaurantId, tableId, "Open"),
             "customer-token",
             true
         );
@@ -353,13 +353,16 @@ public sealed class QrOrderTests : BunitContext
         SetField(cut.Instance, "quantities", new Dictionary<Guid, int> { [productId] = 1 });
         await cut.Find(".checkout-bar button").ClickAsync();
 
-        Assert.Contains("Indica entre 1 y 999 comensales", cut.Markup);
-        Assert.DoesNotContain(requests, request => request.Contains("/sessions"));
+        Assert.DoesNotContain("¿Cuántos comensales van a comer?", cut.Markup);
+        Assert.DoesNotContain("Indica entre 1 y 999 comensales", cut.Markup);
+        Assert.Contains(requests, request => request == "POST /api/dining/qr/MESA-G/sessions");
+        Assert.DoesNotContain(requests, request => request.Contains("guestCount"));
+        Assert.DoesNotContain(requests, request => request.Contains("/guests"));
         await cut.Instance.DisposeAsync();
     }
 
     [Fact]
-    public async Task Guest_count_is_saved_before_customer_qr_order_is_created()
+    public async Task Customer_qr_order_does_not_send_guest_count()
     {
         Guid restaurantId = Guid.NewGuid();
         Guid tableId = Guid.NewGuid();
@@ -368,14 +371,14 @@ public sealed class QrOrderTests : BunitContext
         Guid orderId = Guid.NewGuid();
         List<string> requests = [];
         QrSessionEnvelope preview = new(
-            new QrTableResponse(tableId, restaurantId, "MESA-N", "Mesa nueva", true),
+            new QrTableResponse(tableId, restaurantId, "MESA-N", "Mesa nueva"),
             null,
             "customer-token",
             true
         );
         QrSessionEnvelope opened = preview with
         {
-            Session = new QrDiningSessionResponse(sessionId, restaurantId, tableId, "Open", true),
+            Session = new QrDiningSessionResponse(sessionId, restaurantId, tableId, "Open"),
         };
         Services.AddSingleton(
             new CustomerQrApi(
@@ -388,17 +391,6 @@ public sealed class QrOrderTests : BunitContext
                             return JsonResponse(preview);
                         if (path == "/api/dining/qr/MESA-N/sessions")
                             return JsonResponse(opened);
-                        if (path == $"/api/dining/sessions/{sessionId}/guests")
-                            return JsonResponse(
-                                new QrDiningSessionResponse(
-                                    sessionId,
-                                    restaurantId,
-                                    tableId,
-                                    "Open",
-                                    true,
-                                    3
-                                )
-                            );
                         if (path == $"/api/restaurant-operations/restaurants/{restaurantId}")
                             return JsonResponse(
                                 new RestaurantResponse(
@@ -481,12 +473,12 @@ public sealed class QrOrderTests : BunitContext
             parameters.Add(component => component.QrCode, "MESA-N")
         );
         cut.WaitForAssertion(() => Assert.Contains("Producto", cut.Markup));
-        await cut.Find("input[placeholder='Cantidad de comensales']").ChangeAsync("3");
         await cut.Find(".quantity-control button:last-child").ClickAsync();
         await cut.Find(".checkout-bar button").ClickAsync();
 
-        Assert.Contains("POST /api/dining/qr/MESA-N/sessions?guestCount=3", requests);
-        Assert.Contains($"PUT /api/dining/sessions/{sessionId}/guests", requests);
+        Assert.Contains("POST /api/dining/qr/MESA-N/sessions", requests);
+        Assert.DoesNotContain(requests, request => request.Contains("guestCount"));
+        Assert.DoesNotContain(requests, request => request.Contains("/guests"));
         Assert.Contains("POST /api/orders", requests);
         Assert.Contains("pagado y enviado", cut.Markup);
         await cut.Instance.DisposeAsync();
@@ -503,8 +495,8 @@ public sealed class QrOrderTests : BunitContext
         int orderCreations = 0;
         List<string> captureBodies = [];
         QrSessionEnvelope envelope = new(
-            new QrTableResponse(tableId, restaurantId, "MESA-R", "Mesa", false),
-            new QrDiningSessionResponse(sessionId, restaurantId, tableId, "Open", false, 2),
+            new QrTableResponse(tableId, restaurantId, "MESA-R", "Mesa"),
+            new QrDiningSessionResponse(sessionId, restaurantId, tableId, "Open"),
             "customer-token",
             true
         );

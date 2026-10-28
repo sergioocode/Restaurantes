@@ -187,7 +187,8 @@ public sealed partial class DiningService
             ct
         );
         bool valid = session is not null;
-        if (valid && session!.RequestGuestCount && session.GuestCount is null)
+        bool customerQrRequest = string.Equals(source, "CustomerQr", StringComparison.Ordinal);
+        if (valid && !customerQrRequest && session!.RequestGuestCount && session.GuestCount is null)
         {
             return DiningResults.Conflict(
                 new { detail = "Indica la cantidad de comensales antes de pedir." }
@@ -214,7 +215,11 @@ public sealed partial class DiningService
         DiningTableZone? tableZone =
             valid && tableId is Guid id ? await db.ReadTableZoneAsync(restaurantId, id, ct) : null;
         return valid
-            ? DiningResults.NoContent(session!.GuestCount, tableZone?.ZoneId, tableZone?.ZoneName)
+            ? DiningResults.NoContent(
+                customerQrRequest ? null : session!.GuestCount,
+                tableZone?.ZoneId,
+                tableZone?.ZoneName
+            )
             : DiningResults.Conflict(
                 new
                 {

@@ -217,13 +217,15 @@ public sealed class DiningServiceSessionTests
     }
 
     [Fact]
-    public async Task ValidateSession_checks_open_session_guest_count_mode_and_qr_token()
+    public async Task ValidateSession_skips_guest_count_for_customer_qr_but_checks_mode_and_token()
     {
         (DiningService service, DiningSessionStoreProxy store, _, _) = CreateService();
         store.TableZoneId = Guid.NewGuid();
         store.TableZoneName = "Terraza";
         DiningRequest request = new(Principal(UserId), "secret-token", null);
         DiningSession session = Session(requestGuestCount: true);
+        session.Source = "CustomerQr";
+        session.CustomerAccessToken = "secret-token";
 
         DiningResult missing = await service.ValidateSession(
             session.Id,
@@ -237,7 +239,7 @@ public sealed class DiningServiceSessionTests
         Assert.Equal(DiningOutcome.Conflict, missing.Outcome);
 
         store.Session = session;
-        DiningResult guestCountRequired = await service.ValidateSession(
+        DiningResult validQrWithoutGuestCount = await service.ValidateSession(
             session.Id,
             RestaurantId,
             TableId,
@@ -246,9 +248,9 @@ public sealed class DiningServiceSessionTests
             request,
             CancellationToken.None
         );
-        Assert.Equal(DiningOutcome.Conflict, guestCountRequired.Outcome);
+        Assert.Equal(DiningOutcome.NoContent, validQrWithoutGuestCount.Outcome);
+        Assert.Null(validQrWithoutGuestCount.GuestCount);
 
-        session.GuestCount = 2;
         DiningResult wrongMode = await service.ValidateSession(
             session.Id,
             RestaurantId,
@@ -260,8 +262,6 @@ public sealed class DiningServiceSessionTests
         );
         Assert.Equal(DiningOutcome.Conflict, wrongMode.Outcome);
 
-        session.Source = "CustomerQr";
-        session.CustomerAccessToken = "secret-token";
         DiningResult validQr = await service.ValidateSession(
             session.Id,
             RestaurantId,
@@ -275,7 +275,7 @@ public sealed class DiningServiceSessionTests
             CancellationToken.None
         );
         Assert.Equal(DiningOutcome.NoContent, validQr.Outcome);
-        Assert.Equal(2, validQr.GuestCount);
+        Assert.Null(validQr.GuestCount);
         Assert.Equal(store.TableZoneId, validQr.ZoneId);
         Assert.Equal(store.TableZoneName, validQr.ZoneName);
     }
@@ -1235,7 +1235,7 @@ public sealed class DiningServiceSessionTests
     }
 
     [Fact]
-    public async Task Open_qr_session_checks_table_and_session_state_and_handles_duplicate_race()
+    public async Task Open_qr_session_ignores_guest_count_and_checks_table_and_session_state()
     {
         (DiningService service, DiningSessionStoreProxy store, _, DiningCashRegisterProxy cash) =
             CreateService();
@@ -1243,7 +1243,7 @@ public sealed class DiningServiceSessionTests
 
         Assert.Equal(
             DiningOutcome.NotFound,
-            (await service.OpenQrSession("ABC123", null, anonymous, CancellationToken.None)).Outcome
+            (await service.OpenQrSession("ABC123", anonymous, CancellationToken.None)).Outcome
         );
         RestaurantTable table = Table();
         table.QrCode = "ABC123";
@@ -1253,39 +1253,38 @@ public sealed class DiningServiceSessionTests
         table.DeletedAtUtc = DateTime.UtcNow;
         Assert.Equal(
             DiningOutcome.NotFound,
-            (await service.OpenQrSession("ABC123", 2, anonymous, CancellationToken.None)).Outcome
+            (await service.OpenQrSession("ABC123", anonymous, CancellationToken.None)).Outcome
         );
         table.DeletedAtUtc = null;
         table.IsActive = false;
         Assert.Equal(
             DiningOutcome.Conflict,
-            (await service.OpenQrSession("ABC123", 2, anonymous, CancellationToken.None)).Outcome
+            (await service.OpenQrSession("ABC123", anonymous, CancellationToken.None)).Outcome
         );
         table.IsActive = true;
         cash.Failure = new DiningCashRegisterClosedException("Caja cerrada");
         Assert.Equal(
             DiningOutcome.Conflict,
-            (await service.OpenQrSession("ABC123", 2, anonymous, CancellationToken.None)).Outcome
+            (await service.OpenQrSession("ABC123", anonymous, CancellationToken.None)).Outcome
         );
         cash.Failure = null;
 
         store.Session = Session();
         Assert.Equal(
             DiningOutcome.Conflict,
-            (await service.OpenQrSession("ABC123", 2, anonymous, CancellationToken.None)).Outcome
+            (await service.OpenQrSession("ABC123", anonymous, CancellationToken.None)).Outcome
         );
         store.Session.Source = "CustomerQr";
         store.Session.CustomerAccessToken = "private-token";
         Assert.Equal(
             DiningOutcome.Conflict,
-            (await service.OpenQrSession("ABC123", 2, anonymous, CancellationToken.None)).Outcome
+            (await service.OpenQrSession("ABC123", anonymous, CancellationToken.None)).Outcome
         );
         Assert.Equal(
             DiningOutcome.Ok,
             (
                 await service.OpenQrSession(
                     "ABC123",
-                    2,
                     new DiningRequest(anonymous.User, "private-token", null),
                     CancellationToken.None
                 )
@@ -1293,32 +1292,23 @@ public sealed class DiningServiceSessionTests
         );
 
         store.Session = null;
-        Assert.Equal(
-            DiningOutcome.BadRequest,
-            (await service.OpenQrSession("ABC123", null, anonymous, CancellationToken.None)).Outcome
-        );
-        Assert.Equal(
-            DiningOutcome.BadRequest,
-            (await service.OpenQrSession("ABC123", 0, anonymous, CancellationToken.None)).Outcome
-        );
-
         DiningResult opened = await service.OpenQrSession(
             " abc123 ",
-            3,
             anonymous,
             CancellationToken.None
         );
         Assert.Equal(DiningOutcome.Created, opened.Outcome);
         DiningSession openedSession = Assert.Single(store.AddedEntities.OfType<DiningSession>());
         Assert.Equal("CustomerQr", openedSession.Source);
-        Assert.Equal(3, openedSession.GuestCount);
+        Assert.False(openedSession.RequestGuestCount);
+        Assert.Null(openedSession.GuestCount);
         Assert.Equal(64, openedSession.CustomerAccessToken.Length);
         Assert.True(store.Transaction.IsCommitted);
 
         store.ThrowSaveFailure = DiningStoreFailure.Duplicate;
         Assert.Equal(
             DiningOutcome.Conflict,
-            (await service.OpenQrSession("ABC123", 4, anonymous, CancellationToken.None)).Outcome
+            (await service.OpenQrSession("ABC123", anonymous, CancellationToken.None)).Outcome
         );
         Assert.True(store.DetachedSession);
     }

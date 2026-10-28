@@ -60,9 +60,14 @@ public sealed partial class DiningService
                 table.Code,
                 table.Label,
                 table.ZoneId,
-                session.RequestGuestCount,
             },
-            session = SessionResponse(session),
+            session = new
+            {
+                session.Id,
+                session.RestaurantId,
+                session.TableId,
+                session.Status,
+            },
             customerAccessToken = session.CustomerAccessToken,
             isRestaurantOpen,
         };

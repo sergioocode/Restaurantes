@@ -42,7 +42,6 @@ public sealed partial class DiningService
                         table.RestaurantId,
                         table.Code,
                         table.Label,
-                        requestGuestCount = table.Zone.RequestGuestCount ?? false,
                     },
                     session = (object?)null,
                     customerAccessToken = string.Empty,
@@ -53,7 +52,6 @@ public sealed partial class DiningService
 
     public async Task<DiningResult> OpenQrSession(
         string qrCode,
-        int? guestCount,
         DiningRequest httpContext,
         CancellationToken ct
     )
@@ -98,21 +96,12 @@ public sealed partial class DiningService
                 );
         }
 
-        bool requestGuestCount = table.Zone.RequestGuestCount ?? false;
-        if ((requestGuestCount && guestCount is null) || guestCount is < 1 or > 999)
-        {
-            return DiningResults.BadRequest(
-                new { detail = "Indica entre 1 y 999 comensales antes de pedir." }
-            );
-        }
-
         DiningSession session = new()
         {
             Id = Guid.NewGuid(),
             RestaurantId = table.RestaurantId,
             TableId = table.Id,
-            RequestGuestCount = requestGuestCount,
-            GuestCount = guestCount,
+            RequestGuestCount = false,
             Source = "CustomerQr",
             CustomerAccessToken = NewCustomerAccessToken(),
             OpenedAtUtc = time.GetUtcNow().UtcDateTime,
