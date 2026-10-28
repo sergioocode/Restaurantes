@@ -41,7 +41,7 @@ else
                     </button>
                     }
                 </div>
-                <label class="category-kds-select">Preparación KDS<select value="@(item.RequiresKds ? item.DefaultStationCode : "")" @onchange="args => SetStation(item, args)" disabled="@(!Host.CanManageCategories || Host.busy)">
+                <label class="category-kds-select">Preparación KDS<select value="@(item.RequiresKds ? item.DefaultStationCode : "")" @onchange="args => SetStation(item, args)" disabled="@(!Host.CanManageCategoryPreparation || Host.busy)">
                     <option value="">No requiere KDS</option>
                     @if (item.RequiresKds && !Host.stations.Any(x =>
                         x.IsActive && !x.IsPrimary && x.Code == item.DefaultStationCode

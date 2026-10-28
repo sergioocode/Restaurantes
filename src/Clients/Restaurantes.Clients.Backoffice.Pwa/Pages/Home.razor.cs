@@ -160,6 +160,7 @@ public partial class Home
     internal bool CanManageCategories => HasGlobalPermission("catalog.global.manage");
     internal bool CanViewCategories => CanManageCategories || IsCurrentRestaurantManager;
     internal bool CanManageStations => IsAdmin || IsCurrentRestaurantManager;
+    internal bool CanManageCategoryPreparation => CanManageStations;
     internal Guid? CurrentUserId => login?.User.Id;
     private bool HasBackofficeAccess =>
         HasGlobalPermission("backoffice.access")
@@ -1271,7 +1272,7 @@ public partial class Home
 
     internal async Task<bool> SaveCategoryPreparation(CategoryResponse item, string stationCode)
     {
-        if (!CanManageCategories || busy || restaurantId == Guid.Empty)
+        if (!CanManageCategoryPreparation || busy || restaurantId == Guid.Empty)
         {
             return false;
         }
