@@ -97,6 +97,10 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
         {
             fact.RestaurantId = data.RestaurantId;
             fact.TableLabel = data.TableLabel;
+            if (!string.IsNullOrWhiteSpace(data.ZoneName))
+            {
+                fact.ZoneName = data.ZoneName;
+            }
             fact.CustomerName = data.CustomerName;
             fact.ServiceMode = data.ServiceMode;
             fact.Source = data.Source;
@@ -142,6 +146,11 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
             db.Orders.Add(fact);
         }
 
+        fact.PaidAmount = Math.Max(
+            fact.PaidAmount,
+            e.AmountPaid > 0 ? e.AmountPaid : fact.PaidAmount + e.Amount
+        );
+
         if (e.IsFullyPaid || fact.PaymentStatus != "Paid")
         {
             Guid paymentTransactionId = e.PaymentId;
@@ -175,6 +184,7 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
             await db.Orders.FindAsync([e.OrderId], ct)
             ?? throw new JsonException("Refunded order is missing");
         fact.PaymentStatus = "Refunded";
+        fact.PaidAmount = 0;
         fact.RefundedAtUtc = e.RefundedAtUtc;
         fact.UpdatedAtUtc = e.RefundedAtUtc;
         fact.SaleRecognizedAtUtc = null;
@@ -274,7 +284,8 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
                 e.OccurredAtUtc,
                 null,
                 e.Lines,
-                e.Stations
+                e.Stations,
+                e.ZoneName
             );
         }
         if (type == typeof(OrderLineCancelled).FullName)
@@ -493,6 +504,7 @@ public sealed class ReportingProjectionHandler(ReportingReadDbContext db, TimePr
         DateTime UpdatedAtUtc,
         DateTime? DeliveredAtUtc,
         IReadOnlyList<OrderLineSnapshot> Lines,
-        IReadOnlyList<OrderKitchenStationSnapshot> Stations
+        IReadOnlyList<OrderKitchenStationSnapshot> Stations,
+        string? ZoneName = null
     );
 }

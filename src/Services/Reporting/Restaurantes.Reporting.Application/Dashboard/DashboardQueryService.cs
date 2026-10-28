@@ -60,9 +60,19 @@ public sealed class DashboardQueryService(
             .Select(g => new SalesRestaurant(g.Key, g.Count(), g.Sum(x => x.Total)))
             .OrderByDescending(x => x.Sales)
             .ToList();
-        List<SalesChannel> channels = sales
-            .GroupBy(x => x.Source)
-            .Select(g => new SalesChannel(g.Key, g.Count(), g.Sum(x => x.Total)))
+        HashSet<Guid> completedOrderIds = sales
+            .SelectMany(sale => sale.OrderIds)
+            .Where(orderId => !snapshot.RefundedOrderIds.Contains(orderId))
+            .ToHashSet();
+        List<SalesChannel> channels = snapshot
+            .CompletedOrderChannels.Where(order => completedOrderIds.Contains(order.OrderId))
+            .GroupBy(order => new { order.Source, order.ServiceMode })
+            .Select(group => new SalesChannel(
+                group.Key.Source,
+                group.Key.ServiceMode,
+                group.Count(),
+                group.Sum(order => order.PaidAmount)
+            ))
             .OrderByDescending(x => x.Sales)
             .ToList();
         List<SalesPaymentMethod> paymentMethods = SummarizePaymentMethods(sales);

@@ -198,7 +198,9 @@ public sealed partial class DiningService
         {
             // Bar remains accepted for historical orders; locations no longer have types.
             valid = session!.TableId is null
-                ? serviceMode == "Takeaway" && source == "Pos" && session.CustomerName.Length > 0
+                ? serviceMode == "Takeaway"
+                    && (source is "Pos" or "Comandero")
+                    && session.CustomerName.Length > 0
                 : serviceMode is "DineIn" or "Bar";
         }
         if (valid && string.Equals(source, "CustomerQr", StringComparison.Ordinal))
@@ -209,12 +211,10 @@ public sealed partial class DiningService
                 && TokenEquals(session.CustomerAccessToken, customerAccessToken);
         }
 
-        Guid? zoneId =
-            valid && tableId is Guid id
-                ? await db.ReadTableZoneIdAsync(restaurantId, id, ct)
-                : null;
+        DiningTableZone? tableZone =
+            valid && tableId is Guid id ? await db.ReadTableZoneAsync(restaurantId, id, ct) : null;
         return valid
-            ? DiningResults.NoContent(session!.GuestCount, zoneId)
+            ? DiningResults.NoContent(session!.GuestCount, tableZone?.ZoneId, tableZone?.ZoneName)
             : DiningResults.Conflict(
                 new
                 {

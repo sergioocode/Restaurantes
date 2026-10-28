@@ -1,395 +1,406 @@
 (() => {
-const $ = id => document.getElementById(id),
-    sep = String.fromCodePoint(30),
-    money = new Intl.NumberFormat('es-ES', {
-        style: 'currency',
-        currency: 'EUR'
-    }),
-    gatewayOrigin = location.origin,
-    sessionKey = 'restaurantes.dashboard.login';
-let refreshTimer, realtimeRefreshTimer, access, socket, realtimeGeneration = 0, deadLetterRefreshAt = 0, deadLetterRequestGeneration = 0;
-let dashboardLoadPromise = null, dashboardRefreshPending = false;
-let restaurantNames = new Map();
-let dashboardRestaurantIds = [];
-const today = new Date();
-$('date').value = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
+    const $ = id => document.getElementById(id),
+        sep = String.fromCodePoint(30),
+        money = new Intl.NumberFormat('es-ES', {
+            style: 'currency',
+            currency: 'EUR'
+        }),
+        gatewayOrigin = location.origin,
+        sessionKey = 'restaurantes.dashboard.login';
+    let refreshTimer, realtimeRefreshTimer, access, socket, realtimeGeneration = 0, deadLetterRefreshAt = 0, deadLetterRequestGeneration = 0;
+    let dashboardLoadPromise = null, dashboardRefreshPending = false;
+    let restaurantNames = new Map();
+    let dashboardRestaurantIds = [];
+    const today = new Date();
+    $('date').value = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
 
-function showLogin(message = '') {
-    $('authLoading').hidden = true;
-    $('loginView').hidden = false;
-    $('dashboardHeader').hidden = true;
-    $('dashboardContent').hidden = true;
-    $('loginError').textContent = message;
-    document.body.classList.add('login-mode')
-}
-
-function showDashboard() {
-    $('authLoading').hidden = true;
-    $('loginView').hidden = true;
-    $('dashboardHeader').hidden = false;
-    $('dashboardContent').hidden = false;
-    document.body.classList.remove('login-mode')
-}
-
-function startLogin(provider) {
-    window.location.assign('/api/identity/auth/start/' + provider + '?returnPath=' + encodeURIComponent('/dashboard/'));
-}
-$('loginMicrosoft').onclick = () => startLogin('Microsoft');
-$('loginGoogle').onclick = () => startLogin('Google');
-
-async function loadProvider() {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
-    let settings;
-    try {
-        const response = await fetch(gatewayOrigin + '/api/identity/auth/provider', {
-            signal: controller.signal
-        });
-        if (!response.ok) throw new Error('No se pudo consultar el proveedor.');
-        settings = await response.json();
-    } catch (error) {
-        if (controller.signal.aborted) throw new Error('La consulta del proveedor tardó demasiado. Reintenta.');
-        throw error;
-    } finally {
-        clearTimeout(timeout);
+    function showLogin(message = '') {
+        $('authLoading').hidden = true;
+        $('loginView').hidden = false;
+        $('dashboardHeader').hidden = true;
+        $('dashboardContent').hidden = true;
+        $('loginError').textContent = message;
+        document.body.classList.add('login-mode')
     }
-    $('loginMicrosoft').disabled = settings.activeProvider !== 'Microsoft' || !settings.microsoftConfigured;
-    $('loginGoogle').disabled = settings.activeProvider !== 'Google' || !settings.googleConfigured;
-}
 
-async function prepareLogin(message = '') {
-    showLogin(message);
-    try {
-        await loadProvider();
-    } catch (error) {
-        if (!message) $('loginError').textContent = error.message;
+    function showDashboard() {
+        $('authLoading').hidden = true;
+        $('loginView').hidden = true;
+        $('dashboardHeader').hidden = false;
+        $('dashboardContent').hidden = false;
+        document.body.classList.remove('login-mode')
     }
-}
 
-async function loadOnce() {
-    const requestedDate = $('date').value;
-    const requestedOrderLimit = $('orderLimit').value;
-    try {
-        const params = new URLSearchParams();
-        if (requestedDate) params.set('date', requestedDate);
-        params.set('orderLimit', requestedOrderLimit);
-        const d = await authorizedFetch('/api/reporting/dashboard/daily?' + params).then(r => r.json());
-        if (
-            requestedDate !== $('date').value
-            || requestedOrderLimit !== $('orderLimit').value
-        ) return;
-        $('sales').textContent = money.format(d.totalSales);
-        $('orders').textContent = d.completedSales;
-        $('average').textContent = money.format(d.averageTicket);
-        fill($('products'), d.topProducts, x => `<td>${escapeHtml(x.name)}</td><td>${x.quantity}</td><td>${money.format(x.sales)}</td>`);
-        fill($('restaurants'), d.restaurantRanking, x => `<td>${escapeHtml(restaurantName(x.restaurantId))}</td><td>${x.tickets}</td><td>${money.format(x.sales)}</td>`);
-        fill($('channels'), d.channels, x => `<td>${escapeHtml(x.source)}</td><td>${x.tickets}</td><td>${money.format(x.sales)}</td>`);
-        fill($('paymentMethods'), d.paymentMethods, x => `<td>${escapeHtml(paymentMethodLabel(x.method))}</td><td>${x.tickets}</td><td>${money.format(x.sales)}</td>`);
-        renderOperations(d.operationalOrders);
-        $('state').textContent = 'Actualizado ' + new Date().toLocaleTimeString();
-    } catch (e) {
-        if (access) $('state').textContent = 'Error: ' + e.message
+    function startLogin(provider) {
+        window.location.assign('/api/identity/auth/start/' + provider + '?returnPath=' + encodeURIComponent('/dashboard/'));
     }
-}
+    $('loginMicrosoft').onclick = () => startLogin('Microsoft');
+    $('loginGoogle').onclick = () => startLogin('Google');
 
-function load() {
-    if (!access) return Promise.resolve();
-    dashboardRefreshPending = true;
-    if (dashboardLoadPromise) return dashboardLoadPromise;
-
-    const drain = async () => {
-        while (dashboardRefreshPending) {
-            if (!access) break;
-            dashboardRefreshPending = false;
-            await loadOnce();
+    async function loadProvider() {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        let settings;
+        try {
+            const response = await fetch(gatewayOrigin + '/api/identity/auth/provider', {
+                signal: controller.signal
+            });
+            if (!response.ok) throw new Error('No se pudo consultar el proveedor.');
+            settings = await response.json();
+        } catch (error) {
+            if (controller.signal.aborted) throw new Error('La consulta del proveedor tardó demasiado. Reintenta.');
+            throw error;
+        } finally {
+            clearTimeout(timeout);
         }
-    };
-    dashboardLoadPromise = drain().finally(() => {
-        dashboardLoadPromise = null;
-        if (dashboardRefreshPending && access) void load();
-    });
-    return dashboardLoadPromise;
-}
-
-async function loadHealth() {
-    try {
-        const health = await authorizedFetch('/api/reporting/health').then(r => r.json());
-        fill($('health'), health, x => `<td>${escapeHtml(x.service)}</td><td class="${x.healthy ? 'ok' : 'bad'}">${x.healthy ? 'OK' : 'Error'} ${x.status || ''}</td>`)
-    } catch {
-        $('health').innerHTML = '<tr><td>Salud</td><td class="bad">Error al consultar</td></tr>'
-    }
-}
-
-async function loadDeadLetters() {
-    const alert = $('deadLetterAlert');
-    if (!(access?.allRestaurantsRoles || []).includes('Admin')) {
-        alert.hidden = true;
-        return
+        $('loginMicrosoft').disabled = settings.activeProvider !== 'Microsoft' || !settings.microsoftConfigured;
+        $('loginGoogle').disabled = settings.activeProvider !== 'Google' || !settings.googleConfigured;
     }
 
-    const now = Date.now();
-    if (now < deadLetterRefreshAt) return;
-    deadLetterRefreshAt = now + 30000;
-    const requestGeneration = ++deadLetterRequestGeneration;
-
-    try {
-        const queues = await authorizedFetch('/api/reporting/dead-letters').then(r => r.json()),
-            pending = queues.filter(x => x.available && x.messageCount > 0),
-            unavailable = queues.filter(x => !x.available),
-            total = pending.reduce((sum, x) => sum + x.messageCount, 0),
-            hasAlert = total > 0 || unavailable.length > 0;
-        if (requestGeneration !== deadLetterRequestGeneration) return;
-
-        alert.hidden = false;
-        alert.className = 'dead-letter-alert ' + (hasAlert ? 'bad' : 'ok');
-        alert.textContent = (total > 0 ? `⚠ DLQ ${total}` : unavailable.length > 0 ? '⚠ DLQ ?' : '✓ DLQ 0') + ' · cada 30 s';
-        alert.title = [
-            ...pending.map(x => `${x.queue}: ${x.messageCount} pendiente${x.messageCount === 1 ? '' : 's'}`),
-            ...unavailable.map(x => `${x.queue}: no disponible`)
-        ].join('\n') || 'No hay mensajes muertos pendientes.'
-    } catch (error) {
-        if (requestGeneration !== deadLetterRequestGeneration) return;
-        alert.hidden = false;
-        alert.className = 'dead-letter-alert bad';
-        alert.textContent = '⚠ DLQ ? · cada 30 s';
-        alert.title = 'No se pudo consultar el estado de las colas de mensajes muertos.'
+    async function prepareLogin(message = '') {
+        showLogin(message);
+        try {
+            await loadProvider();
+        } catch (error) {
+            if (!message) $('loginError').textContent = error.message;
+        }
     }
-}
 
-function check(r) {
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    return r
-}
-
-function authorizedFetch(path, options = {}) {
-    const headers = new Headers(options.headers || {});
-    headers.set('Authorization', 'Bearer ' + access.accessToken);
-    return fetch(gatewayOrigin + path, { ...options, headers, cache: 'no-store' }).then(check)
-}
-
-function fill(node, items, row) {
-    node.innerHTML = items.map(x => `<tr>${row(x)}</tr>`).join('') || '<tr><td>Sin datos</td></tr>'
-}
-
-function short(id) {
-    return id ? id.slice(0, 8) : '-'
-}
-
-function restaurantName(id) {
-    return restaurantNames.get(id?.toLowerCase()) || 'Local ' + short(id)
-}
-
-function escapeHtml(v) {
-    return String(v ?? '').replace(/[&<>"']/g, c => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;'
-    }[c]))
-}
-
-function badge(value) {
-    return `<span class="badge ${escapeHtml(value)}">${escapeHtml(value)}</span>`
-}
-
-function paymentMethodLabel(method) {
-    return ({
-        Card: 'Tarjeta',
-        Cash: 'Efectivo',
-        Transfer: 'Transferencia',
-        Mixed: 'Mixto',
-        UnavailableBreakdown: 'Sin desglose',
-        Online: 'Pago online',
-        Check: 'Cheque',
-        Cheque: 'Cheque',
-        Unknown: 'Sin especificar'
-    })[method] || method
-}
-
-function renderOperations(items) {
-    const groups = items.reduce((all, item) => {
-        if (!all[item.restaurantId]) all[item.restaurantId] = [];
-        all[item.restaurantId].push(item);
-    return all
-}, { });
-$('operations').innerHTML = Object.entries(groups).map(([local, orders]) => `<section><h3 class="local">${escapeHtml(restaurantName(local))}</h3><div class="orders">${orders.map(renderOrder).join('')}</div></section>`).join('') || '<p>Sin pedidos para este día.</p>'
-  }
-
-function renderOrder(o) {
-    const lines = o.lines.map(l => {
-        const cancelled = l.status === 'Cancelled';
-        const marker = lineStatusMarker(l.kitchenStatus, l.status);
-        return `<li class="operation-line${cancelled ? ' cancelled' : ''}">${marker}<span class="operation-product">${l.quantity} × ${escapeHtml(l.productName)}</span> <small>${escapeHtml(l.categoryName)} · ${escapeHtml(l.preparationStationCode)}</small></li>`;
-    }).join('');
-    const label = o.serviceMode === 'DineIn' ? o.tableLabel : o.serviceMode === 'Bar' ? (o.tableLabel || 'Barra') : ('Para llevar · ' + (o.customerName || 'Sin nombre'));
-    let methods = o.paymentMethods || [];
-    if (!methods.length && o.paymentMethod) methods = [o.paymentMethod];
-    return `<article class="order"><div class="order-head"><strong>${escapeHtml(label)}</strong><small>${short(o.orderId)}</small></div><div class="badges">${badge(o.serviceMode)}${badge(o.source === 'Pos' ? 'TPV' : o.source)}${badge(o.orderStatus)}${badge(o.paymentStatus)}${methods.map(badge).join('')}</div><ul>${lines}</ul><strong>${money.format(o.total)}</strong></article>`
-}
-
-function lineStatusMarker(status, lineStatus) {
-    if (lineStatus === 'Cancelled') {
-        return '<span class="line-cancelled-marker" role="img" aria-label="Producto cancelado">✕</span> ';
+    async function loadOnce() {
+        const requestedDate = $('date').value;
+        const requestedOrderLimit = $('orderLimit').value;
+        try {
+            const params = new URLSearchParams();
+            if (requestedDate) params.set('date', requestedDate);
+            params.set('orderLimit', requestedOrderLimit);
+            const d = await authorizedFetch('/api/reporting/dashboard/daily?' + params).then(r => r.json());
+            if (
+                requestedDate !== $('date').value
+                || requestedOrderLimit !== $('orderLimit').value
+            ) return;
+            $('sales').textContent = money.format(d.totalSales);
+            $('orders').textContent = d.completedSales;
+            $('average').textContent = money.format(d.averageTicket);
+            fill($('products'), d.topProducts, x => `<td>${escapeHtml(x.name)}</td><td>${x.quantity}</td><td>${money.format(x.sales)}</td>`);
+            fill($('restaurants'), d.restaurantRanking, x => `<td>${escapeHtml(restaurantName(x.restaurantId))}</td><td>${x.tickets}</td><td>${money.format(x.sales)}</td>`);
+            fill($('channels'), d.channels, x => `<td>${escapeHtml(channelLabel(x.source))}</td><td>${escapeHtml(serviceModeLabel(x.serviceMode))}</td><td>${x.tickets}</td><td>${money.format(x.sales)}</td>`);
+            fill($('paymentMethods'), d.paymentMethods, x => `<td>${escapeHtml(paymentMethodLabel(x.method))}</td><td>${x.tickets}</td><td>${money.format(x.sales)}</td>`);
+            renderOperations(d.operationalOrders);
+            $('state').textContent = 'Actualizado ' + new Date().toLocaleTimeString();
+        } catch (e) {
+            if (access) $('state').textContent = 'Error: ' + e.message
+        }
     }
-    const markers = {
-        Pending: ['⏳', 'Pendiente', 'line-pending-marker'],
-        InPreparation: ['🍴', 'En preparación', 'line-preparing-marker'],
-        Ready: ['⏳', 'Esperando despacho del chef', 'line-waiting-marker'],
-        Dispatched: ['✔', 'Despachado', 'line-complete-marker']
-    };
-    const marker = markers[status];
-    return marker
-        ? `<span class="${marker[2]}" role="img" aria-label="${marker[1]}" title="${marker[1]}">${marker[0]}</span> `
-        : '';
-}
 
-$('date').onchange = () => { void load() };
-$('orderLimit').onchange = () => { void load() };
+    function load() {
+        if (!access) return Promise.resolve();
+        dashboardRefreshPending = true;
+        if (dashboardLoadPromise) return dashboardLoadPromise;
 
-$('logout').onclick = logout;
-
-async function openDashboard(session) {
-    const dashboardRoles = new Set(['Admin', 'Gerente', 'Contabilidad', 'Marketing']);
-    const hasAllRestaurants = (session.allRestaurantsRoles || []).some(role => dashboardRoles.has(role))
-        && (session.allRestaurantsPermissions || []).includes('dashboard.read');
-    const allowed = new Set((session.restaurants || []).filter(x => dashboardRoles.has(x.role)
-        && (x.permissions || []).includes('dashboard.read')).map(x => x.restaurantId.toLowerCase()));
-    if (!hasAllRestaurants && allowed.size === 0) throw new Error('Este perfil no tiene acceso al Dashboard.');
-    access = session;
-    deadLetterRefreshAt = 0;
-    showDashboard();
-
-    let knownRestaurants = [];
-    try {
-        knownRestaurants = await authorizedFetch('/api/restaurant-operations/restaurants').then(r => r.json())
-    } catch { }
-    const visible = knownRestaurants.filter(x => hasAllRestaurants || allowed.has(x.id.toLowerCase()));
-    const missing = (access.restaurants || []).filter(x => allowed.has(x.restaurantId.toLowerCase()) && !visible.some(r => r.id.toLowerCase() === x.restaurantId.toLowerCase())).map(x => ({ id: x.restaurantId, name: 'Local ' + short(x.restaurantId) }));
-    const restaurants = [...visible, ...missing].sort((a, b) => a.name.localeCompare(b.name));
-    restaurantNames = new Map(restaurants.map(x => [x.id.toLowerCase(), x.name]));
-    dashboardRestaurantIds = restaurants.map(x => x.id);
-    $('currentUser').textContent = access.user.displayName;
-    await refreshAll();
-    scheduleRefresh();
-    realtime()
-}
-
-async function refreshAll() {
-    await Promise.all([load(), loadHealth(), loadDeadLetters()]);
-}
-
-function scheduleRefresh() {
-    clearTimeout(refreshTimer);
-    if (!access) return;
-    refreshTimer = setTimeout(async () => {
-        await refreshAll();
-        scheduleRefresh();
-    }, 30000);
-}
-
-function logout() {
-    realtimeGeneration++;
-    if (socket) socket.close();
-    socket = null;
-    access = null;
-    deadLetterRefreshAt = 0;
-    clearTimeout(refreshTimer);
-    clearTimeout(realtimeRefreshTimer);
-    dashboardRefreshPending = false;
-    sessionStorage.removeItem(sessionKey);
-    showLogin();
-    void loadProvider().catch(error => { $('loginError').textContent = error.message; });
-}
-
-async function realtime() {
-    const generation = ++realtimeGeneration;
-    if (socket) socket.close();
-    if (!access) return;
-    try {
-        const gateway = new URL(gatewayOrigin),
-            protocol = gateway.protocol === 'https:' ? 'wss' : 'ws',
-            neg = await authorizedFetch('/hubs/reporting/negotiate?negotiateVersion=1', {
-                method: 'POST'
-            }).then(check).then(r => r.json()),
-            ws = new WebSocket(`${protocol}://${gateway.host}/hubs/reporting?id=${encodeURIComponent(neg.connectionToken)}&access_token=${encodeURIComponent(access.accessToken)}`);
-        socket = ws;
-        let joined = false;
-        ws.onopen = () => ws.send(JSON.stringify({
-            protocol: 'json',
-            version: 1
-        }) + sep);
-        ws.onmessage = e => {
-            for (const raw of e.data.split(sep)) {
-                if (!raw) continue;
-                const m = JSON.parse(raw);
-                if (!joined && m.type === undefined) {
-                    ws.send(JSON.stringify({ type: 1, target: 'JoinRestaurants', arguments: [dashboardRestaurantIds] }) + sep);
-                    joined = true;
-                    $('state').textContent = 'Conectado';
-                    void load();
-                }
-                if (m.type === 1 && m.target === 'DashboardUpdated') {
-                    clearTimeout(realtimeRefreshTimer);
-                    realtimeRefreshTimer = setTimeout(() => { void load() }, 200);
-                }
+        const drain = async () => {
+            while (dashboardRefreshPending) {
+                if (!access) break;
+                dashboardRefreshPending = false;
+                await loadOnce();
             }
         };
-        ws.onclose = () => { if (access && generation === realtimeGeneration) setTimeout(realtime, 2000) }
-    } catch {
-        if (access && generation === realtimeGeneration) setTimeout(realtime, 2000)
+        dashboardLoadPromise = drain().finally(() => {
+            dashboardLoadPromise = null;
+            if (dashboardRefreshPending && access) void load();
+        });
+        return dashboardLoadPromise;
     }
-}
 
-(async function bootstrap() {
-    try {
-        const query = new URLSearchParams(window.location.hash.slice(1));
-        const code = query.get('login_code');
-        if (code) {
-            history.replaceState(null, '', window.location.pathname);
-            const response = await fetch(gatewayOrigin + '/api/identity/auth/exchange', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code })
-            });
-            if (!response.ok) throw new Error('La cuenta no está autorizada.');
-            const session = await response.json();
-            sessionStorage.setItem(sessionKey, JSON.stringify(session));
+    async function loadHealth() {
+        try {
+            const health = await authorizedFetch('/api/reporting/health').then(r => r.json());
+            fill($('health'), health, x => `<td>${escapeHtml(x.service)}</td><td class="${x.healthy ? 'ok' : 'bad'}">${x.healthy ? 'OK' : 'Error'} ${x.status || ''}</td>`)
+        } catch {
+            $('health').innerHTML = '<tr><td>Salud</td><td class="bad">Error al consultar</td></tr>'
+        }
+    }
+
+    async function loadDeadLetters() {
+        const alert = $('deadLetterAlert');
+        if (!(access?.allRestaurantsRoles || []).includes('Admin')) {
+            alert.hidden = true;
+            return
+        }
+
+        const now = Date.now();
+        if (now < deadLetterRefreshAt) return;
+        deadLetterRefreshAt = now + 30000;
+        const requestGeneration = ++deadLetterRequestGeneration;
+
+        try {
+            const queues = await authorizedFetch('/api/reporting/dead-letters').then(r => r.json()),
+                pending = queues.filter(x => x.available && x.messageCount > 0),
+                unavailable = queues.filter(x => !x.available),
+                total = pending.reduce((sum, x) => sum + x.messageCount, 0),
+                hasAlert = total > 0 || unavailable.length > 0;
+            if (requestGeneration !== deadLetterRequestGeneration) return;
+
+            alert.hidden = false;
+            alert.className = 'dead-letter-alert ' + (hasAlert ? 'bad' : 'ok');
+            alert.textContent = (total > 0 ? `⚠ DLQ ${total}` : unavailable.length > 0 ? '⚠ DLQ ?' : '✓ DLQ 0');
+            alert.title = [
+                ...pending.map(x => `${x.queue}: ${x.messageCount} pendiente${x.messageCount === 1 ? '' : 's'}`),
+                ...unavailable.map(x => `${x.queue}: no disponible`)
+            ].join('\n') || 'No hay mensajes muertos pendientes.'
+        } catch (error) {
+            if (requestGeneration !== deadLetterRequestGeneration) return;
+            alert.hidden = false;
+            alert.className = 'dead-letter-alert bad';
+            alert.textContent = '⚠ DLQ ?';
+            alert.title = 'No se pudo consultar el estado de las colas de mensajes muertos.'
+        }
+    }
+
+    function check(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r
+    }
+
+    function authorizedFetch(path, options = {}) {
+        const headers = new Headers(options.headers || {});
+        headers.set('Authorization', 'Bearer ' + access.accessToken);
+        return fetch(gatewayOrigin + path, { ...options, headers, cache: 'no-store' }).then(check)
+    }
+
+    function fill(node, items, row) {
+        node.innerHTML = items.map(x => `<tr>${row(x)}</tr>`).join('') || '<tr><td>Sin datos</td></tr>'
+    }
+
+    function short(id) {
+        return id ? id.slice(0, 8) : '-'
+    }
+
+    function restaurantName(id) {
+        return restaurantNames.get(id?.toLowerCase()) || 'Local ' + short(id)
+    }
+
+    function escapeHtml(v) {
+        return String(v ?? '').replace(/[&<>"']/g, c => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[c]))
+    }
+
+    function badge(value) {
+        return `<span class="badge ${escapeHtml(value)}">${escapeHtml(value)}</span>`
+    }
+
+    function paymentMethodLabel(method) {
+        return ({
+            Card: 'Tarjeta',
+            Cash: 'Efectivo',
+            Transfer: 'Transferencia',
+            Mixed: 'Mixto',
+            UnavailableBreakdown: 'Sin desglose',
+            Online: 'Pago online',
+            Check: 'Cheque',
+            Cheque: 'Cheque',
+            Unknown: 'Sin especificar'
+        })[method] || method
+    }
+
+    function channelLabel(source) {
+        return ({ Pos: 'POS', CustomerQr: 'Customer QR' })[source] || source
+    }
+
+    function serviceModeLabel(mode) {
+        return ({ DineIn: 'Dine-in', Bar: 'Barra', Takeaway: 'Takeaway' })[mode] || mode
+    }
+
+    function renderOperations(items) {
+        const groups = items.reduce((all, item) => {
+            if (!all[item.restaurantId]) all[item.restaurantId] = [];
+            all[item.restaurantId].push(item);
+            return all
+        }, {});
+        $('operations').innerHTML = Object.entries(groups).map(([local, orders]) => `<section><h3 class="local">${escapeHtml(restaurantName(local))}</h3><div class="orders">${orders.map(renderOrder).join('')}</div></section>`).join('') || '<p>Sin pedidos para este día.</p>'
+    }
+
+    function renderOrder(o) {
+        const lines = o.lines.map(l => {
+            const cancelled = l.status === 'Cancelled';
+            const marker = lineStatusMarker(l.kitchenStatus, l.status);
+            return `<li class="operation-line${cancelled ? ' cancelled' : ''}">${marker}<span class="operation-product">${l.quantity} × ${escapeHtml(l.productName)}</span> <small>${escapeHtml(l.categoryName)} · ${escapeHtml(l.preparationStationCode)}</small></li>`;
+        }).join('');
+        const location = o.serviceMode === 'DineIn' ? o.tableLabel : o.serviceMode === 'Bar' ? (o.tableLabel || 'Barra') : ('Para llevar · ' + (o.customerName || 'Sin nombre'));
+        const zone = o.serviceMode === 'Takeaway' ? '' : (o.zoneName || '').trim();
+        const label = [location, zone].filter(Boolean).join(' · ');
+        let methods = o.paymentMethods || [];
+        if (!methods.length && o.paymentMethod) methods = [o.paymentMethod];
+        const sourceLabel = o.source === 'Pos' ? 'TPV' : o.source;
+        return `<article class="order"><div class="order-head"><strong>${escapeHtml(label)}</strong><small>${short(o.orderId)}</small></div><div class="badges">${badge(o.serviceMode)}${badge(sourceLabel)}${badge(o.orderStatus)}${badge(o.paymentStatus)}${methods.map(badge).join('')}</div><ul>${lines}</ul><strong>${money.format(o.total)}</strong></article>`
+    }
+
+    function lineStatusMarker(status, lineStatus) {
+        if (lineStatus === 'Cancelled') {
+            return '<span class="line-cancelled-marker" role="img" aria-label="Producto cancelado">✕</span> ';
+        }
+        const markers = {
+            Pending: ['⏳', 'Pendiente', 'line-pending-marker'],
+            InPreparation: ['🍴', 'En preparación', 'line-preparing-marker'],
+            Ready: ['⏳', 'Esperando despacho del chef', 'line-waiting-marker'],
+            Dispatched: ['✔', 'Despachado', 'line-complete-marker']
+        };
+        const marker = markers[status];
+        return marker
+            ? `<span class="${marker[2]}" role="img" aria-label="${marker[1]}" title="${marker[1]}">${marker[0]}</span> `
+            : '';
+    }
+
+    $('date').onchange = () => { void load() };
+    $('orderLimit').onchange = () => { void load() };
+
+    $('logout').onclick = logout;
+
+    async function openDashboard(session) {
+        const dashboardRoles = new Set(['Admin', 'Gerente', 'Contabilidad', 'Marketing']);
+        const hasAllRestaurants = (session.allRestaurantsRoles || []).some(role => dashboardRoles.has(role))
+            && (session.allRestaurantsPermissions || []).includes('dashboard.read');
+        const allowed = new Set((session.restaurants || []).filter(x => dashboardRoles.has(x.role)
+            && (x.permissions || []).includes('dashboard.read')).map(x => x.restaurantId.toLowerCase()));
+        if (!hasAllRestaurants && allowed.size === 0) throw new Error('Este perfil no tiene acceso al Dashboard.');
+        access = session;
+        deadLetterRefreshAt = 0;
+        showDashboard();
+
+        let knownRestaurants = [];
+        try {
+            knownRestaurants = await authorizedFetch('/api/restaurant-operations/restaurants').then(r => r.json())
+        } catch { }
+        const visible = knownRestaurants.filter(x => hasAllRestaurants || allowed.has(x.id.toLowerCase()));
+        const missing = (access.restaurants || []).filter(x => allowed.has(x.restaurantId.toLowerCase()) && !visible.some(r => r.id.toLowerCase() === x.restaurantId.toLowerCase())).map(x => ({ id: x.restaurantId, name: 'Local ' + short(x.restaurantId) }));
+        const restaurants = [...visible, ...missing].sort((a, b) => a.name.localeCompare(b.name));
+        restaurantNames = new Map(restaurants.map(x => [x.id.toLowerCase(), x.name]));
+        dashboardRestaurantIds = restaurants.map(x => x.id);
+        $('currentUser').textContent = access.user.displayName;
+        await refreshAll();
+        scheduleRefresh();
+        realtime()
+    }
+
+    async function refreshAll() {
+        await Promise.all([load(), loadHealth(), loadDeadLetters()]);
+    }
+
+    function scheduleRefresh() {
+        clearTimeout(refreshTimer);
+        if (!access) return;
+        refreshTimer = setTimeout(async () => {
+            await refreshAll();
+            scheduleRefresh();
+        }, 30000);
+    }
+
+    function logout() {
+        realtimeGeneration++;
+        if (socket) socket.close();
+        socket = null;
+        access = null;
+        deadLetterRefreshAt = 0;
+        clearTimeout(refreshTimer);
+        clearTimeout(realtimeRefreshTimer);
+        dashboardRefreshPending = false;
+        sessionStorage.removeItem(sessionKey);
+        showLogin();
+        void loadProvider().catch(error => { $('loginError').textContent = error.message; });
+    }
+
+    async function realtime() {
+        const generation = ++realtimeGeneration;
+        if (socket) socket.close();
+        if (!access) return;
+        try {
+            const gateway = new URL(gatewayOrigin),
+                protocol = gateway.protocol === 'https:' ? 'wss' : 'ws',
+                neg = await authorizedFetch('/hubs/reporting/negotiate?negotiateVersion=1', {
+                    method: 'POST'
+                }).then(check).then(r => r.json()),
+                ws = new WebSocket(`${protocol}://${gateway.host}/hubs/reporting?id=${encodeURIComponent(neg.connectionToken)}&access_token=${encodeURIComponent(access.accessToken)}`);
+            socket = ws;
+            let joined = false;
+            ws.onopen = () => ws.send(JSON.stringify({
+                protocol: 'json',
+                version: 1
+            }) + sep);
+            ws.onmessage = e => {
+                for (const raw of e.data.split(sep)) {
+                    if (!raw) continue;
+                    const m = JSON.parse(raw);
+                    if (!joined && m.type === undefined) {
+                        ws.send(JSON.stringify({ type: 1, target: 'JoinRestaurants', arguments: [dashboardRestaurantIds] }) + sep);
+                        joined = true;
+                        $('state').textContent = 'Conectado';
+                        void load();
+                    }
+                    if (m.type === 1 && m.target === 'DashboardUpdated') {
+                        clearTimeout(realtimeRefreshTimer);
+                        realtimeRefreshTimer = setTimeout(() => { void load() }, 200);
+                    }
+                }
+            };
+            ws.onclose = () => { if (access && generation === realtimeGeneration) setTimeout(realtime, 2000) }
+        } catch {
+            if (access && generation === realtimeGeneration) setTimeout(realtime, 2000)
+        }
+    }
+
+    (async function bootstrap() {
+        try {
+            const query = new URLSearchParams(window.location.hash.slice(1));
+            const code = query.get('login_code');
+            if (code) {
+                history.replaceState(null, '', window.location.pathname);
+                const response = await fetch(gatewayOrigin + '/api/identity/auth/exchange', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code })
+                });
+                if (!response.ok) throw new Error('La cuenta no está autorizada.');
+                const session = await response.json();
+                sessionStorage.setItem(sessionKey, JSON.stringify(session));
+                await openDashboard(session);
+                return;
+            }
+            if (query.has('login_error')) {
+                history.replaceState(null, '', window.location.pathname);
+                await prepareLogin('La cuenta no está autorizada o el proveedor rechazó el acceso.');
+                return;
+            }
+            const saved = sessionStorage.getItem(sessionKey);
+            if (!saved) {
+                await prepareLogin();
+                return;
+            }
+            const session = JSON.parse(saved);
+            if (new Date(session.expiresAtUtc) <= new Date()) {
+                sessionStorage.removeItem(sessionKey);
+                await prepareLogin();
+                return;
+            }
             await openDashboard(session);
-            return;
+        } catch (error) {
+            if (access) {
+                showDashboard();
+                $('state').textContent = error.message;
+            } else {
+                sessionStorage.removeItem(sessionKey);
+                await prepareLogin(error.message);
+            }
         }
-        if (query.has('login_error')) {
-            history.replaceState(null, '', window.location.pathname);
-            await prepareLogin('La cuenta no está autorizada o el proveedor rechazó el acceso.');
-            return;
-        }
-        const saved = sessionStorage.getItem(sessionKey);
-        if (!saved) {
-            await prepareLogin();
-            return;
-        }
-        const session = JSON.parse(saved);
-        if (new Date(session.expiresAtUtc) <= new Date()) {
-            sessionStorage.removeItem(sessionKey);
-            await prepareLogin();
-            return;
-        }
-        await openDashboard(session);
-    } catch (error) {
-        if (access) {
-            showDashboard();
-            $('state').textContent = error.message;
-        } else {
-            sessionStorage.removeItem(sessionKey);
-            await prepareLogin(error.message);
-        }
-    }
-})();
+    })();
 
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./service-worker.js', { updateViaCache: 'none' });
-    });
-}
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./service-worker.js', { updateViaCache: 'none' });
+        });
+    }
 })();
 

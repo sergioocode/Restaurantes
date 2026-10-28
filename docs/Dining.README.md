@@ -262,7 +262,7 @@ El TPV abre una sesión virtual mediante:
 POST /api/dining/restaurants/{restaurantId}/takeaway-sessions
 ```
 
-La sesión guarda el nombre del cliente, el origen `Pos` y `TableId = null`. El TPV la usa al crear el pedido `Takeaway`; Orders valida la sesión de forma síncrona y publica los mismos eventos de creación, preparación, despacho y entrega que para los demás pedidos. La sesión se muestra en la lista de recogidas del TPV y se puede consultar/cobrar como una cuenta. En el flujo actual, cada nuevo pedido para llevar abre una sesión propia, y varias sesiones pueden permanecer abiertas a la vez.
+La sesión guarda el nombre del cliente, el origen `Pos` y `TableId = null`. El TPV la usa al crear un pedido `Pos` con modalidad `Takeaway`; Orders valida la sesión de forma síncrona y publica los mismos eventos de creación, preparación, despacho y entrega que para los demás pedidos. La sesión se muestra en la lista de recogidas del TPV y se puede consultar/cobrar como una cuenta. En el flujo actual, cada nuevo pedido para llevar abre una sesión propia, y varias sesiones pueden permanecer abiertas a la vez.
 
 Takeaway no ocupa ni libera una ubicación física. La acción de cierre libera la sesión virtual después de que sus pedidos estén pagados y entregados o cancelados, igual que Dining verifica esas condiciones para cerrar una sesión de mesa.
 

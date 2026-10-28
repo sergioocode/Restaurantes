@@ -98,6 +98,62 @@ public sealed class DashboardQueryServiceEdgeCaseTests
         );
     }
 
+    [Fact]
+    public async Task Channels_keep_pos_and_takeaway_sales_separate()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        Guid dineInOrderId = Guid.NewGuid();
+        Guid takeawayOrderId = Guid.NewGuid();
+        SnapshotStore store = new(
+            new DailyReportingSnapshot(
+                [
+                    new CompletedSale(restaurantId, 12m, "Pos", "Card", [], [dineInOrderId], []),
+                    new CompletedSale(restaurantId, 7m, "Pos", "Card", [], [takeawayOrderId], []),
+                ],
+                new HashSet<Guid>(),
+                []
+            )
+            {
+                CompletedOrderChannels =
+                [
+                    new CompletedOrderChannel(dineInOrderId, "Pos", "DineIn", 12m),
+                    new CompletedOrderChannel(takeawayOrderId, "Pos", "Takeaway", 7m),
+                ],
+            }
+        );
+        DashboardQueryService service = new(
+            store,
+            new FixedTimeProvider(new DateTimeOffset(2026, 10, 19, 12, 0, 0, TimeSpan.Zero)),
+            TimeZoneInfo.Utc
+        );
+
+        DailyDashboard dashboard = await service.GetDailyAsync(
+            new DateOnly(2026, 10, 19),
+            [restaurantId],
+            10,
+            CancellationToken.None
+        );
+
+        Assert.Equal(
+            12m,
+            Assert
+                .Single(
+                    dashboard.Channels,
+                    channel => channel.Source == "Pos" && channel.ServiceMode == "DineIn"
+                )
+                .Sales
+        );
+        Assert.Equal(
+            7m,
+            Assert
+                .Single(
+                    dashboard.Channels,
+                    channel => channel.Source == "Pos" && channel.ServiceMode == "Takeaway"
+                )
+                .Sales
+        );
+    }
+
     private static OperationalOrder OperationalOrder(Guid orderId) =>
         new(
             orderId,

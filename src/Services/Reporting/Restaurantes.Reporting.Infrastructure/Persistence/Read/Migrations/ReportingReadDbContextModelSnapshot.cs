@@ -120,6 +120,12 @@ namespace Restaurantes.Reporting.Infrastructure.Migrations
                     b.Property<Guid?>("PaymentTransactionId")
                         .HasColumnType("uuid");
 
+                    b.Property<decimal>("PaidAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(0m);
+
                     b.Property<DateTime?>("RefundedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -149,6 +155,13 @@ namespace Restaurantes.Reporting.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
+
+                    b.Property<string>("ZoneName")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasDefaultValue("");
 
                     b.Property<decimal>("Total")
                         .HasPrecision(12, 2)

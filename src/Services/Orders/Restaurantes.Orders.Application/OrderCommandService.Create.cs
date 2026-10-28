@@ -18,7 +18,7 @@ public sealed partial class OrderCommandService
         (OrderSource source, PaymentTiming timing, ServiceMode serviceMode) = ParseOrderTypes(
             request
         );
-        (int? guestCount, Guid? zoneId) = await ValidateDiningSessionAsync(
+        (int? guestCount, Guid? zoneId, string? zoneName) = await ValidateDiningSessionAsync(
             request,
             serviceMode,
             customerAccessToken,
@@ -82,7 +82,8 @@ public sealed partial class OrderCommandService
                 Lines(order),
                 Stations(order),
                 createdByUserId,
-                zoneId
+                zoneId,
+                zoneName
             ),
             ct
         );
@@ -107,7 +108,11 @@ public sealed partial class OrderCommandService
         return (source, timing, serviceMode);
     }
 
-    private async Task<(int? GuestCount, Guid? ZoneId)> ValidateDiningSessionAsync(
+    private async Task<(
+        int? GuestCount,
+        Guid? ZoneId,
+        string? ZoneName
+    )> ValidateDiningSessionAsync(
         CreateOrderRequest request,
         ServiceMode serviceMode,
         string customerAccessToken,
@@ -119,12 +124,12 @@ public sealed partial class OrderCommandService
             if (serviceMode != ServiceMode.Takeaway || request.TableId is not null)
                 throw new ArgumentException("Orders require an open dining session.");
 
-            return (null, null);
+            return (null, null, null);
         }
 
         if (
             (serviceMode is ServiceMode.DineIn or ServiceMode.Bar) != (request.TableId is not null)
-            || (serviceMode == ServiceMode.Takeaway && request.Source != "Pos")
+            || (serviceMode == ServiceMode.Takeaway && request.Source is not ("Pos" or "Comandero"))
         )
         {
             throw new ArgumentException("The order location does not match its service mode.");
@@ -147,7 +152,7 @@ public sealed partial class OrderCommandService
             throw new InvalidOperationException("The dining table zone could not be resolved.");
         }
 
-        return (validation.GuestCount, validation.ZoneId);
+        return (validation.GuestCount, validation.ZoneId, validation.ZoneName);
     }
 
     private static OrderLineDraft BuildLineDraft(

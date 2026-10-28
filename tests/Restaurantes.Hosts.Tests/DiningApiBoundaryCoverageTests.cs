@@ -97,7 +97,8 @@ public sealed class DiningApiBoundaryCoverageTests
                 ProblemStatusCode: StatusCodes.Status422UnprocessableEntity,
                 ProblemTitle: "Invalid dining operation",
                 ProblemDetail: "The requested transition is not allowed.",
-                ZoneId: Guid.Parse("923c7197-494f-4db8-90f8-73a7d54d3a35")
+                ZoneId: Guid.Parse("923c7197-494f-4db8-90f8-73a7d54d3a35"),
+                ZoneName: "Terraza"
             );
 
             IActionResult action = (IActionResult)
@@ -108,6 +109,10 @@ public sealed class DiningApiBoundaryCoverageTests
             Assert.Equal(
                 "923c7197-494f-4db8-90f8-73a7d54d3a35",
                 controller.Response.Headers["X-Dining-Zone-Id"]
+            );
+            Assert.Equal(
+                Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("Terraza")),
+                controller.Response.Headers["X-Dining-Zone-Name-Base64"]
             );
             if (action is CreatedResult created)
             {
@@ -131,6 +136,7 @@ public sealed class DiningApiBoundaryCoverageTests
         );
         Assert.False(noHeadersController.Response.Headers.ContainsKey("X-Dining-Guest-Count"));
         Assert.False(noHeadersController.Response.Headers.ContainsKey("X-Dining-Zone-Id"));
+        Assert.False(noHeadersController.Response.Headers.ContainsKey("X-Dining-Zone-Name-Base64"));
 
         TargetInvocationException exception = Assert.Throws<TargetInvocationException>(() =>
             InvokeRequestContext(

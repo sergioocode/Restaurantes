@@ -31,6 +31,10 @@ public sealed class DiningSessionHttpStoreTests
             HttpResponseMessage response = new(HttpStatusCode.NoContent);
             response.Headers.Add("X-Dining-Guest-Count", "3");
             response.Headers.Add("X-Dining-Zone-Id", zoneId.ToString());
+            response.Headers.Add(
+                "X-Dining-Zone-Name-Base64",
+                Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("Terraza"))
+            );
             return response;
         });
         DiningSessionHttpStore store = new(
@@ -49,6 +53,7 @@ public sealed class DiningSessionHttpStoreTests
 
         Assert.Equal(3, result.GuestCount);
         Assert.Equal(zoneId, result.ZoneId);
+        Assert.Equal("Terraza", result.ZoneName);
     }
 
     [Fact]
@@ -60,6 +65,7 @@ public sealed class DiningSessionHttpStoreTests
             HttpResponseMessage response = new(HttpStatusCode.NoContent);
             response.Headers.Add("X-Dining-Guest-Count", "not-a-number");
             response.Headers.Add("X-Dining-Zone-Id", "not-a-guid");
+            response.Headers.Add("X-Dining-Zone-Name-Base64", "not-base64");
             return response;
         });
         DiningSessionHttpStore store = new(

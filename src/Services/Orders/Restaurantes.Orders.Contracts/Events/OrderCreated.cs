@@ -16,5 +16,6 @@ public sealed record OrderCreated(
     IReadOnlyList<OrderLineSnapshot> Lines,
     IReadOnlyList<OrderKitchenStationSnapshot> Stations,
     Guid? CreatedByUserId = null,
-    Guid? ZoneId = null
+    Guid? ZoneId = null,
+    string? ZoneName = null
 );

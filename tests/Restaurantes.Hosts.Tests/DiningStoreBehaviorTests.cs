@@ -103,11 +103,11 @@ public sealed class DiningStoreBehaviorTests
         Assert.Equal(["T01", "T02", "T03"], tables.Select(table => table.Code));
         Assert.Equal("Salón", tables[0].Zone.Name);
         Assert.Equal(
-            terrace.Id,
-            await store.ReadTableZoneIdAsync(restaurantId, second.Id, cancellationToken)
+            new DiningTableZone(terrace.Id, "Terraza"),
+            await store.ReadTableZoneAsync(restaurantId, second.Id, cancellationToken)
         );
         Assert.Null(
-            await store.ReadTableZoneIdAsync(restaurantId, anotherRestaurant.Id, cancellationToken)
+            await store.ReadTableZoneAsync(restaurantId, anotherRestaurant.Id, cancellationToken)
         );
 
         List<DiningZone> zones = await store.ListZonesAsync(restaurantId, cancellationToken);

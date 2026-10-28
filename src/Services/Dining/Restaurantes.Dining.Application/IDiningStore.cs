@@ -29,7 +29,11 @@ public interface IDiningStore
         Guid? tableId,
         CancellationToken ct
     );
-    Task<Guid?> ReadTableZoneIdAsync(Guid restaurantId, Guid tableId, CancellationToken ct);
+    Task<DiningTableZone?> ReadTableZoneAsync(
+        Guid restaurantId,
+        Guid tableId,
+        CancellationToken ct
+    );
     Task<DiningSession?> FindSessionWithOrdersAsync(Guid sessionId, CancellationToken ct);
     Task<List<DiningZone>> ListZonesAsync(Guid restaurantId, CancellationToken ct);
     Task<DiningZone?> FindZoneAsync(Guid restaurantId, Guid zoneId, CancellationToken ct);
@@ -49,6 +53,8 @@ public interface IDiningStore
     );
     void RemovePendingPayment(DiningPendingPayment payment);
 }
+
+public sealed record DiningTableZone(Guid ZoneId, string ZoneName);
 
 public enum DiningStoreFailure
 {

@@ -1,5 +1,5 @@
 const cachePrefix = 'restaurantes-dashboard-';
-const cacheName = `${cachePrefix}v10`;
+const cacheName = `${cachePrefix}v11`;
 const appShell = [
   './',
   './index.html',

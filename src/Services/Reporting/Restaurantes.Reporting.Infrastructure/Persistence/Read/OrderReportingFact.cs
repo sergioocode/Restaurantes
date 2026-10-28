@@ -6,6 +6,7 @@ public sealed class OrderReportingFact
     public Guid RestaurantId { get; set; }
     public Guid? PaymentTransactionId { get; set; }
     public string TableLabel { get; set; } = string.Empty;
+    public string ZoneName { get; set; } = string.Empty;
     public string CustomerName { get; set; } = string.Empty;
     public string ServiceMode { get; set; } = "DineIn";
     public string Source { get; set; } = string.Empty;
@@ -14,6 +15,7 @@ public sealed class OrderReportingFact
     public string PaymentStatus { get; set; } = "Unpaid";
     public string PaymentMethod { get; set; } = string.Empty;
     public decimal Total { get; set; }
+    public decimal PaidAmount { get; set; }
     public int Version { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public DateTime UpdatedAtUtc { get; set; }

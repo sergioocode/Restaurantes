@@ -166,7 +166,7 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
             );
     }
 
-    public Task<Guid?> ReadTableZoneIdAsync(
+    public Task<DiningTableZone?> ReadTableZoneAsync(
         Guid restaurantId,
         Guid tableId,
         CancellationToken ct
@@ -174,7 +174,7 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
         db
             .Tables.AsNoTracking()
             .Where(table => table.RestaurantId == restaurantId && table.Id == tableId)
-            .Select(table => (Guid?)table.ZoneId)
+            .Select(table => new DiningTableZone(table.ZoneId, table.Zone.Name))
             .SingleOrDefaultAsync(ct);
 
     public Task<DiningSession?> FindSessionWithOrdersAsync(Guid sessionId, CancellationToken ct)

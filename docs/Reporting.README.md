@@ -231,7 +231,7 @@ Incluye información procedente de distintos servicios:
 - origen del pedido;
 - modalidad temporal del pago.
 
-En un pedido para llevar, `ServiceMode` es `Takeaway`, `Source` sigue siendo `Pos` y no hay mesa física; `CustomerName` identifica al cliente. El Dashboard muestra «Para llevar · {nombre}» como ubicación y mantiene el origen TPV como badge. Esto diferencia la modalidad de servicio del canal que creó el pedido y deja el campo `Source` disponible para futuros canales de venta cuando estén implementados.
+Los pedidos para llevar del TPV usan `Source=Pos` y `ServiceMode=Takeaway`; no ocupan mesa y `CustomerName` identifica al cliente. `Source` y `ServiceMode` se conservan por pedido y permiten desglosar las ventas sin combinar ambas dimensiones en un valor persistido.
 
 ### Estado operativo
 
@@ -621,9 +621,7 @@ El ranking se ordena por ventas descendentes.
 
 ### Canales
 
-Agrupa por `Source`, permitiendo distinguir el origen comercial de las ventas.
-
-Por ejemplo, según los valores utilizados por los servicios productores, la proyección puede separar ventas generadas por distintos clientes o flujos de entrada.
+Agrupa por `Source` y `ServiceMode`, y muestra ambos valores por separado. Por ejemplo, los pedidos del TPV pueden aparecer como `Pos | DineIn` y `Pos | Takeaway`; una modalidad `Takeaway` de Comandero se distingue como `Comandero | Takeaway`.
 
 ### Métodos de pago
 

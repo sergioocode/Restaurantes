@@ -35,6 +35,24 @@ public sealed class ReportingReadStore(ReportingReadDbContext db) : IReportingRe
                 )
             )
             .ToListAsync(ct);
+        Guid[] completedOrderIds = saleFacts
+            .SelectMany(fact => JsonSerializer.Deserialize<List<Guid>>(fact.OrderIdsJson) ?? [])
+            .Distinct()
+            .ToArray();
+        List<CompletedOrderChannel> completedOrderChannels = [];
+        if (completedOrderIds.Length > 0)
+        {
+            completedOrderChannels = await db
+                .Orders.AsNoTracking()
+                .Where(order => completedOrderIds.Contains(order.OrderId))
+                .Select(order => new CompletedOrderChannel(
+                    order.OrderId,
+                    order.Source,
+                    order.ServiceMode,
+                    order.PaidAmount
+                ))
+                .ToListAsync(ct);
+        }
         HashSet<Guid> refundedOrderIds = (
             await orderQuery
                 .Where(x => x.PaymentStatus == "Refunded")
@@ -64,11 +82,14 @@ public sealed class ReportingReadStore(ReportingReadDbContext db) : IReportingRe
             .OrderByDescending(x => x.CreatedAtUtc)
             .ThenByDescending(x => x.OrderId)
             .ToList();
-        return new(
+        return new DailyReportingSnapshot(
             saleFacts.Select(MapSale).ToList(),
             refundedOrderIds,
             orderFacts.Select(MapOperation).ToList()
-        );
+        )
+        {
+            CompletedOrderChannels = completedOrderChannels,
+        };
     }
 
     private static CompletedSale MapSale(CompletedSaleFact fact)
@@ -124,7 +145,8 @@ public sealed class ReportingReadStore(ReportingReadDbContext db) : IReportingRe
             fact.UpdatedAtUtc,
             stations,
             lines,
-            []
+            [],
+            fact.ZoneName
         );
     }
 

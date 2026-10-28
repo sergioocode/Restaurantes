@@ -17,7 +17,14 @@ public sealed record SalesProduct(Guid ProductId, string Name, int Quantity, dec
 
 public sealed record SalesRestaurant(Guid RestaurantId, int Tickets, decimal Sales);
 
-public sealed record SalesChannel(string Source, int Tickets, decimal Sales);
+public sealed record SalesChannel(string Source, string ServiceMode, int Tickets, decimal Sales);
+
+public sealed record CompletedOrderChannel(
+    Guid OrderId,
+    string Source,
+    string ServiceMode,
+    decimal PaidAmount
+);
 
 public sealed record SalesPaymentMethod(string Method, int Tickets, decimal Sales);
 
@@ -55,7 +62,8 @@ public sealed record OperationalOrder(
     DateTime UpdatedAtUtc,
     IReadOnlyList<OperationalStation> Stations,
     IReadOnlyList<OperationalLine> Lines,
-    IReadOnlyList<string> PaymentMethods
+    IReadOnlyList<string> PaymentMethods,
+    string ZoneName = ""
 );
 
 public sealed record OperationalStation(string Code, string Name, string Status);
@@ -74,4 +82,7 @@ public sealed record DailyReportingSnapshot(
     IReadOnlyList<CompletedSale> Sales,
     IReadOnlySet<Guid> RefundedOrderIds,
     IReadOnlyList<OperationalOrder> OperationalOrders
-);
+)
+{
+    public IReadOnlyList<CompletedOrderChannel> CompletedOrderChannels { get; init; } = [];
+}

@@ -17,6 +17,7 @@ public sealed class ReportingReadDbContext(DbContextOptions<ReportingReadDbConte
         o.ToTable("order_reporting_facts");
         o.HasKey(x => x.OrderId);
         o.Property(x => x.TableLabel).HasMaxLength(80).IsRequired();
+        o.Property(x => x.ZoneName).HasMaxLength(80).HasDefaultValue(string.Empty).IsRequired();
         o.Property(x => x.CustomerName).HasMaxLength(80).IsRequired();
         o.Property(x => x.ServiceMode).HasMaxLength(30).HasDefaultValue("DineIn").IsRequired();
         o.Property(x => x.Source).HasMaxLength(30).IsRequired();
@@ -25,6 +26,7 @@ public sealed class ReportingReadDbContext(DbContextOptions<ReportingReadDbConte
         o.Property(x => x.PaymentStatus).HasMaxLength(30).IsRequired();
         o.Property(x => x.PaymentMethod).HasMaxLength(30);
         o.Property(x => x.Total).HasPrecision(12, 2);
+        o.Property(x => x.PaidAmount).HasPrecision(12, 2).HasDefaultValue(0m);
         o.Property(x => x.LinesJson).HasColumnType("jsonb").IsRequired();
         o.Property(x => x.StationsJson).HasColumnType("jsonb").IsRequired();
         o.HasIndex(x => new

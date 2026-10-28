@@ -27,6 +27,12 @@ internal static class DiningRequestContext
         {
             controller.Response.Headers["X-Dining-Zone-Id"] = zoneId.ToString();
         }
+        if (!string.IsNullOrWhiteSpace(result.ZoneName))
+        {
+            controller.Response.Headers["X-Dining-Zone-Name-Base64"] = Convert.ToBase64String(
+                System.Text.Encoding.UTF8.GetBytes(result.ZoneName)
+            );
+        }
 
         return result.Outcome switch
         {

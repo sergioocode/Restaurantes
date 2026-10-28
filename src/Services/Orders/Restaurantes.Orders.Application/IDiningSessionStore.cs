@@ -1,6 +1,10 @@
 ﻿namespace Restaurantes.Orders.Application;
 
-public sealed record DiningSessionValidation(int? GuestCount, Guid? ZoneId);
+public sealed record DiningSessionValidation(
+    int? GuestCount,
+    Guid? ZoneId,
+    string? ZoneName = null
+);
 
 public interface IDiningSessionStore
 {

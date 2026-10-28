@@ -60,7 +60,23 @@ public sealed class DiningSessionHttpStore(HttpClient client) : IDiningSessionSt
                 ) && Guid.TryParse(zoneValues.SingleOrDefault(), out Guid parsedZoneId)
                     ? parsedZoneId
                     : null;
-            return new DiningSessionValidation(guestCount, zoneId);
+            string? zoneName = null;
+            if (
+                response.Headers.TryGetValues(
+                    "X-Dining-Zone-Name-Base64",
+                    out IEnumerable<string>? zoneNameValues
+                ) && zoneNameValues.SingleOrDefault() is string encodedZoneName
+            )
+            {
+                try
+                {
+                    zoneName = System.Text.Encoding.UTF8.GetString(
+                        Convert.FromBase64String(encodedZoneName)
+                    );
+                }
+                catch (FormatException) { }
+            }
+            return new DiningSessionValidation(guestCount, zoneId, zoneName);
         }
     }
 }

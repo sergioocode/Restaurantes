@@ -183,7 +183,7 @@ Customer QR siempre usa `Immediate`; Orders rechaza otras modalidades para ese o
 
 - no referencia una mesa física, pero requiere una sesión virtual abierta en Dining;
 - requiere `CustomerName`;
-- se crea desde el TPV con origen `Pos` y pago `OnAccount`.
+- se crea desde el TPV con origen `Pos`, modalidad `Takeaway` y pago `OnAccount`.
 
 La sesión virtual identifica al cliente y permite asociar el pedido a una cuenta de Dining sin ocupar una ubicación de sala. En la interfaz actual del TPV, cada nuevo pedido para llevar abre su propia sesión; puede haber varias sesiones de recogida abiertas al mismo tiempo.
 
@@ -536,7 +536,7 @@ La proyección contiene, entre otros:
 
 Esta estructura está pensada para responder a las necesidades del KDS sin hacer joins sobre el modelo transaccional ni consultar el esquema `orders_write`.
 
-En la vista KDS, el origen `Pos` se presenta como «TPV» y la modalidad `Takeaway` añade «Para llevar». La modalidad no altera la asignación de estaciones ni las reglas de prioridad/despacho configuradas en Catalog.
+En la vista KDS, el origen identifica la aplicación que creó el pedido y la modalidad `Takeaway` indica que se prepara para llevar. La modalidad no altera la asignación de estaciones ni las reglas de prioridad/despacho configuradas en Catalog.
 
 ## SignalR
 
