@@ -22,6 +22,12 @@ public interface IDiningStore
     Task<List<RestaurantTable>> ListTablesAsync(Guid restaurantId, CancellationToken ct);
     Task<RestaurantTable?> LockQrTableAsync(string normalizedQrCode, CancellationToken ct);
     Task<DiningSession?> FindActiveSessionWithOrdersAsync(Guid tableId, CancellationToken ct);
+    Task<DiningSession?> FindQrSessionByTokenAsync(
+        Guid tableId,
+        string token,
+        CancellationToken ct
+    );
+    Task<List<Guid>> FindExpiredQrReservationIdsAsync(DateTime nowUtc, CancellationToken ct);
     Task<DiningSession?> ReadSessionWithOrdersAsync(Guid sessionId, CancellationToken ct);
     Task<DiningSession?> ReadValidatedSessionAsync(
         Guid sessionId,

@@ -24,5 +24,6 @@ internal static class WorkerHost
             )
             .ValidateOnStart();
         services.AddHostedService<DiningIntegrationWorker>();
+        services.AddHostedService<DiningQrReservationWorker>();
     }
 }

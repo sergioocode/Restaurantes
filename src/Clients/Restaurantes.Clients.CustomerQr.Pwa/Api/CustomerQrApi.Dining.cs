@@ -29,4 +29,18 @@ public sealed partial class CustomerQrApi
         using HttpResponseMessage response = await http.SendAsync(request);
         return await ReadAsync<QrSessionEnvelope>(response);
     }
+
+    public async Task<QrReservationActivityResponse> TouchReservationAsync(
+        Guid sessionId,
+        string customerAccessToken
+    )
+    {
+        using HttpRequestMessage request = WithCustomerToken(
+            HttpMethod.Post,
+            $"/api/dining/sessions/{sessionId}/qr/activity",
+            customerAccessToken
+        );
+        using HttpResponseMessage response = await http.SendAsync(request);
+        return await ReadAsync<QrReservationActivityResponse>(response);
+    }
 }

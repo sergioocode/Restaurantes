@@ -139,6 +139,37 @@ public sealed class DiningStore(DiningDbContext db) : IDiningStore
             .SingleOrDefaultAsync(x => x.TableId == tableId && x.Status == "Open", ct);
     }
 
+    public Task<DiningSession?> FindQrSessionByTokenAsync(
+        Guid tableId,
+        string token,
+        CancellationToken ct
+    )
+    {
+        return db
+            .Sessions.AsNoTracking()
+            .Include(x => x.Orders)
+            .SingleOrDefaultAsync(
+                x =>
+                    x.TableId == tableId
+                    && x.Source == "CustomerQr"
+                    && x.CustomerAccessToken == token,
+                ct
+            );
+    }
+
+    public Task<List<Guid>> FindExpiredQrReservationIdsAsync(DateTime nowUtc, CancellationToken ct)
+    {
+        return db
+            .Sessions.AsNoTracking()
+            .Where(x =>
+                x.Status == "Open"
+                && x.Source == "CustomerQr"
+                && x.QrReservationExpiresAtUtc <= nowUtc
+            )
+            .Select(x => x.Id)
+            .ToListAsync(ct);
+    }
+
     public Task<DiningSession?> ReadSessionWithOrdersAsync(Guid sessionId, CancellationToken ct)
     {
         return db

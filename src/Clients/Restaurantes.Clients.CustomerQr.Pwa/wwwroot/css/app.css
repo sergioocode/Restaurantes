@@ -109,6 +109,21 @@ button:disabled {
     color: #c9c1b8;
 }
 
+.qr-reservation-countdown {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .12);
+    font-size: .9rem;
+}
+
+.qr-reservation-countdown strong {
+    color: white;
+    font-variant-numeric: tabular-nums;
+}
+
 .eyebrow, .station {
     color: #f09b72;
     font-size: .72rem;

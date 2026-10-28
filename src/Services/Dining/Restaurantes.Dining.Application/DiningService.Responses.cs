@@ -67,6 +67,7 @@ public sealed partial class DiningService
                 session.RestaurantId,
                 session.TableId,
                 session.Status,
+                session.QrReservationExpiresAtUtc,
             },
             customerAccessToken = session.CustomerAccessToken,
             isRestaurantOpen,

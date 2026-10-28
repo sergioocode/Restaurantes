@@ -4,5 +4,6 @@ public sealed record QrDiningSessionResponse(
     Guid Id,
     Guid RestaurantId,
     Guid TableId,
-    string Status
+    string Status,
+    DateTime? QrReservationExpiresAtUtc = null
 );

@@ -81,6 +81,9 @@ namespace Restaurantes.Dining.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<DateTime?>("QrReservationExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int?>("GuestCount")
                         .HasColumnType("integer");
 

@@ -44,6 +44,7 @@ internal static class DiningRequestContext
             DiningOutcome.Forbidden => controller.Forbid(),
             DiningOutcome.NotFound => controller.NotFound(result.Value),
             DiningOutcome.Conflict => controller.Conflict(result.Value),
+            DiningOutcome.Gone => controller.StatusCode(StatusCodes.Status410Gone, result.Value),
             DiningOutcome.Problem => controller.Problem(
                 statusCode: result.ProblemStatusCode,
                 title: result.ProblemTitle,

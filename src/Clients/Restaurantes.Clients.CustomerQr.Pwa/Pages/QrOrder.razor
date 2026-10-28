@@ -1,6 +1,7 @@
 @page "/{QrCode}"
 @implements IAsyncDisposable
 @inject CustomerQrApi Api
+@inject CustomerQrCatalogRealtimeClient CatalogRealtime
 @inject IJSRuntime Js
 
 <PageTitle>Tu pedido</PageTitle>
@@ -11,6 +12,15 @@
         <div class="spinner"></div>
         <h1>Cargando la carta…</h1>
         <p>Estamos comprobando el QR y cargando la carta.</p>
+    </section>
+}
+else if (sessionExpired)
+{
+    <section class="empty-page error-page">
+        <div class="brand-mark">!</div>
+        <h1>La sesión QR terminó</h1>
+        <p>La reserva caducó o el personal liberó la mesa. Vuelve a escanear el código para pedir.</p>
+        <button class="primary-button" @onclick="LoadAsync">Volver a escanear</button>
     </section>
 }
 else if (!string.IsNullOrWhiteSpace(error))
@@ -33,12 +43,27 @@ else if (context is not null && !context.IsRestaurantOpen)
 }
 else if (context is not null)
 {
+    <div class="qr-order-page" @onpointerdown="RegisterQrActivity" @onkeydown="RegisterQrActivity">
     <header class="customer-header">
         <div>
             <span class="eyebrow">Pedido por QR</span>
             <h1>@context.Table.Label</h1>
             <p><strong>@restaurant?.Name</strong></p>
-            <p>@context.Table.Code · @(context.Session is null ? "Consulta la carta" : "Sesión activa")</p>
+            <p>
+                @context.Table.Code ·
+                @if (!qrOrderSubmitted && context.Session?.QrReservationExpiresAtUtc is not null)
+                {
+                    <span class="qr-reservation-countdown">
+                        <span aria-hidden="true">⏳</span>
+                        <span>Reserva QR temporal</span>
+                        <strong>@ReservationCountdown</strong>
+                    </span>
+                }
+                else
+                {
+                    <span>Mesa ocupada</span>
+                }
+            </p>
         </div>
         <div class="table-badge">Mesa</div>
     </header>
@@ -123,4 +148,5 @@ else if (context is not null)
             @(busy ? progress : "Pagar online y enviar")
         </button>
     </aside>
+    </div>
 }

@@ -73,8 +73,24 @@ public sealed class DiningWriteController(
         ObjectResult? denied = QrNetworkAccess.DeniedResult(HttpContext, configuration);
         return denied is not null
             ? Task.FromResult<IActionResult>(denied)
-            : Execute(() =>
+            : ExecuteDiningChange(() =>
                 service.OpenQrSession(qrCode, DiningRequestContext.FromHttpContext(HttpContext), ct)
+            );
+    }
+
+    [AllowAnonymous]
+    [HttpPost("sessions/{sessionId:guid}/qr/activity")]
+    public Task<IActionResult> TouchQrSession(Guid sessionId, CancellationToken ct)
+    {
+        ObjectResult? denied = QrNetworkAccess.DeniedResult(HttpContext, configuration);
+        return denied is not null
+            ? Task.FromResult<IActionResult>(denied)
+            : ExecuteDiningChange(() =>
+                service.TouchQrSession(
+                    sessionId,
+                    DiningRequestContext.FromHttpContext(HttpContext),
+                    ct
+                )
             );
     }
 

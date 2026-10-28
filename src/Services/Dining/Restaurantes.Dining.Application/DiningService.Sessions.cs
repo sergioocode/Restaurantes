@@ -210,7 +210,11 @@ public sealed partial class DiningService
             string? customerAccessToken = httpContext.CustomerSessionToken;
             valid =
                 session!.Source == "CustomerQr"
-                && TokenEquals(session.CustomerAccessToken, customerAccessToken);
+                && TokenEquals(session.CustomerAccessToken, customerAccessToken)
+                && (
+                    session.QrReservationExpiresAtUtc is null
+                    || session.QrReservationExpiresAtUtc > time.GetUtcNow().UtcDateTime
+                );
         }
 
         DiningTableZone? tableZone =

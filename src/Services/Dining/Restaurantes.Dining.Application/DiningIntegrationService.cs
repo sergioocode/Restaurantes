@@ -189,6 +189,11 @@ public sealed class DiningIntegrationService(IDiningStore db, TimeProvider time)
         DiningSessionOrder order =
             await db.FindOrderAsync(e.OrderId)
             ?? throw new JsonException($"Dining order ''{e.OrderId}'' does not exist.");
+        DiningSession? session = await db.FindSessionWithOrdersAsync(
+            e.DiningSessionId.Value,
+            CancellationToken.None
+        );
+        session?.ConfirmQrOrder();
         order.OrderStatus = AllKitchenStationsDispatched(e.Lines, e.Stations)
             ? "Delivered"
             : e.Status;

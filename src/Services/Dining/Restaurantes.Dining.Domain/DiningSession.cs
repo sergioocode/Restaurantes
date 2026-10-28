@@ -18,6 +18,7 @@ public sealed class DiningSession
     public string PaymentMethod { get; set; } = string.Empty;
     public decimal DiscountPercentage { get; set; }
     public string CustomerAccessToken { get; set; } = string.Empty;
+    public DateTime? QrReservationExpiresAtUtc { get; set; }
     public DateTime? PaidAtUtc { get; set; }
     public DateTime? CancelledAtUtc { get; set; }
     public Guid? CancelledByUserId { get; set; }
@@ -56,6 +57,7 @@ public sealed class DiningSession
     {
         Status = "Closed";
         ClosedAtUtc = now;
+        QrReservationExpiresAtUtc = null;
         Version++;
     }
 
@@ -65,7 +67,48 @@ public sealed class DiningSession
         CancelledByUserId = userId;
         CancelledAtUtc = now;
         ClosedAtUtc = now;
+        QrReservationExpiresAtUtc = null;
         Version++;
+    }
+
+    public bool HasConfirmedQrOrder =>
+        Source == "CustomerQr"
+        && Orders.Any(order =>
+            order.OrderStatus != "Draft" || order.PaymentStatus is "Paid" or "PartiallyPaid"
+        );
+
+    public void RenewQrReservation(DateTime expiresAtUtc)
+    {
+        if (Status == "Open" && Source == "CustomerQr" && !HasConfirmedQrOrder)
+        {
+            QrReservationExpiresAtUtc = expiresAtUtc;
+            Version++;
+        }
+    }
+
+    public void ConfirmQrOrder()
+    {
+        if (Source == "CustomerQr" && QrReservationExpiresAtUtc is not null)
+        {
+            QrReservationExpiresAtUtc = null;
+            Version++;
+        }
+    }
+
+    public void ExpireQrReservation(DateTime now)
+    {
+        if (
+            Status == "Open"
+            && Source == "CustomerQr"
+            && QrReservationExpiresAtUtc is not null
+            && !HasConfirmedQrOrder
+        )
+        {
+            Status = "Expired";
+            ClosedAtUtc = now;
+            QrReservationExpiresAtUtc = null;
+            Version++;
+        }
     }
 
     public void RegisterGuests(int guestCount)
