@@ -21,6 +21,7 @@ export class OrderRenderer {
     this.element = element;
     this.options = options;
     this.collapsedOrders = new Set();
+    this.collapsedPasses = new Set();
     this.orders = [];
     this.columnCount = this.getColumnCount();
     window.addEventListener('resize', () => {
@@ -178,6 +179,22 @@ export class OrderRenderer {
     toggleButton.setAttribute('aria-expanded', String(!collapsed));
     toggleButton.setAttribute('aria-label', collapsed ? 'Expandir tarjeta' : 'Contraer tarjeta');
     toggleButton.title = collapsed ? 'Mostrar pedido' : 'Recoger tarjeta';
+  }
+
+  togglePass(passKey, lines, toggleButton, priority) {
+    const collapsed = !lines.hidden;
+    if (collapsed) this.collapsedPasses.add(passKey);
+    else this.collapsedPasses.delete(passKey);
+    lines.hidden = collapsed;
+    this.updatePassToggleButton(toggleButton, collapsed, priority);
+  }
+
+  updatePassToggleButton(toggleButton, collapsed, priority) {
+    const action = collapsed ? 'Expandir' : 'Recoger';
+    toggleButton.textContent = collapsed ? '+' : '−';
+    toggleButton.setAttribute('aria-expanded', String(!collapsed));
+    toggleButton.setAttribute('aria-label', action + ' prioridad ' + priority);
+    toggleButton.title = action + ' prioridad ' + priority;
   }
 
   renderOtherStations(order, selectedStationCode) {
@@ -342,27 +359,43 @@ export class OrderRenderer {
   renderChefPasses(order) {
     const controlled = this.getControlledStations(order)
       .sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name));
-    if (new Set(controlled.map(station => station.priority)).size < 2) return null;
+    const priorityGroups = new Map();
+    for (const station of controlled) {
+      if (!priorityGroups.has(station.priority)) priorityGroups.set(station.priority, []);
+      priorityGroups.get(station.priority).push(station);
+    }
+    if (priorityGroups.size < 2) return null;
 
     const container = document.createElement('div');
     container.className = 'passes';
 
-    for (const station of controlled) {
+    for (const [priority, stations] of priorityGroups) {
       const pass = document.createElement('section');
       pass.className = 'pass';
       const header = document.createElement('header');
       const name = document.createElement('strong');
-      name.textContent = 'Prioridad ' + station.priority;
-      header.append(name);
+      name.textContent = 'Prioridad ' + priority;
+      const passKey = order.id + ':priority:' + priority;
+      const collapsed = this.collapsedPasses.has(passKey);
+      const toggleButton = document.createElement('button');
+      toggleButton.className = 'pass-collapse secondary';
+      toggleButton.type = 'button';
+      this.updatePassToggleButton(toggleButton, collapsed, priority);
+      header.append(name, toggleButton);
 
       const blocked = controlled.some(other =>
-        other.priority < station.priority
+        other.priority < priority
         && other.status !== 'Dispatched'
         && other.status !== 'Cancelled'
       );
       const lines = document.createElement('ul');
       lines.className = 'product-lines pass-lines';
-      for (const line of order.lines.filter(line => line.preparationStationCode === station.code)) {
+      lines.hidden = collapsed;
+      toggleButton.addEventListener('click', () =>
+        this.togglePass(passKey, lines, toggleButton, priority)
+      );
+      const stationCodes = new Set(stations.map(station => station.code));
+      for (const line of order.lines.filter(line => stationCodes.has(line.preparationStationCode))) {
         lines.append(this.renderProductLine(order, line, true, blocked, false));
       }
       pass.append(header, lines);
