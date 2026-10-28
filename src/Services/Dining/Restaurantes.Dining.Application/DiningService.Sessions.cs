@@ -187,49 +187,61 @@ public sealed partial class DiningService
             tableId,
             ct
         );
-        bool valid = session is not null;
         bool customerQrRequest = string.Equals(source, "CustomerQr", StringComparison.Ordinal);
-        if (valid && !customerQrRequest && session!.RequestGuestCount && session.GuestCount is null)
+        if (
+            session is not null
+            && !customerQrRequest
+            && session.RequestGuestCount
+            && session.GuestCount is null
+        )
         {
             return DiningResults.Conflict(
                 new { detail = "Indica la cantidad de comensales antes de pedir." }
             );
         }
 
-        if (valid)
+        if (
+            session is null
+            || !IsServiceModeValid(session, source, serviceMode)
+            || (customerQrRequest && !IsCustomerQrSessionValid(session, httpContext))
+        )
         {
-            // Bar remains accepted for historical orders; locations no longer have types.
-            valid = session!.TableId is null
-                ? serviceMode == "Takeaway"
-                    && (source is "Pos" or "Comandero")
-                    && session.CustomerName.Length > 0
-                : serviceMode is "DineIn" or "Bar";
-        }
-        if (valid && string.Equals(source, "CustomerQr", StringComparison.Ordinal))
-        {
-            string? customerAccessToken = httpContext.CustomerSessionToken;
-            valid =
-                session!.Source == "CustomerQr"
-                && TokenEquals(session.CustomerAccessToken, customerAccessToken)
-                && (
-                    session.QrReservationExpiresAtUtc is null
-                    || session.QrReservationExpiresAtUtc > time.GetUtcNow().UtcDateTime
-                );
-        }
-
-        DiningTableZone? tableZone =
-            valid && tableId is Guid id ? await db.ReadTableZoneAsync(restaurantId, id, ct) : null;
-        return valid
-            ? DiningResults.NoContent(
-                customerQrRequest ? null : session!.GuestCount,
-                tableZone?.ZoneId,
-                tableZone?.ZoneName
-            )
-            : DiningResults.Conflict(
+            return DiningResults.Conflict(
                 new
                 {
                     detail = "The dining session is not open or does not belong to this restaurant and table.",
                 }
+            );
+        }
+
+        DiningTableZone? tableZone = tableId is Guid id
+            ? await db.ReadTableZoneAsync(restaurantId, id, ct)
+            : null;
+        return DiningResults.NoContent(
+            customerQrRequest ? null : session.GuestCount,
+            tableZone?.ZoneId,
+            tableZone?.ZoneName
+        );
+    }
+
+    private static bool IsServiceModeValid(
+        DiningSession session,
+        string? source,
+        string? serviceMode
+    ) =>
+        session.TableId is null
+            ? serviceMode == "Takeaway"
+                && (source is "Pos" or "Comandero")
+                && session.CustomerName.Length > 0
+            : serviceMode is "DineIn" or "Bar";
+
+    private bool IsCustomerQrSessionValid(DiningSession session, DiningRequest httpContext)
+    {
+        return session.Source == "CustomerQr"
+            && TokenEquals(session.CustomerAccessToken, httpContext.CustomerSessionToken)
+            && (
+                session.QrReservationExpiresAtUtc is null
+                || session.QrReservationExpiresAtUtc > time.GetUtcNow().UtcDateTime
             );
     }
 

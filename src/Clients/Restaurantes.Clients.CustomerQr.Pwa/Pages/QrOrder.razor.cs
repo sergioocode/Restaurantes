@@ -365,52 +365,64 @@ public partial class QrOrder
                     }
 
                     lastSessionCheckAtUtc = DateTime.UtcNow;
-                    if (context?.Session is not QrDiningSessionResponse session)
-                    {
-                        return;
-                    }
-
-                    try
-                    {
-                        if (
-                            !qrOrderSubmitted
-                            && session.QrReservationExpiresAtUtc is not null
-                            && lastQrActivityAtUtc > lastQrTouchAtUtc
-                        )
-                        {
-                            await RenewQrReservationAsync(session);
-                            if (context is null)
-                            {
-                                return;
-                            }
-                        }
-                        else
-                        {
-                            context = await Api.PreviewAsync(QrCode, context.CustomerAccessToken);
-                            if (context.Session is null)
-                            {
-                                await ExpireCustomerSessionAsync(
-                                    $"restaurantes.qr.{QrCode.Trim().ToUpperInvariant()}"
-                                );
-                                return;
-                            }
-                            qrOrderSubmitted = context.Session.QrReservationExpiresAtUtc is null;
-                        }
-
-                        StateHasChanged();
-                    }
-                    catch (CustomerApiException exception)
-                        when (exception.StatusCode == HttpStatusCode.Gone)
-                    {
-                        await ExpireCustomerSessionAsync(
-                            $"restaurantes.qr.{QrCode.Trim().ToUpperInvariant()}"
-                        );
-                    }
+                    await RefreshQrSessionAsync();
                 });
             }
         }
         catch (OperationCanceledException) { }
     }
+
+    private async Task RefreshQrSessionAsync()
+    {
+        QrSessionEnvelope? currentContext = context;
+        if (currentContext?.Session is not QrDiningSessionResponse session)
+        {
+            return;
+        }
+
+        try
+        {
+            if (ShouldRenewQrReservation(session))
+            {
+                await RenewQrReservationAsync(session);
+                if (context is null)
+                {
+                    return;
+                }
+            }
+            else if (!await RefreshQrPreviewAsync(currentContext))
+            {
+                return;
+            }
+
+            StateHasChanged();
+        }
+        catch (CustomerApiException exception) when (exception.StatusCode == HttpStatusCode.Gone)
+        {
+            await ExpireCustomerSessionAsync(GetCustomerSessionStorageKey());
+        }
+    }
+
+    private bool ShouldRenewQrReservation(QrDiningSessionResponse session) =>
+        !qrOrderSubmitted
+        && session.QrReservationExpiresAtUtc is not null
+        && lastQrActivityAtUtc > lastQrTouchAtUtc;
+
+    private async Task<bool> RefreshQrPreviewAsync(QrSessionEnvelope currentContext)
+    {
+        context = await Api.PreviewAsync(QrCode, currentContext.CustomerAccessToken);
+        if (context.Session is not null)
+        {
+            qrOrderSubmitted = context.Session.QrReservationExpiresAtUtc is null;
+            return true;
+        }
+
+        await ExpireCustomerSessionAsync(GetCustomerSessionStorageKey());
+        return false;
+    }
+
+    private string GetCustomerSessionStorageKey() =>
+        $"restaurantes.qr.{QrCode.Trim().ToUpperInvariant()}";
 
     private async Task ExpireCustomerSessionAsync(string storageKey)
     {

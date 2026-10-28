@@ -61,6 +61,16 @@ public sealed class OrdersWriteController(
                 return denied;
             }
         }
+
+        return await CreateAuthorizedOrderAsync(request, customerAccessToken, cancellationToken);
+    }
+
+    private async Task<ActionResult<OrderResponse>> CreateAuthorizedOrderAsync(
+        CreateOrderRequest request,
+        string? customerAccessToken,
+        CancellationToken cancellationToken
+    )
+    {
         try
         {
             Guid? createdByUserId = Guid.TryParse(

@@ -508,33 +508,19 @@ internal static class Program
             completedOrders += completed;
             failedOrders += failed;
 
-            bool acceptingOrders = CanCreateMoreOrders(
-                canCreateOrders,
-                runTimer,
-                runDuration,
-                stopCreating
-            );
-            if (acceptingOrders && activeOrders.Count < ordersPerBatch)
-            {
-                List<TableInfo>? tables = await TryGetAvailableTablesAsync(inputs, activeOrders);
-                if (tables is null)
-                {
-                    canCreateOrders = false;
-                    generationFailed = true;
-                }
-                else
-                {
-                    startedOrders += ScheduleAvailableOrders(
-                        inputs,
-                        tables,
-                        activeOrders,
-                        ordersPerBatch,
-                        runTimer,
-                        runDuration,
-                        stopCreating
-                    );
-                }
-            }
+            (bool canContinueGeneration, bool batchFailed, int started) =
+                await TryScheduleOrderBatchAsync(
+                    inputs,
+                    activeOrders,
+                    ordersPerBatch,
+                    runTimer,
+                    runDuration,
+                    stopCreating,
+                    canCreateOrders
+                );
+            canCreateOrders = canContinueGeneration;
+            startedOrders += started;
+            generationFailed |= batchFailed;
 
             bool acceptingMoreOrders = CanCreateMoreOrders(
                 canCreateOrders,
@@ -561,6 +547,46 @@ internal static class Program
             $"{restaurant.Name}: carga finalizada; pedidos iniciados {startedOrders}, completados {completedOrders}, fallidos {failedOrders}{(generationFailed ? ", generación detenida por error" : "")}."
         );
         return new RestaurantRunResult(failedOrders, generationFailed ? 1 : 0);
+    }
+
+    private static async Task<(
+        bool CanCreateOrders,
+        bool Failed,
+        int Started
+    )> TryScheduleOrderBatchAsync(
+        RestaurantRunInputs inputs,
+        Dictionary<Guid, Task<bool>> activeOrders,
+        int ordersPerBatch,
+        Stopwatch runTimer,
+        TimeSpan runDuration,
+        CancellationToken stopCreating,
+        bool canCreateOrders
+    )
+    {
+        if (
+            !CanCreateMoreOrders(canCreateOrders, runTimer, runDuration, stopCreating)
+            || activeOrders.Count >= ordersPerBatch
+        )
+        {
+            return (canCreateOrders, false, 0);
+        }
+
+        List<TableInfo>? tables = await TryGetAvailableTablesAsync(inputs, activeOrders);
+        if (tables is null)
+        {
+            return (false, true, 0);
+        }
+
+        int started = ScheduleAvailableOrders(
+            inputs,
+            tables,
+            activeOrders,
+            ordersPerBatch,
+            runTimer,
+            runDuration,
+            stopCreating
+        );
+        return (canCreateOrders, false, started);
     }
 
     internal static bool CanCreateMoreOrders(

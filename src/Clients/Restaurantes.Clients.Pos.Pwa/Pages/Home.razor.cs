@@ -2049,43 +2049,63 @@ public partial class Home
 
     private async Task HandleCatalogChanged(Guid changedRestaurantId)
     {
-        if (
-            login is null
-            || (changedRestaurantId != Guid.Empty && changedRestaurantId != restaurantId)
-        )
-            return;
-        await InvokeAsync(async () =>
+        if (!IsCatalogChangeForCurrentRestaurant(changedRestaurantId))
         {
-            if (selectedTable is null && !takeawayOpen)
-                return;
-            int version = ++menuRefreshVersion;
-            Guid currentRestaurantId = restaurantId;
-            try
+            return;
+        }
+
+        await InvokeAsync(RefreshMenuAfterCatalogChangeAsync);
+    }
+
+    private bool IsCatalogChangeForCurrentRestaurant(Guid changedRestaurantId) =>
+        login is not null
+        && (changedRestaurantId == Guid.Empty || changedRestaurantId == restaurantId);
+
+    private async Task RefreshMenuAfterCatalogChangeAsync()
+    {
+        if (selectedTable is null && !takeawayOpen)
+        {
+            return;
+        }
+
+        int version = ++menuRefreshVersion;
+        Guid currentRestaurantId = restaurantId;
+        try
+        {
+            List<MenuItemResponse> updated = await Api.MenuAsync(currentRestaurantId);
+            ApplyUpdatedMenu(updated, version, currentRestaurantId);
+        }
+        catch (Exception exception)
+        {
+            message = $"No se pudo actualizar la carta: {exception.Message}";
+            StateHasChanged();
+        }
+    }
+
+    private void ApplyUpdatedMenu(
+        List<MenuItemResponse> updated,
+        int version,
+        Guid currentRestaurantId
+    )
+    {
+        if (version != menuRefreshVersion || currentRestaurantId != restaurantId)
+        {
+            return;
+        }
+
+        menu = updated;
+        Dictionary<Guid, int> versions = updated.ToDictionary(
+            item => item.ProductId,
+            item => item.CatalogVersion
+        );
+        foreach (PosCartLine line in cart)
+        {
+            if (versions.TryGetValue(line.ProductId, out int catalogVersion))
             {
-                List<MenuItemResponse> updated = await Api.MenuAsync(currentRestaurantId);
-                if (version == menuRefreshVersion && currentRestaurantId == restaurantId)
-                {
-                    menu = updated;
-                    Dictionary<Guid, int> versions = updated.ToDictionary(
-                        item => item.ProductId,
-                        item => item.CatalogVersion
-                    );
-                    foreach (PosCartLine line in cart)
-                    {
-                        if (versions.TryGetValue(line.ProductId, out int catalogVersion))
-                        {
-                            line.CatalogVersion = catalogVersion;
-                        }
-                    }
-                    StateHasChanged();
-                }
+                line.CatalogVersion = catalogVersion;
             }
-            catch (Exception exception)
-            {
-                message = $"No se pudo actualizar la carta: {exception.Message}";
-                StateHasChanged();
-            }
-        });
+        }
+        StateHasChanged();
     }
 
     private Task ScheduleRealtimeRefresh(Guid changedRestaurantId)

@@ -56,39 +56,22 @@ public sealed class KitchenOrderReadStore(OrderReadDbContext dbContext) : IKitch
             JsonSerializer.Deserialize<List<OrderKitchenStationResponse>>(item.StationsJson) ?? [];
         if (!string.IsNullOrWhiteSpace(stationCode))
         {
-            if (stationCode == "CHEF")
-            {
-                lines = lines
-                    .Where(line =>
-                        line.Status != "Cancelled"
-                        && !string.IsNullOrWhiteSpace(line.PreparationStationCode)
-                    )
-                    .ToList();
-                bool fullyDispatched = stations
-                    .Where(station => station.Status != "Cancelled")
-                    .All(station => station.Status == "Dispatched");
-                if (item.Status == "Ready" && fullyDispatched)
-                {
-                    return null;
-                }
-            }
-            else
-            {
-                lines = lines.Where(line => line.Status != "Cancelled").ToList();
-                OrderKitchenStationResponse? selected = stations.FirstOrDefault(station =>
-                    station.Code == stationCode
-                );
-                if (selected is null || selected.Status is "Dispatched" or "Cancelled")
-                {
-                    return null;
-                }
-                lines = lines.Where(line => line.PreparationStationCode == stationCode).ToList();
-                stations = stations.Where(station => station.Code == stationCode).ToList();
-            }
-            if (lines.Count == 0)
+            if (
+                !TryFilterForStation(
+                    item,
+                    stationCode,
+                    lines,
+                    stations,
+                    out List<OrderLineResponse> filteredLines,
+                    out List<OrderKitchenStationResponse> filteredStations
+                )
+            )
             {
                 return null;
             }
+
+            lines = filteredLines;
+            stations = filteredStations;
         }
 
         return new(
@@ -114,5 +97,45 @@ public sealed class KitchenOrderReadStore(OrderReadDbContext dbContext) : IKitch
             stations,
             item.ZoneId
         );
+    }
+
+    private static bool TryFilterForStation(
+        KitchenOrderReadModel item,
+        string stationCode,
+        List<OrderLineResponse> lines,
+        List<OrderKitchenStationResponse> stations,
+        out List<OrderLineResponse> filteredLines,
+        out List<OrderKitchenStationResponse> filteredStations
+    )
+    {
+        filteredStations = stations;
+        if (stationCode == "CHEF")
+        {
+            filteredLines = lines
+                .Where(line =>
+                    line.Status != "Cancelled"
+                    && !string.IsNullOrWhiteSpace(line.PreparationStationCode)
+                )
+                .ToList();
+            bool fullyDispatched = stations
+                .Where(station => station.Status != "Cancelled")
+                .All(station => station.Status == "Dispatched");
+            return filteredLines.Count > 0 && !(item.Status == "Ready" && fullyDispatched);
+        }
+
+        filteredLines = lines
+            .Where(line => line.Status != "Cancelled" && line.PreparationStationCode == stationCode)
+            .ToList();
+        OrderKitchenStationResponse? selected = stations.FirstOrDefault(station =>
+            station.Code == stationCode
+        );
+        if (selected is null || selected.Status is "Dispatched" or "Cancelled")
+        {
+            filteredStations = [];
+            return false;
+        }
+
+        filteredStations = stations.Where(station => station.Code == stationCode).ToList();
+        return filteredLines.Count > 0;
     }
 }
