@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Restaurantes.Orders.Api.Controllers;
+using Restaurantes.Orders.Api.Security;
 using Restaurantes.Orders.Application;
 using Restaurantes.Orders.Contracts.Responses;
 using Restaurantes.Orders.Domain;
@@ -111,12 +112,13 @@ public sealed class OrdersReadControllerTests
     }
 
     [Fact]
-    public async Task Pos_list_returns_only_pos_and_customer_qr_orders()
+    public async Task Pos_list_returns_pos_and_customer_qr_orders()
     {
         Guid restaurantId = Guid.NewGuid();
         Fixture fixture = new();
         fixture.Orders =
         [
+            Order(restaurantId, "Pos"),
             Order(restaurantId, "Pos"),
             Order(restaurantId, "CustomerQr"),
             Order(restaurantId, "Comandero"),
@@ -131,7 +133,45 @@ public sealed class OrdersReadControllerTests
         OrderResponse[] orders = Assert.IsType<OrderResponse[]>(
             Assert.IsType<OkObjectResult>(result.Result).Value
         );
-        Assert.Equal(["Pos", "CustomerQr"], orders.Select(order => order.Source));
+        Assert.Equal(["Pos", "Pos", "CustomerQr"], orders.Select(order => order.Source));
+    }
+
+    [Fact]
+    public void Pos_takeaway_orders_use_pos_permissions_for_management_and_session_reads()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        ClaimsPrincipal user = new(
+            new ClaimsIdentity(
+                [
+                    new Claim(
+                        RestaurantClaimTypes.Permission,
+                        RestaurantSecurityExtensions.ScopedPermission(
+                            restaurantId,
+                            RestaurantPermissions.PosUse
+                        )
+                    ),
+                    new Claim(
+                        RestaurantClaimTypes.Permission,
+                        RestaurantSecurityExtensions.ScopedPermission(
+                            restaurantId,
+                            RestaurantPermissions.OrdersManage
+                        )
+                    ),
+                    new Claim(
+                        RestaurantClaimTypes.Permission,
+                        RestaurantSecurityExtensions.ScopedPermission(
+                            restaurantId,
+                            RestaurantPermissions.TablesRead
+                        )
+                    ),
+                ],
+                "test"
+            )
+        );
+
+        Assert.Equal(RestaurantPermissions.PosUse, OrderClientAccess.PermissionForSource("Pos"));
+        Assert.True(user.CanManageOrder(restaurantId, "Pos"));
+        Assert.True(user.CanReadDiningSessionOrder(restaurantId, "Pos", Guid.NewGuid()));
     }
 
     [Fact]

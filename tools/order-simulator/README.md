@@ -9,8 +9,9 @@ Herramienta local para generar pedidos en todos los restaurantes configurados a 
 3. Ajusta los productos máximos, los métodos de pago y las propinas.
 4. Configura `OpeningFloat` si quieres un fondo inicial distinto de cero.
 5. En cada local, configura `PosAccessToken` y `KdsAccessToken` con cuentas autorizadas para ese local.
+6. Si quieres simular pedidos del Comandero, configura `CommanderAccessToken` y activa `ComanderoProbability` con un valor mayor que cero.
 
-`simulator.sample.json` deja vacíos ambos tokens. La herramienta los lee desde `simulator.local.json`, que está excluido de Git; no los solicita por consola ni los escribe en logs. Si falta alguno, informa el campo y el local y se detiene. Si la URL de la API no es local, también se detiene; para otra URL hay que cambiar explícitamente `AllowNonLocalApi` en la configuración.
+`simulator.sample.json` deja vacíos los tres tokens y Comandero desactivado. La herramienta lee `PosAccessToken`, `KdsAccessToken` y, cuando Comandero está activado, `CommanderAccessToken` desde `simulator.local.json`, que está excluido de Git; no los solicita por consola ni los escribe en logs. Si falta un token requerido, informa el campo y el local y se detiene. Si la URL de la API no es local, también se detiene; para otra URL hay que cambiar explícitamente `AllowNonLocalApi` en la configuración.
 
 Para obtener los tokens en el equipo de desarrollo, inicia sesión en cada cliente con una cuenta autorizada para el local, abre F12 → Consola y copia el token correspondiente.
 
@@ -26,7 +27,13 @@ En KDS:
 copy(JSON.parse(sessionStorage.getItem('restaurantes.kds.login')).accessToken)
 ```
 
-Pega cada valor en `PosAccessToken` o `KdsAccessToken` del local correspondiente. El token de TPV ejecuta también las operaciones de pedidos, caja, pagos y liberación de la mesa; por eso debe tener esos permisos en ese local. El token KDS se usa para consultar y avanzar las estaciones. No se requiere un token independiente para cada API.
+En Comandero:
+
+```javascript
+copy(JSON.parse(sessionStorage.getItem('restaurantes.commander.login')).AccessToken)
+```
+
+Pega cada valor en `PosAccessToken`, `KdsAccessToken` o `CommanderAccessToken` del local correspondiente. El token de TPV ejecuta las operaciones de pedidos POS y takeaway, caja, pagos y liberación de sus sesiones; por eso debe tener esos permisos en ese local. El token de Comandero crea y envía sus pedidos, cobra con tarjeta y libera sus mesas. El token KDS se usa para consultar y avanzar las estaciones. No se requiere un token independiente para cada API.
 
 ## Ejecutar
 
@@ -45,6 +52,8 @@ Durante `RunDurationMinutes` (10 minutos de forma predeterminada), cada local co
 ## Comportamiento aleatorio
 
 - Elige productos disponibles del menú de cada local, cantidades de 1 a 3 y excluye los productos de la categoría `Extras` como platos independientes. Solo añade extras configurados para el producto elegido, respetando sus grupos y límites.
+- Mantiene la proporción de `TakeawayProbability` (0,2 de forma predeterminada) con una rotación ponderada, para que los pedidos de mesa no dependan de una racha aleatoria. Los pedidos para llevar del TPV se registran con origen `Pos` y modalidad `Takeaway`; al no haber mesas disponibles, solo puede generar takeaway. El inicio de la simulación informa cuántas mesas activas y zonas encontró, y las mesas se recorren en rotación por zona.
+- `ComanderoProbability` elige qué proporción de los pedidos de mesa crea el Comandero (0 de forma predeterminada). Para activarlo, configura `CommanderAccessToken` y una probabilidad mayor que cero. El token de Comandero abre la sesión, crea y envía el pedido, cobra con tarjeta y libera la mesa; KDS actualiza la preparación. La tarjeta es el único método permitido al rol Camarero; efectivo y transferencia siguen disponibles para pedidos del TPV.
 - Abre sesiones con una cantidad aleatoria de 2 a 10 comensales cuando la zona la solicita; zonas como barra, que no lo piden, no reciben ese dato.
 - Avanza cada línea por los estados visibles del KDS: en preparación y lista. Espera `KitchenStepDelaySeconds` (2 segundos de forma predeterminada) antes de marcarla lista, deja ese mismo intervalo para ver todos los platos listos y espera entre los pases despachados por el KDS principal. Las estaciones con `RequiresPrimaryDispatch` solo se despachan cuando están en `Ready`, en orden de prioridad; las demás se despachan al marcarlas listas. Comprueba que cada plato activo termine `Dispatched` y que el pedido esté `Ready` antes de entregarlo, cobrarlo y liberar la mesa.
 - Con `SplitProbability` puede dividir la cuenta entre comensales y pagarla usando `Card`, `Cash` y `Transfer`; los pedidos divididos combinan los tres medios. `Methods.Weight` controla la frecuencia en el resto de pagos.

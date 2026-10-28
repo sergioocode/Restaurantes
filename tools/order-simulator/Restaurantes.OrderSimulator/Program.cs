@@ -137,12 +137,31 @@ internal static class Program
                 );
             }
             step = "mesas TPV";
-            _ = await GetAsync<List<TableInfo>>(
+            List<TableInfo> tables = await GetAsync<List<TableInfo>>(
                 client,
                 $"api/dining/restaurants/{restaurant.RestaurantId}/tables",
                 posToken,
                 CancellationToken.None
             );
+            TableInfo[] activeTables = tables.Where(table => table.IsActive).ToArray();
+            int availableTableCount = activeTables.Count(table => table.Status == "Available");
+            int activeZoneCount = activeTables
+                .Select(table => table.ZoneName)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count();
+            WriteLog(
+                $"{restaurant.Name}: {availableTableCount}/{activeTables.Length} mesas activas disponibles en {activeZoneCount} zonas."
+            );
+            if (restaurant.ComanderoProbability > 0)
+            {
+                step = "acceso de Comandero";
+                _ = await GetAsync<List<OrderResponse>>(
+                    client,
+                    $"api/orders/commander?restaurantId={restaurant.RestaurantId}",
+                    restaurant.CommanderAccessToken.Trim(),
+                    CancellationToken.None
+                );
+            }
             step = "estado de caja TPV";
             _ = await GetAsync<CashRegisterStatusResponse?>(
                 client,
@@ -347,6 +366,27 @@ internal static class Program
                 $"{restaurant.Name}: MaxProductsPerOrder debe ser 1–30."
             );
         }
+        if (restaurant.TakeawayProbability is < 0 or > 1)
+        {
+            throw new InvalidDataException(
+                $"{restaurant.Name}: TakeawayProbability debe estar entre 0 y 1."
+            );
+        }
+        if (restaurant.ComanderoProbability is < 0 or > 1)
+        {
+            throw new InvalidDataException(
+                $"{restaurant.Name}: ComanderoProbability debe estar entre 0 y 1."
+            );
+        }
+        if (
+            restaurant.ComanderoProbability > 0
+            && string.IsNullOrWhiteSpace(restaurant.CommanderAccessToken)
+        )
+        {
+            throw new InvalidDataException(
+                $"{restaurant.Name}: configura CommanderAccessToken para generar pedidos desde Comandero."
+            );
+        }
         ValidatePaymentOptions(restaurant);
     }
 
@@ -441,7 +481,12 @@ internal static class Program
             Client = client,
             Restaurant = restaurant,
             PosToken = posToken,
+            CommanderToken = restaurant.CommanderAccessToken.Trim(),
             KdsToken = kdsToken,
+            MixScheduler = new OrderMixScheduler(
+                restaurant.TakeawayProbability,
+                restaurant.ComanderoProbability
+            ),
             Menu = menu,
             AvailableProductIds = availableProductIds,
             OrderScheduler = orderScheduler,
@@ -602,15 +647,42 @@ internal static class Program
     )
     {
         int startedOrders = 0;
-        foreach (TableInfo table in tables.Take(ordersPerBatch - activeOrders.Count))
+        int availableSlots = ordersPerBatch - activeOrders.Count;
+        List<TableInfo> availableTables = tables.ToList();
+        int candidateOrders =
+            availableTables.Count == 0
+                ? (inputs.Restaurant.TakeawayProbability > 0 ? availableSlots : 0)
+                : Math.Min(availableSlots, availableTables.Count);
+        for (int index = 0; index < candidateOrders; index++)
         {
             if (stopCreating.IsCancellationRequested || runTimer.Elapsed >= runDuration)
             {
                 break;
             }
 
+            bool isTakeaway = inputs.MixScheduler.NextIsTakeaway(
+                hasAvailableTables: availableTables.Count > 0
+            );
+            string source = isTakeaway ? "Pos" : inputs.MixScheduler.NextDineInSource();
+            string sourceToken = source == "Comandero" ? inputs.CommanderToken : inputs.PosToken;
+            TableInfo? table = null;
+            Guid activeOrderKey;
+            string orderLabel;
+            if (isTakeaway)
+            {
+                activeOrderKey = Guid.NewGuid();
+                orderLabel = $"Takeaway {activeOrderKey.ToString("N")[..8]}";
+            }
+            else
+            {
+                table = availableTables[0];
+                availableTables.RemoveAt(0);
+                activeOrderKey = table.Id;
+                orderLabel = table.Label;
+            }
+
             activeOrders.Add(
-                table.Id,
+                activeOrderKey,
                 inputs.OrderScheduler.RunAsync(
                     inputs.Restaurant.RestaurantId,
                     () =>
@@ -622,6 +694,10 @@ internal static class Program
                             inputs.Menu,
                             inputs.AvailableProductIds,
                             table,
+                            isTakeaway,
+                            orderLabel,
+                            source,
+                            sourceToken,
                             inputs.KitchenStepDelay,
                             inputs.Random,
                             inputs.RandomLock
@@ -630,7 +706,7 @@ internal static class Program
             );
             startedOrders++;
             WriteLog(
-                $"{inputs.Restaurant.Name}: inicia {table.Label}; pedidos activos {activeOrders.Count}/{ordersPerBatch}."
+                $"{inputs.Restaurant.Name}: inicia {orderLabel} ({source}); pedidos activos {activeOrders.Count}/{ordersPerBatch}."
             );
         }
         return startedOrders;
@@ -664,7 +740,9 @@ internal static class Program
         public required HttpClient Client { get; init; }
         public required RestaurantOptions Restaurant { get; init; }
         public required string PosToken { get; init; }
+        public required string CommanderToken { get; init; }
         public required string KdsToken { get; init; }
+        public required OrderMixScheduler MixScheduler { get; init; }
         public required IReadOnlyList<MenuItemResponse> Menu { get; init; }
         public required IReadOnlySet<Guid> AvailableProductIds { get; init; }
         public required RandomOrderScheduler OrderScheduler { get; init; }
@@ -751,7 +829,7 @@ internal static class Program
             .ToList();
     }
 
-    internal static async Task<bool> ProcessOrderAsync(
+    internal static Task<bool> ProcessOrderAsync(
         HttpClient client,
         RestaurantOptions restaurant,
         string posToken,
@@ -762,29 +840,70 @@ internal static class Program
         TimeSpan kitchenStepDelay,
         SimulatorRandom random,
         SemaphoreSlim randomLock
+    ) =>
+        ProcessOrderAsync(
+            client,
+            restaurant,
+            posToken,
+            kdsToken,
+            menu,
+            availableProductIds,
+            table,
+            false,
+            table.Label,
+            "Pos",
+            posToken,
+            kitchenStepDelay,
+            random,
+            randomLock
+        );
+
+    internal static async Task<bool> ProcessOrderAsync(
+        HttpClient client,
+        RestaurantOptions restaurant,
+        string posToken,
+        string kdsToken,
+        IReadOnlyList<MenuItemResponse> menu,
+        IReadOnlySet<Guid> availableProductIds,
+        TableInfo? table,
+        bool isTakeaway,
+        string orderLabel,
+        string source,
+        string sourceToken,
+        TimeSpan kitchenStepDelay,
+        SimulatorRandom random,
+        SemaphoreSlim randomLock
     )
     {
         Guid sessionId = Guid.Empty;
         Guid orderId = Guid.Empty;
         try
         {
-            SessionInfo session = await PostAsync<SessionInfo>(
-                client,
-                $"api/dining/tables/{table.Id}/sessions",
-                new OpenSessionRequest { Source = "Pos" },
-                posToken,
-                CancellationToken.None
-            );
+            SessionInfo session = isTakeaway
+                ? await PostAsync<SessionInfo>(
+                    client,
+                    $"api/dining/restaurants/{restaurant.RestaurantId}/takeaway-sessions",
+                    new { customerName = orderLabel },
+                    sourceToken,
+                    CancellationToken.None
+                )
+                : await PostAsync<SessionInfo>(
+                    client,
+                    $"api/dining/tables/{table!.Id}/sessions",
+                    new OpenSessionRequest { Source = source },
+                    sourceToken,
+                    CancellationToken.None
+                );
             sessionId = session.Id;
             int guestCount = 1;
-            if (table.RequestGuestCount)
+            if (table?.RequestGuestCount == true)
             {
                 guestCount = Next(random, randomLock, restaurant.GuestCount);
                 await PutAsync<SessionInfo>(
                     client,
                     $"api/dining/sessions/{sessionId}/guests",
                     new SetGuestCountRequest(guestCount),
-                    posToken,
+                    sourceToken,
                     CancellationToken.None
                 );
             }
@@ -801,15 +920,16 @@ internal static class Program
                 new
                 {
                     restaurantId = restaurant.RestaurantId,
-                    tableId = table.Id,
+                    tableId = table?.Id,
                     diningSessionId = sessionId,
-                    tableLabel = table.Label,
-                    serviceMode = "DineIn",
-                    source = "Pos",
+                    tableLabel = orderLabel,
+                    customerName = isTakeaway ? orderLabel : string.Empty,
+                    serviceMode = isTakeaway ? "Takeaway" : "DineIn",
+                    source,
                     paymentTiming = "OnAccount",
                     lines,
                 },
-                posToken,
+                sourceToken,
                 CancellationToken.None
             );
             orderId = order.Id;
@@ -817,11 +937,11 @@ internal static class Program
                 client,
                 $"api/orders/{order.Id}/submit",
                 null,
-                posToken,
+                sourceToken,
                 CancellationToken.None
             );
             WriteLog(
-                $"{restaurant.Name} · {table.Label} · pedido {order.Id.ToString("N")[..8]} · {lines.Count} platos · {order.Total:0.00} €"
+                $"{restaurant.Name} · {orderLabel} · pedido {order.Id.ToString("N")[..8]} · {lines.Count} platos · {order.Total:0.00} €"
             );
             await Task.Delay(kitchenStepDelay);
 
@@ -835,7 +955,7 @@ internal static class Program
                     client,
                     $"api/orders/{order.Id}/deliver",
                     null,
-                    posToken,
+                    sourceToken,
                     CancellationToken.None
                 );
             if (deliveredOrder.Status != "Delivered")
@@ -847,7 +967,7 @@ internal static class Program
             await WaitForDiningBillAsync(
                 client,
                 sessionId,
-                posToken,
+                sourceToken,
                 bill =>
                     bill.Orders.Any(sessionOrder =>
                         sessionOrder.OrderId == order.Id && sessionOrder.OrderStatus == "Delivered"
@@ -857,16 +977,17 @@ internal static class Program
             await SimulatePaymentsAsync(
                 client,
                 restaurant,
-                posToken,
+                PaymentOptionsForOrder(source, restaurant.Payment),
+                sourceToken,
                 sessionId,
                 order,
                 guestCount,
                 random,
                 randomLock
             );
-            await ClosePaidSessionAsync(client, sessionId, posToken);
+            await ClosePaidSessionAsync(client, sessionId, sourceToken);
             WriteLog(
-                $"{restaurant.Name} · {table.Label} · {order.Id.ToString("N")[..8]} completado; cuenta pagada y mesa liberada."
+                $"{restaurant.Name} · {orderLabel} · {order.Id.ToString("N")[..8]} completado; cobro y cierre por {source}."
             );
             return true;
         }
@@ -875,8 +996,8 @@ internal static class Program
             await ReportOrderFailureAsync(
                 client,
                 restaurant,
-                posToken,
-                table,
+                orderLabel,
+                sourceToken,
                 sessionId,
                 orderId,
                 exception
@@ -888,8 +1009,8 @@ internal static class Program
     private static async Task ReportOrderFailureAsync(
         HttpClient client,
         RestaurantOptions restaurant,
-        string posToken,
-        TableInfo table,
+        string orderLabel,
+        string sessionToken,
         Guid sessionId,
         Guid orderId,
         Exception exception
@@ -904,7 +1025,7 @@ internal static class Program
                     client,
                     $"api/dining/sessions/{sessionId}/cancel",
                     null,
-                    posToken,
+                    sessionToken,
                     CancellationToken.None
                 );
                 sessionStatus = "; sesión vacía cancelada";
@@ -928,7 +1049,7 @@ internal static class Program
                     ? sessionStatus
                     : $"; sesión {sessionId.ToString("N")[..8]} queda abierta";
         }
-        WriteError($"{restaurant.Name} · {table.Label} · {order}{session}: {exception.Message}");
+        WriteError($"{restaurant.Name} · {orderLabel} · {order}{session}: {exception.Message}");
     }
 
     internal static List<CreateOrderLineRequest> CreateRandomLines(
@@ -1176,9 +1297,24 @@ internal static class Program
         }
     }
 
+    internal static PaymentOptions PaymentOptionsForOrder(
+        string source,
+        PaymentOptions configuredOptions
+    ) =>
+        source == "Comandero"
+            ? new PaymentOptions
+            {
+                SplitProbability = 0,
+                CashOverpayProbability = 0,
+                TipPercentages = configuredOptions.TipPercentages,
+                Methods = [new PaymentMethodOptions { Name = "Card", Weight = 1 }],
+            }
+            : configuredOptions;
+
     private static async Task SimulatePaymentsAsync(
         HttpClient client,
         RestaurantOptions restaurant,
+        PaymentOptions paymentOptions,
         string token,
         Guid sessionId,
         OrderResponse order,
@@ -1188,21 +1324,13 @@ internal static class Program
     )
     {
         bool splitAcrossGuests =
-            guestCount > 1 && NextDouble(random, randomLock) < restaurant.Payment.SplitProbability;
+            guestCount > 1 && NextDouble(random, randomLock) < paymentOptions.SplitProbability;
         List<PaymentPart> parts = splitAcrossGuests
-            ? CreateGuestPaymentParts(
-                restaurant.Payment,
-                order.Total,
-                guestCount,
-                random,
-                randomLock
-            )
-            : CreatePaymentParts(restaurant.Payment, order.Total, random, randomLock);
+            ? CreateGuestPaymentParts(paymentOptions, order.Total, guestCount, random, randomLock)
+            : CreatePaymentParts(paymentOptions, order.Total, random, randomLock);
         decimal totalTip = Math.Max(
             0.01m,
-            RoundMoney(
-                order.Total * Pick(restaurant.Payment.TipPercentages, random, randomLock) / 100m
-            )
+            RoundMoney(order.Total * Pick(paymentOptions.TipPercentages, random, randomLock) / 100m)
         );
         List<decimal> tips = AllocateMoney(totalTip, parts.Select(part => part.Amount).ToList());
         for (int index = 0; index < parts.Count; index++)
@@ -1212,7 +1340,7 @@ internal static class Program
             decimal amountDue = part.Amount + tip;
             decimal? amountReceived =
                 part.Method == "Cash"
-                && NextDouble(random, randomLock) < restaurant.Payment.CashOverpayProbability
+                && NextDouble(random, randomLock) < paymentOptions.CashOverpayProbability
                     ? decimal.Ceiling(amountDue)
                     : amountDue;
             BillResponse bill = await PostAsync<BillResponse>(
@@ -1723,6 +1851,80 @@ internal static class Program
         }
     }
 
+    internal sealed class OrderMixScheduler(double takeawayProbability, double comanderoProbability)
+    {
+        private int takeawayOrders;
+        private int dineInOrders;
+        private int comanderoOrders;
+        private int posDineInOrders;
+
+        public bool NextIsTakeaway(bool hasAvailableTables)
+        {
+            if (!hasAvailableTables)
+            {
+                if (takeawayProbability > 0)
+                {
+                    takeawayOrders++;
+                    return true;
+                }
+                return false;
+            }
+
+            if (takeawayProbability <= 0)
+            {
+                dineInOrders++;
+                return false;
+            }
+            if (takeawayProbability >= 1)
+            {
+                takeawayOrders++;
+                return true;
+            }
+            if (dineInOrders == 0)
+            {
+                dineInOrders++;
+                return false;
+            }
+
+            int nextOrderCount = takeawayOrders + dineInOrders + 1;
+            bool isTakeaway = takeawayOrders < nextOrderCount * takeawayProbability;
+            if (isTakeaway)
+            {
+                takeawayOrders++;
+            }
+            else
+            {
+                dineInOrders++;
+            }
+            return isTakeaway;
+        }
+
+        public string NextDineInSource()
+        {
+            if (comanderoProbability <= 0)
+            {
+                posDineInOrders++;
+                return "Pos";
+            }
+            if (comanderoProbability >= 1)
+            {
+                comanderoOrders++;
+                return "Comandero";
+            }
+
+            int nextDineInCount = comanderoOrders + posDineInOrders + 1;
+            bool isComandero = comanderoOrders < nextDineInCount * comanderoProbability;
+            if (isComandero)
+            {
+                comanderoOrders++;
+                return "Comandero";
+            }
+
+            posDineInOrders++;
+            return "Pos";
+        }
+    }
+
     internal sealed class RandomOrderScheduler(
         int maxConcurrentOrders,
         IEnumerable<Guid> restaurantIds,
@@ -1836,10 +2038,13 @@ internal sealed class RestaurantOptions
     public string Name { get; init; } = "";
     public Guid RestaurantId { get; init; }
     public string PosAccessToken { get; init; } = "";
+    public string CommanderAccessToken { get; init; } = "";
     public string KdsAccessToken { get; init; } = "";
     public decimal OpeningFloat { get; init; }
     public IntRange GuestCount { get; init; } = new(2, 10);
     public int MaxProductsPerOrder { get; init; } = 4;
+    public double TakeawayProbability { get; init; } = 0.2;
+    public double ComanderoProbability { get; init; }
     public PaymentOptions Payment { get; init; } = new();
 }
 
@@ -1878,7 +2083,7 @@ internal sealed record TableInfo(
     string ZoneName
 );
 
-internal sealed record SessionInfo(Guid Id, Guid RestaurantId, Guid TableId, string Status);
+internal sealed record SessionInfo(Guid Id, Guid RestaurantId, Guid? TableId, string Status);
 
 internal sealed record CashRegisterStatusResponse(string Status);
 

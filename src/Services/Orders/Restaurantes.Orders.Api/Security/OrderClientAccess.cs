@@ -31,7 +31,7 @@ public static class OrderClientAccess
     )
     {
         return diningSessionId.HasValue
-            && source is "Pos" or "Comandero"
+            && (source is "Pos" or "Comandero")
             && user.CanAccessRestaurant(restaurantId, RestaurantPermissions.TablesRead)
             && user.CanAccessRestaurant(restaurantId, RestaurantPermissions.OrdersManage)
             && (

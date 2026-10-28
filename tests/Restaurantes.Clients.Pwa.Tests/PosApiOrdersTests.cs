@@ -74,6 +74,7 @@ public sealed class PosApiOrdersTests
                 Assert.Equal(sessionId, body.RootElement.GetProperty("diningSessionId").GetGuid());
                 Assert.Equal("Mesa 04", body.RootElement.GetProperty("tableLabel").GetString());
                 Assert.Equal("DineIn", body.RootElement.GetProperty("serviceMode").GetString());
+                Assert.Equal("Pos", body.RootElement.GetProperty("source").GetString());
                 Assert.Equal(
                     productId,
                     body.RootElement.GetProperty("lines")[0].GetProperty("productId").GetGuid()
@@ -87,6 +88,35 @@ public sealed class PosApiOrdersTests
                 Assert.Equal("Bearer pos-token", request.Authorization);
             }
         );
+    }
+
+    [Fact]
+    public async Task Takeaway_order_uses_pos_origin_and_takeaway_service_mode()
+    {
+        Guid restaurantId = Guid.NewGuid();
+        Guid sessionId = Guid.NewGuid();
+        Guid orderId = Guid.NewGuid();
+        OrderResponse response = new(
+            orderId,
+            restaurantId,
+            null,
+            sessionId,
+            "Cliente",
+            "Takeaway",
+            "OnAccount",
+            "Submitted",
+            8m,
+            DateTime.UtcNow
+        );
+        RecordingHandler handler = new(response);
+        using HttpClient http = new(handler) { BaseAddress = new Uri("http://localhost/") };
+        PosApi api = new(http) { AccessToken = "pos-token" };
+
+        await api.CreateAndSubmitTakeawayAsync(restaurantId, sessionId, "Cliente", []);
+
+        using JsonDocument body = JsonDocument.Parse(handler.Requests[0].Body!);
+        Assert.Equal("Pos", body.RootElement.GetProperty("source").GetString());
+        Assert.Equal("Takeaway", body.RootElement.GetProperty("serviceMode").GetString());
     }
 
     private sealed class RecordingHandler(OrderResponse response) : HttpMessageHandler

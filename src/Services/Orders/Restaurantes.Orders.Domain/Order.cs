@@ -187,6 +187,7 @@ public sealed class Order
             (OrderSource.Pos, ServiceMode.DineIn, PaymentTiming.OnAccount) => true,
             (OrderSource.Pos, ServiceMode.Bar, PaymentTiming.OnAccount) => true,
             (OrderSource.Pos, ServiceMode.Takeaway, PaymentTiming.OnAccount) => true,
+            (OrderSource.Comandero, ServiceMode.Takeaway, PaymentTiming.OnAccount) => true,
             _ => false,
         };
         if (!validPaymentFlow)

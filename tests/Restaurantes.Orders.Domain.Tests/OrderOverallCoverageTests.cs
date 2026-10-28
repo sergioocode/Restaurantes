@@ -10,6 +10,7 @@ public sealed class OrderOverallCoverageTests
     [InlineData(OrderSource.Comandero, ServiceMode.DineIn, PaymentTiming.OnAccount)]
     [InlineData(OrderSource.Pos, ServiceMode.Bar, PaymentTiming.OnAccount)]
     [InlineData(OrderSource.Pos, ServiceMode.Takeaway, PaymentTiming.OnAccount)]
+    [InlineData(OrderSource.Comandero, ServiceMode.Takeaway, PaymentTiming.OnAccount)]
     public void Create_accepts_supported_source_service_and_payment_combinations(
         OrderSource source,
         ServiceMode serviceMode,

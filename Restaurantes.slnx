@@ -1,4 +1,4 @@
-﻿<Solution>
+<Solution>
   <Configurations>
     <Platform Name="Any CPU" />
     <Platform Name="x64" />
@@ -18,6 +18,9 @@
     <Project Path="tests/Restaurantes.Sales.Application.Tests/Restaurantes.Sales.Application.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
+    <File Path="tools/order-simulator/README.md" />
+    <File Path="tools/order-simulator/simulator.local.json" />
+    <File Path="tools/order-simulator/simulator.sample.json" />
     <Project Path="tools/order-simulator/Restaurantes.OrderSimulator/Restaurantes.OrderSimulator.csproj" />
   </Folder>
   <Folder Name="/src/ApiGateways/">

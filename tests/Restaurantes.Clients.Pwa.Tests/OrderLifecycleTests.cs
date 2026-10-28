@@ -26,6 +26,15 @@ public sealed class OrderLifecycleTests
     }
 
     [Fact]
+    public void Pos_channel_is_valid_for_takeaway_service()
+    {
+        Order order = CreateOrder(OrderSource.Pos, ServiceMode.Takeaway, PaymentTiming.OnAccount);
+
+        Assert.Equal(OrderSource.Pos, order.Source);
+        Assert.Equal(ServiceMode.Takeaway, order.ServiceMode);
+    }
+
+    [Fact]
     public void Takeaway_order_rejects_a_physical_table()
     {
         Assert.Throws<ArgumentException>(() =>

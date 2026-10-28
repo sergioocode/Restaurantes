@@ -18,6 +18,50 @@ public sealed class SimulatorRunTests
     private static readonly Guid OrderId = Guid.Parse("7073c92c-72ec-458e-ae55-2422c3edf28f");
 
     [Fact]
+    public void Order_mix_keeps_takeaway_and_comandero_channels_in_their_configured_proportions()
+    {
+        Simulator.OrderMixScheduler mix = new(0.2, 0.25);
+        int takeawayOrders = 0;
+        List<string> dineInSources = [];
+
+        for (int index = 0; index < 40; index++)
+        {
+            if (mix.NextIsTakeaway(hasAvailableTables: true))
+            {
+                takeawayOrders++;
+            }
+            else
+            {
+                dineInSources.Add(mix.NextDineInSource());
+            }
+        }
+
+        Assert.Equal(8, takeawayOrders);
+        Assert.Equal(8, dineInSources.Count(source => source == "Comandero"));
+        Assert.Equal(24, dineInSources.Count(source => source == "Pos"));
+    }
+
+    [Fact]
+    public void Comandero_orders_are_paid_by_card_and_pos_keeps_configured_payment_methods()
+    {
+        PaymentOptions configured = new()
+        {
+            Methods =
+            [
+                new PaymentMethodOptions { Name = "Card", Weight = 40 },
+                new PaymentMethodOptions { Name = "Cash", Weight = 40 },
+                new PaymentMethodOptions { Name = "Transfer", Weight = 20 },
+            ],
+        };
+
+        PaymentOptions comandero = Simulator.PaymentOptionsForOrder("Comandero", configured);
+        PaymentOptions pos = Simulator.PaymentOptionsForOrder("Pos", configured);
+
+        Assert.Collection(comandero.Methods, method => Assert.Equal("Card", method.Name));
+        Assert.Same(configured, pos);
+    }
+
+    [Fact]
     public async Task Run_schedules_available_tables_then_drains_the_started_order_on_cancellation()
     {
         using CancellationTokenSource stopCreating = new();
