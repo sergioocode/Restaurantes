@@ -29,6 +29,7 @@ public sealed class RestaurantMenuItem
     public string PreparationStationName { get; private set; } = "";
     public int Version { get; private set; }
     public DateTime UpdatedAtUtc { get; private set; }
+    public string ProjectionFingerprint { get; private set; } = "";
 
     public static RestaurantMenuItem Create(
         Guid restaurantId,
@@ -54,6 +55,13 @@ public sealed class RestaurantMenuItem
     )
     {
         Configure(price, available, stationCode, stationName, now, true);
+    }
+
+    public void SetProjectionFingerprint(string fingerprint)
+    {
+        if (fingerprint.Length != 64)
+            throw new ArgumentException("A SHA-256 fingerprint is required.", nameof(fingerprint));
+        ProjectionFingerprint = fingerprint;
     }
 
     private void Configure(

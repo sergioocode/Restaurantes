@@ -29,9 +29,7 @@ public partial class Home
     private List<TableResponse> FilteredTables { get; set; } = [];
     private IEnumerable<TableResponse> TablesInSelectedZone =>
         selectedZoneId is Guid zoneId
-            ? FilteredTables
-                .Where(table => table.ZoneId == zoneId && table.IsActive)
-                .OrderBy(table => table.Code)
+            ? FilteredTables.Where(table => table.ZoneId == zoneId).OrderBy(table => table.Code)
             : [];
     private string SelectedZoneName =>
         FilteredTables.FirstOrDefault(table => table.ZoneId == selectedZoneId)?.ZoneName ?? "";
@@ -273,8 +271,9 @@ public partial class Home
     protected override async Task OnInitializedAsync()
     {
         Realtime.OrderUpdated += HandleOrderUpdated;
-        Realtime.DiningTableUpdated += HandleDiningTableUpdated;
         Realtime.SaleCompleted += HandleSaleCompleted;
+        CatalogRealtime.Changed += HandleRestaurantConfigurationChanged;
+        DiningRealtime.Changed += HandleRestaurantConfigurationChanged;
         try
         {
             providerSettings = await Api.ProviderAsync();
@@ -359,6 +358,8 @@ public partial class Home
     {
         await Js.InvokeVoidAsync("sessionStorage.removeItem", SessionKey);
         await Realtime.DisconnectAsync();
+        await CatalogRealtime.DisconnectAsync();
+        await DiningRealtime.DisconnectAsync();
         Api.AccessToken = null;
         login = null;
         restaurant = null;
@@ -387,9 +388,7 @@ public partial class Home
 
     private async Task LoadOperationalData()
     {
-        FilteredTables = (await Api.TablesAsync(restaurantId))
-            .Where(table => table.IsActive)
-            .ToList();
+        FilteredTables = (await Api.TablesAsync(restaurantId)).ToList();
         if (selectedZoneId is Guid zoneId && FilteredTables.All(table => table.ZoneId != zoneId))
         {
             selectedZoneId = null;
@@ -410,16 +409,17 @@ public partial class Home
 
     private async Task SelectTable(TableResponse table)
     {
+        if (!table.IsActive)
+        {
+            return;
+        }
+
         await Run(async () =>
         {
             guestCountSessionOpenedHere = !table.ActiveSessionId.HasValue;
             DiningSessionResponse session = table.ActiveSessionId.HasValue
                 ? await Api.ActiveSessionAsync(table.Id)
                 : await Api.OpenSessionAsync(table.Id);
-            if (guestCountSessionOpenedHere)
-            {
-                await Realtime.NotifyDiningTableUpdatedAsync();
-            }
             sessionId = session.Id;
             diningSession = session;
             HasSessionOrders = activeOrders.Any(order => order.DiningSessionId == sessionId);
@@ -449,7 +449,6 @@ public partial class Home
         await Run(async () =>
         {
             diningSession = await Api.SetGuestCountAsync(sessionId, guestCountDraft);
-            await Realtime.NotifyDiningTableUpdatedAsync();
             guestCount = diningSession.GuestCount;
             menu = await Api.MenuAsync(restaurantId);
             selectedTable = guestCountTable;
@@ -466,7 +465,6 @@ public partial class Home
             await Run(async () =>
             {
                 await Api.CancelSessionAsync(diningSession.Id);
-                await Realtime.NotifyDiningTableUpdatedAsync();
                 BackToTables();
                 await LoadOperationalData();
             });
@@ -752,7 +750,6 @@ public partial class Home
             await Run(async () =>
             {
                 await Api.CancelSessionAsync(diningSession.Id);
-                await Realtime.NotifyDiningTableUpdatedAsync();
                 BackToTables();
                 await LoadOperationalData();
             });
@@ -773,7 +770,6 @@ public partial class Home
             async () =>
             {
                 await Api.CloseSessionAsync(diningSession.Id);
-                await Realtime.NotifyDiningTableUpdatedAsync();
                 success = true;
                 message = "Mesa liberada.";
                 BackToTables();
@@ -979,7 +975,6 @@ public partial class Home
                 );
                 checkoutKey = Guid.Empty;
                 paymentDialogOpen = false;
-                await Realtime.NotifyDiningTableUpdatedAsync();
                 await LoadBill();
                 success = true;
                 message =
@@ -1221,6 +1216,8 @@ public partial class Home
         try
         {
             await Realtime.ConnectAsync(restaurantId);
+            await CatalogRealtime.ConnectAsync(restaurantId);
+            await DiningRealtime.ConnectAsync(restaurantId);
         }
         catch (Exception exception)
         {
@@ -1234,9 +1231,20 @@ public partial class Home
         return ScheduleRealtimeRefresh(notification.RestaurantId);
     }
 
-    private Task HandleDiningTableUpdated(Guid changedRestaurantId)
+    private async Task HandleRestaurantConfigurationChanged(Guid changedRestaurantId)
     {
-        return ScheduleRealtimeRefresh(changedRestaurantId);
+        if (
+            login is null
+            || (changedRestaurantId != Guid.Empty && changedRestaurantId != restaurantId)
+        )
+            return;
+
+        await InvokeAsync(async () =>
+        {
+            menu = await Api.MenuAsync(restaurantId);
+            await ScheduleRealtimeRefresh(restaurantId);
+            StateHasChanged();
+        });
     }
 
     private Task HandleSaleCompleted(Guid saleId) =>
@@ -1267,9 +1275,7 @@ public partial class Home
             await Task.Delay(400, cancellationToken);
             await InvokeAsync(async () =>
             {
-                FilteredTables = (await Api.TablesAsync(restaurantId))
-                    .Where(table => table.IsActive)
-                    .ToList();
+                FilteredTables = (await Api.TablesAsync(restaurantId)).ToList();
                 activeOrders = await Api.OrdersAsync(restaurantId);
                 if (selectedTable is not null)
                 {
@@ -1307,8 +1313,9 @@ public partial class Home
     public async ValueTask DisposeAsync()
     {
         Realtime.OrderUpdated -= HandleOrderUpdated;
-        Realtime.DiningTableUpdated -= HandleDiningTableUpdated;
         Realtime.SaleCompleted -= HandleSaleCompleted;
+        CatalogRealtime.Changed -= HandleRestaurantConfigurationChanged;
+        DiningRealtime.Changed -= HandleRestaurantConfigurationChanged;
         if (realtimeRefresh is not null)
         {
             await realtimeRefresh.CancelAsync();
@@ -1316,5 +1323,7 @@ public partial class Home
 
         realtimeRefresh?.Dispose();
         await Realtime.DisconnectAsync();
+        await CatalogRealtime.DisconnectAsync();
+        await DiningRealtime.DisconnectAsync();
     }
 }

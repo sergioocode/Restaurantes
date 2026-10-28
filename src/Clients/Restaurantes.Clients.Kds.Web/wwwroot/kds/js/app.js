@@ -56,6 +56,26 @@ const realtime = new KdsRealtimeClient(apiBaseUrl, {
     await loadOrders();
   }
 });
+let configurationRefreshTimer;
+const refreshConfiguration = async () => {
+  window.clearTimeout(configurationRefreshTimer);
+  configurationRefreshTimer = window.setTimeout(() => loadStationsAndConnect(), 150);
+};
+const configurationConnection = hubPath => new KdsRealtimeClient(apiBaseUrl, {
+  onStatus: () => {},
+  onConnected: () => {},
+  onOrderUpdated: () => {},
+  onConfigurationChanged: async restaurantId => {
+    if (!restaurantId || restaurantId === selectedRestaurantId) await refreshConfiguration();
+  }
+}, {
+  hubPath,
+  joinTarget: 'JoinRestaurant',
+  joinArguments: connection => [connection.restaurantId],
+  configurationEvent: hubPath === '/hubs/catalog' ? 'CatalogChanged' : 'DiningChanged'
+});
+const catalogRealtime = configurationConnection('/hubs/catalog');
+const diningRealtime = configurationConnection('/hubs/dining');
 
 function setStatus(connected, text) {
   status.classList.toggle('connected', connected);
@@ -257,6 +277,13 @@ async function loadStationsAndConnect() {
   const restaurantId = selectedRestaurantId;
   if (!restaurantId) return;
   realtime.disconnect();
+  const configConnection = {
+    restaurantId,
+    stationCode: stationSelect.value,
+    accessToken: login.accessToken
+  };
+  catalogRealtime.connect(configConnection);
+  diningRealtime.connect(configConnection);
   closeHistory();
   clearOrdersView('Cargando pedidos…');
   stationSelect.disabled = true;
@@ -404,6 +431,8 @@ function logout() {
   pendingOrders.clear();
   api.setAccessToken('');
   realtime.disconnect();
+  catalogRealtime.disconnect();
+  diningRealtime.disconnect();
   sessionStorage.removeItem(sessionKey);
   authLoading.classList.add('hidden');
   loginPanel.classList.remove('hidden');

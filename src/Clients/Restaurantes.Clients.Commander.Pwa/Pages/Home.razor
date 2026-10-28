@@ -1,8 +1,10 @@
-﻿@page "/"
+@page "/"
 @using System.Text.Json
 @implements IAsyncDisposable
 @inject CommanderApi Api
 @inject OrderRealtimeClient Realtime
+@inject CatalogConfigurationRealtimeClient CatalogRealtime
+@inject DiningRealtimeClient DiningRealtime
 @inject IJSRuntime Js
 @inject NavigationManager Nav
 
@@ -68,7 +70,7 @@
                             <button class="location-card" @onclick="() => SelectZone(location.Key.ZoneId)" disabled="@busy">
                                 <strong>@location.Key.ZoneName</strong>
                                 <span>@location.Count() mesas</span>
-                                <small>@location.Count(table => table.Status == "Available") disponibles</small>
+                                <small>@location.Count(table => table.IsActive && table.Status == "Available") disponibles</small>
                                 <em>Ver mesas →</em>
                             </button>
                         }
@@ -87,14 +89,18 @@
                     <div class="table-grid">
                         @foreach (TableResponse table in TablesInSelectedZone)
                         {
-                            <button class="table-card @(table.Status == "Occupied" ? (IsCurrentCommanderTable(table) ? "occupied" : "occupied-other") : "available")"
-                                    @onclick="() => SelectTable(table)" disabled="@busy">
+                            <button class="table-card @(table.IsActive ? (table.Status == "Occupied" ? (IsCurrentCommanderTable(table) ? "occupied" : "occupied-other") : "available") : "inactive")"
+                                    @onclick="() => SelectTable(table)" disabled="@(busy || !table.IsActive)">
                                 <strong>@table.Label</strong><span>@table.Code</span>
+                                @if (!table.IsActive)
+                                {
+                                    <span class="table-disabled-indicator" aria-hidden="true">🚫</span>
+                                }
                                 @if (table.Status == "Occupied")
                                 {
                                     <small class="order-progress">@TableOrderSummary(table)</small>
                                 }
-                                <em>@(table.Status == "Occupied" ? "Ocupada · continuar" : "Disponible · abrir")</em>
+                                <em>@(!table.IsActive ? "Desactivada" : table.Status == "Occupied" ? "Ocupada · continuar" : "Disponible · abrir")</em>
                             </button>
                         }
                     </div>

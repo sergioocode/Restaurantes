@@ -7,22 +7,22 @@ public sealed class CatalogNotifications(
     ILogger<CatalogNotifications> logger
 )
 {
-    public async Task MenuChanged(Guid restaurantId)
+    public async Task CatalogChanged(Guid restaurantId)
     {
         try
         {
             if (restaurantId == Guid.Empty)
-                await hub.Clients.All.MenuChanged(restaurantId);
+                await hub.Clients.All.CatalogChanged(restaurantId);
             else
                 await hub
                     .Clients.Group(CatalogHub.RestaurantGroup(restaurantId))
-                    .MenuChanged(restaurantId);
+                    .CatalogChanged(restaurantId);
         }
         catch (Exception exception)
         {
             logger.LogError(
                 exception,
-                "Could not notify TPVs of menu change for {RestaurantId}",
+                "Could not notify restaurant clients of catalog change for {RestaurantId}",
                 restaurantId
             );
         }

@@ -203,6 +203,11 @@ namespace Restaurantes.Catalog.Infrastructure.Persistence.Write.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
 
+                    b.Property<string>("ProjectionFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<decimal>("Price")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");

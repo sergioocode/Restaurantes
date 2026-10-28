@@ -120,7 +120,7 @@ public sealed class CatalogDesignController(
         await db.SaveChangesAsync(ct);
         await synchronizer.SyncAffectedMenus(Guid.Empty, ct);
         await transaction.CommitAsync(ct);
-        await notifications.MenuChanged(Guid.Empty);
+        await notifications.CatalogChanged(Guid.Empty);
         return Ok(tax);
     }
 
@@ -186,7 +186,7 @@ public sealed class CatalogDesignController(
                 "El producto cambió durante el guardado. Recarga e inténtalo de nuevo."
             );
         }
-        await notifications.MenuChanged(Guid.Empty);
+        await notifications.CatalogChanged(Guid.Empty);
         return NoContent();
     }
 
@@ -230,7 +230,7 @@ public sealed class CatalogDesignController(
             return BadRequest(validationError);
 
         await PersistDefinitionAsync(productId, input, ct);
-        await notifications.MenuChanged(Guid.Empty);
+        await notifications.CatalogChanged(Guid.Empty);
         return NoContent();
     }
 
@@ -434,7 +434,7 @@ public sealed class CatalogDesignController(
         await db.SaveChangesAsync(ct);
         await synchronizer.SyncAffectedMenus(Guid.Empty, ct);
         await transaction.CommitAsync(ct);
-        await notifications.MenuChanged(Guid.Empty);
+        await notifications.CatalogChanged(Guid.Empty);
     }
 
     private async Task UpdateDefaultMenuAsync(
@@ -552,7 +552,7 @@ public sealed class CatalogDesignController(
         await db.SaveChangesAsync(ct);
         await synchronizer.SyncAffectedMenus(restaurantId, ct);
         await transaction.CommitAsync(ct);
-        await notifications.MenuChanged(restaurantId);
+        await notifications.CatalogChanged(restaurantId);
         return NoContent();
     }
 

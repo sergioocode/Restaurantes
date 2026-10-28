@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Restaurantes.Catalog.Contracts.Events;
@@ -172,6 +174,40 @@ public sealed class CatalogMenuSynchronizer(CatalogWriteDbContext db)
             localPreparation?.StationName
             ?? (category.RequiresKds ? category.DefaultStationName : "");
         bool requiresKds = !string.IsNullOrWhiteSpace(stationCode);
+        decimal? taxRate = GetTaxRate(product, data.ActiveTaxRates);
+        ProductExtraGroup[] extraGroups = BuildExtraGroups(product.Id, data);
+        MenuItemFormatPrice[] formatPrices = data
+            .Prices.Where(x => x.ProductId == product.Id)
+            .OrderBy(x => x.Format, StringComparer.Ordinal)
+            .Select(x => new MenuItemFormatPrice(x.Format, x.Amount))
+            .ToArray();
+        decimal effectivePrice = price?.Amount ?? item?.Price ?? 0;
+        CatalogItemChanged projection = new(
+            restaurantId,
+            product.Id,
+            product.Sku,
+            product.Name,
+            category.Id,
+            category.Code,
+            category.Name,
+            effectivePrice,
+            available,
+            stationCode,
+            stationName,
+            0,
+            default,
+            extraGroups,
+            entry?.DefaultFormat ?? "PLATO",
+            formatPrices,
+            RequiresKds: requiresKds,
+            TaxRate: taxRate
+        );
+        string fingerprint = Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(projection)))
+        );
+        if (item is not null && item.ProjectionFingerprint == fingerprint)
+            return;
+
         item = SaveRestaurantMenuItem(
             restaurantId,
             product,
@@ -180,9 +216,9 @@ public sealed class CatalogMenuSynchronizer(CatalogWriteDbContext db)
             available,
             stationCode,
             stationName,
+            fingerprint,
             now
         );
-        decimal? taxRate = GetTaxRate(product, data.ActiveTaxRates);
         CatalogItemChanged changed = new(
             restaurantId,
             product.Id,
@@ -197,11 +233,9 @@ public sealed class CatalogMenuSynchronizer(CatalogWriteDbContext db)
             stationName,
             item.Version,
             now,
-            BuildExtraGroups(product.Id, data),
+            extraGroups,
             entry?.DefaultFormat ?? "PLATO",
-            data.Prices.Where(x => x.ProductId == product.Id)
-                .Select(x => new MenuItemFormatPrice(x.Format, x.Amount))
-                .ToArray(),
+            formatPrices,
             RequiresKds: requiresKds,
             TaxRate: taxRate
         );
@@ -238,6 +272,7 @@ public sealed class CatalogMenuSynchronizer(CatalogWriteDbContext db)
         bool available,
         string stationCode,
         string stationName,
+        string fingerprint,
         DateTime now
     )
     {
@@ -252,11 +287,13 @@ public sealed class CatalogMenuSynchronizer(CatalogWriteDbContext db)
                 stationName,
                 now
             );
+            created.SetProjectionFingerprint(fingerprint);
             db.MenuItems.Add(created);
             return created;
         }
 
         item.Configure(price?.Amount ?? item.Price, available, stationCode, stationName, now);
+        item.SetProjectionFingerprint(fingerprint);
         return item;
     }
 

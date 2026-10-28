@@ -32,7 +32,7 @@ public sealed partial class DiningService
 
         if (table.DeletedAtUtc is not null)
         {
-            return DiningResults.NoContent();
+            return DiningResults.NoContent(restaurantId: table.RestaurantId);
         }
 
         if (await db.HasOpenSessionAsync(tableId, ct))
@@ -56,6 +56,6 @@ public sealed partial class DiningService
         table.IsActive = false;
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        return DiningResults.NoContent();
+        return DiningResults.NoContent(restaurantId: table.RestaurantId);
     }
 }

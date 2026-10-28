@@ -96,7 +96,7 @@ public sealed class CatalogWriteController(
             return NotFound();
         await synchronizer.SyncAffectedMenus(Guid.Empty, ct);
         await transaction.CommitAsync(ct);
-        await notifications.MenuChanged(Guid.Empty);
+        await notifications.CatalogChanged(Guid.Empty);
         return Accepted($"/api/catalog/categories/{id}", item);
     }
 
@@ -173,7 +173,7 @@ public sealed class CatalogWriteController(
         await db.SaveChangesAsync(ct);
         await synchronizer.SyncAffectedMenus(restaurantId, ct);
         await transaction.CommitAsync(ct);
-        await notifications.MenuChanged(restaurantId);
+        await notifications.CatalogChanged(restaurantId);
         return Accepted(
             $"/api/catalog/restaurants/{restaurantId}/categories/{categoryId}/preparation",
             new CategoryResponse(
@@ -211,7 +211,7 @@ public sealed class CatalogWriteController(
             return NotFound();
         await synchronizer.SyncAffectedMenus(Guid.Empty, ct);
         await transaction.CommitAsync(ct);
-        await notifications.MenuChanged(Guid.Empty);
+        await notifications.CatalogChanged(Guid.Empty);
         return Accepted($"/api/catalog/products/{id}", item);
     }
 
@@ -233,7 +233,7 @@ public sealed class CatalogWriteController(
             return NotFound();
         await synchronizer.SyncAffectedMenus(Guid.Empty, ct);
         await transaction.CommitAsync(ct);
-        await notifications.MenuChanged(Guid.Empty);
+        await notifications.CatalogChanged(Guid.Empty);
         return Accepted($"/api/catalog/products/{id}", item);
     }
 
@@ -255,7 +255,7 @@ public sealed class CatalogWriteController(
             return NotFound();
         await synchronizer.SyncAffectedMenus(Guid.Empty, ct);
         await transaction.CommitAsync(ct);
-        await notifications.MenuChanged(Guid.Empty);
+        await notifications.CatalogChanged(Guid.Empty);
         return Accepted($"/api/catalog/products/{id}", item);
     }
 
@@ -277,7 +277,7 @@ public sealed class CatalogWriteController(
             return NotFound();
         await synchronizer.SyncAffectedMenus(Guid.Empty, ct);
         await transaction.CommitAsync(ct);
-        await notifications.MenuChanged(Guid.Empty);
+        await notifications.CatalogChanged(Guid.Empty);
         return Accepted($"/api/catalog/products/{id}", item);
     }
 
@@ -308,7 +308,7 @@ public sealed class CatalogWriteController(
                 }
             );
         await synchronizer.SyncAffectedMenus(restaurantId, ct);
-        await notifications.MenuChanged(restaurantId);
+        await notifications.CatalogChanged(restaurantId);
         return Accepted($"/api/catalog/restaurants/{restaurantId}/menu", item);
     }
 
@@ -326,7 +326,10 @@ public sealed class CatalogWriteController(
 
         KitchenStationResponse? item = await service.CreateStationAsync(restaurantId, request, ct);
         if (item is not null)
+        {
             await synchronizer.SyncAffectedMenus(restaurantId, ct);
+            await notifications.CatalogChanged(restaurantId);
+        }
         return item is null
             ? Conflict(
                 new ProblemDetails
@@ -357,6 +360,11 @@ public sealed class CatalogWriteController(
             request,
             ct
         );
+        if (item is not null)
+        {
+            await synchronizer.SyncAffectedMenus(restaurantId, ct);
+            await notifications.CatalogChanged(restaurantId);
+        }
         return item is null
             ? NotFound()
             : Accepted($"/api/catalog/restaurants/{restaurantId}/stations", item);
@@ -371,7 +379,8 @@ public sealed class CatalogWriteController(
     ) =>
         SaveStationChangeAsync(
             restaurantId,
-            () => service.SetStationNameAsync(restaurantId, stationId, name, ct)
+            () => service.SetStationNameAsync(restaurantId, stationId, name, ct),
+            ct
         );
 
     [HttpPut("restaurants/{restaurantId:guid}/stations/{stationId:guid}/priority")]
@@ -383,7 +392,8 @@ public sealed class CatalogWriteController(
     ) =>
         SaveStationChangeAsync(
             restaurantId,
-            () => service.SetStationPriorityAsync(restaurantId, stationId, priority, ct)
+            () => service.SetStationPriorityAsync(restaurantId, stationId, priority, ct),
+            ct
         );
 
     [HttpPut("restaurants/{restaurantId:guid}/stations/{stationId:guid}/active")]
@@ -395,7 +405,8 @@ public sealed class CatalogWriteController(
     ) =>
         SaveStationChangeAsync(
             restaurantId,
-            () => service.SetStationActiveAsync(restaurantId, stationId, active, ct)
+            () => service.SetStationActiveAsync(restaurantId, stationId, active, ct),
+            ct
         );
 
     [HttpPut("restaurants/{restaurantId:guid}/stations/{stationId:guid}/primary")]
@@ -407,7 +418,8 @@ public sealed class CatalogWriteController(
     ) =>
         SaveStationChangeAsync(
             restaurantId,
-            () => service.SetStationPrimaryAsync(restaurantId, stationId, primary, ct)
+            () => service.SetStationPrimaryAsync(restaurantId, stationId, primary, ct),
+            ct
         );
 
     [HttpPut("restaurants/{restaurantId:guid}/stations/{stationId:guid}/requires-primary-dispatch")]
@@ -425,7 +437,8 @@ public sealed class CatalogWriteController(
                     stationId,
                     requiresDispatch,
                     ct
-                )
+                ),
+            ct
         );
 
     [HttpPut("restaurants/{restaurantId:guid}/stations/{stationId:guid}/print-ticket")]
@@ -437,7 +450,8 @@ public sealed class CatalogWriteController(
     ) =>
         SaveStationChangeAsync(
             restaurantId,
-            () => service.SetStationPrintTicketAsync(restaurantId, stationId, printTicket, ct)
+            () => service.SetStationPrintTicketAsync(restaurantId, stationId, printTicket, ct),
+            ct
         );
 
     [HttpPut("restaurants/{restaurantId:guid}/stations/{stationId:guid}/manages-zones")]
@@ -449,12 +463,14 @@ public sealed class CatalogWriteController(
     ) =>
         SaveStationChangeAsync(
             restaurantId,
-            () => service.SetStationManagesZonesAsync(restaurantId, stationId, managesZones, ct)
+            () => service.SetStationManagesZonesAsync(restaurantId, stationId, managesZones, ct),
+            ct
         );
 
     private async Task<ActionResult<KitchenStationResponse>> SaveStationChangeAsync(
         Guid restaurantId,
-        Func<Task<KitchenStationResponse?>> change
+        Func<Task<KitchenStationResponse?>> change,
+        CancellationToken ct
     )
     {
         if (!CanManageStation(restaurantId))
@@ -463,6 +479,11 @@ public sealed class CatalogWriteController(
         }
 
         KitchenStationResponse? item = await change();
+        if (item is not null)
+        {
+            await synchronizer.SyncAffectedMenus(restaurantId, ct);
+            await notifications.CatalogChanged(restaurantId);
+        }
         return item is null
             ? NotFound()
             : Accepted($"/api/catalog/restaurants/{restaurantId}/stations", item);

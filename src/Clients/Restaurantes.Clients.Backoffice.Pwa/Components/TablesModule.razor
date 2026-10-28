@@ -17,11 +17,11 @@ else
             <div class="maintenance-list">
                 @foreach (TableResponse item in group.OrderBy(x => x.Code))
                 {
-                    <article class="table-maintenance @(item.IsActive ? "" : "inactive")">
+                    <article class="table-maintenance @(!item.IsActive || item.Status == "Occupied" ? "disabled" : "")">
                         <div class="table-code-status"><small>@Home.StatusLabel(item.Status)</small></div>
                         <div class="table-field-editor table-name-editor">
-                            <label>Nombre<input @bind="drafts[item.Id].Label" /></label>
-                            <button class="primary product-name-save" @onclick="() => SaveLabel(item)" disabled="@Host.busy" aria-label="Guardar nombre de mesa" title="Guardar nombre">
+                            <label>Nombre<input @bind="drafts[item.Id].Label" disabled="@(Host.busy || item.Status == "Occupied")" /></label>
+                            <button class="primary product-name-save" @onclick="() => SaveLabel(item)" disabled="@(Host.busy || item.Status == "Occupied")" aria-label="Guardar nombre de mesa" title="Guardar nombre">
                                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
                                     <path d="M4 3h13l3 3v15H4z" />
                                     <path d="M7 3v6h10V3M7 21v-8h10v8M14 3v4" />
@@ -29,7 +29,7 @@ else
                             </button>
                         </div>
                         <div class="table-field-editor table-zone-editor">
-                            <select aria-label="Zona" value="@item.ZoneId" @onchange="args => SetZone(item, args)" disabled="@Host.busy">
+                            <select aria-label="Zona" value="@item.ZoneId" @onchange="args => SetZone(item, args)" disabled="@(Host.busy || item.Status == "Occupied")">
                                 @foreach (ZoneResponse zone in Host.zones.OrderBy(x => x.SortOrder).ThenBy(x => x.Name))
                                 {
                                     <option value="@zone.Id">@zone.Name</option>
@@ -37,7 +37,17 @@ else
                             </select>
                         </div>
                         <label class="availability table-active"><input type="checkbox" checked="@item.IsActive" @onchange="args => SetActive(item, args)" disabled="@(Host.busy || item.Status == "Occupied")" /> Activa</label>
-                        <div class="table-qr-data"><code title="@item.QrCode">@item.QrCode</code><a href="@item.CustomerQrPath" target="_blank" rel="noopener noreferrer">Abrir QR</a></div>
+                        <div class="table-qr-data">
+                            <code title="@item.QrCode">@item.QrCode</code>
+                            @if (item.Status == "Occupied")
+                            {
+                                <span class="disabled-control">Abrir QR</span>
+                            }
+                            else
+                            {
+                                <a href="@item.CustomerQrPath" target="_blank" rel="noopener noreferrer">Abrir QR</a>
+                            }
+                        </div>
                         <button class="secondary table-qr-button" @onclick="() => Host.RotateQr(item)" disabled="@(Host.busy || item.Status == "Occupied")">Regenerar QR</button>
                         <button class="danger table-delete-button" @onclick="() => Host.DeleteTable(item)" disabled="@(Host.busy || item.Status == "Occupied")" title="Solo se pueden eliminar mesas sin ventas y sin sesión abierta">Eliminar</button>
                     </article>

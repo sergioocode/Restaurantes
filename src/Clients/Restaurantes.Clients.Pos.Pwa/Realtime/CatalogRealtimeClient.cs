@@ -13,7 +13,7 @@ public sealed class CatalogRealtimeClient(
     private HubConnection? connection;
     private Guid restaurantId;
 
-    public event Func<Guid, Task>? MenuChanged;
+    public event Func<Guid, Task>? CatalogChanged;
 
     public async Task ConnectAsync(Guid newRestaurantId)
     {
@@ -47,7 +47,7 @@ public sealed class CatalogRealtimeClient(
                     TimeSpan.FromSeconds(5),
                 ])
                 .Build();
-            connection.On<Guid>("MenuChanged", NotifyAsync);
+            connection.On<Guid>("CatalogChanged", NotifyAsync);
             connection.Reconnected += async _ =>
             {
                 if (restaurantId != Guid.Empty)
@@ -80,7 +80,7 @@ public sealed class CatalogRealtimeClient(
     {
         if (changedRestaurantId != Guid.Empty && changedRestaurantId != restaurantId)
             return Task.CompletedTask;
-        return AsyncEventDispatcher.InvokeAsync(MenuChanged, changedRestaurantId);
+        return AsyncEventDispatcher.InvokeAsync(CatalogChanged, changedRestaurantId);
     }
 
     public ValueTask DisposeAsync() => connection?.DisposeAsync() ?? ValueTask.CompletedTask;

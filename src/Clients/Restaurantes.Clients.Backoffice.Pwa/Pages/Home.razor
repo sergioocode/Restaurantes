@@ -1,5 +1,6 @@
-﻿@page "/"
+@page "/"
 @using System.Text.Json
+@using Restaurantes.Clients.Shared.Operations
 @implements IAsyncDisposable
 @using Syncfusion.Blazor.Navigations
 @inject BackofficeApi Api
@@ -7,6 +8,8 @@
 @inject NavigationManager Nav
 @inject Restaurantes.Clients.Backoffice.Pwa.Security.SessionAuthenticationStateProvider AuthState
 @inject Restaurantes.Clients.Backoffice.Pwa.Realtime.ITablesRealtimeClient TablesRealtime
+@inject CatalogConfigurationRealtimeClient CatalogRealtime
+@inject DiningRealtimeClient DiningRealtime
 
 <PageTitle>Backoffice · Restaurantes</PageTitle>
 

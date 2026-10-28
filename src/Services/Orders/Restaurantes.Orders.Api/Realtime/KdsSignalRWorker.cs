@@ -101,6 +101,11 @@ public sealed class KdsSignalRWorker(
             List<Task> notifications = kdsGroups
                 .Select(group => kdsHubContext.Clients.Group(group).OrderUpdated(notification))
                 .ToList();
+            notifications.Add(
+                ordersHubContext
+                    .Clients.Group(OrdersHub.TablesGroup(notification.RestaurantId))
+                    .DiningTableUpdated(notification.RestaurantId)
+            );
             string? clientPermission = OrderClientAccess.PermissionForSource(notification.Source);
             if (clientPermission == RestaurantPermissions.CommanderUse)
             {

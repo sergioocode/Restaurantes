@@ -10,6 +10,7 @@ public enum DiningOutcome
     Forbidden,
     NotFound,
     Conflict,
+    Gone,
     Problem,
 }
 
@@ -22,32 +23,35 @@ public sealed record DiningResult(
     string? ProblemTitle = null,
     string? ProblemDetail = null,
     Guid? ZoneId = null,
-    string? ZoneName = null
+    string? ZoneName = null,
+    Guid? RestaurantId = null
 );
 
 internal static class DiningResults
 {
-    public static DiningResult Ok(object value)
+    public static DiningResult Ok(object value, Guid? restaurantId = null)
     {
-        return new(DiningOutcome.Ok, value);
+        return new(DiningOutcome.Ok, value, RestaurantId: restaurantId);
     }
 
-    public static DiningResult Created(string location, object value)
+    public static DiningResult Created(string location, object value, Guid? restaurantId = null)
     {
-        return new(DiningOutcome.Created, value, location);
+        return new(DiningOutcome.Created, value, location, RestaurantId: restaurantId);
     }
 
     public static DiningResult NoContent(
         int? guestCount = null,
         Guid? zoneId = null,
-        string? zoneName = null
+        string? zoneName = null,
+        Guid? restaurantId = null
     )
     {
         return new(
             DiningOutcome.NoContent,
             GuestCount: guestCount,
             ZoneId: zoneId,
-            ZoneName: zoneName
+            ZoneName: zoneName,
+            RestaurantId: restaurantId
         );
     }
 
@@ -74,6 +78,11 @@ internal static class DiningResults
     public static DiningResult Conflict(object value)
     {
         return new(DiningOutcome.Conflict, value);
+    }
+
+    public static DiningResult Gone(object value, Guid? restaurantId = null)
+    {
+        return new(DiningOutcome.Gone, value, RestaurantId: restaurantId);
     }
 
     public static DiningResult Problem(int statusCode, string? title = null, string? detail = null)

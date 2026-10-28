@@ -1,8 +1,9 @@
-﻿using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Restaurantes.Clients.Pos.Pwa;
 using Restaurantes.Clients.Pos.Pwa.Api;
 using Restaurantes.Clients.Pos.Pwa.Realtime;
+using Restaurantes.Clients.Shared.Operations;
 
 WebAssemblyHostBuilder builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -16,5 +17,9 @@ builder.Services.AddScoped(_ => new HttpClient
 builder.Services.AddScoped<PosApi>();
 builder.Services.AddScoped<OrderRealtimeClient>();
 builder.Services.AddScoped<CatalogRealtimeClient>();
+builder.Services.AddScoped(sp => new DiningRealtimeClient(
+    sp.GetRequiredService<HttpClient>(),
+    () => sp.GetRequiredService<PosApi>().AccessToken
+));
 
 await builder.Build().RunAsync();

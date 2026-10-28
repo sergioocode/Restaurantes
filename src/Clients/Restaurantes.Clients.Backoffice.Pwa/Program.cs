@@ -1,10 +1,11 @@
-﻿using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Restaurantes.Clients.Backoffice.Pwa;
 using Restaurantes.Clients.Backoffice.Pwa.Api;
 using Restaurantes.Clients.Backoffice.Pwa.Realtime;
 using Restaurantes.Clients.Backoffice.Pwa.Security;
+using Restaurantes.Clients.Shared.Operations;
 using Syncfusion.Blazor;
 using Syncfusion.Licensing;
 
@@ -24,6 +25,14 @@ builder.Services.AddScoped(_ => new HttpClient
     BaseAddress = new Uri(applicationUri.GetLeftPart(UriPartial.Authority)),
 });
 builder.Services.AddScoped<BackofficeApi>();
+builder.Services.AddScoped(sp => new CatalogConfigurationRealtimeClient(
+    sp.GetRequiredService<HttpClient>(),
+    () => sp.GetRequiredService<BackofficeApi>().AccessToken
+));
+builder.Services.AddScoped(sp => new DiningRealtimeClient(
+    sp.GetRequiredService<HttpClient>(),
+    () => sp.GetRequiredService<BackofficeApi>().AccessToken
+));
 builder.Services.AddScoped<TablesRealtimeClient>();
 builder.Services.AddScoped<ITablesRealtimeClient>(sp =>
     sp.GetRequiredService<TablesRealtimeClient>()

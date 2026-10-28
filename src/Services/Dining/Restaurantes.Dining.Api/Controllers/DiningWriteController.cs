@@ -1,5 +1,6 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Restaurantes.Dining.Api.Realtime;
 using Restaurantes.Dining.Application;
 using Restaurantes.Dining.Contracts.Requests;
 using Restaurantes.Security;
@@ -7,8 +8,11 @@ using Restaurantes.Security;
 namespace Restaurantes.Dining.Api.Controllers;
 
 [ApiController, Authorize, Route("api/dining")]
-public sealed class DiningWriteController(DiningService service, IConfiguration configuration)
-    : ControllerBase
+public sealed class DiningWriteController(
+    DiningService service,
+    IConfiguration configuration,
+    DiningNotifications notifications
+) : ControllerBase
 {
     [HttpPost("restaurants/{restaurantId:guid}/tables")]
     public Task<IActionResult> CreateTable(
@@ -17,7 +21,7 @@ public sealed class DiningWriteController(DiningService service, IConfiguration 
         CancellationToken ct
     )
     {
-        return Execute(() => service.CreateTable(restaurantId, request, User, ct));
+        return ExecuteDiningChange(() => service.CreateTable(restaurantId, request, User, ct));
     }
 
     [HttpPut("tables/{tableId:guid}")]
@@ -27,13 +31,13 @@ public sealed class DiningWriteController(DiningService service, IConfiguration 
         CancellationToken ct
     )
     {
-        return Execute(() => service.UpdateTable(tableId, request, User, ct));
+        return ExecuteDiningChange(() => service.UpdateTable(tableId, request, User, ct));
     }
 
     [HttpDelete("tables/{tableId:guid}")]
     public Task<IActionResult> DeleteTable(Guid tableId, CancellationToken ct)
     {
-        return Execute(() => service.DeleteTable(tableId, User, ct));
+        return ExecuteDiningChange(() => service.DeleteTable(tableId, User, ct));
     }
 
     [HttpPost("tables/{tableId:guid}/sessions")]
@@ -43,7 +47,7 @@ public sealed class DiningWriteController(DiningService service, IConfiguration 
         CancellationToken ct
     )
     {
-        return Execute(() => service.OpenSession(tableId, request, User, ct));
+        return ExecuteDiningChange(() => service.OpenSession(tableId, request, User, ct));
     }
 
     [HttpPost("restaurants/{restaurantId:guid}/takeaway-sessions")]
@@ -59,7 +63,7 @@ public sealed class DiningWriteController(DiningService service, IConfiguration 
     [HttpPost("tables/{tableId:guid}/qr/rotate")]
     public Task<IActionResult> RotateQr(Guid tableId, CancellationToken ct)
     {
-        return Execute(() => service.RotateQr(tableId, User, ct));
+        return ExecuteDiningChange(() => service.RotateQr(tableId, User, ct));
     }
 
     [AllowAnonymous]
@@ -126,13 +130,13 @@ public sealed class DiningWriteController(DiningService service, IConfiguration 
     [HttpPost("sessions/{sessionId:guid}/close")]
     public Task<IActionResult> CloseSession(Guid sessionId, CancellationToken ct)
     {
-        return Execute(() => service.CloseSession(sessionId, User, ct));
+        return ExecuteDiningChange(() => service.CloseSession(sessionId, User, ct));
     }
 
     [HttpPost("sessions/{sessionId:guid}/cancel")]
     public Task<IActionResult> CancelSession(Guid sessionId, CancellationToken ct)
     {
-        return Execute(() => service.CancelSession(sessionId, User, ct));
+        return ExecuteDiningChange(() => service.CancelSession(sessionId, User, ct));
     }
 
     [HttpPost("restaurants/{restaurantId:guid}/zones")]
@@ -142,7 +146,7 @@ public sealed class DiningWriteController(DiningService service, IConfiguration 
         CancellationToken ct
     )
     {
-        return Execute(() => service.CreateZone(restaurantId, request, User, ct));
+        return ExecuteDiningChange(() => service.CreateZone(restaurantId, request, User, ct));
     }
 
     [HttpPut("restaurants/{restaurantId:guid}/zones/{zoneId:guid}")]
@@ -153,11 +157,32 @@ public sealed class DiningWriteController(DiningService service, IConfiguration 
         CancellationToken ct
     )
     {
-        return Execute(() => service.UpdateZone(restaurantId, zoneId, request, User, ct));
+        return ExecuteDiningChange(() =>
+            service.UpdateZone(restaurantId, zoneId, request, User, ct)
+        );
     }
 
     private async Task<IActionResult> Execute(Func<Task<DiningResult>> operation)
     {
         return this.ToActionResult(await operation());
+    }
+
+    private async Task<IActionResult> ExecuteDiningChange(Func<Task<DiningResult>> operation)
+    {
+        DiningResult result = await operation();
+        if (
+            (
+                result.Outcome
+                is DiningOutcome.Ok
+                    or DiningOutcome.Created
+                    or DiningOutcome.NoContent
+                    or DiningOutcome.Gone
+            ) && result.RestaurantId is Guid restaurantId
+        )
+        {
+            await notifications.DiningChanged(restaurantId);
+        }
+
+        return this.ToActionResult(result);
     }
 }

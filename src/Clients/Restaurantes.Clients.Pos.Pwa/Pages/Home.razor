@@ -1,8 +1,9 @@
-﻿@page "/"
+@page "/"
 @implements IAsyncDisposable
 @inject PosApi Api
 @inject OrderRealtimeClient Realtime
 @inject CatalogRealtimeClient CatalogRealtime
+@inject Restaurantes.Clients.Shared.Operations.DiningRealtimeClient DiningRealtime
 @inject IJSRuntime Js
 @inject NavigationManager Nav
 
@@ -104,11 +105,15 @@
                             @foreach (TableResponse table in FilteredTables())
                             {
                                 TableSessionOrderSnapshot? sessionOrderSnapshot = TableSessionSnapshot(table);
-                                <button class="table-card dining-location @table.Status.ToLowerInvariant()"
-                                        @onclick="() => SelectTable(table)" disabled="@(busy || (!CashRegisterOpen && table.Status != "Occupied"))">
-                                    <span class="table-status">@StatusLabel(table.Status)</span>
+                                <button class="table-card dining-location @(table.IsActive ? table.Status.ToLowerInvariant() : "inactive")"
+                                        @onclick="() => SelectTable(table)" disabled="@(busy || !table.IsActive || (!CashRegisterOpen && table.Status != "Occupied"))">
+                                    <span class="table-status">@(table.IsActive ? StatusLabel(table.Status) : "Desactivada")</span>
                                     <strong>@table.Label</strong>
                                     <small>@table.Code</small>
+                                    @if (!table.IsActive)
+                                    {
+                                        <span class="table-disabled-indicator" aria-hidden="true">🚫</span>
+                                    }
                                     <div class="table-card-meta">
                                         @if (table.Status == "Occupied" && sessionOrderSnapshot is { IsAvailable: true })
                                         {

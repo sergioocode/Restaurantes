@@ -62,6 +62,7 @@ public sealed class CatalogWriteDbContext(DbContextOptions<CatalogWriteDbContext
         m.Property(x => x.Price).HasPrecision(12, 2);
         m.Property(x => x.PreparationStationCode).HasMaxLength(40).IsRequired();
         m.Property(x => x.PreparationStationName).HasMaxLength(80).IsRequired();
+        m.Property(x => x.ProjectionFingerprint).HasMaxLength(64).IsRequired();
         m.Property(x => x.Version).IsConcurrencyToken();
         m.HasIndex(x => new { x.RestaurantId, x.ProductId }).IsUnique();
         m.HasOne<Product>()

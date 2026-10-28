@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Restaurantes.Clients.Backoffice.Pwa.Components;
@@ -397,6 +397,8 @@ public partial class Home
     protected override async Task OnInitializedAsync()
     {
         TablesRealtime.DiningTableUpdated += HandleDiningTableUpdated;
+        CatalogRealtime.Changed += HandleConfigurationChanged;
+        DiningRealtime.Changed += HandleConfigurationChanged;
         try
         {
             providerSettings = await Api.ProviderAsync();
@@ -495,6 +497,8 @@ public partial class Home
     private async Task Logout()
     {
         await TablesRealtime.DisconnectAsync();
+        await CatalogRealtime.DisconnectAsync();
+        await DiningRealtime.DisconnectAsync();
         await Js.InvokeVoidAsync("sessionStorage.removeItem", SessionKey);
         Api.AccessToken = null;
         login = null;
@@ -897,6 +901,8 @@ public partial class Home
         if (SelectableRestaurants().Count == 0)
         {
             await TablesRealtime.DisconnectAsync();
+            await CatalogRealtime.DisconnectAsync();
+            await DiningRealtime.DisconnectAsync();
             stations = [];
             tables = [];
             zones = [];
@@ -910,6 +916,8 @@ public partial class Home
             IsAdmin || HasLocalPermission("kds.use") || IsCurrentRestaurantManager
                 ? await Api.StationsAsync(restaurantId)
                 : [];
+        await CatalogRealtime.ConnectAsync(restaurantId);
+        await DiningRealtime.ConnectAsync(restaurantId);
         await ConnectTablesRealtimeAsync();
         tables = HasLocalPermission("tables.read") ? await Api.TablesAsync(restaurantId) : [];
         zones = HasLocalPermission("tables.read") ? await Api.ZonesAsync(restaurantId) : [];
@@ -958,10 +966,38 @@ public partial class Home
         });
     }
 
+    private Task HandleConfigurationChanged(Guid changedRestaurantId)
+    {
+        if (
+            login is null
+            || (changedRestaurantId != Guid.Empty && changedRestaurantId != restaurantId)
+        )
+            return Task.CompletedTask;
+
+        return InvokeAsync(async () =>
+        {
+            try
+            {
+                await LoadLocalCore();
+                await RefreshCurrentModule();
+            }
+            catch (Exception exception)
+            {
+                message = $"No se pudo actualizar la configuración del local: {exception.Message}";
+            }
+
+            StateHasChanged();
+        });
+    }
+
     public async ValueTask DisposeAsync()
     {
         TablesRealtime.DiningTableUpdated -= HandleDiningTableUpdated;
+        CatalogRealtime.Changed -= HandleConfigurationChanged;
+        DiningRealtime.Changed -= HandleConfigurationChanged;
         await TablesRealtime.DisconnectAsync();
+        await CatalogRealtime.DisconnectAsync();
+        await DiningRealtime.DisconnectAsync();
     }
 
     internal async Task CreateStation()

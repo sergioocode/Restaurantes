@@ -89,11 +89,6 @@ public abstract class RestaurantOrderRealtimeClient<TNotification>(
         restaurantId = Guid.Empty;
     }
 
-    public Task NotifyDiningTableUpdatedAsync() =>
-        connection is { State: HubConnectionState.Connected } && restaurantId != Guid.Empty
-            ? connection.InvokeAsync("NotifyDiningTableUpdated", restaurantId)
-            : Task.CompletedTask;
-
     private Task NotifyAsync(TNotification notification) =>
         AsyncEventDispatcher.InvokeForRestaurantAsync(
             OrderUpdated,

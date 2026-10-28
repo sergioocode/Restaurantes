@@ -5,9 +5,16 @@ function send(socket, message) {
 }
 
 export class KdsRealtimeClient {
-  constructor(baseUrl, handlers) {
+  constructor(baseUrl, handlers, options = {}) {
     this.baseUrl = baseUrl;
     this.handlers = handlers;
+    this.options = {
+      hubPath: '/hubs/kds',
+      joinTarget: 'JoinStation',
+      joinArguments: connection => [connection.restaurantId, connection.stationCode],
+      configurationEvent: null,
+      ...options
+    };
     this.socket = null;
     this.connection = null;
     this.version = 0;
@@ -15,6 +22,10 @@ export class KdsRealtimeClient {
   }
 
   connect(connection) {
+    if (this.connection && this.socket?.readyState < WebSocket.CLOSING
+      && this.connection.accessToken === connection.accessToken
+      && JSON.stringify(this.options.joinArguments(this.connection))
+        === JSON.stringify(this.options.joinArguments(connection))) return;
     this.connection = connection;
     const version = ++this.version;
     if (this.reconnectTimer) window.clearTimeout(this.reconnectTimer);
@@ -24,7 +35,7 @@ export class KdsRealtimeClient {
     const hubOrigin = new URL(this.baseUrl);
     const protocol = hubOrigin.protocol === 'https:' ? 'wss:' : 'ws:';
     const token = encodeURIComponent(connection.accessToken);
-    const socket = new WebSocket(protocol + '//' + hubOrigin.host + '/hubs/kds?access_token=' + token);
+    const socket = new WebSocket(protocol + '//' + hubOrigin.host + this.options.hubPath + '?access_token=' + token);
     let handshakeComplete = false;
     this.socket = socket;
 
@@ -38,8 +49,8 @@ export class KdsRealtimeClient {
           send(socket, {
             type: 1,
             invocationId: 'join',
-            target: 'JoinStation',
-            arguments: [connection.restaurantId, connection.stationCode]
+            target: this.options.joinTarget,
+            arguments: this.options.joinArguments(connection)
           });
           continue;
         }
@@ -49,6 +60,9 @@ export class KdsRealtimeClient {
         }
         if (message.type === 1 && message.target === 'OrderUpdated') {
           await this.handlers.onOrderUpdated(message.arguments[0]);
+        }
+        if (message.type === 1 && message.target === this.options.configurationEvent) {
+          await this.handlers.onConfigurationChanged(message.arguments[0]);
         }
       }
     });

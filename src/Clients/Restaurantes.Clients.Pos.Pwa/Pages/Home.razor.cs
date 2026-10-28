@@ -188,9 +188,7 @@ public partial class Home
             .ToList();
 
     private List<TableResponse> TablesInSelectedZone() =>
-        selectedZoneId is Guid zoneId
-            ? tables.Where(x => x.ZoneId == zoneId && x.IsActive).ToList()
-            : [];
+        selectedZoneId is Guid zoneId ? tables.Where(x => x.ZoneId == zoneId).ToList() : [];
 
     private List<TableResponse> FilteredTables() =>
         TablesInSelectedZone()
@@ -320,9 +318,9 @@ public partial class Home
     protected override async Task OnInitializedAsync()
     {
         Realtime.OrderUpdated += HandleOrderUpdated;
-        Realtime.DiningTableUpdated += HandleDiningTableUpdated;
         Realtime.SaleCompleted += HandleSaleCompleted;
-        CatalogRealtime.MenuChanged += HandleMenuChanged;
+        CatalogRealtime.CatalogChanged += HandleCatalogChanged;
+        DiningRealtime.Changed += HandleDiningTableUpdated;
         try
         {
             providerSettings = await Api.ProviderAsync();
@@ -411,6 +409,7 @@ public partial class Home
         await Js.InvokeVoidAsync("sessionStorage.removeItem", SessionKey);
         await Realtime.DisconnectAsync();
         await CatalogRealtime.DisconnectAsync();
+        await DiningRealtime.DisconnectAsync();
         if (reconciliation is not null)
         {
             await reconciliation.CancelAsync();
@@ -645,6 +644,11 @@ public partial class Home
 
     private async Task SelectTable(TableResponse table)
     {
+        if (!table.IsActive)
+        {
+            return;
+        }
+
         await Run(async () =>
         {
             if (!CashRegisterOpen && table.Status != OccupiedTableStatus)
@@ -659,10 +663,6 @@ public partial class Home
             session = table.ActiveSessionId.HasValue
                 ? await Api.ActiveSessionAsync(table.Id)
                 : await Api.OpenSessionAsync(table.Id);
-            if (guestCountSessionOpenedHere)
-            {
-                await Realtime.NotifyDiningTableUpdatedAsync();
-            }
             guestCount = session.GuestCount;
             guestCountDraft = guestCount ?? 2;
             guestCountDialogOpen = session.RequestGuestCount && session.GuestCount is null;
@@ -686,7 +686,6 @@ public partial class Home
         await Run(async () =>
         {
             session = await Api.SetGuestCountAsync(session.Id, guestCountDraft);
-            await Realtime.NotifyDiningTableUpdatedAsync();
             guestCount = session.GuestCount;
             menu = await Api.MenuAsync(restaurantId);
             menuRefreshVersion++;
@@ -703,7 +702,6 @@ public partial class Home
             await Run(async () =>
             {
                 await Api.CancelSessionAsync(session.Id);
-                await Realtime.NotifyDiningTableUpdatedAsync();
                 BackToTables();
                 await LoadOperationalData();
             });
@@ -1049,7 +1047,6 @@ public partial class Home
             async () =>
             {
                 await Api.CancelSessionAsync(session.Id);
-                await Realtime.NotifyDiningTableUpdatedAsync();
                 success = true;
                 message = "Apertura cancelada y ubicación liberada.";
                 BackToTables();
@@ -1578,7 +1575,6 @@ public partial class Home
                     pickupSessions.RemoveAll(pickup => pickup.Id == releasedSessionId);
                     ClosePickup();
                 }
-                await Realtime.NotifyDiningTableUpdatedAsync();
                 success = true;
                 if (wasPickup)
                 {
@@ -2024,6 +2020,7 @@ public partial class Home
         {
             await Realtime.ConnectAsync(restaurantId);
             await CatalogRealtime.ConnectAsync(restaurantId);
+            await DiningRealtime.ConnectAsync(restaurantId);
             SetTables(await Api.TablesAsync(restaurantId));
             StateHasChanged();
         }
@@ -2050,7 +2047,7 @@ public partial class Home
             StateHasChanged();
         });
 
-    private async Task HandleMenuChanged(Guid changedRestaurantId)
+    private async Task HandleCatalogChanged(Guid changedRestaurantId)
     {
         if (
             login is null
@@ -2254,9 +2251,9 @@ public partial class Home
     public async ValueTask DisposeAsync()
     {
         Realtime.OrderUpdated -= HandleOrderUpdated;
-        Realtime.DiningTableUpdated -= HandleDiningTableUpdated;
         Realtime.SaleCompleted -= HandleSaleCompleted;
-        CatalogRealtime.MenuChanged -= HandleMenuChanged;
+        CatalogRealtime.CatalogChanged -= HandleCatalogChanged;
+        DiningRealtime.Changed -= HandleDiningTableUpdated;
         if (realtimeRefresh is not null)
         {
             await realtimeRefresh.CancelAsync();
@@ -2277,6 +2274,7 @@ public partial class Home
         kitchenClockRefresh?.Dispose();
         await Realtime.DisconnectAsync();
         await CatalogRealtime.DisconnectAsync();
+        await DiningRealtime.DisconnectAsync();
     }
 
     private sealed record TableSessionOrderSnapshot(

@@ -49,7 +49,8 @@ public sealed partial class DiningService
             await transaction.CommitAsync(ct);
             return DiningResults.Created(
                 $"/api/dining/tables/{table.Id}",
-                TableResponse(table, null)
+                TableResponse(table, null),
+                restaurantId
             );
         }
         catch (DiningStoreException e) when (e.Failure == DiningStoreFailure.Duplicate)
@@ -123,7 +124,7 @@ public sealed partial class DiningService
         DiningSession? session = occupied
             ? await db.ReadRequiredActiveSessionAsync(tableId, ct)
             : null;
-        return DiningResults.Ok(TableResponse(table, session));
+        return DiningResults.Ok(TableResponse(table, session), table.RestaurantId);
     }
 
     public async Task<DiningResult> ListTables(
@@ -186,6 +187,6 @@ public sealed partial class DiningService
         table.QrCode = NewQrCode();
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        return DiningResults.Ok(QrResponse(table));
+        return DiningResults.Ok(QrResponse(table), table.RestaurantId);
     }
 }

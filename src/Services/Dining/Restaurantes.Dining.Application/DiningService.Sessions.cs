@@ -125,7 +125,8 @@ public sealed partial class DiningService
             await transaction.CommitAsync(ct);
             return DiningResults.Created(
                 $"/api/dining/sessions/{session.Id}",
-                SessionResponse(session)
+                SessionResponse(session),
+                table.RestaurantId
             );
         }
         catch (DiningStoreException e) when (e.Failure == DiningStoreFailure.Duplicate)
@@ -290,7 +291,7 @@ public sealed partial class DiningService
 
         session.Close(time.GetUtcNow().UtcDateTime);
         await db.SaveChangesAsync(ct);
-        return DiningResults.Ok(SessionResponse(session));
+        return DiningResults.Ok(SessionResponse(session), session.RestaurantId);
     }
 
     private static DiningResult? ValidateSessionRelease(DiningSession session)
@@ -417,6 +418,6 @@ public sealed partial class DiningService
         DateTime now = time.GetUtcNow().UtcDateTime;
         session.Cancel(cancelledByUserId, now);
         await db.SaveChangesAsync(ct);
-        return DiningResults.Ok(SessionResponse(session));
+        return DiningResults.Ok(SessionResponse(session), session.RestaurantId);
     }
 }

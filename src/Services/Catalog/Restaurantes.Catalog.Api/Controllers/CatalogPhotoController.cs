@@ -59,7 +59,7 @@ public sealed class CatalogPhotoController(
             photo.Revision = revision;
             photo.OriginalContentType = processed.OriginalContentType;
             await db.SaveChangesAsync(ct);
-            await notifications.MenuChanged(Guid.Empty);
+            await notifications.CatalogChanged(Guid.Empty);
             if (oldRevision != Guid.Empty)
             {
                 try

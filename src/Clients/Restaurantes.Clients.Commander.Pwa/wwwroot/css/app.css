@@ -65,6 +65,9 @@ input:focus, select:focus { border-color: #2f684a; box-shadow: 0 0 0 3px #2f684a
 .table-card.occupied-other em { color: #58645c; }
 .table-card.occupied-other .order-progress { color: #58645c; }
 .table-card .order-progress { color: #f5b28d; font-size: 12px; font-weight: 800; }
+.table-card.inactive { position: relative; color: #606963; border-color: #c7cdc9; background: #e2e5e3; cursor: not-allowed; }
+.table-card.inactive span, .table-card.inactive em { color: #737b76; }
+.table-disabled-indicator { position: absolute; inset: 50% auto auto 50%; display: grid; width: 46px; height: 46px; place-items: center; border-radius: 50%; background: #ffffffc9; font-size: 30px; line-height: 1; opacity: .9; pointer-events: none; transform: translate(-50%, -50%); }
 .order-head { margin: 20px 0; }
 .order-table-heading { min-width: 0; flex: 1; }
 .order-table-heading h2 { margin: 0; }

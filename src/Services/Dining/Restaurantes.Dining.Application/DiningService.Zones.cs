@@ -97,9 +97,10 @@ public sealed partial class DiningService
             return created
                 ? DiningResults.Created(
                     $"/api/dining/restaurants/{zone.RestaurantId}/zones/{zone.Id}",
-                    zone
+                    zone,
+                    zone.RestaurantId
                 )
-                : DiningResults.Ok(zone);
+                : DiningResults.Ok(zone, zone.RestaurantId);
         }
         catch (DiningStoreException e) when (e.Failure == DiningStoreFailure.Duplicate)
         {
