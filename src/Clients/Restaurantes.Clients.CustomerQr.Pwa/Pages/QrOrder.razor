@@ -38,7 +38,6 @@ else if (context is not null)
             <span class="eyebrow">Pedido por QR</span>
             <h1>@context.Table.Label</h1>
             <p><strong>@restaurant?.Name</strong></p>
-            <p>Local @context.Table.RestaurantId</p>
             <p>@context.Table.Code · @(context.Session is null ? "Consulta la carta" : "Sesión activa")</p>
         </div>
         <div class="table-badge">Mesa</div>
