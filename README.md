@@ -15,20 +15,16 @@
 [![Prometheus](https://img.shields.io/badge/Prometheus-3.8.0-E6522C?style=for-the-badge&logo=prometheus&logoColor=white)](https://prometheus.io/)
 [![Grafana](https://img.shields.io/badge/Grafana-12.3.0-F46800?style=for-the-badge&logo=grafana&logoColor=white)](https://grafana.com/)
 
-**Restaurantes** es una plataforma distribuida para la operación y gestión de una cadena de restaurantes, construida sobre **.NET 10** y diseñada alrededor de dominios independientes, separación de lectura y escritura, mensajería asíncrona y persistencia aislada por servicio.
+**Restaurantes** es una plataforma distribuida para la operación y gestión de restaurantes, construida sobre **.NET 10**. Reúne servicios para catálogo, sala, pedidos, cocina, pagos, caja, ventas, identidad y reporting, con aplicaciones para clientes, personal y administración.
 
-La solución modela distintos puntos de la operación real: configuración de restaurantes, catálogo, sala, ubicaciones y sesiones, pedidos, cocina, pagos, caja, ventas, identidad y reporting. Sobre estos servicios se apoyan aplicaciones específicas para cliente QR, camarero, TPV, KDS, backoffice y dashboard.
-
-En el TPV, un pedido para llevar sigue el mismo ciclo operativo de un pedido normal: se crea y se envía a cocina, se prepara, se cobra y se entrega. La sesión se libera cuando cumple las condiciones normales de pago y entrega. La diferencia es que no ocupa una mesa física: Dining registra una sesión virtual con el nombre del cliente. El origen técnico sigue siendo `Pos` y la modalidad de servicio es `Takeaway`; por eso KDS y Dashboard pueden mostrar «TPV · Para llevar» sin tratar Takeaway como un origen de venta distinto.
+El repositorio presenta la arquitectura, sus objetivos y las áreas funcionales. Los detalles de cada servicio, flujo e infraestructura se encuentran en los [documentos de `docs`](docs/).
 
 > [!IMPORTANT]
 > El proyecto se encuentra en **desarrollo activo**. La arquitectura backend y varios flujos de negocio ya están implementados, mientras que algunas interfaces, integraciones externas, automatización de despliegue y cobertura de pruebas continúan evolucionando. El objetivo del repositorio es mostrar una arquitectura extensible y cercana a un escenario real, no presentar un producto comercial terminado.
 
 ## Objetivos de arquitectura
 
-El diseño parte de una necesidad concreta: **la operación del restaurante no debe competir por los mismos recursos que las consultas administrativas, de oficina o de reporting**.
-
-Un restaurante necesita seguir aceptando pedidos, enviando comandas a cocina, cobrando y operando incluso cuando desde oficina se ejecutan consultas más costosas sobre ventas, actividad histórica o indicadores agregados. Por ello, los contextos con mayor carga separan sus modelos de escritura y lectura y pueden escalarse o alojarse de forma independiente.
+El objetivo principal es que **la operación del restaurante mantenga su capacidad de respuesta mientras la oficina consulta ventas, actividad e indicadores**. Por eso, algunos dominios separan lectura y escritura y pueden escalarse por separado.
 
 Los principales objetivos son:
 
@@ -118,28 +114,22 @@ flowchart TB
     Reporting --> ReadDB
 ```
 
-La solución no aplica CQRS de forma mecánica a todos los dominios. **RestaurantOperations,
-Catalog y Orders** conservan modelos de lectura y escritura separados dentro de una API por
-servicio. **Sales** también mantiene modelos separados, aunque su escritura se alimenta
-principalmente mediante eventos. **Dining**, **Identity** y **CashRegister** mantienen una
-única persistencia operacional por servicio.
+CQRS se aplica donde aporta valor: **RestaurantOperations, Catalog, Orders y Sales** separan lectura y escritura; **Dining, Identity y CashRegister** mantienen una persistencia operacional. Los detalles de cada dominio están en sus documentos.
 
 ### YARP como punto único de entrada
 
-Las aplicaciones cliente no conocen las direcciones físicas de las APIs ni llaman directamente a los puertos donde se alojan los demás procesos. El navegador entra por uno de los gateways YARP y utiliza ese mismo origen tanto para cargar la interfaz como para consumir `/api/*` y conectarse a `/hubs/*`.
+YARP ofrece un origen de entrada para las interfaces, las APIs y las conexiones SignalR; los clientes no necesitan conocer los puertos internos.
 
 | Gateway | Audiencia | Interfaces publicadas |
 | --- | --- | --- |
 | **Public Gateway** | Clientes externos | Customer QR en `/qr/{codigo}` |
 | **Private Gateway** | Personal del local y oficina | Backoffice en `/backoffice/`, Comandero en `/commander/`, TPV en `/pos/`, KDS en `/kds/` y Dashboard en `/dashboard/` |
 
-La configuración de rutas, destinos internos, mismo origen, CORS y despliegue se detalla en **[Gateways YARP](docs/Gateways.README.md)**. El comportamiento específico de Customer QR se documenta en **[Dining](docs/Dining.README.md#interfaz-customer-qr)** y el acceso único de Dashboard en **[Reporting](docs/Reporting.README.md#gateways)**.
+Rutas, CORS y despliegue se detallan en **[Gateways YARP](docs/Gateways.README.md)**; Customer QR en **[Dining](docs/Dining.README.md#interfaz-customer-qr)** y Dashboard en **[Reporting](docs/Reporting.README.md#gateways)**.
 
 ## Separación de lectura y escritura
 
-En los dominios que aplican CQRS, una operación de negocio se persiste primero en el modelo de escritura. Los eventos generados por esa operación se publican mediante RabbitMQ y los consumidores actualizan posteriormente las proyecciones utilizadas por las APIs de lectura.
-
-Esto introduce **consistencia eventual**, pero permite tratar lectura y escritura como cargas diferentes.
+En los dominios CQRS, los cambios se guardan primero en escritura; RabbitMQ distribuye los eventos que actualizan las proyecciones de lectura. Esto introduce **consistencia eventual** y permite escalar ambas cargas por separado.
 
 ### ¿Por qué bases separadas?
 
@@ -147,32 +137,27 @@ La separación no se utiliza únicamente como patrón arquitectónico. Responde 
 
 | Necesidad | Beneficio |
 | --- | --- |
-| Consultas intensivas desde oficina | El reporting y las búsquedas históricas no consumen CPU, I/O o conexiones de la base que atiende la operación del restaurante. |
-| Continuidad operacional | La toma de pedidos, cocina, pagos y caja pueden mantener prioridad sobre cargas analíticas o administrativas. |
-| Escalado independiente | La capacidad asignada a lectura puede aumentar sin sobredimensionar los servicios de escritura. |
-| Modelos optimizados | Las proyecciones de lectura pueden diseñarse para consultar y mostrar información sin imponer el mismo modelo normalizado utilizado para escribir. |
-| Aislamiento de fallos | Saturación, mantenimiento o problemas en una carga de consulta tienen menor superficie de impacto sobre la operación transaccional. |
-| Evolución independiente | Los esquemas de lectura pueden cambiar para responder a nuevas necesidades de consulta sin modificar necesariamente el modelo transaccional. |
-| Despliegue cloud flexible | Cada base puede alojarse y dimensionarse por separado en el proveedor elegido. |
+| Consultas de oficina | Reporting e historial no compiten por recursos con la operación. |
+| Continuidad operacional | Pedidos, cocina, pagos y caja mantienen prioridad. |
+| Escalado independiente | Lectura y escritura se dimensionan según su carga. |
+| Modelos optimizados | Las proyecciones de lectura responden a las consultas de cada cliente. |
+| Aislamiento y evolución | Fallos y cambios de lectura reducen su impacto en la operación. |
+| Despliegue flexible | Cada base puede alojarse y dimensionarse por separado. |
 
-En desarrollo local, Docker Compose levanta **dos instancias PostgreSQL independientes**, cada una con una base. Los servicios siguen separados en el código; sus contextos comparten la base operativa o la de lectura mediante esquemas PostgreSQL propios y una tabla `__EFMigrationsHistory` en cada esquema.
+En local, Compose levanta **dos instancias PostgreSQL**: una operativa y otra analítica. Los contextos mantienen esquemas y tablas `__EFMigrationsHistory` separados dentro de cada base.
 
 | Base | Esquemas asignados |
 | --- | --- |
 | `restaurants_operational` | Identity, RestaurantOperations Write, Catalog Write, Dining, Orders Write, Payments, CashRegister y Sales Write. |
 | `restaurants_analytics` | RestaurantOperations Read, Catalog Read, Orders Read, Sales Read y Reporting. |
 
-Las cadenas de conexión conservan una clave por contexto y fijan su `Search Path` al esquema correspondiente. Por eso, nombres como `catalog_write` y `reporting` identifican esquemas, no bases independientes. Cada contexto guarda `__EFMigrationsHistory` en su esquema. Las migraciones existentes usan nombres de tabla sin esquema explícito, así que se aplican al esquema del `Search Path`; no es necesario regenerar las migraciones iniciales. `MigrateAsync` se mantiene en el arranque durante esta etapa.
+Cada contexto usa el esquema indicado por su `Search Path`; esos nombres no representan bases independientes. Los servicios aplican migraciones al iniciar. En producción se conserva el aislamiento físico.
 
-En producción se mantiene esta separación física; cada instancia puede ser administrada o dimensionada de forma independiente.
-
-Compose usa volúmenes nuevos para estas dos instancias. El volumen PostgreSQL anterior no se borra ni se monta, y sus datos no se copian automáticamente.
+Compose utiliza volúmenes nuevos; no monta ni copia automáticamente los datos de volúmenes PostgreSQL anteriores.
 
 ## Estrategia de alojamiento cloud
 
-El proyecto está diseñado para no depender de servicios propietarios de un proveedor cloud dentro de su lógica de negocio. Actualmente, sus dependencias de infraestructura principales son **.NET, PostgreSQL, RabbitMQ, HTTP, SignalR y YARP**, lo que permite desplegar los componentes en Azure, AWS, GCP, infraestructura privada o una combinación de ellos.
-
-El despliegue cloud todavía no forma parte del repositorio y se plantea como una etapa posterior. La estrategia prevista es mantener las dos bases en recursos separados y elegir su tamaño según la carga real.
+La lógica de negocio no depende de un proveedor cloud concreto. La plataforma utiliza **.NET, PostgreSQL, RabbitMQ, HTTP, SignalR y YARP**; el despliegue cloud está previsto para una etapa posterior.
 
 ### Modelo de despliegue previsto
 
@@ -199,7 +184,7 @@ flowchart LR
     OfficeApps --> ReadServices
 ```
 
-Una primera versión productiva podría mantener varias bases lógicas dentro de uno o varios servidores PostgreSQL administrados. Cuando la carga crezca, los grupos con perfiles distintos pueden separarse:
+La infraestructura puede empezar con bases administradas y separar recursos según crezca la carga:
 
 - **Bases operacionales de escritura:** priorizadas para baja latencia y continuidad del negocio.
 - **Bases de lectura:** dimensionadas para consultas frecuentes de clientes y aplicaciones operativas.
@@ -218,17 +203,15 @@ Una primera versión productiva podría mantener varias bases lógicas dentro de
 | SignalR | Self-hosted o Azure SignalR Service | SignalR self-hosted detrás de infraestructura compatible con WebSockets |
 | Secretos y configuración | Key Vault | AWS Secrets Manager, GCP Secret Manager, Vault |
 
-La elección final no está fijada deliberadamente. El objetivo es que **la arquitectura pueda adaptarse al coste, volumen y disponibilidad requerida sin tener que rediseñar los dominios de negocio**.
+La elección del proveedor queda abierta para adaptar coste, capacidad y disponibilidad sin rediseñar los dominios.
 
 ## Comunicación entre servicios
 
-La plataforma combina comunicación síncrona y asíncrona.
+La plataforma combina comunicación síncrona y asíncrona según lo requiera cada flujo.
 
 ### HTTP
 
-Se utiliza cuando una operación necesita una respuesta inmediata. Los gateways YARP enrutan las peticiones hacia el servicio correspondiente y, en los dominios CQRS, pueden dirigir el mismo recurso a una API distinta según el verbo HTTP.
-
-Por ejemplo:
+HTTP atiende operaciones que requieren respuesta inmediata. En dominios CQRS, YARP puede enrutar según el verbo:
 
 - `GET` → API de lectura.
 - `POST`, `PUT`, `PATCH`, `DELETE` → API de escritura.
@@ -237,9 +220,7 @@ También existen llamadas HTTP entre servicios cuando el flujo necesita coordina
 
 ### RabbitMQ
 
-RabbitMQ distribuye eventos entre bounded contexts y alimenta proyecciones sin crear acceso directo entre sus bases de datos.
-
-La infraestructura de mensajería incluye:
+RabbitMQ distribuye eventos entre dominios y alimenta proyecciones sin acceso directo entre bases de datos. La infraestructura incluye:
 
 - publishers y consumers independientes;
 - **Transactional Outbox** para persistir cambios y eventos de forma coordinada;
@@ -249,33 +230,21 @@ La infraestructura de mensajería incluye:
 
 ## Tiempo real
 
-**SignalR** se utiliza para propagar cambios hacia interfaces que necesitan reaccionar sin polling continuo.
-
-Actualmente existen hubs relacionados con:
+**SignalR** propaga en tiempo real cambios de:
 
 - sala y sesiones de mesa;
 - estado de pedidos y KDS;
 - reporting y dashboard.
 
-Esto permite que cocina, camareros, caja y paneles de seguimiento puedan refrescar su estado a medida que ocurren cambios en los servicios.
+Así, las interfaces se actualizan cuando cambian los servicios, sin depender de polling continuo.
 
 ## Seguridad
 
-La autenticación se basa en **ASP.NET Core Identity y JWT**.
-
-Las restricciones de Microsoft Entra ID, dominios verificados, Google Workspace y autorización por correo están documentadas en [Identity](docs/Identity.README.md).
-
-La autorización contempla tanto roles como permisos asociados al contexto del restaurante. El objetivo es evitar que un usuario autenticado pueda operar sobre un restaurante únicamente por conocer su identificador.
-
-Los gateways actúan como punto de entrada, pero las reglas de autorización relevantes permanecen en los servicios responsables del dominio.
+La autenticación usa **ASP.NET Core Identity y JWT**; los permisos se evalúan dentro del restaurante y en el servicio de dominio correspondiente. Proveedores, dominios y reglas de acceso se describen en [Identity](docs/Identity.README.md).
 
 ### Configuración JWT compartida
 
-`Restaurantes.Security` centraliza los valores predeterminados de emisor, audiencia y duración del token mediante `RestaurantSecurityOptions`. La clave de firma no se almacena en código ni en los `appsettings.json`: todos los procesos que emiten o validan el JWT reciben el mismo valor desde Vault mediante `Security:SigningKey`.
-
-En desarrollo local, la inicialización de Vault genera una clave compartida y la guarda en `secret/restaurantes/local`. Cada proceso que llama a `AddVaultConfiguration()` la obtiene desde el proxy local de Vault antes de configurar sus servicios. No se configura `Security__SigningKey` como variable de entorno del usuario ni mediante .NET User Secrets.
-
-En producción, la clave debe residir en el almacén de secretos del despliegue y el proveedor de Vault debe proporcionar el mismo valor a cada API. No debe incluirse en archivos versionados ni en imágenes de contenedor.
+`Restaurantes.Security` centraliza emisor, audiencia y duración. La clave JWT compartida llega desde Vault; no se guarda en código, archivos versionados ni imágenes. La configuración local y productiva se detalla en [Identity](docs/Identity.README.md).
 
 ## Servicios
 
@@ -290,22 +259,22 @@ En producción, la clave debe residir en el almacén de secretos del despliegue 
 | **[CashRegister](docs/CashRegister.README.md)** | Apertura/cierre de caja, jornada operativa y conciliación de efectivo. | Write |
 | **[Identity](docs/Identity.README.md)** | Usuarios, roles, autenticación y acceso por restaurante. | Write |
 | **[Reporting](docs/Reporting.README.md)** | Proyecciones agregadas para actividad y ventas. | Read |
-| **[Integrations](docs/Integrations.README.md)** | Punto de extensión para proveedores, webhooks, delivery y sistemas externos; actualmente expone sólo un endpoint descriptivo. | — |
+| **[Integrations](docs/Integrations.README.md)** | Punto de extensión para proveedores y sistemas externos. | — |
 
-Cada servicio es propietario de sus datos. Un servicio no consulta directamente las tablas de otro; la colaboración se realiza mediante contratos HTTP o eventos.
+Cada servicio es propietario de sus datos; colaboran mediante contratos HTTP o eventos.
 
 ## Aplicaciones
 
 | Perfil | Aplicación | Propósito | Tecnología |
 | --- | --- | --- | --- |
 | Cliente | **Customer QR** | Pago online obligatorio antes de enviar el pedido a cocina y seguimiento desde el QR asociado a una mesa/sesión. | Blazor WebAssembly PWA |
-| Camarero | **Comandero** | Atención de mesas, registro y seguimiento de pedidos. | Blazor WebAssembly PWA |
-| Caja | **TPV / POS** | Pedidos de sala, barra y para llevar; consulta y cobro de cuentas y operación de caja. Takeaway usa una sesión virtual con el nombre del cliente, sin mesa física. | Blazor WebAssembly PWA |
-| Cocina | **KDS** | Preparación por estación y seguimiento del ciclo de cocina. Las reglas de prioridad y despacho se aplican según la configuración de cada estación, con independencia de que el pedido sea para llevar o de sala. | ASP.NET Core Web |
-| Administración | **Backoffice** | Administración de restaurantes, catálogo, sala y usuarios según los permisos del perfil. | Blazor WebAssembly PWA |
-| Oficina | **Dashboard** | Visualización en tiempo real de ventas, actividad operativa y estado de salud de los endpoints. | ASP.NET Core Web |
+| Camarero | **Comandero** | Pedidos de mesa, cobro con tarjeta y liberación de mesa. | Blazor WebAssembly PWA |
+| Caja | **TPV / POS** | Pedidos de sala y barra, canal Takeaway, cuentas y caja. | Blazor WebAssembly PWA |
+| Cocina | **KDS** | Preparación y despacho por estación. | ASP.NET Core Web |
+| Administración | **Backoffice** | Restaurantes, catálogo, sala y usuarios. | Blazor WebAssembly PWA |
+| Oficina | **Dashboard** | Ventas, actividad operativa y salud de endpoints. | ASP.NET Core Web |
 
-Las interfaces son todavía una de las áreas en evolución del proyecto. El foco actual está puesto en la arquitectura backend, los flujos distribuidos y la separación de responsabilidades; el diseño visual y la experiencia de usuario no se consideran definitivos.
+Las interfaces y las integraciones externas siguen en evolución.
 
 ## Flujo simplificado de una operación
 
@@ -330,14 +299,15 @@ sequenceDiagram
         Client->>Orders: submit
         Orders-->>MQ: OrderSubmitted
         MQ-->>KDS: actualizar proyección operativa
-    else Comandero / POS en mesa o barra
+    else Comandero en mesa o barra
         Client->>Orders: crear pedido Draft (OnAccount)
         Client->>Orders: submit
         Orders-->>MQ: OrderSubmitted
         MQ-->>KDS: actualizar proyección operativa
-    else POS para llevar
+        Note over Client,Dining: Comandero cobra con tarjeta, POS cobra según los métodos configurados
+    else Canal Takeaway desde POS
         Client->>Dining: abrir sesión virtual con CustomerName
-        Client->>Orders: crear pedido Draft (Pos, Takeaway, OnAccount)
+        Client->>Orders: crear pedido Draft (Source=Pos, ServiceMode=Takeaway)
         Client->>Orders: submit
         Orders-->>MQ: OrderSubmitted
         MQ-->>KDS: actualizar proyección operativa
@@ -348,9 +318,7 @@ sequenceDiagram
     end
 ```
 
-Customer QR siempre crea pedidos `Immediate`. Payments debe confirmar el pago y Orders proyectar `Paid` antes de aceptar `submit`; el pedido `Draft` creado para iniciar el pago aún no se envía a cocina.
-
-La publicación y consumo de eventos introduce consistencia eventual entre servicios. Cada bounded context mantiene su propio estado y las proyecciones se actualizan después del commit del servicio que origina el cambio.
+Customer QR cobra antes de enviar el pedido; el resto del flujo de pedidos se detalla en [Orders](docs/Orders.README.md), [Dining](docs/Dining.README.md) y [Payments](docs/Payments.README.md). La mensajería introduce consistencia eventual entre las proyecciones.
 
 ## Estructura del repositorio
 
@@ -416,63 +384,50 @@ necesarios para el cliente elegido.
 
 ### Infraestructura
 
-El `docker-compose.yml` levanta:
+Compose levanta PostgreSQL, RabbitMQ, pgAdmin, Vault y la pila local de observabilidad. SonarQube Community Build está en el perfil opcional `quality`. Los scripts de `tools/postgres/init` crean las bases lógicas.
 
-- PostgreSQL 18.
-- RabbitMQ con Management UI.
-- pgAdmin.
-- Vault de desarrollo, su inicialización y el proxy de autenticación local.
-- OpenTelemetry Collector, Prometheus y Grafana para métricas y dashboards locales.
-- SonarQube Community Build bajo el perfil opcional `quality` para análisis estático, seguridad y Quality Gate locales.
-
-Las bases de datos lógicas necesarias se crean mediante los scripts de `tools/postgres/init`.
-
-Antes de iniciar Compose, copia `tools/vault/.env.example` a `tools/vault/.env` y define valores locales distintos para Vault, PostgreSQL, pgAdmin, RabbitMQ, Grafana y la base de datos de SonarQube. El archivo `.env` está ignorado por Git. Pasa siempre `--env-file tools/vault/.env`: Compose no carga automáticamente un `.env` ubicado en esa subcarpeta.
+Configura `tools/vault/.env` desde `.env.example` con valores locales y pásalo explícitamente a Compose. El archivo está excluido de Git.
 
 ```bash
 docker compose --env-file tools/vault/.env up -d
 ```
 
-Las migraciones de Entity Framework Core son aplicadas por los servicios correspondientes durante su inicialización.
+Los servicios aplican sus migraciones de Entity Framework Core al iniciar.
 
 ### Observabilidad local
 
-Las APIs y gateways que usan `AddServiceDefaults()` exportan métricas HTTP entrantes, HTTP salientes y del runtime .NET mediante OpenTelemetry: **OTLP/gRPC → Collector → Prometheus → Grafana**.
+OpenTelemetry envía métricas HTTP y de runtime por **Collector → Prometheus → Grafana**. Prometheus usa `http://localhost:9090`; Grafana, `http://localhost:3000` (credenciales en `tools/vault/.env`). Los dashboards de **Restaurantes** cubren gateways, APIs, dependencias, pedidos y runtime.
 
-- Prometheus: `http://localhost:9090`.
-- Grafana: `http://localhost:3000` (usuario `admin`; contraseña en `tools/vault/.env`).
-- Carpeta **Restaurantes**: dashboards **Entrada · Gateways**, **Servicios · APIs**, **Dependencias · HTTP saliente**, **Flujo de pedidos** y **Runtime · .NET**, con tags y filtros por servicio.
-
-La configuración y la interpretación de los paneles se describen en [Observabilidad de gateways y APIs](docs/Gateways.README.md#observabilidad-de-gateways-y-apis).
+Dashboards y métricas: [Observabilidad de gateways y APIs](docs/Gateways.README.md#observabilidad-de-gateways-y-apis).
 
 #### Evidencias visuales
 
-Esta captura muestra la actividad HTTP, la latencia p95 y los errores por servicio durante una operación observada en Grafana.
+Actividad HTTP y latencia p95 durante una operación:
 
 ![Dashboard de Grafana con operación HTTP](assets/grafana/grafana-operacion-http.jpg)
 
-Esta consulta de Prometheus conserva la evidencia del flujo completo: apertura de mesa, creación y envío de pedido, preparación KDS, captura de pago y cierre de sesión.
+Métricas del flujo de mesa, pedido, KDS, pago y cierre:
 
 ![Consulta de Prometheus con el flujo completo](assets/prometheus/prometheus-flujo-completo.jpg)
 
 ### Calidad y seguridad local
 
-SonarQube Community Build permite analizar mantenibilidad, fiabilidad y reglas básicas de seguridad antes de promover los cambios a `master`. Se mantiene en un perfil Compose independiente para no cargar su base de datos ni su imagen cuando sólo se necesita la infraestructura operativa:
+SonarQube Community Build se inicia bajo el perfil opcional `quality`:
 
 ```powershell
 docker compose --env-file tools/vault/.env --profile quality up -d sonarqube
 ```
 
-Cuando el contenedor esté disponible, abre `http://localhost:9001`, inicia sesión inicialmente con `admin` / `admin`, cambia esa contraseña y crea un token de análisis para el proyecto `restaurantes`. El token no se versiona: decláralo sólo en la sesión de PowerShell actual.
+Proporciona el token de análisis solo en la sesión actual de PowerShell:
 
 ```powershell
 $env:SONAR_TOKEN = "<token-de-analisis>"
 .\tools\sonar\Invoke-SonarQubeLocalAnalysis.ps1
 ```
 
-El análisis requiere .NET 10 y Node.js 24. El script restaura el escáner local, compila la solución completa, ejecuta las pruebas .NET con cobertura OpenCover y las pruebas JavaScript de KDS con cobertura LCOV, y espera el resultado del **Quality Gate**. Un Gate fallido devuelve un error.
+El análisis ejecuta las validaciones de calidad y espera el **Quality Gate**:
 
-Para ejecutar únicamente las pruebas de KDS y generar `TestResults/kds.lcov.info`, sin publicar un análisis:
+Para ejecutar solo las pruebas de KDS:
 
 ```powershell
 .\tools\sonar\Invoke-KdsCoverage.ps1
@@ -488,11 +443,7 @@ docker compose --env-file tools/vault/.env --profile quality stop sonarqube sona
 
 ### Integración continua y calidad local
 
-`develop` es la rama habitual de trabajo e integración. Tras validar los cambios y superar el Quality Gate local, se promueven a `master` con `git merge --ff-only develop`, sin crear un commit de merge.
-
-El [workflow de CI](.github/workflows/ci.yml) se ejecuta al subir `master` o manualmente. Restaura y compila la solución, ejecuta las pruebas .NET con cobertura OpenCover y las pruebas de KDS con cobertura LCOV, y publica los informes de cobertura como artefactos.
-
-El análisis de SonarQube Community Build y su **Quality Gate** se ejecutan localmente con el script indicado arriba, antes de promover los cambios a `master`. Antes de publicar un release, comprueba que el workflow del commit de `master` ha terminado correctamente.
+`develop` integra los cambios; `master` es la rama estable. El [workflow de CI](.github/workflows/ci.yml) compila, ejecuta pruebas y publica cobertura. SonarQube local valida el Quality Gate antes de promover a `master`.
 
 ### Scripts PostgreSQL
 
@@ -507,9 +458,7 @@ dotnet restore
 dotnet build Restaurantes.slnx
 ```
 
-El repositorio incluye perfiles `.slnLaunch` para levantar conjuntos de proyectos asociados a distintos escenarios, por ejemplo el flujo de Comandero o el circuito Orders/KDS. Cada escenario dispone de una variante **Con navegador** y otra **Sin navegador**; ambas levantan los mismos procesos y seleccionan perfiles de inicio diferentes. Customer QR nunca abre una ventana automáticamente porque su entrada real requiere un código QR.
-
-Cuando se utiliza una variante sin navegador, las interfaces se abren manualmente mediante las rutas del gateway descritas en [YARP como punto único de entrada](#yarp-como-punto-único-de-entrada), no mediante los puertos internos de los proyectos cliente.
+Los perfiles `.slnLaunch` levantan los procesos de cada escenario, con o sin navegador. Abre las interfaces por las rutas de [YARP](#yarp-como-punto-único-de-entrada).
 
 ## Tooling
 
@@ -527,4 +476,4 @@ dotnet csharpier format .
 
 ---
 
-Este repositorio forma parte de mi portfolio técnico y refleja un trabajo en evolución sobre arquitectura distribuida, diseño de servicios, CQRS, mensajería fiable, persistencia aislada y aplicaciones .NET orientadas a un dominio operativo real.
+Este repositorio forma parte de mi portfolio técnico sobre arquitectura distribuida y aplicaciones .NET para un dominio operativo real.
