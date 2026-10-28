@@ -137,7 +137,7 @@ small { color: var(--muted); }
 .product-extras { display: grid; gap: 2px; margin: 2px 0 0; padding-left: 12px; list-style: none; }
 .line-controls { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .line-state, .line-clock { padding: 4px 8px; border-radius: 999px; background: var(--chip-bg); color: var(--chip-text); white-space: nowrap; }
-.line-state.InPreparation { background: #e6eff9; color: #285781; }
+.line-state.InPreparation { background: #e6eff9; color: #285781; font-size: .95rem; line-height: 1.1; }
 .line-state.Ready { background: #dcfce7; color: #166534; }
 .line-state.Dispatched { background: #e0f0e5; color: #205d3f; }
 .line-clock { font-variant-numeric: tabular-nums; }

@@ -427,9 +427,9 @@ function updateKitchenClock(badge, start, end, label = badge.title) {
 function kitchenStatusLabel(status) {
   return ({
     Pending: 'Pendiente',
-    InPreparation: '🧑‍🍳',
+    InPreparation: '♨️',
     Ready: '✓ Listo',
-    Dispatched: 'Despachado'
+    Dispatched: 'Servido'
   })[status] || 'Pendiente';
 }
 
