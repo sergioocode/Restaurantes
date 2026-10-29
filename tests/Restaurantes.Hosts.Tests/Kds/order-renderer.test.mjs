@@ -43,6 +43,7 @@ function createRenderer(stationCode, pending = false) {
   const renderer = Object.create(OrderRenderer.prototype);
   renderer.element = new Element();
   renderer.collapsedOrders = new Set();
+  renderer.collapsedPasses = new Set();
   renderer.options = {
     getStationCode: () => stationCode,
     getPrimaryStationCode: () => 'CHEF',
@@ -211,8 +212,17 @@ test('chef dispatch waits for earlier passes and station actions follow line sta
       isOrderPending: () => false,
       onAdvance: (_order, action) => advances.push(action.path),
     };
-    const order = { id: 'order-1' };
-    const line = { id: 'line-1', quantity: 1, productName: 'Plato', categoryName: 'Carta' };
+    const order = {
+      id: 'order-1',
+      stations: [{ code: 'GRILL', requiresPrimaryDispatch: true }],
+    };
+    const line = {
+      id: 'line-1',
+      quantity: 1,
+      productName: 'Plato',
+      categoryName: 'Carta',
+      preparationStationCode: 'GRILL',
+    };
     const controls = (status, isPrimary, blocked = false, stationActions = true) =>
       renderer.renderProductLine(order, { ...line, kitchenStatus: status }, isPrimary, blocked, stationActions).children[1];
 
@@ -222,9 +232,7 @@ test('chef dispatch waits for earlier passes and station actions follow line sta
     readyChef.children[2].listeners.get('click')();
 
     const waitingChef = controls('Ready', true, true);
-    assert.equal(waitingChef.children[2].textContent, '⌛');
-    assert.equal(waitingChef.children[2].title, 'Esperando un pase anterior');
-    assert.equal(waitingChef.children[2].attributes.get('aria-label'), 'Esperando un pase anterior');
+    assert.deepEqual(waitingChef.children.map(child => child.textContent), ['🕓 —', '🕓 —']);
     assert.equal(controls('Pending', true).children.length, 2);
 
     const pendingStation = controls('Pending', false);

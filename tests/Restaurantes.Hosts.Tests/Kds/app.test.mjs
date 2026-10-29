@@ -222,10 +222,13 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
     assert.equal(element('zoneId').disabled, false);
     assert.deepEqual(element('zoneId').options.map(option => option.value), ['zone-1', 'zone-2']);
     assert.equal(element('zoneId').value, 'zone-2');
-    assert.equal(sockets.length, 1);
+    assert.deepEqual(
+      sockets.map(socket => new URL(socket.url).pathname).sort(),
+      ['/hubs/catalog', '/hubs/dining', '/hubs/kds']
+    );
     assert.equal(element('monitorPanel').classList.contains('hidden'), false);
 
-    const socket = sockets[0];
+    const socket = sockets.find(socket => new URL(socket.url).pathname === '/hubs/kds');
     const separator = String.fromCodePoint(30);
     await socket.listeners.get('open')();
     await socket.listeners.get('message')({ data: '{}' + separator });
