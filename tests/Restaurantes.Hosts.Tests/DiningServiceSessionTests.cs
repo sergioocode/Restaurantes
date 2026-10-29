@@ -1452,6 +1452,13 @@ public sealed class DiningServiceSessionTests
                 nameof(IDiningStore.LoadOrdersAsync) => Task.CompletedTask,
                 nameof(IDiningStore.ReadActiveSessionWithOrdersAsync) => Task.FromResult(Session),
                 nameof(IDiningStore.FindActiveSessionWithOrdersAsync) => Task.FromResult(Session),
+                nameof(IDiningStore.FindQrSessionByTokenAsync) => Task.FromResult(
+                    Session is { Source: "CustomerQr" } qrSession
+                    && qrSession.TableId == (Guid)args![0]!
+                    && qrSession.CustomerAccessToken == (string)args[1]!
+                        ? qrSession
+                        : null
+                ),
                 nameof(IDiningStore.ReadSessionWithOrdersAsync) => Task.FromResult(Session),
                 nameof(IDiningStore.ReadValidatedSessionAsync) => Task.FromResult(Session),
                 nameof(IDiningStore.ReadTableZoneAsync) => Task.FromResult(
