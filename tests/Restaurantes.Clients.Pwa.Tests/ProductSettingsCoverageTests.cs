@@ -12,7 +12,7 @@ using BackofficeHome = Restaurantes.Clients.Backoffice.Pwa.Pages.Home;
 
 namespace Restaurantes.Clients.Pwa.Tests;
 
-public sealed class ProductSettingsCoverageTests : BunitContext
+public sealed class ProductSettingsCoverageTests : PwaTestContext
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(
         JsonSerializerDefaults.Web

@@ -294,7 +294,8 @@ public sealed class CommanderHomeOverallCoverageTests
                 "TablesInSelectedZone"
             )
             .ToArray();
-        Assert.Equal([firstTable, secondTable], filtered);
+        Assert.Equal([inactiveTable, firstTable, secondTable], filtered);
+        Assert.False(filtered[0].IsActive);
         Assert.Equal("Terraza", GetProperty<string>(home, "SelectedZoneName"));
         Assert.Equal("Local", GetProperty<RestaurantResponse>(home, "CurrentRestaurant").Name);
         Assert.Equal("Mesa A1", GetProperty<string>(home, "CurrentLabel"));

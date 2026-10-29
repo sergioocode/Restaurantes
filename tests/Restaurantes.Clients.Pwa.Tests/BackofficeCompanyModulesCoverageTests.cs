@@ -15,7 +15,7 @@ using BackofficeHome = Restaurantes.Clients.Backoffice.Pwa.Pages.Home;
 
 namespace Restaurantes.Clients.Pwa.Tests;
 
-public sealed class BackofficeCompanyModulesCoverageTests : BunitContext
+public sealed class BackofficeCompanyModulesCoverageTests : PwaTestContext
 {
     private readonly RecordingHandler handler = new();
 

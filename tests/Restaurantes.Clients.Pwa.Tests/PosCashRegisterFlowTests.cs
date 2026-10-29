@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using System.Reflection;
 using System.Text.Json;
@@ -14,7 +14,7 @@ using PosHome = Restaurantes.Clients.Pos.Pwa.Pages.Home;
 
 namespace Restaurantes.Clients.Pwa.Tests;
 
-public sealed class PosCashRegisterFlowTests : BunitContext
+public sealed class PosCashRegisterFlowTests : PwaTestContext
 {
     private readonly Guid restaurantId = Guid.NewGuid();
     private readonly Guid registerId = Guid.NewGuid();

@@ -13,7 +13,7 @@ using BackofficeHome = Restaurantes.Clients.Backoffice.Pwa.Pages.Home;
 
 namespace Restaurantes.Clients.Pwa.Tests;
 
-public sealed class BackofficeTablesModuleCoverageTests : BunitContext
+public sealed class BackofficeTablesModuleCoverageTests : PwaTestContext
 {
     private readonly RecordingHandler handler = new();
     private readonly Guid restaurantId = Guid.NewGuid();

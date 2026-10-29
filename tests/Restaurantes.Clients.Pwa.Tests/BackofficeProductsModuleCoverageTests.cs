@@ -13,7 +13,7 @@ using BackofficeHome = Restaurantes.Clients.Backoffice.Pwa.Pages.Home;
 
 namespace Restaurantes.Clients.Pwa.Tests;
 
-public sealed class BackofficeProductsModuleCoverageTests : BunitContext
+public sealed class BackofficeProductsModuleCoverageTests : PwaTestContext
 {
     public BackofficeProductsModuleCoverageTests() =>
         BackofficeTestServices.AddTablesRealtime(this);

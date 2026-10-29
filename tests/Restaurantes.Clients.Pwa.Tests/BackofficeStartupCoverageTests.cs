@@ -17,7 +17,7 @@ using BackofficeHome = Restaurantes.Clients.Backoffice.Pwa.Pages.Home;
 
 namespace Restaurantes.Clients.Pwa.Tests;
 
-public sealed class BackofficeStartupCoverageTests : BunitContext
+public sealed class BackofficeStartupCoverageTests : PwaTestContext
 {
     private readonly StartupHandler handler = new();
     private readonly BackofficeApi api;

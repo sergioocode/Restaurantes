@@ -18,7 +18,7 @@ using BackofficeHome = Restaurantes.Clients.Backoffice.Pwa.Pages.Home;
 
 namespace Restaurantes.Clients.Pwa.Tests;
 
-public sealed class BackofficeStationFlowTests : BunitContext
+public sealed class BackofficeStationFlowTests : PwaTestContext
 {
     public BackofficeStationFlowTests()
     {

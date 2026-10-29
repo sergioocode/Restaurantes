@@ -12,7 +12,7 @@ using BackofficeHome = Restaurantes.Clients.Backoffice.Pwa.Pages.Home;
 
 namespace Restaurantes.Clients.Pwa.Tests;
 
-public sealed class BackofficeCashRegisterReportTests : BunitContext
+public sealed class BackofficeCashRegisterReportTests : PwaTestContext
 {
     public BackofficeCashRegisterReportTests()
     {

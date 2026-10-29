@@ -21,7 +21,7 @@ using PosHome = Restaurantes.Clients.Pos.Pwa.Pages.Home;
 
 namespace Restaurantes.Clients.Pwa.Tests;
 
-public sealed class PosHomeRenderingTests : BunitContext
+public sealed class PosHomeRenderingTests : PwaTestContext
 {
     public PosHomeRenderingTests()
     {

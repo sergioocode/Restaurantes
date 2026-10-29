@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Restaurantes.Clients.Pwa.Tests;
 
-public sealed class AsyncEventDispatcherTests : BunitContext
+public sealed class AsyncEventDispatcherTests : PwaTestContext
 {
     public AsyncEventDispatcherTests() => BackofficeTestServices.AddTablesRealtime(this);
 
@@ -240,6 +240,18 @@ public sealed class AsyncEventDispatcherTests : BunitContext
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic
             )!
             .SetValue(home, BackofficeTestServices.CreateTablesRealtime());
+        home.GetType()
+            .GetProperty(
+                "CatalogRealtime",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic
+            )!
+            .SetValue(home, PwaTestContext.CreateCatalogConfigurationRealtime());
+        home.GetType()
+            .GetProperty(
+                "DiningRealtime",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic
+            )!
+            .SetValue(home, PwaTestContext.CreateDiningRealtime());
         SetField(
             home,
             "stations",

@@ -14,7 +14,7 @@ using Xunit;
 
 namespace Restaurantes.Clients.Pwa.Tests;
 
-public sealed class CommanderHomeCheckoutTests : BunitContext
+public sealed class CommanderHomeCheckoutTests : PwaTestContext
 {
     private const BindingFlags PrivateInstance = BindingFlags.Instance | BindingFlags.NonPublic;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -585,7 +585,7 @@ public sealed class CommanderHomeCheckoutTests : BunitContext
     }
 
     [Fact]
-    public async Task Loading_operational_data_clears_stale_zone_and_ignores_inactive_tables()
+    public async Task Loading_operational_data_clears_stale_zone_and_keeps_inactive_tables()
     {
         Guid restaurantId = Guid.NewGuid();
         Guid previousZoneId = Guid.NewGuid();
@@ -637,15 +637,13 @@ public sealed class CommanderHomeCheckoutTests : BunitContext
         Assert.Equal(restaurantId, Get(cut.Instance, "restaurantId"));
         Assert.Null(Get(cut.Instance, "selectedZoneId"));
         Assert.Equal(
-            activeTable.Id,
-            Assert
-                .Single(
-                    (List<TableResponse>)
-                        typeof(Home)
-                            .GetProperty("FilteredTables", PrivateInstance)!
-                            .GetValue(cut.Instance)!
-                )
-                .Id
+            new[] { inactiveTable.Id, activeTable.Id },
+            (
+                (List<TableResponse>)
+                    typeof(Home)
+                        .GetProperty("FilteredTables", PrivateInstance)!
+                        .GetValue(cut.Instance)!
+            ).Select(table => table.Id)
         );
         Assert.Contains($"/api/dining/restaurants/{restaurantId}/tables", requests);
         Assert.Contains($"/api/orders/commander?restaurantId={restaurantId}", requests);
