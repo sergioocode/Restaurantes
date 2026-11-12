@@ -93,29 +93,15 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:?Local Keycloak admin username is missing}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Local Keycloak admin password is missing}
       KC_HEALTH_ENABLED: "true"
+      IDENTITY_KEYCLOAK_CLIENT_ID: ${IDENTITY_KEYCLOAK_CLIENT_ID:-restaurantes-identity}
+      IDENTITY_KEYCLOAK_CLIENT_SECRET: ${IDENTITY_KEYCLOAK_CLIENT_SECRET:?Local Keycloak client secret is missing}
+      IDENTITY_KEYCLOAK_TEST_PASSWORD: ${IDENTITY_KEYCLOAK_TEST_PASSWORD:?Local Keycloak test password is missing}
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
       - restaurant-keycloak-data:/opt/keycloak/data
       - ./tools/keycloak/import:/opt/keycloak/data/import:ro
     restart: unless-stopped
-
-  keycloak-init:
-    image: quay.io/keycloak/keycloak:26.4.4
-    container_name: restaurantes-keycloak-init
-    environment:
-      KEYCLOAK_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:?Local Keycloak admin username is missing}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Local Keycloak admin password is missing}
-      IDENTITY_KEYCLOAK_CLIENT_ID: ${IDENTITY_KEYCLOAK_CLIENT_ID:-restaurantes-identity}
-      IDENTITY_KEYCLOAK_CLIENT_SECRET: ${IDENTITY_KEYCLOAK_CLIENT_SECRET:?Local Keycloak client secret is missing}
-      IDENTITY_KEYCLOAK_TEST_PASSWORD: ${IDENTITY_KEYCLOAK_TEST_PASSWORD:?Local Keycloak test password is missing}
-    volumes:
-      - ./tools/keycloak/init.sh:/opt/keycloak/init/init.sh:ro
-    depends_on:
-      keycloak:
-        condition: service_started
-    entrypoint: [ "/bin/sh", "/opt/keycloak/init/init.sh" ]
-    restart: "no"
 
   vault:
     image: hashicorp/vault:1.21.4
@@ -153,8 +139,6 @@ services:
         condition: service_healthy
       postgres-analytics:
         condition: service_healthy
-      keycloak-init:
-        condition: service_completed_successfully
     entrypoint: [ "/bin/sh", "/vault/init/init.sh" ]
 
   vault-proxy:

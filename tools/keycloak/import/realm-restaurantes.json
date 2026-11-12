@@ -7,6 +7,30 @@
   "resetPasswordAllowed": false,
   "rememberMe": false,
   "verifyEmail": false,
+  "clients": [
+    {
+      "clientId": "${IDENTITY_KEYCLOAK_CLIENT_ID}",
+      "name": "Restaurantes Identity",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${IDENTITY_KEYCLOAK_CLIENT_SECRET}",
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:5001/api/identity/auth/callback/keycloak",
+        "http://localhost:5001/api/identity/auth/logout-callback/keycloak"
+      ],
+      "webOrigins": ["http://localhost:5001"],
+      "attributes": {
+        "post.logout.redirect.uris": "+"
+      },
+      "defaultClientScopes": ["web-origins", "acr", "roles", "profile", "email"]
+    }
+  ],
   "users": [
     {
       "username": "admin-soporte@restaurantes.test",
@@ -14,7 +38,14 @@
       "firstName": "Administrador",
       "lastName": "Soporte",
       "enabled": true,
-      "emailVerified": true
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${IDENTITY_KEYCLOAK_TEST_PASSWORD}",
+          "temporary": false
+        }
+      ]
     },
     {
       "username": "gerente@restaurantes.test",
@@ -22,7 +53,14 @@
       "firstName": "Gerencia",
       "lastName": "Restaurantes",
       "enabled": true,
-      "emailVerified": true
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${IDENTITY_KEYCLOAK_TEST_PASSWORD}",
+          "temporary": false
+        }
+      ]
     },
     {
       "username": "contabilidad@restaurantes.test",
@@ -30,7 +68,14 @@
       "firstName": "Contabilidad",
       "lastName": "Restaurantes",
       "enabled": true,
-      "emailVerified": true
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${IDENTITY_KEYCLOAK_TEST_PASSWORD}",
+          "temporary": false
+        }
+      ]
     },
     {
       "username": "contabilidad2@restaurantes.test",
@@ -38,7 +83,14 @@
       "firstName": "Contabilidad",
       "lastName": "Restaurantes 2",
       "enabled": true,
-      "emailVerified": true
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${IDENTITY_KEYCLOAK_TEST_PASSWORD}",
+          "temporary": false
+        }
+      ]
     },
     {
       "username": "marketing@restaurantes.test",
@@ -46,7 +98,14 @@
       "firstName": "Marketing",
       "lastName": "Restaurantes",
       "enabled": true,
-      "emailVerified": true
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${IDENTITY_KEYCLOAK_TEST_PASSWORD}",
+          "temporary": false
+        }
+      ]
     },
     {
       "username": "marketing2@restaurantes.test",
@@ -54,7 +113,14 @@
       "firstName": "Marketing",
       "lastName": "Restaurantes 2",
       "enabled": true,
-      "emailVerified": true
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${IDENTITY_KEYCLOAK_TEST_PASSWORD}",
+          "temporary": false
+        }
+      ]
     },
     {
       "username": "kds-madrid-centro@restaurantes.test",
@@ -62,7 +128,14 @@
       "firstName": "KDS Madrid",
       "lastName": "Centro",
       "enabled": true,
-      "emailVerified": true
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${IDENTITY_KEYCLOAK_TEST_PASSWORD}",
+          "temporary": false
+        }
+      ]
     },
     {
       "username": "commander-madrid-centro@restaurantes.test",
@@ -70,7 +143,14 @@
       "firstName": "Comandero Madrid",
       "lastName": "Centro",
       "enabled": true,
-      "emailVerified": true
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${IDENTITY_KEYCLOAK_TEST_PASSWORD}",
+          "temporary": false
+        }
+      ]
     },
     {
       "username": "tpv-madrid-centro@restaurantes.test",
@@ -78,7 +158,14 @@
       "firstName": "TPV Madrid",
       "lastName": "Centro",
       "enabled": true,
-      "emailVerified": true
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${IDENTITY_KEYCLOAK_TEST_PASSWORD}",
+          "temporary": false
+        }
+      ]
     },
     {
       "username": "kds-bcn-centro@restaurantes.test",
@@ -86,7 +173,14 @@
       "firstName": "KDS Barcelona",
       "lastName": "Centro",
       "enabled": true,
-      "emailVerified": true
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${IDENTITY_KEYCLOAK_TEST_PASSWORD}",
+          "temporary": false
+        }
+      ]
     },
     {
       "username": "commander-bcn-centro@restaurantes.test",
@@ -94,7 +188,14 @@
       "firstName": "Comandero Barcelona",
       "lastName": "Centro",
       "enabled": true,
-      "emailVerified": true
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${IDENTITY_KEYCLOAK_TEST_PASSWORD}",
+          "temporary": false
+        }
+      ]
     },
     {
       "username": "tpv-bcn-centro@restaurantes.test",
@@ -102,7 +203,14 @@
       "firstName": "TPV Barcelona",
       "lastName": "Centro",
       "enabled": true,
-      "emailVerified": true
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${IDENTITY_KEYCLOAK_TEST_PASSWORD}",
+          "temporary": false
+        }
+      ]
     }
   ]
 }
