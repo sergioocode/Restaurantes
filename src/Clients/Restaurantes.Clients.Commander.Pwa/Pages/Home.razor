@@ -1,5 +1,4 @@
-@page "/"
-@using System.Text.Json
+﻿@page "/"
 @implements IAsyncDisposable
 @inject CommanderApi Api
 @inject OrderRealtimeClient Realtime
@@ -26,13 +25,8 @@
                 <div><p class="eyebrow">RESTAURANTES · OPERACIONES</p><h1>Comandero</h1></div>
             </div>
             <div class="login-providers">
-                <button class="primary full" type="button" @onclick='() => StartLogin("Microsoft")'
-                        disabled="@(providerSettings is null || providerSettings.ActiveProvider != "Microsoft" || !providerSettings.MicrosoftConfigured)">
-                    Iniciar sesión con Microsoft
-                </button>
-                <button class="primary full" type="button" @onclick='() => StartLogin("Google")'
-                        disabled="@(providerSettings is null || providerSettings.ActiveProvider != "Google" || !providerSettings.GoogleConfigured)">
-                    Iniciar sesión con Google
+                <button class="primary full" type="button" @onclick="StartLogin">
+                    Iniciar sesión
                 </button>
             </div>
             @if (!string.IsNullOrWhiteSpace(message)) { <p class="error">@message</p> }

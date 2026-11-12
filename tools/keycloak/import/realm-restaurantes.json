@@ -1,0 +1,108 @@
+{
+  "realm": "restaurantes",
+  "enabled": true,
+  "loginWithEmailAllowed": true,
+  "registrationAllowed": false,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "rememberMe": false,
+  "verifyEmail": false,
+  "users": [
+    {
+      "username": "admin-soporte@restaurantes.test",
+      "email": "admin-soporte@restaurantes.test",
+      "firstName": "Administrador",
+      "lastName": "Soporte",
+      "enabled": true,
+      "emailVerified": true
+    },
+    {
+      "username": "gerente@restaurantes.test",
+      "email": "gerente@restaurantes.test",
+      "firstName": "Gerencia",
+      "lastName": "Restaurantes",
+      "enabled": true,
+      "emailVerified": true
+    },
+    {
+      "username": "contabilidad@restaurantes.test",
+      "email": "contabilidad@restaurantes.test",
+      "firstName": "Contabilidad",
+      "lastName": "Restaurantes",
+      "enabled": true,
+      "emailVerified": true
+    },
+    {
+      "username": "contabilidad2@restaurantes.test",
+      "email": "contabilidad2@restaurantes.test",
+      "firstName": "Contabilidad",
+      "lastName": "Restaurantes 2",
+      "enabled": true,
+      "emailVerified": true
+    },
+    {
+      "username": "marketing@restaurantes.test",
+      "email": "marketing@restaurantes.test",
+      "firstName": "Marketing",
+      "lastName": "Restaurantes",
+      "enabled": true,
+      "emailVerified": true
+    },
+    {
+      "username": "marketing2@restaurantes.test",
+      "email": "marketing2@restaurantes.test",
+      "firstName": "Marketing",
+      "lastName": "Restaurantes 2",
+      "enabled": true,
+      "emailVerified": true
+    },
+    {
+      "username": "kds-madrid-centro@restaurantes.test",
+      "email": "kds-madrid-centro@restaurantes.test",
+      "firstName": "KDS Madrid",
+      "lastName": "Centro",
+      "enabled": true,
+      "emailVerified": true
+    },
+    {
+      "username": "commander-madrid-centro@restaurantes.test",
+      "email": "commander-madrid-centro@restaurantes.test",
+      "firstName": "Comandero Madrid",
+      "lastName": "Centro",
+      "enabled": true,
+      "emailVerified": true
+    },
+    {
+      "username": "tpv-madrid-centro@restaurantes.test",
+      "email": "tpv-madrid-centro@restaurantes.test",
+      "firstName": "TPV Madrid",
+      "lastName": "Centro",
+      "enabled": true,
+      "emailVerified": true
+    },
+    {
+      "username": "kds-bcn-centro@restaurantes.test",
+      "email": "kds-bcn-centro@restaurantes.test",
+      "firstName": "KDS Barcelona",
+      "lastName": "Centro",
+      "enabled": true,
+      "emailVerified": true
+    },
+    {
+      "username": "commander-bcn-centro@restaurantes.test",
+      "email": "commander-bcn-centro@restaurantes.test",
+      "firstName": "Comandero Barcelona",
+      "lastName": "Centro",
+      "enabled": true,
+      "emailVerified": true
+    },
+    {
+      "username": "tpv-bcn-centro@restaurantes.test",
+      "email": "tpv-bcn-centro@restaurantes.test",
+      "firstName": "TPV Barcelona",
+      "lastName": "Centro",
+      "enabled": true,
+      "emailVerified": true
+    }
+  ]
+}

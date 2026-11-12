@@ -185,9 +185,9 @@ public sealed class PosHomeRenderingTests : PwaTestContext
         );
         NavigationManager navigation = Services.GetRequiredService<NavigationManager>();
 
-        await cut.InvokeAsync(() => InvokeVoid(cut.Instance, "StartLogin", "Microsoft"));
+        await cut.InvokeAsync(() => InvokeVoid(cut.Instance, "StartLogin"));
 
-        Assert.Contains("/api/identity/auth/start/Microsoft?returnPath=%2Fpos%2F", navigation.Uri);
+        Assert.Contains("/api/identity/auth/start?returnPath=%2Fpos%2F", navigation.Uri);
     }
 
     [Theory]

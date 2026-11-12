@@ -443,7 +443,7 @@ public sealed class CommanderHomeCheckoutTests : PwaTestContext
     }
 
     [Fact]
-    public async Task Starting_login_navigates_to_the_selected_identity_provider()
+    public async Task Starting_login_navigates_to_Keycloak_without_a_provider_selector()
     {
         HttpClient http = new(
             new CheckoutHandler(_ =>
@@ -459,10 +459,10 @@ public sealed class CommanderHomeCheckoutTests : PwaTestContext
         Services.AddSingleton<IJSRuntime, EmptyJsRuntime>();
         IRenderedComponent<Home> cut = Render<Home>();
 
-        typeof(Home).GetMethod("StartLogin", PrivateInstance)!.Invoke(cut.Instance, ["microsoft"]);
+        typeof(Home).GetMethod("StartLogin", PrivateInstance)!.Invoke(cut.Instance, null);
 
         Assert.EndsWith(
-            "/api/identity/auth/start/microsoft?returnPath=%2Fcommander%2F",
+            "/api/identity/auth/start?returnPath=%2Fcommander%2F",
             Services.GetRequiredService<NavigationManager>().Uri
         );
     }
@@ -500,7 +500,9 @@ public sealed class CommanderHomeCheckoutTests : PwaTestContext
         Assert.Null(Get(cut.Instance, "login"));
         Assert.True(js.RemovedSession);
         Assert.Contains("Comandero", cut.Markup);
-        Assert.Contains("Iniciar sesión con Microsoft", cut.Markup);
+        Assert.Contains("Iniciar sesión", cut.Markup);
+        Assert.DoesNotContain("Microsoft", cut.Markup);
+        Assert.DoesNotContain("Google", cut.Markup);
     }
 
     [Fact]
@@ -1492,7 +1494,6 @@ public sealed class CommanderHomeCheckoutTests : PwaTestContext
 
         Assert.Equal(
             [
-                "GET /api/identity/auth/provider",
                 "POST /api/orders",
                 $"POST /api/orders/{orderId}/submit",
                 $"GET /api/orders/commander?restaurantId={restaurantId}",
@@ -1591,7 +1592,6 @@ public sealed class CommanderHomeCheckoutTests : PwaTestContext
 
         Assert.Equal(
             [
-                "GET /api/identity/auth/provider",
                 $"POST /api/dining/sessions/{sessionId}/close",
                 $"GET /api/dining/restaurants/{restaurantId}/tables",
                 $"GET /api/orders/commander?restaurantId={restaurantId}",

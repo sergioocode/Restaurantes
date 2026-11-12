@@ -1,4 +1,4 @@
-﻿import assert from 'node:assert/strict';
+import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 const appUrl = new URL('../../../src/Clients/Restaurantes.Clients.Kds.Web/wwwroot/kds/js/app.js', import.meta.url);
@@ -178,7 +178,6 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
   replaceGlobal('fetch', async (url, options = {}) => {
     calls.push({ url: String(url), method: options.method || 'GET' });
     const path = new URL(url).pathname;
-    if (path.endsWith('/provider')) return json({ activeProvider: 'Microsoft', microsoftConfigured: true });
     if (path.endsWith('/accessible/kds')) return json([
       { id: 'restaurant-1', name: 'Centro', code: 'CENTRO' },
     ]);
@@ -350,8 +349,9 @@ test('KDS restores a session, advances an order, shows its ticket and changes st
 
     element('logout').listeners.get('click')();
     assert.equal(element('loginPanel').classList.contains('hidden'), false);
-    element('loginMicrosoft').listeners.get('click')();
-    assert.match(assigned[0], /auth\/start\/Microsoft/u);
+    assert.match(assigned[0], /auth\/logout\?returnPath=%2Fkds%2F/u);
+    element('loginButton').listeners.get('click')();
+    assert.match(assigned[1], /auth\/start\?returnPath=%2Fkds%2F$/u);
   } finally {
     for (const [name, descriptor] of original) {
       if (descriptor) Object.defineProperty(globalThis, name, descriptor);
@@ -406,13 +406,8 @@ test('KDS login error keeps the login screen available and registers its service
   replaceGlobal('sessionStorage', { getItem: () => null, setItem() {}, removeItem() {} });
   replaceGlobal('localStorage', { getItem: () => null, setItem() {} });
   replaceGlobal('history', { replaceState: (...args) => historyCalls.push(args) });
-  replaceGlobal('fetch', async url => {
-    assert.match(String(url), /\/api\/identity\/auth\/provider$/u);
-    return Response.json({
-      activeProvider: 'Microsoft',
-      microsoftConfigured: true,
-      googleConfigured: false,
-    });
+  replaceGlobal('fetch', async () => {
+    assert.fail('A rejected login must not call the API.');
   });
 
   try {
@@ -421,9 +416,9 @@ test('KDS login error keeps the login screen available and registers its service
 
     assert.equal(authLoading.classList.contains('hidden'), true);
     assert.equal(loginPanel.classList.contains('hidden'), false);
-    assert.equal(monitorPanel.classList.contains('hidden'), false);
-    assert.equal(element('loginMicrosoft').disabled, false);
-    assert.equal(element('loginGoogle').disabled, true);
+    assert.equal(monitorPanel.classList.contains('hidden'), true);
+    assert.equal(element('loginButton').textContent, 'Iniciar sesión');
+    assert.equal(element('loginButton').disabled, false);
     assert.equal(historyCalls.length, 1);
     assert.deepEqual(historyCalls[0], [null, '', '/kds/']);
 

@@ -11,19 +11,6 @@ public sealed class IdentityServiceTests
     private static readonly DateTime Now = new(2026, 10, 21, 18, 0, 0, DateTimeKind.Utc);
 
     [Fact]
-    public async Task Provider_settings_reads_store_and_returns_configured_providers()
-    {
-        FakeIdentityStore store = new();
-        IdentityService service = CreateService(store);
-
-        IdentityResult result = await service.GetProviderSettings("Microsoft", true, false, Ct);
-
-        Assert.Equal(IdentityOutcome.Ok, result.Outcome);
-        Assert.Equal(new ProviderSettingsResponse("Microsoft", true, false), result.Value);
-        Assert.Equal(1, store.SettingsReads);
-    }
-
-    [Fact]
     public async Task Create_user_validates_fields_scope_and_duplicate_email()
     {
         FakeIdentityStore store = new();
@@ -31,28 +18,24 @@ public sealed class IdentityServiceTests
         Guid restaurantId = Guid.NewGuid();
 
         IdentityResult invalidEmail = await service.CreateUser(
-            "Microsoft",
             true,
             Set(restaurantId),
             new("not-an-email", "Name", "Manager", false, restaurantId),
             Ct
         );
         IdentityResult invalidRole = await service.CreateUser(
-            "Microsoft",
             true,
             Set(restaurantId),
             new("person@example.test", "Name", "Admin", false, restaurantId),
             Ct
         );
         IdentityResult invalidGlobalScope = await service.CreateUser(
-            "Microsoft",
             true,
             Set(restaurantId),
             new("person@example.test", "Name", "Manager", true, restaurantId),
             Ct
         );
         IdentityResult forbidden = await service.CreateUser(
-            "Microsoft",
             false,
             Set(Guid.NewGuid()),
             new("person@example.test", "Name", "Manager", false, restaurantId),
@@ -60,7 +43,6 @@ public sealed class IdentityServiceTests
         );
         store.Users.Add(User("person@example.test", restaurantId: restaurantId));
         IdentityResult duplicate = await service.CreateUser(
-            "Microsoft",
             true,
             Set(restaurantId),
             new(" PERSON@example.test ", "Name", "Manager", false, restaurantId),
@@ -83,7 +65,6 @@ public sealed class IdentityServiceTests
         Guid restaurantId = Guid.NewGuid();
 
         IdentityResult result = await service.CreateUser(
-            "Microsoft",
             false,
             Set(restaurantId),
             new("  PERSON@Example.Test ", "  Ana Pérez  ", "Camarero", false, restaurantId),
@@ -94,7 +75,6 @@ public sealed class IdentityServiceTests
         Assert.Equal(IdentityOutcome.Created, result.Outcome);
         Assert.Equal("person@example.test", account.Email);
         Assert.Equal("Ana Pérez", account.DisplayName);
-        Assert.Equal("Microsoft", account.Provider);
         Assert.Equal("Camarero", account.Role);
         Assert.Equal(restaurantId, account.RestaurantId);
         Assert.True(account.IsActive);
@@ -222,7 +202,7 @@ public sealed class IdentityServiceTests
     }
 
     [Fact]
-    public async Task External_authorization_links_subject_and_rejects_provider_subject_conflicts()
+    public async Task External_authorization_links_keycloak_subject_and_rejects_changed_subject()
     {
         Guid restaurantId = Guid.NewGuid();
         FakeIdentityStore store = new();
@@ -230,35 +210,20 @@ public sealed class IdentityServiceTests
         store.Users.Add(user);
         IdentityService service = CreateService(store);
 
-        IdentityResult wrongProvider = await service.AuthorizeExternalAsync(
-            "Google",
-            "Microsoft",
-            user.Email,
-            "subject-1",
-            "tenant-1",
-            Ct
-        );
         IdentityResult linked = await service.AuthorizeExternalAsync(
-            "Microsoft",
-            "Microsoft",
             " PERSON@EXAMPLE.TEST ",
             "subject-1",
-            "tenant-1",
             Ct
         );
         IdentityResult changedSubject = await service.AuthorizeExternalAsync(
-            "Microsoft",
-            "Microsoft",
             user.Email,
             "subject-2",
-            "tenant-1",
             Ct
         );
 
-        Assert.Equal(IdentityOutcome.Unauthorized, wrongProvider.Outcome);
         Assert.Equal(IdentityOutcome.Ok, linked.Outcome);
         Assert.Equal("subject-1", user.ProviderSubject);
-        Assert.Equal("tenant-1", user.TenantId);
+        Assert.Null(user.TenantId);
         Assert.Equal(1, store.Saves);
         Assert.Equal("login-code", linked.Value);
         Assert.Equal(IdentityOutcome.Unauthorized, changedSubject.Outcome);
@@ -277,41 +242,28 @@ public sealed class IdentityServiceTests
         ApplicationUser target = User("target@example.test", "Manager", restaurantId);
         ApplicationUser subjectOwner = User("owner@example.test", "Manager", restaurantId);
         subjectOwner.ProviderSubject = "claimed-subject";
-        subjectOwner.TenantId = "tenant";
         FakeIdentityStore store = new();
         store.Users.AddRange([inactive, target, subjectOwner]);
         IdentityService service = CreateService(store);
 
         IdentityResult unknown = await service.AuthorizeExternalAsync(
-            "Microsoft",
-            "Microsoft",
             "missing@example.test",
             "subject",
-            "tenant",
             Ct
         );
         IdentityResult disabled = await service.AuthorizeExternalAsync(
-            "Microsoft",
-            "Microsoft",
             inactive.Email,
             "subject",
-            "tenant",
             Ct
         );
         IdentityResult claimed = await service.AuthorizeExternalAsync(
-            "Microsoft",
-            "Microsoft",
             target.Email,
             "claimed-subject",
-            "tenant",
             Ct
         );
         IdentityResult linked = await service.AuthorizeExternalAsync(
-            "Microsoft",
-            "Microsoft",
             subjectOwner.Email,
             "claimed-subject",
-            "tenant",
             Ct
         );
 
@@ -330,14 +282,16 @@ public sealed class IdentityServiceTests
         FakeTokenIssuer tokens = new();
         IdentityService service = CreateService(store, tokens);
         store.TicketUser = User("inactive@example.test", "Manager", restaurantId, active: false);
-        IdentityResult inactive = await service.ExchangeAsync("Microsoft", "code", Ct);
+        IdentityResult inactive = await service.ExchangeAsync("code", Ct);
+        store.TicketUser = User("legacy@example.test", "Manager", restaurantId);
+        store.TicketUser.Provider = "Microsoft";
+        IdentityResult legacyProvider = await service.ExchangeAsync("code", Ct);
         store.TicketUser = User("person@example.test", "Camarero", restaurantId);
-        IdentityResult wrongProvider = await service.ExchangeAsync("Google", "code", Ct);
-        IdentityResult exchanged = await service.ExchangeAsync("Microsoft", "code", Ct);
+        IdentityResult exchanged = await service.ExchangeAsync("code", Ct);
 
         LoginResponse login = Assert.IsType<LoginResponse>(exchanged.Value);
         Assert.Equal(IdentityOutcome.Unauthorized, inactive.Outcome);
-        Assert.Equal(IdentityOutcome.Unauthorized, wrongProvider.Outcome);
+        Assert.Equal(IdentityOutcome.Unauthorized, legacyProvider.Outcome);
         Assert.Equal(IdentityOutcome.Ok, exchanged.Outcome);
         Assert.Equal("access-token", login.AccessToken);
         Assert.Equal("Bearer", login.TokenType);
@@ -358,7 +312,7 @@ public sealed class IdentityServiceTests
         };
         IdentityService service = CreateService(store);
 
-        IdentityResult result = await service.ExchangeAsync("Microsoft", "code", Ct);
+        IdentityResult result = await service.ExchangeAsync("code", Ct);
 
         LoginResponse login = Assert.IsType<LoginResponse>(result.Value);
         Assert.Equal(IdentityOutcome.Ok, result.Outcome);
@@ -387,7 +341,7 @@ public sealed class IdentityServiceTests
         {
             Id = Guid.NewGuid(),
             Email = email,
-            Provider = "Microsoft",
+            Provider = "Keycloak",
             DisplayName = email,
             Role = role,
             RestaurantId = restaurantId,
@@ -420,13 +374,6 @@ public sealed class IdentityServiceTests
         public ApplicationUser? TicketUser { get; set; }
         public bool HasOtherActiveAdmin { get; set; }
         public int Saves { get; private set; }
-        public int SettingsReads { get; private set; }
-
-        public Task<AuthenticationSettings> GetSettingsAsync(CancellationToken ct)
-        {
-            SettingsReads++;
-            return Task.FromResult(new AuthenticationSettings());
-        }
 
         public Task<ApplicationUser?> FindByEmailAsync(
             string provider,

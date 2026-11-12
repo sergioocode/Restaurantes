@@ -1,15 +1,19 @@
+import './auth-client.js';
 import { KdsApiClient } from './api-client.js';
 import { OrderRenderer, productFormatLabel } from './order-renderer.js?v=35';
 import { KdsRealtimeClient } from './realtime-client.js';
 import { renderKitchenTicket } from './ticket-renderer.js';
 
-const sessionKey = 'restaurantes.kds.login';
 const apiBaseUrl = window.location.origin;
+const auth = globalThis.RestaurantesAuth.createAuthClient({
+  appPath: '/kds/',
+  sessionKey: 'restaurantes.kds.login',
+  baseUrl: apiBaseUrl
+});
 const authLoading = document.querySelector('#authLoading');
 const loginPanel = document.querySelector('#loginPanel');
 const monitorPanel = document.querySelector('#monitorPanel');
-const loginMicrosoft = document.querySelector('#loginMicrosoft');
-const loginGoogle = document.querySelector('#loginGoogle');
+const loginButton = document.querySelector('#loginButton');
 const refreshButton = document.querySelector('#refresh');
 const historyButton = document.querySelector('#historyButton');
 const historyPanel = document.querySelector('#historyPanel');
@@ -333,10 +337,9 @@ async function loadStationsAndConnect() {
   }
 }
 
-async function activateLogin(loginResponse) {
+async function activateSession(loginResponse) {
   login = loginResponse;
   api.setAccessToken(login.accessToken);
-  sessionStorage.setItem(sessionKey, JSON.stringify(login));
   authLoading.classList.add('hidden');
   loginPanel.classList.add('hidden');
   monitorPanel.classList.remove('hidden');
@@ -360,8 +363,10 @@ async function activateLogin(loginResponse) {
     };
   });
   if (accessibleRestaurants.length === 0) {
-    logout();
-    throw new Error('El usuario no tiene acceso KDS en ningún local.');
+    clearLocalSession();
+    throw globalThis.RestaurantesAuth.createAccessDeniedError(
+      'El usuario no tiene acceso KDS en ningún local.'
+    );
   }
   restaurantAccess = accessibleRestaurants[0];
   selectedRestaurantId = restaurantAccess.restaurantId;
@@ -411,18 +416,22 @@ async function openHistory() {
     historyButton.disabled = false;
   }
 }
-function startLogin(provider) {
-  const returnPath = encodeURIComponent('/kds/');
-  window.location.assign('/api/identity/auth/start/' + provider + '?returnPath=' + returnPath);
-}
 
-async function loadProvider() {
-  const settings = await api.provider();
-  loginMicrosoft.disabled = settings.activeProvider !== 'Microsoft' || !settings.microsoftConfigured;
-  loginGoogle.disabled = settings.activeProvider !== 'Google' || !settings.googleConfigured;
+function showLogin(message = '', reauthenticate = false) {
+  auth.prepareLoginButton(loginButton, reauthenticate);
+  authLoading.classList.add('hidden');
+  loginPanel.classList.remove('hidden');
+  monitorPanel.classList.add('hidden');
+  eventText.textContent = message;
 }
 
 function logout() {
+  clearLocalSession();
+  showLogin();
+  auth.logout();
+}
+
+function clearLocalSession() {
   login = null;
   selectedRestaurantId = '';
   restaurantAccess = null;
@@ -433,10 +442,7 @@ function logout() {
   realtime.disconnect();
   catalogRealtime.disconnect();
   diningRealtime.disconnect();
-  sessionStorage.removeItem(sessionKey);
-  authLoading.classList.add('hidden');
-  loginPanel.classList.remove('hidden');
-  monitorPanel.classList.add('hidden');
+  auth.clearSession();
   refreshButton.disabled = true;
   currentUserName.textContent = '';
   zoneSelect.replaceChildren();
@@ -448,31 +454,7 @@ function logout() {
   setStatus(false, 'Sin autenticar');
 }
 
-async function restoreLogin() {
-  const storedLogin = sessionStorage.getItem(sessionKey);
-  if (!storedLogin) {
-    authLoading.classList.add('hidden');
-    loginPanel.classList.remove('hidden');
-    return;
-  }
-  try {
-    const session = JSON.parse(storedLogin);
-    if (new Date(session.expiresAtUtc) <= new Date()) throw new Error('La sesión ha caducado.');
-    await activateLogin(session);
-  } catch (error) {
-    if (!login) {
-      logout();
-    } else {
-      authLoading.classList.add('hidden');
-      loginPanel.classList.add('hidden');
-      monitorPanel.classList.remove('hidden');
-    }
-    eventText.textContent = error.message;
-  }
-}
-
-loginMicrosoft.addEventListener('click', () => startLogin('Microsoft'));
-loginGoogle.addEventListener('click', () => startLogin('Google'));
+auth.bindLoginButton(loginButton);
 refreshButton.addEventListener('click', refreshMonitor);
 historyButton.addEventListener('click', () => {
   if (historyOpen) closeHistory();
@@ -504,31 +486,18 @@ zoneSelect.addEventListener('change', () => {
 
 async function initialize() {
   try {
-    await loadProvider();
-    const query = new URLSearchParams(window.location.hash.slice(1));
-    const code = query.get('login_code');
-    if (code) {
-      history.replaceState(null, '', window.location.pathname);
-      await activateLogin(await api.exchange(code));
-      return;
-    }
-    if (query.has('login_error')) {
-      history.replaceState(null, '', window.location.pathname);
-      eventText.textContent = 'La cuenta no está autorizada o el proveedor rechazó el acceso.';
-      authLoading.classList.add('hidden');
-      loginPanel.classList.remove('hidden');
-      return;
-    }
-    await restoreLogin();
+    const { session, message } = await auth.resolveSession();
+    if (session) await activateSession(session);
+    else showLogin(message);
   } catch (error) {
-    eventText.textContent = error.message;
-    authLoading.classList.add('hidden');
     if (login) {
+      eventText.textContent = error.message;
+      authLoading.classList.add('hidden');
       loginPanel.classList.add('hidden');
       monitorPanel.classList.remove('hidden');
     } else {
-      loginPanel.classList.remove('hidden');
-      monitorPanel.classList.add('hidden');
+      clearLocalSession();
+      showLogin(error.message, error.reauthenticate === true);
     }
   }
 }

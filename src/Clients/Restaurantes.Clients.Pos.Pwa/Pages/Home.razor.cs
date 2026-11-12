@@ -1,5 +1,4 @@
-﻿using System.Text.Json;
-using Microsoft.AspNetCore.Components;
+﻿using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Restaurantes.Clients.Pos.Pwa.Api;
 using Restaurantes.Clients.Pos.Pwa.Models;
@@ -21,13 +20,13 @@ public partial class Home
     private bool guestCountDialogOpen;
     private bool guestCountSessionOpenedHere;
     private const string SessionKey = "restaurantes.pos.login";
+    private ClientLoginFlow LoginFlow => new(Nav, Js);
     private const string CashMovementIncomeType = "Income";
     private string? message;
     private bool busy;
     private bool success;
     private bool initializing = true;
     private LoginResponse? login;
-    private ProviderSettingsResponse? providerSettings;
     private Guid restaurantId;
     private RestaurantResponse? restaurant;
     private List<TableResponse> tables = [];
@@ -323,32 +322,33 @@ public partial class Home
         DiningRealtime.Changed += HandleDiningTableUpdated;
         try
         {
-            providerSettings = await Api.ProviderAsync();
-            string? code = QueryValue("login_code");
-            if (!string.IsNullOrWhiteSpace(code))
+            ClientLoginResolution<LoginResponse> authentication = await LoginFlow.ResolveAsync(
+                SessionKey,
+                Api.ExchangeAsync,
+                session => session.ExpiresAtUtc
+            );
+            if (authentication.LoginError)
             {
-                await Js.InvokeVoidAsync("history.replaceState", null, "", Nav.BaseUri);
-                await AcceptLogin(await Api.ExchangeAsync(code));
-                return;
+                message = ClientLoginFlow.LoginRejectedMessage;
             }
-            if (QueryValue("login_error") is not null)
-            {
-                await Js.InvokeVoidAsync("history.replaceState", null, "", Nav.BaseUri);
-                message = "La cuenta no está autorizada o el proveedor rechazó el acceso.";
-            }
-
-            string? json = await Js.InvokeAsync<string?>("sessionStorage.getItem", SessionKey);
-            if (string.IsNullOrWhiteSpace(json))
-            {
-                return;
-            }
-
-            login = JsonSerializer.Deserialize<LoginResponse>(json);
-            if (login is null || login.ExpiresAtUtc <= DateTime.UtcNow)
+            if (authentication.SessionExpired)
             {
                 await Logout();
                 return;
             }
+
+            if (authentication.Session is null)
+            {
+                return;
+            }
+
+            if (authentication.ExchangeCompleted)
+            {
+                await AcceptLogin(authentication.Session);
+                return;
+            }
+
+            login = authentication.Session;
             Api.AccessToken = login.AccessToken;
             await LoadRestaurants();
             await LoadTables();
@@ -366,37 +366,12 @@ public partial class Home
         }
     }
 
-    private void StartLogin(string provider)
-    {
-        Nav.NavigateTo(
-            $"/api/identity/auth/start/{provider}?returnPath=%2Fpos%2F",
-            forceLoad: true
-        );
-    }
-
-    private string? QueryValue(string key)
-    {
-        string query = new Uri(Nav.Uri).Fragment.TrimStart('#');
-        foreach (string part in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
-        {
-            string[] pair = part.Split('=', 2);
-            if (pair[0] == key)
-            {
-                return Uri.UnescapeDataString(pair.Length > 1 ? pair[1] : "");
-            }
-        }
-        return null;
-    }
+    private void StartLogin() => LoginFlow.StartLogin("/pos/");
 
     private async Task AcceptLogin(LoginResponse response)
     {
         login = response;
         Api.AccessToken = login.AccessToken;
-        await Js.InvokeVoidAsync(
-            "sessionStorage.setItem",
-            SessionKey,
-            JsonSerializer.Serialize(login)
-        );
         await LoadRestaurants();
         await LoadOperationalData();
         await ConnectRealtimeAsync();
@@ -406,7 +381,6 @@ public partial class Home
 
     private async Task Logout()
     {
-        await Js.InvokeVoidAsync("sessionStorage.removeItem", SessionKey);
         await Realtime.DisconnectAsync();
         await CatalogRealtime.DisconnectAsync();
         await DiningRealtime.DisconnectAsync();
@@ -433,6 +407,7 @@ public partial class Home
         pickupView = false;
         BackToTables();
         message = null;
+        await LoginFlow.LogoutAsync(SessionKey, "/pos/");
     }
 
     private async Task LoadTables()

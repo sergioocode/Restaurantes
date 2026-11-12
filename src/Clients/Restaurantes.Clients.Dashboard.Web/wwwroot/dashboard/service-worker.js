@@ -1,5 +1,5 @@
 const cachePrefix = 'restaurantes-dashboard-';
-const cacheName = `${cachePrefix}v11`;
+const cacheName = `${cachePrefix}v14`;
 const appShell = [
   './',
   './index.html',
@@ -45,6 +45,21 @@ self.addEventListener('fetch', event => {
           return response;
         })
         .catch(() => caches.match('./index.html'))
+    );
+    return;
+  }
+
+  if (requestUrl.pathname.endsWith('.js')) {
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(cacheName).then(cache => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request))
     );
     return;
   }

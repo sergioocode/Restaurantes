@@ -1,11 +1,12 @@
 const cachePrefix = 'restaurantes-kds-';
-const cacheName = `${cachePrefix}v42`;
+const cacheName = `${cachePrefix}v43`;
 const appShell = [
   './',
   './index.html',
   './css/kds.css',
   './js/app.js',
   './js/api-client.js',
+  './js/auth-client.js',
   './js/realtime-client.js',
   './js/order-renderer.js',
   './js/kitchen-clock.js',

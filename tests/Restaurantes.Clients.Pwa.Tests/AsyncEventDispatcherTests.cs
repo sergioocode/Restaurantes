@@ -212,14 +212,14 @@ public sealed class AsyncEventDispatcherTests : PwaTestContext
 
         await InvokeRefreshOrdersAsync(cut.Instance);
 
-        Assert.Equal(3, handler.Requests.Count);
+        Assert.Equal(2, handler.Requests.Count);
         Assert.Contains(handler.Requests, request => request.Contains("/api/orders/management"));
         Assert.Contains(handler.Requests, request => request.Contains("/api/sales"));
 
         SetField(cut.Instance, "module", "orders");
         await InvokeRefreshOrdersAsync(cut.Instance);
 
-        Assert.Equal(4, handler.Requests.Count);
+        Assert.Equal(3, handler.Requests.Count);
     }
 
     [Fact]

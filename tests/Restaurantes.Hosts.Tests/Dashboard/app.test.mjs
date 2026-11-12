@@ -1,4 +1,4 @@
-﻿import assert from 'node:assert/strict';
+import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
@@ -6,6 +6,13 @@ import { test } from 'node:test';
 
 const appUrl = new URL('../../../src/Clients/Restaurantes.Clients.Dashboard.Web/wwwroot/dashboard/js/app.js', import.meta.url);
 const appSource = await readFile(appUrl, 'utf8');
+const authUrl = new URL('../../../src/Clients/Restaurantes.Clients.Dashboard.Web/wwwroot/dashboard/js/auth-client.js', import.meta.url);
+const authSource = await readFile(authUrl, 'utf8');
+
+function runDashboard(source, context) {
+  vm.runInContext(authSource, context, { filename: fileURLToPath(authUrl) });
+  vm.runInContext(source, context, { filename: fileURLToPath(appUrl) });
+}
 
 function loadRenderer() {
   const elements = new Map();
@@ -24,14 +31,9 @@ function loadRenderer() {
       body: createElement(),
       getElementById,
     },
-    fetch: async () => ({
-      ok: true,
-      json: async () => ({
-        activeProvider: 'Microsoft',
-        microsoftConfigured: true,
-        googleConfigured: false,
-      }),
-    }),
+    fetch: async () => {
+      throw new Error('The login screen must not call the API.');
+    },
     history: { replaceState() {} },
     location: { origin: 'https://dashboard.test', pathname: '/dashboard/', hash: '' },
     navigator: {},
@@ -52,13 +54,14 @@ function loadRenderer() {
     /\}\)\(\);\s*$/u,
     'globalThis.__dashboardTest = { renderOrder };})();'
   );
-  vm.runInContext(instrumentedSource, context, { filename: fileURLToPath(appUrl) });
+  runDashboard(instrumentedSource, context);
   return context.__dashboardTest.renderOrder;
 }
 
 function createElement() {
   return {
     classList: { add() {}, remove() {}, toggle() {} },
+    dataset: {},
     addEventListener() {},
   };
 }
@@ -142,7 +145,6 @@ async function loadDashboard(session, deadLetters = [], testOptions = {}) {
     fetch: async (url, options = {}) => {
       requests.push({ url: String(url), headers: options.headers });
       const path = new URL(url).pathname;
-      if (path.endsWith('/provider')) return json({ activeProvider: 'Microsoft', microsoftConfigured: true });
       if (path.endsWith('/restaurants')) {
         if (testOptions.failRestaurants) throw new Error('restaurant list unavailable');
         return json([
@@ -190,9 +192,9 @@ async function loadDashboard(session, deadLetters = [], testOptions = {}) {
   });
   const instrumentedSource = appSource.replace(
     /\}\)\(\);\s*$/u,
-    'globalThis.__dashboardTest = { load, logout, openDashboard, loadHealth, loadDeadLetters, schedule: scheduleRefresh };})();'
+    'globalThis.__dashboardTest = { load, logout, activateSession, loadHealth, loadDeadLetters, schedule: scheduleRefresh };})();'
   );
-  vm.runInContext(instrumentedSource, context, { filename: fileURLToPath(appUrl) });
+  runDashboard(instrumentedSource, context);
   for (let attempt = 0; attempt < 50 && !getElementById('operations').innerHTML; attempt++) {
     await new Promise(resolve => setImmediate(resolve));
   }
@@ -220,7 +222,7 @@ test('dashboard loads authorized local data, escapes product names and refreshes
   await context.__dashboardTest.load();
   assert.ok(requests.some(request => request.url.includes('orderLimit=25')));
   context.__dashboardTest.logout();
-  assert.equal(getElementById('loginView').hidden, false);
+  assert.equal(getElementById('loginPanel').hidden, false);
 });
 
 test('dashboard rejects unauthorized access and reports a failed data refresh', async () => {
@@ -232,7 +234,7 @@ test('dashboard rejects unauthorized access and reports a failed data refresh', 
   const { context, getElementById, requests, testOptions } = await loadDashboard(session);
   const requestsBeforeDeniedAccess = requests.length;
 
-  await assert.rejects(context.__dashboardTest.openDashboard({
+  await assert.rejects(context.__dashboardTest.activateSession({
     accessToken: 'unprivileged-token',
     user: { displayName: 'Cajero' },
     restaurants: [{ restaurantId: 'restaurant-1', role: 'Cajero', permissions: ['dashboard.read'] }],

@@ -9,11 +9,6 @@ namespace Restaurantes.Identity.Infrastructure.Stores;
 
 public sealed class IdentityStore(IdentityWriteDbContext db, TimeProvider time) : IIdentityStore
 {
-    public async Task<AuthenticationSettings> GetSettingsAsync(CancellationToken ct)
-    {
-        return await db.AuthenticationSettings.SingleAsync(x => x.Id == 1, ct);
-    }
-
     public Task<ApplicationUser?> FindByEmailAsync(
         string provider,
         string email,

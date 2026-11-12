@@ -29,51 +29,28 @@ AuthenticationBuilder authentication = builder
         }
     );
 
-if (Configured(builder.Configuration, "Microsoft"))
+if (KeycloakConfigured(builder.Configuration))
 {
     authentication.AddOpenIdConnect(
-        "Microsoft",
+        "Keycloak",
         options =>
         {
             options.SignInScheme = "External";
-            options.Authority =
-                $"https://login.microsoftonline.com/{builder.Configuration["ExternalAuth:Microsoft:TenantId"]}/v2.0";
-            options.ClientId = builder.Configuration["ExternalAuth:Microsoft:ClientId"]!;
-            options.ClientSecret = builder.Configuration["ExternalAuth:Microsoft:ClientSecret"]!;
+            options.Authority = builder.Configuration["ExternalAuth:Keycloak:Authority"]!;
+            options.ClientId = builder.Configuration["ExternalAuth:Keycloak:ClientId"]!;
+            options.ClientSecret = builder.Configuration["ExternalAuth:Keycloak:ClientSecret"]!;
+            options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
             options.ResponseType = OpenIdConnectResponseType.Code;
             options.UsePkce = true;
             options.MapInboundClaims = false;
             options.SaveTokens = false;
-            options.CallbackPath = "/api/identity/auth/callback/microsoft";
+            options.CallbackPath = "/api/identity/auth/callback/keycloak";
+            options.SignedOutCallbackPath = "/api/identity/auth/logout-callback/keycloak";
             options.Scope.Clear();
             options.Scope.Add("openid");
             options.Scope.Add("profile");
             options.Scope.Add("email");
-            SetPublicRedirect(options, builder.Configuration, "microsoft");
-        }
-    );
-}
-
-if (Configured(builder.Configuration, "Google"))
-{
-    authentication.AddOpenIdConnect(
-        "Google",
-        options =>
-        {
-            options.SignInScheme = "External";
-            options.Authority = "https://accounts.google.com";
-            options.ClientId = builder.Configuration["ExternalAuth:Google:ClientId"]!;
-            options.ClientSecret = builder.Configuration["ExternalAuth:Google:ClientSecret"]!;
-            options.ResponseType = OpenIdConnectResponseType.Code;
-            options.UsePkce = true;
-            options.MapInboundClaims = false;
-            options.SaveTokens = false;
-            options.CallbackPath = "/api/identity/auth/callback/google";
-            options.Scope.Clear();
-            options.Scope.Add("openid");
-            options.Scope.Add("profile");
-            options.Scope.Add("email");
-            SetPublicRedirect(options, builder.Configuration, "google");
+            SetPublicRedirect(options, builder.Configuration);
         }
     );
 }
@@ -81,43 +58,48 @@ if (Configured(builder.Configuration, "Google"))
 builder.Services.AddControllers();
 
 WebApplication app = builder.Build();
-await app.Services.InitializeIdentityDatabaseAsync(app.Configuration);
+await app.Services.InitializeIdentityDatabaseAsync();
 app.MapServiceDefaults();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 await app.RunAsync();
 
-static bool Configured(IConfiguration configuration, string provider)
+static bool KeycloakConfigured(IConfiguration configuration)
 {
-    return !string.IsNullOrWhiteSpace(configuration["ExternalAuth:PublicOrigin"])
-        && (
-            provider != "Microsoft"
-            || !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Microsoft:TenantId"])
+    return Uri.TryCreate(
+            configuration["ExternalAuth:Keycloak:Authority"],
+            UriKind.Absolute,
+            out Uri? authority
         )
-        && (
-            provider != "Google"
-            || !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Google:WorkspaceDomain"])
-        )
-        && !string.IsNullOrWhiteSpace(configuration[$"ExternalAuth:{provider}:ClientId"])
-        && !string.IsNullOrWhiteSpace(configuration[$"ExternalAuth:{provider}:ClientSecret"]);
+        && authority.Scheme is "http" or "https"
+        && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:PublicOrigin"])
+        && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Keycloak:ClientId"])
+        && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Keycloak:ClientSecret"]);
 }
 
-static void SetPublicRedirect(
-    OpenIdConnectOptions options,
-    IConfiguration configuration,
-    string provider
-)
+static void SetPublicRedirect(OpenIdConnectOptions options, IConfiguration configuration)
 {
     string origin = configuration["ExternalAuth:PublicOrigin"]!.TrimEnd('/');
-    string redirect = $"{origin}/api/identity/auth/callback/{provider}";
+    string redirect = $"{origin}/api/identity/auth/callback/keycloak";
+    string logoutRedirect = $"{origin}/api/identity/auth/logout-callback/keycloak";
     options.Events.OnRedirectToIdentityProvider = context =>
     {
         context.ProtocolMessage.RedirectUri = redirect;
-        if (provider.Equals("microsoft", StringComparison.OrdinalIgnoreCase))
+        if (
+            context.Properties?.Items.TryGetValue("reauthenticate", out string? reauthenticate)
+                == true
+            && reauthenticate == "true"
+        )
         {
-            context.ProtocolMessage.Prompt = "select_account";
+            context.ProtocolMessage.Prompt = "login";
         }
+        return Task.CompletedTask;
+    };
+    options.Events.OnRedirectToIdentityProviderForSignOut = context =>
+    {
+        context.ProtocolMessage.ClientId = options.ClientId;
+        context.ProtocolMessage.PostLogoutRedirectUri = logoutRedirect;
         return Task.CompletedTask;
     };
     options.Events.OnAuthorizationCodeReceived = context =>

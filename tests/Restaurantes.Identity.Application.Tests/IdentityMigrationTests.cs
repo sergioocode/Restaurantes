@@ -30,6 +30,9 @@ public sealed class IdentityMigrationTests
         Assert.Contains("CREATE TABLE login_tickets", script);
         Assert.Contains("CK_authorized_accounts_restaurant_scope", script);
         Assert.Contains("ProviderSubject", script);
+        Assert.Contains("lower(trim(\"Email\"))", script);
+        Assert.Contains("\"Provider\" = 'Keycloak'", script);
+        Assert.Contains("DROP TABLE authentication_settings", script);
         Assert.Contains("ConsumedAtUtc", script);
         Assert.Contains("DROP TABLE login_tickets", rollback);
     }

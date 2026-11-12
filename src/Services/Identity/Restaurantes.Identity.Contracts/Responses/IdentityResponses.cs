@@ -1,15 +1,8 @@
-namespace Restaurantes.Identity.Contracts.Responses;
-
-public sealed record ProviderSettingsResponse(
-    string ActiveProvider,
-    bool MicrosoftConfigured,
-    bool GoogleConfigured
-);
+﻿namespace Restaurantes.Identity.Contracts.Responses;
 
 public sealed record AccountResponse(
     Guid Id,
     string Email,
-    string Provider,
     string DisplayName,
     string Role,
     bool AllRestaurants,

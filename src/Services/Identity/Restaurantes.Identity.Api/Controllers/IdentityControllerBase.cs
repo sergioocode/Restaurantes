@@ -7,21 +7,16 @@ namespace Restaurantes.Identity.Api.Controllers;
 
 public abstract class IdentityControllerBase(IConfiguration configuration) : ControllerBase
 {
-    protected IConfiguration Configuration => configuration;
-
-    protected bool MicrosoftConfigured =>
-        !string.IsNullOrWhiteSpace(configuration["ExternalAuth:PublicOrigin"])
-        && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Microsoft:TenantId"])
-        && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Microsoft:ClientId"])
-        && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Microsoft:ClientSecret"]);
-
-    protected bool GoogleConfigured =>
-        !string.IsNullOrWhiteSpace(configuration["ExternalAuth:PublicOrigin"])
-        && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Google:WorkspaceDomain"])
-        && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Google:ClientId"])
-        && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Google:ClientSecret"]);
-
-    protected string ActiveProvider => ReadActiveProvider(configuration);
+    protected bool KeycloakConfigured =>
+        Uri.TryCreate(
+            configuration["ExternalAuth:Keycloak:Authority"],
+            UriKind.Absolute,
+            out Uri? authority
+        )
+        && authority.Scheme is "http" or "https"
+        && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:PublicOrigin"])
+        && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Keycloak:ClientId"])
+        && !string.IsNullOrWhiteSpace(configuration["ExternalAuth:Keycloak:ClientSecret"]);
 
     protected (bool AllRestaurants, HashSet<Guid> RestaurantIds) IdentityManagementScope()
     {
@@ -64,15 +59,5 @@ public abstract class IdentityControllerBase(IConfiguration configuration) : Con
                 $"Unsupported identity outcome: {result.Outcome}."
             ),
         };
-    }
-
-    private static string ReadActiveProvider(IConfiguration configuration)
-    {
-        string? provider = configuration["ExternalAuth:Provider"];
-        return provider is "Microsoft" or "Google"
-            ? provider
-            : throw new InvalidOperationException(
-                "ExternalAuth:Provider must be Microsoft or Google."
-            );
     }
 }

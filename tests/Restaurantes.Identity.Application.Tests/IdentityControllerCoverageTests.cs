@@ -50,22 +50,10 @@ public sealed class IdentityControllerCoverageTests
     }
 
     [Fact]
-    public void Base_reads_provider_configuration_and_rejects_an_unknown_active_provider()
+    public void Base_reports_whether_Keycloak_is_configured()
     {
-        ProbeController controller = new(Configuration("Microsoft"));
-
-        Assert.Equal("Microsoft", controller.CurrentProvider);
-        Assert.True(controller.IsMicrosoftConfigured);
-        Assert.True(controller.IsGoogleConfigured);
-
-        ProbeController google = new(Configuration("Google"));
-        Assert.Equal("Google", google.CurrentProvider);
-        ProbeController incomplete = new(Configuration("Other", configured: false));
-        Assert.False(incomplete.IsMicrosoftConfigured);
-        Assert.False(incomplete.IsGoogleConfigured);
-        Assert.Throws<InvalidOperationException>(() =>
-            _ = new ProbeController(Configuration("Other")).CurrentProvider
-        );
+        Assert.True(new ProbeController(Configuration()).IsKeycloakConfigured);
+        Assert.False(new ProbeController(Configuration(configured: false)).IsKeycloakConfigured);
     }
 
     [Fact]
@@ -118,122 +106,111 @@ public sealed class IdentityControllerCoverageTests
         Guid self = Guid.NewGuid();
         write.HttpContext.User = User(new Claim(ClaimTypes.NameIdentifier, self.ToString("D")));
         Assert.IsType<BadRequestObjectResult>(await write.DeleteUser(self, Ct));
-        Assert.IsType<BadRequestResult>(await write.Start("Unknown", "/pos/", Ct));
-        Assert.IsType<BadRequestResult>(await write.Start("Microsoft", "/external/", Ct));
-        Assert.IsType<BadRequestResult>(await write.Complete("Unknown", "/pos/", Ct));
-        Assert.IsType<BadRequestResult>(await write.Complete("Microsoft", "/external/", Ct));
+        Assert.IsType<BadRequestResult>(await write.Start("/external/"));
+        Assert.IsType<BadRequestResult>(await write.Complete("/external/", Ct));
     }
 
     [Fact]
-    public async Task Start_signs_out_external_cookie_and_challenges_configured_provider()
+    public async Task Start_signs_out_external_cookie_and_challenges_Keycloak()
     {
         FakeAuthenticationService authentication = new(AuthenticateResult.NoResult());
-        IdentityService service = CreateIdentityService(new FakeIdentityStore());
         IdentityWriteController controller = CreateWriteController(
-            service,
+            CreateIdentityService(new FakeIdentityStore()),
             Configuration(),
             authentication
         );
 
-        IActionResult result = await controller.Start("Microsoft", "/pos/", Ct);
+        IActionResult result = await controller.Start("/pos/", reauthenticate: true);
 
         ChallengeResult challenge = Assert.IsType<ChallengeResult>(result);
-        Assert.Equal(["Microsoft"], challenge.AuthenticationSchemes);
-        Assert.Equal("Microsoft", challenge.Properties!.Items["provider"]);
-        Assert.Equal("/pos/", challenge.Properties.Items["returnPath"]);
+        Assert.Equal(["Keycloak"], challenge.AuthenticationSchemes);
+        Assert.Equal("/pos/", challenge.Properties!.Items["returnPath"]);
+        Assert.Equal("true", challenge.Properties.Items["reauthenticate"]);
+        Assert.EndsWith("returnPath=%2Fpos%2F", challenge.Properties.RedirectUri);
         Assert.Equal(1, authentication.SignOutCount);
+
+        IdentityWriteController unconfigured = CreateWriteController(
+            CreateIdentityService(new FakeIdentityStore()),
+            Configuration(configured: false),
+            new FakeAuthenticationService(AuthenticateResult.NoResult())
+        );
+        Assert.Equal(
+            StatusCodes.Status503ServiceUnavailable,
+            Assert.IsType<ObjectResult>(await unconfigured.Start("/pos/")).StatusCode
+        );
     }
 
     [Fact]
-    public async Task Complete_rejects_microsoft_identity_from_unconfigured_tenant()
+    public void Logout_signs_out_local_and_Keycloak_sessions_for_an_allowed_return_path()
     {
-        ClaimsPrincipal principal = new(
-            new ClaimsIdentity(
-                [
-                    new Claim("email", "person@example.test"),
-                    new Claim("oid", "subject-1"),
-                    new Claim("tid", "other-tenant"),
-                ],
-                "External"
-            )
-        );
-        FakeAuthenticationService authentication = ExternalAuthentication("Microsoft", principal);
-        IdentityService service = CreateIdentityService(new FakeIdentityStore());
         IdentityWriteController controller = CreateWriteController(
-            service,
+            CreateIdentityService(new FakeIdentityStore()),
             Configuration(),
-            authentication
+            new FakeAuthenticationService(AuthenticateResult.NoResult())
         );
 
-        IActionResult result = await controller.Complete("Microsoft", "/pos/", Ct);
+        SignOutResult result = Assert.IsType<SignOutResult>(controller.Logout("/kds/"));
 
-        RedirectResult redirect = Assert.IsType<RedirectResult>(result);
-        Assert.Equal("/pos/#login_error=tenant", redirect.Url);
-        Assert.Equal(1, authentication.SignOutCount);
+        Assert.Equal(["External", "Keycloak"], result.AuthenticationSchemes);
+        Assert.Equal("/kds/", result.Properties!.RedirectUri);
+        Assert.IsType<BadRequestResult>(controller.Logout("//evil.example/"));
+
+        IdentityWriteController unconfigured = CreateWriteController(
+            CreateIdentityService(new FakeIdentityStore()),
+            Configuration(configured: false),
+            new FakeAuthenticationService(AuthenticateResult.NoResult())
+        );
+        Assert.Equal(
+            StatusCodes.Status503ServiceUnavailable,
+            Assert.IsType<ObjectResult>(unconfigured.Logout("/kds/")).StatusCode
+        );
     }
 
     [Fact]
-    public async Task Complete_links_valid_microsoft_identity_and_redirects_with_login_code()
+    public async Task Complete_links_verified_Keycloak_identity_and_redirects_with_login_code()
     {
         ApplicationUser user = new()
         {
             Id = Guid.NewGuid(),
             Email = "person@example.test",
-            Provider = "Microsoft",
+            Provider = "Keycloak",
             DisplayName = "Person",
             Role = "Manager",
             IsActive = true,
         };
         FakeIdentityStore store = new() { User = user };
-        ClaimsPrincipal principal = new(
-            new ClaimsIdentity(
-                [
-                    new Claim("email", user.Email),
-                    new Claim("oid", "subject-1"),
-                    new Claim("tid", "tenant-id"),
-                    new Claim("acct", "0"),
-                ],
-                "External"
-            )
-        );
-        FakeAuthenticationService authentication = ExternalAuthentication("Microsoft", principal);
-        IdentityService service = CreateIdentityService(store);
+        ClaimsPrincipal principal = KeycloakPrincipal(user.Email, "subject-1", "true");
+        FakeAuthenticationService authentication = ExternalAuthentication("/pos/", principal);
         IdentityWriteController controller = CreateWriteController(
-            service,
+            CreateIdentityService(store),
             Configuration(),
             authentication
         );
 
-        IActionResult result = await controller.Complete("Microsoft", "/pos/", Ct);
+        IActionResult result = await controller.Complete("/pos/", Ct);
 
         RedirectResult redirect = Assert.IsType<RedirectResult>(result);
         Assert.Equal("/pos/#login_code=login-code", redirect.Url);
         Assert.Equal("subject-1", user.ProviderSubject);
-        Assert.Equal("tenant-id", user.TenantId);
+        Assert.Null(user.TenantId);
         Assert.Equal(1, store.Saves);
         Assert.Equal(1, authentication.SignOutCount);
     }
 
     [Fact]
-    public async Task Complete_rejects_missing_authentication_challenge_and_incomplete_identity()
+    public async Task Complete_rejects_unverified_email_missing_authentication_and_mismatched_return_path()
     {
-        ClaimsPrincipal principal = new(
-            new ClaimsIdentity([new Claim("email", "person@example.test")], "External")
-        );
+        ClaimsPrincipal unverified = KeycloakPrincipal("person@example.test", "subject-1", "false");
         FakeAuthenticationService[] authentications =
         [
             new(AuthenticateResult.NoResult()),
-            new(
-                AuthenticateResult.Success(
-                    new AuthenticationTicket(
-                        principal,
-                        new AuthenticationProperties { Items = { ["provider"] = "Google" } },
-                        "External"
-                    )
-                )
+            ExternalAuthentication(
+                "/commander/",
+                KeycloakPrincipal("person@example.test", "subject-1", "true")
             ),
-            ExternalAuthentication("Microsoft", principal),
+            ExternalAuthentication("/pos/", unverified),
         ];
+        string[] returnPaths = ["/pos/", "/pos/", "/pos/"];
         string[] expectedErrors = ["authentication", "authentication", "identity"];
 
         for (int index = 0; index < authentications.Length; index++)
@@ -245,7 +222,7 @@ public sealed class IdentityControllerCoverageTests
             );
 
             RedirectResult redirect = Assert.IsType<RedirectResult>(
-                await controller.Complete("Microsoft", "/pos/", Ct)
+                await controller.Complete(returnPaths[index], Ct)
             );
 
             Assert.Equal($"/pos/#login_error={expectedErrors[index]}", redirect.Url);
@@ -264,103 +241,22 @@ public sealed class IdentityControllerCoverageTests
         controller.Url = new FixedUrlHelper(isLocal: false);
 
         RedirectResult redirect = Assert.IsType<RedirectResult>(
-            await controller.Complete("Microsoft", "/pos/", Ct)
+            await controller.Complete("/pos/", Ct)
         );
 
         Assert.Equal("/#login_error=authentication", redirect.Url);
     }
 
-    [Fact]
-    public async Task Complete_checks_microsoft_account_type_and_google_workspace_before_linking()
+    private static IConfiguration Configuration(bool configured = true)
     {
-        ClaimsPrincipal personalMicrosoftAccount = new(
-            new ClaimsIdentity(
-                [
-                    new Claim("email", "person@example.test"),
-                    new Claim("oid", "subject-1"),
-                    new Claim("tid", "tenant-id"),
-                    new Claim("acct", "1"),
-                ],
-                "External"
-            )
-        );
-        IdentityWriteController microsoft = CreateWriteController(
-            CreateIdentityService(new FakeIdentityStore()),
-            Configuration(),
-            ExternalAuthentication("Microsoft", personalMicrosoftAccount)
-        );
-        RedirectResult microsoftRedirect = Assert.IsType<RedirectResult>(
-            await microsoft.Complete("Microsoft", "/pos/", Ct)
-        );
-        Assert.Equal("/pos/#login_error=tenant", microsoftRedirect.Url);
-
-        foreach (
-            (string Domain, string Verified) in new[]
-            {
-                ("outside.test", "true"),
-                ("example.test", "false"),
-            }
-        )
-        {
-            ClaimsPrincipal rejectedGoogle = GooglePrincipal(Domain, Verified);
-            IdentityWriteController google = CreateWriteController(
-                CreateIdentityService(new FakeIdentityStore()),
-                Configuration("Google"),
-                ExternalAuthentication("Google", rejectedGoogle)
-            );
-
-            RedirectResult redirect = Assert.IsType<RedirectResult>(
-                await google.Complete("Google", "/pos/", Ct)
-            );
-
-            Assert.Equal("/pos/#login_error=workspace", redirect.Url);
-        }
-
-        ApplicationUser user = new()
-        {
-            Id = Guid.NewGuid(),
-            Email = "person@example.test",
-            Provider = "Google",
-            DisplayName = "Person",
-            Role = "Manager",
-            IsActive = true,
-        };
-        FakeIdentityStore store = new() { User = user };
-        FakeAuthenticationService authentication = ExternalAuthentication(
-            "Google",
-            GooglePrincipal("example.test", "TRUE")
-        );
-        IdentityWriteController linked = CreateWriteController(
-            CreateIdentityService(store),
-            Configuration("Google"),
-            authentication
-        );
-
-        RedirectResult linkedRedirect = Assert.IsType<RedirectResult>(
-            await linked.Complete("Google", "/pos/", Ct)
-        );
-
-        Assert.Equal("/pos/#login_code=login-code", linkedRedirect.Url);
-        Assert.Equal("google-subject", user.ProviderSubject);
-        Assert.Equal(1, store.Saves);
-        Assert.Equal(1, authentication.SignOutCount);
-    }
-
-    private static IConfiguration Configuration(
-        string provider = "Microsoft",
-        bool configured = true
-    )
-    {
-        Dictionary<string, string?> values = new() { ["ExternalAuth:Provider"] = provider };
+        Dictionary<string, string?> values = [];
         if (configured)
         {
             values["ExternalAuth:PublicOrigin"] = "https://restaurant.example.test";
-            values["ExternalAuth:Microsoft:TenantId"] = "tenant-id";
-            values["ExternalAuth:Microsoft:ClientId"] = "microsoft-client";
-            values["ExternalAuth:Microsoft:ClientSecret"] = "microsoft-secret";
-            values["ExternalAuth:Google:WorkspaceDomain"] = "example.test";
-            values["ExternalAuth:Google:ClientId"] = "google-client";
-            values["ExternalAuth:Google:ClientSecret"] = "google-secret";
+            values["ExternalAuth:Keycloak:Authority"] =
+                "https://keycloak.example.test/realms/restaurants";
+            values["ExternalAuth:Keycloak:ClientId"] = "identity-client";
+            values["ExternalAuth:Keycloak:ClientSecret"] = "identity-secret";
         }
         return new ConfigurationBuilder().AddInMemoryCollection(values).Build();
     }
@@ -407,26 +303,29 @@ public sealed class IdentityControllerCoverageTests
     }
 
     private static FakeAuthenticationService ExternalAuthentication(
-        string provider,
+        string returnPath,
         ClaimsPrincipal principal
     ) =>
         new(
             AuthenticateResult.Success(
                 new AuthenticationTicket(
                     principal,
-                    new AuthenticationProperties { Items = { ["provider"] = provider } },
+                    new AuthenticationProperties { Items = { ["returnPath"] = returnPath } },
                     "External"
                 )
             )
         );
 
-    private static ClaimsPrincipal GooglePrincipal(string domain, string emailVerified) =>
+    private static ClaimsPrincipal KeycloakPrincipal(
+        string email,
+        string subject,
+        string emailVerified
+    ) =>
         new(
             new ClaimsIdentity(
                 [
-                    new Claim("email", "person@example.test"),
-                    new Claim("sub", "google-subject"),
-                    new Claim("hd", domain),
+                    new Claim("email", email),
+                    new Claim("sub", subject),
                     new Claim("email_verified", emailVerified),
                 ],
                 "External"
@@ -483,9 +382,6 @@ public sealed class IdentityControllerCoverageTests
     {
         public ApplicationUser? User { get; init; }
         public int Saves { get; private set; }
-
-        public Task<AuthenticationSettings> GetSettingsAsync(CancellationToken ct) =>
-            Task.FromResult(new AuthenticationSettings());
 
         public Task<ApplicationUser?> FindByEmailAsync(
             string provider,
@@ -554,9 +450,7 @@ public sealed class IdentityControllerCoverageTests
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
         }
 
-        public string CurrentProvider => ActiveProvider;
-        public bool IsMicrosoftConfigured => MicrosoftConfigured;
-        public bool IsGoogleConfigured => GoogleConfigured;
+        public bool IsKeycloakConfigured => KeycloakConfigured;
 
         public (bool AllRestaurants, HashSet<Guid> RestaurantIds) Scope() =>
             IdentityManagementScope();

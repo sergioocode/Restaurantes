@@ -10,14 +10,6 @@ namespace Restaurantes.Identity.Api.Controllers;
 public sealed class IdentityReadController(IdentityService service, IConfiguration configuration)
     : IdentityControllerBase(configuration)
 {
-    [HttpGet("auth/provider")]
-    public Task<IActionResult> Provider(CancellationToken ct)
-    {
-        return Execute(() =>
-            service.GetProviderSettings(ActiveProvider, MicrosoftConfigured, GoogleConfigured, ct)
-        );
-    }
-
     [Authorize, HttpGet("me")]
     public IActionResult Me()
     {

@@ -196,7 +196,7 @@ public sealed class BackofficeCashRegisterReportTests : PwaTestContext
             await (Task)refresh.Invoke(cut.Instance, null)!;
         });
 
-        Assert.Equal(4, handler.Requests.Count);
+        Assert.Equal(3, handler.Requests.Count);
         Assert.Contains(
             handler.Requests,
             request => request.Contains($"/api/cash-register/restaurants/{allowedId}/history")

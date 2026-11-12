@@ -33,7 +33,7 @@ public sealed class BackofficeStartupCoverageTests : PwaTestContext
     }
 
     [Fact]
-    public void Login_error_fragment_is_reported_after_provider_settings_load()
+    public void Login_error_fragment_is_reported_without_requesting_provider_settings()
     {
         NavigationManager navigation = Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo(navigation.BaseUri + "#other=value&login_error=access_denied");
@@ -45,7 +45,7 @@ public sealed class BackofficeStartupCoverageTests : PwaTestContext
             "La cuenta no está autorizada o el proveedor rechazó el acceso.",
             GetField<string?>(cut.Instance, "message")
         );
-        Assert.Contains("/api/identity/auth/provider", handler.Paths);
+        Assert.Empty(handler.Paths);
         Assert.Null(api.AccessToken);
     }
 
@@ -73,7 +73,7 @@ public sealed class BackofficeStartupCoverageTests : PwaTestContext
             JSInterop.Invocations,
             invocation => invocation.Identifier == "sessionStorage.removeItem"
         );
-        Assert.Equal(["/api/identity/auth/provider"], handler.Paths);
+        Assert.Empty(handler.Paths);
     }
 
     [Fact]
@@ -112,15 +112,15 @@ public sealed class BackofficeStartupCoverageTests : PwaTestContext
     }
 
     [Fact]
-    public void Start_login_uses_the_selected_provider_and_backoffice_return_path()
+    public void Start_login_redirects_to_the_single_Keycloak_flow()
     {
         IRenderedComponent<BackofficeHome> cut = Render<BackofficeHome>();
         cut.WaitForState(() => !GetField<bool>(cut.Instance, "initializing"));
 
-        InvokeAction(cut.Instance, "StartLogin", "Google");
+        InvokeAction(cut.Instance, "StartLogin");
 
         Assert.EndsWith(
-            "/api/identity/auth/start/Google?returnPath=%2Fbackoffice%2F",
+            "/api/identity/auth/start?returnPath=%2Fbackoffice%2F",
             Services.GetRequiredService<NavigationManager>().Uri
         );
     }
@@ -203,20 +203,7 @@ public sealed class BackofficeStartupCoverageTests : PwaTestContext
             CancellationToken cancellationToken
         )
         {
-            string path = request.RequestUri!.AbsolutePath;
-            Paths.Add(path);
-            if (path == "/api/identity/auth/provider")
-            {
-                return Task.FromResult(
-                    new HttpResponseMessage(HttpStatusCode.OK)
-                    {
-                        Content = JsonContent.Create(
-                            new ProviderSettingsResponse("Microsoft", true, false)
-                        ),
-                    }
-                );
-            }
-
+            Paths.Add(request.RequestUri!.AbsolutePath);
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
         }
     }

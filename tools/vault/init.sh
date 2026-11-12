@@ -50,4 +50,17 @@ vault kv put secret/restaurantes/local \
   "RabbitMq__Password=${RESTAURANTES_RABBITMQ_PASSWORD}" \
   "Security__SigningKey=${signing_key}" >/dev/null
 
+if [ -n "${IDENTITY_KEYCLOAK_AUTHORITY:-}" ]; then
+  vault kv patch secret/restaurantes/local \
+    "ExternalAuth__Keycloak__Authority=${IDENTITY_KEYCLOAK_AUTHORITY}" >/dev/null
+fi
+if [ -n "${IDENTITY_KEYCLOAK_CLIENT_ID:-}" ]; then
+  vault kv patch secret/restaurantes/local \
+    "ExternalAuth__Keycloak__ClientId=${IDENTITY_KEYCLOAK_CLIENT_ID}" >/dev/null
+fi
+if [ -n "${IDENTITY_KEYCLOAK_CLIENT_SECRET:-}" ]; then
+  vault kv patch secret/restaurantes/local \
+    "ExternalAuth__Keycloak__ClientSecret=${IDENTITY_KEYCLOAK_CLIENT_SECRET}" >/dev/null
+fi
+
 echo "Vault local secrets are ready."

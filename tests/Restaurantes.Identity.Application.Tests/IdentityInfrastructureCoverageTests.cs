@@ -32,19 +32,14 @@ public sealed class IdentityInfrastructureCoverageTests
         inactiveAdmin.DisplayName = "Inactive";
         ApplicationUser backupAdmin = User("backup@example.test", "Admin", restaurantId);
         db.Users.AddRange(manager, inactiveAdmin, admin, backupAdmin);
-        db.AuthenticationSettings.Add(new AuthenticationSettings { ActiveProvider = "Google" });
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         IdentityStore store = new(db, new FixedTimeProvider(Now));
 
         Assert.Equal(
-            "Google",
-            (await store.GetSettingsAsync(TestContext.Current.CancellationToken)).ActiveProvider
-        );
-        Assert.Equal(
             admin.Id,
             (
                 await store.FindByEmailAsync(
-                    "Microsoft",
+                    "Keycloak",
                     admin.Email,
                     TestContext.Current.CancellationToken
                 )
@@ -54,7 +49,7 @@ public sealed class IdentityInfrastructureCoverageTests
             admin.Id,
             (
                 await store.FindBySubjectAsync(
-                    "Microsoft",
+                    "Keycloak",
                     "tenant-1",
                     admin.Email,
                     TestContext.Current.CancellationToken
@@ -73,21 +68,21 @@ public sealed class IdentityInfrastructureCoverageTests
         );
         Assert.True(
             await store.AnyActiveAdminForProviderAsync(
-                "Microsoft",
+                "Keycloak",
                 TestContext.Current.CancellationToken
             )
         );
         Assert.True(
             await store.AnyActiveAdminExceptAsync(
                 admin.Id,
-                "Microsoft",
+                "Keycloak",
                 TestContext.Current.CancellationToken
             )
         );
         Assert.False(
             await store.AnyActiveAdminExceptAsync(
                 manager.Id,
-                "Google",
+                "Other",
                 TestContext.Current.CancellationToken
             )
         );
@@ -225,75 +220,6 @@ public sealed class IdentityInfrastructureCoverageTests
         );
     }
 
-    [Fact]
-    public void Bootstrap_accounts_are_normalized_and_duplicate_emails_with_different_roles_fail()
-    {
-        IConfiguration configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(
-                new Dictionary<string, string?>
-                {
-                    ["IdentityBootstrap:AdminEmail"] = " ADMIN@example.test ; admin@example.test ",
-                    ["IdentityBootstrap:GerenteEmail"] =
-                        "gerencia@example.test, gerente2@example.test",
-                    ["IdentityBootstrap:ContabilidadEmail"] = "conta@example.test",
-                    ["IdentityBootstrap:MarketingEmail"] = "marketing@example.test",
-                }
-            )
-            .Build();
-        MethodInfo getAccounts = typeof(DependencyInjection).GetMethod(
-            "GetBootstrapAccounts",
-            BindingFlags.NonPublic | BindingFlags.Static
-        )!;
-
-        object[] accounts = (
-            (System.Collections.IEnumerable)getAccounts.Invoke(null, [configuration])!
-        )
-            .Cast<object>()
-            .ToArray();
-
-        Assert.Equal(5, accounts.Length);
-        Assert.Contains(
-            accounts,
-            account =>
-                (string)account.GetType().GetProperty("Email")!.GetValue(account)!
-                    == "admin@example.test"
-                && (string)account.GetType().GetProperty("Role")!.GetValue(account)! == "Admin"
-        );
-
-        IConfiguration conflicting = new ConfigurationBuilder()
-            .AddInMemoryCollection(
-                new Dictionary<string, string?>
-                {
-                    ["IdentityBootstrap:AdminEmail"] = "same@example.test",
-                    ["IdentityBootstrap:GerenteEmail"] = "same@example.test",
-                }
-            )
-            .Build();
-        TargetInvocationException failure = Assert.Throws<TargetInvocationException>(() =>
-            getAccounts.Invoke(null, [conflicting])
-        );
-        Assert.IsType<InvalidOperationException>(failure.InnerException);
-        Assert.Contains("same@example.test", failure.InnerException!.Message);
-    }
-
-    [Theory]
-    [InlineData("Microsoft")]
-    [InlineData("Google")]
-    public void Active_provider_accepts_supported_external_auth_providers(string provider)
-    {
-        IConfiguration configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(
-                new Dictionary<string, string?> { ["ExternalAuth:Provider"] = provider }
-            )
-            .Build();
-        MethodInfo readProvider = typeof(DependencyInjection).GetMethod(
-            "ReadActiveProvider",
-            BindingFlags.NonPublic | BindingFlags.Static
-        )!;
-
-        Assert.Equal(provider, readProvider.Invoke(null, [configuration]));
-    }
-
     private static IdentityWriteDbContext CreateDatabase() =>
         new(
             new DbContextOptionsBuilder<IdentityWriteDbContext>()
@@ -306,7 +232,7 @@ public sealed class IdentityInfrastructureCoverageTests
         {
             Id = Guid.NewGuid(),
             Email = email,
-            Provider = "Microsoft",
+            Provider = "Keycloak",
             ProviderSubject = email,
             TenantId = "tenant-1",
             DisplayName =

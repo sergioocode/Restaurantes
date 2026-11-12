@@ -9,45 +9,25 @@ public sealed class IdentityService(
     TimeProvider time
 )
 {
+    private const string KeycloakProvider = "Keycloak";
     private static readonly string[] Roles = ["Manager", "Camarero", "Kds"];
 
-    public async Task<IdentityResult> GetProviderSettings(
-        string activeProvider,
-        bool microsoftConfigured,
-        bool googleConfigured,
-        CancellationToken ct
-    )
-    {
-        await store.GetSettingsAsync(ct);
-        return Ok(
-            new ProviderSettingsResponse(activeProvider, microsoftConfigured, googleConfigured)
-        );
-    }
-
     public async Task<IdentityResult> AuthorizeExternalAsync(
-        string activeProvider,
-        string provider,
         string email,
         string subject,
-        string? tenantId,
         CancellationToken ct
     )
     {
-        if (!string.Equals(activeProvider, provider, StringComparison.Ordinal))
-        {
-            return new(IdentityOutcome.Unauthorized);
-        }
-
         string normalizedEmail = email.Trim().ToLowerInvariant();
-        ApplicationUser? user = await store.FindByEmailAsync(provider, normalizedEmail, ct);
+        ApplicationUser? user = await store.FindByEmailAsync(KeycloakProvider, normalizedEmail, ct);
         if (user is null || !user.IsActive)
         {
             return new(IdentityOutcome.Unauthorized);
         }
 
         ApplicationUser? subjectOwner = await store.FindBySubjectAsync(
-            provider,
-            tenantId,
+            KeycloakProvider,
+            null,
             subject,
             ct
         );
@@ -59,10 +39,9 @@ public sealed class IdentityService(
         if (user.ProviderSubject is null)
         {
             user.ProviderSubject = subject;
-            user.TenantId = tenantId;
             await store.SaveChangesAsync(ct);
         }
-        else if (user.ProviderSubject != subject || user.TenantId != tenantId)
+        else if (user.ProviderSubject != subject)
         {
             return new(IdentityOutcome.Unauthorized);
         }
@@ -71,11 +50,7 @@ public sealed class IdentityService(
         return Ok(code);
     }
 
-    public async Task<IdentityResult> ExchangeAsync(
-        string activeProvider,
-        string code,
-        CancellationToken ct
-    )
+    public async Task<IdentityResult> ExchangeAsync(string code, CancellationToken ct)
     {
         ApplicationUser? user = await store.ConsumeLoginTicketAsync(code, ct);
         if (user is null || !user.IsActive)
@@ -83,7 +58,7 @@ public sealed class IdentityService(
             return new(IdentityOutcome.Unauthorized);
         }
 
-        if (activeProvider != user.Provider)
+        if (user.Provider != KeycloakProvider)
         {
             return new(IdentityOutcome.Unauthorized);
         }
@@ -139,7 +114,6 @@ public sealed class IdentityService(
     }
 
     public async Task<IdentityResult> CreateUser(
-        string activeProvider,
         bool canManageAllRestaurants,
         IReadOnlySet<Guid> managedRestaurantIds,
         CreateAccountRequest request,
@@ -171,7 +145,7 @@ public sealed class IdentityService(
         }
 
         string email = request.Email.Trim().ToLowerInvariant();
-        if (await store.FindByEmailAsync(activeProvider, email, ct) is not null)
+        if (await store.FindByEmailAsync(KeycloakProvider, email, ct) is not null)
         {
             return new(
                 IdentityOutcome.Conflict,
@@ -183,7 +157,7 @@ public sealed class IdentityService(
         {
             Id = Guid.NewGuid(),
             Email = email,
-            Provider = activeProvider,
+            Provider = KeycloakProvider,
             DisplayName = request.DisplayName.Trim(),
             Role = request.Role,
             AllRestaurants = request.AllRestaurants,
@@ -242,7 +216,7 @@ public sealed class IdentityService(
         if (
             user.Role == "Admin"
             && (!request.IsActive || request.Role != "Admin")
-            && !await store.AnyActiveAdminExceptAsync(id, user.Provider, ct)
+            && !await store.AnyActiveAdminExceptAsync(id, KeycloakProvider, ct)
         )
         {
             return BadRequest("No se puede desactivar el último Admin.");
@@ -282,7 +256,10 @@ public sealed class IdentityService(
             return new(IdentityOutcome.Forbidden);
         }
 
-        if (user.Role == "Admin" && !await store.AnyActiveAdminExceptAsync(id, user.Provider, ct))
+        if (
+            user.Role == "Admin"
+            && !await store.AnyActiveAdminExceptAsync(id, KeycloakProvider, ct)
+        )
         {
             return BadRequest("No se puede eliminar el último Admin.");
         }
@@ -338,7 +315,6 @@ public sealed class IdentityService(
         return new(
             user.Id,
             user.Email,
-            user.Provider,
             user.DisplayName,
             user.Role,
             user.AllRestaurants,

@@ -8,22 +8,6 @@ export class KdsApiClient {
     this.accessToken = accessToken || '';
   }
 
-  async provider() {
-    const response = await fetch(this.baseUrl + '/api/identity/auth/provider');
-    if (!response.ok) throw new Error('No se pudo consultar el proveedor.');
-    return response.json();
-  }
-
-  async exchange(code) {
-    const response = await fetch(this.baseUrl + '/api/identity/auth/exchange', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code })
-    });
-    if (!response.ok) throw new Error('La cuenta no está autorizada.');
-    return response.json();
-  }
-
   async getOrders(restaurantId, stationCode, zoneId = null) {
     const query = new URLSearchParams({ restaurantId, stationCode });
     if (zoneId !== null) query.set('zoneId', zoneId);

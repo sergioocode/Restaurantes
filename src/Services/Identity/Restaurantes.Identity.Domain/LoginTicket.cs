@@ -1,11 +1,5 @@
 ﻿namespace Restaurantes.Identity.Domain;
 
-public sealed class AuthenticationSettings
-{
-    public int Id { get; set; } = 1;
-    public string ActiveProvider { get; set; } = "Microsoft";
-}
-
 public sealed class LoginTicket
 {
     public string CodeHash { get; set; } = string.Empty;

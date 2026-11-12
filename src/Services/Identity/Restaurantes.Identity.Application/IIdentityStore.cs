@@ -4,7 +4,6 @@ namespace Restaurantes.Identity.Application;
 
 public interface IIdentityStore
 {
-    Task<AuthenticationSettings> GetSettingsAsync(CancellationToken ct);
     Task<ApplicationUser?> FindByEmailAsync(string provider, string email, CancellationToken ct);
     Task<ApplicationUser?> FindBySubjectAsync(
         string provider,

@@ -1,4 +1,4 @@
-@if (!Host.CanManageUsers) { <NoAccessPanel /> }
+﻿@if (!Host.CanManageUsers) { <NoAccessPanel /> }
 else
 {
     <details class="admin-panel" open>
@@ -30,7 +30,7 @@ else
         {
             <article class="user-card @(user.IsActive ? "" : "inactive")">
                 <header>
-                    <div><strong>@user.DisplayName</strong><small>@user.Email · @user.Provider · @(user.IsLinked ? "Vinculada" : "Pendiente de primer acceso")</small></div>
+                    <div><strong>@user.DisplayName</strong><small>@user.Email · @(user.IsLinked ? "Vinculada a Keycloak" : "Pendiente de primer acceso")</small></div>
                 </header>
                 <div class="assignment-row">
                     <label>Nombre<input @bind="user.DisplayName" /></label>

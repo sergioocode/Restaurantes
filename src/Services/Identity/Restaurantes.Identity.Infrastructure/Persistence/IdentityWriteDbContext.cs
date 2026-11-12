@@ -7,7 +7,6 @@ public sealed class IdentityWriteDbContext(DbContextOptions<IdentityWriteDbConte
     : DbContext(options)
 {
     public DbSet<ApplicationUser> Users => Set<ApplicationUser>();
-    public DbSet<AuthenticationSettings> AuthenticationSettings => Set<AuthenticationSettings>();
     public DbSet<LoginTicket> LoginTickets => Set<LoginTicket>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -36,12 +35,6 @@ public sealed class IdentityWriteDbContext(DbContextOptions<IdentityWriteDbConte
                     x.ProviderSubject,
                 })
                 .IsUnique();
-        });
-        modelBuilder.Entity<AuthenticationSettings>(settings =>
-        {
-            settings.ToTable("authentication_settings");
-            settings.HasKey(x => x.Id);
-            settings.Property(x => x.ActiveProvider).HasMaxLength(20).IsRequired();
         });
         modelBuilder.Entity<LoginTicket>(ticket =>
         {

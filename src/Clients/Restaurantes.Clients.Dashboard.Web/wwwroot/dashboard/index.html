@@ -23,15 +23,14 @@
         </div>
         <div class="auth-progress"><span class="auth-spinner"></span><span>Comprobando sesión…</span></div>
     </section>
-    <section id="loginView" class="auth-card" hidden>
+    <section id="loginPanel" class="auth-card" hidden>
         <div class="auth-brand">
             <img src="icons/icon-192.png" alt="" />
             <div><small>RESTAURANTES · INFORMES</small><strong>Dashboard</strong></div>
         </div>
         <p id="loginError"></p>
         <div id="loginForm">
-            <button id="loginMicrosoft" type="button" disabled>Continuar con Microsoft</button>
-            <button id="loginGoogle" type="button" disabled>Continuar con Google</button>
+            <button id="loginButton" type="button">Iniciar sesión</button>
         </div>
     </section>
 
@@ -140,7 +139,8 @@
         </section>
     </main>
 
-    <script src="js/app.js?v=8"></script>
+    <script src="js/auth-client.js?v=1"></script>
+    <script src="js/app.js?v=10"></script>
 </body>
 
 </html>

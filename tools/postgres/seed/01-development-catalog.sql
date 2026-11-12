@@ -86,24 +86,40 @@ WHERE "Type" = 'Restaurantes.RestaurantOperations.Contracts.RestaurantChanged';
 \connect restaurants_operational
 SET search_path TO identity;
 
+INSERT INTO authorized_accounts (
+    "Id", "Email", "Provider", "ProviderSubject", "TenantId", "DisplayName", "Role",
+    "AllRestaurants", "RestaurantId", "IsActive", "CreatedAtUtc"
+)
+VALUES
+    (gen_random_uuid(), 'admin-soporte@restaurantes.test', 'Keycloak', NULL, NULL, 'Administrador', 'Admin', true, NULL, true, now()),
+    (gen_random_uuid(), 'gerente@restaurantes.test', 'Keycloak', NULL, NULL, 'Gerencia', 'Gerente', true, NULL, true, now()),
+    (gen_random_uuid(), 'contabilidad@restaurantes.test', 'Keycloak', NULL, NULL, 'Contabilidad', 'Contabilidad', true, NULL, true, now()),
+    (gen_random_uuid(), 'contabilidad2@restaurantes.test', 'Keycloak', NULL, NULL, 'Contabilidad', 'Contabilidad', true, NULL, true, now()),
+    (gen_random_uuid(), 'marketing@restaurantes.test', 'Keycloak', NULL, NULL, 'Marketing', 'Marketing', true, NULL, true, now()),
+    (gen_random_uuid(), 'marketing2@restaurantes.test', 'Keycloak', NULL, NULL, 'Marketing', 'Marketing', true, NULL, true, now())
+ON CONFLICT ("Provider", "Email") DO UPDATE SET
+    "DisplayName" = EXCLUDED."DisplayName",
+    "Role" = EXCLUDED."Role",
+    "AllRestaurants" = EXCLUDED."AllRestaurants",
+    "RestaurantId" = NULL,
+    "IsActive" = true;
+
 WITH accounts("Email", "DisplayName", "Role", "RestaurantId") AS (
     VALUES
-        ('kds-madrid-centro@facturacen.cl', 'KDS Madrid Centro', 'Kds', '11111111-1111-4111-8111-111111111111'::uuid),
-        ('commander-madrid-centro@facturacen.cl', 'Commander Madrid Centro', 'Camarero', '11111111-1111-4111-8111-111111111111'::uuid),
-        ('tpv-madrid-centro@facturacen.cl', 'TPV Madrid Centro', 'Manager', '11111111-1111-4111-8111-111111111111'::uuid),
-        ('kds-bcn-centro@facturacen.cl', 'KDS Barcelona Centro', 'Kds', '33333333-3333-4333-8333-333333333333'::uuid),
-        ('commander-bcn-centro@facturacen.cl', 'Commander Barcelona Centro', 'Camarero', '33333333-3333-4333-8333-333333333333'::uuid),
-        ('tpv-bcn-centro@facturacen.cl', 'TPV Barcelona Centro', 'Manager', '33333333-3333-4333-8333-333333333333'::uuid)
+        ('kds-madrid-centro@restaurantes.test', 'KDS Madrid Centro', 'Kds', '11111111-1111-4111-8111-111111111111'::uuid),
+        ('commander-madrid-centro@restaurantes.test', 'Commander Madrid Centro', 'Camarero', '11111111-1111-4111-8111-111111111111'::uuid),
+        ('tpv-madrid-centro@restaurantes.test', 'TPV Madrid Centro', 'Manager', '11111111-1111-4111-8111-111111111111'::uuid),
+        ('kds-bcn-centro@restaurantes.test', 'KDS Barcelona Centro', 'Kds', '33333333-3333-4333-8333-333333333333'::uuid),
+        ('commander-bcn-centro@restaurantes.test', 'Commander Barcelona Centro', 'Camarero', '33333333-3333-4333-8333-333333333333'::uuid),
+        ('tpv-bcn-centro@restaurantes.test', 'TPV Barcelona Centro', 'Manager', '33333333-3333-4333-8333-333333333333'::uuid)
 )
 INSERT INTO authorized_accounts (
     "Id", "Email", "Provider", "ProviderSubject", "TenantId", "DisplayName", "Role",
     "AllRestaurants", "RestaurantId", "IsActive", "CreatedAtUtc"
 )
-SELECT gen_random_uuid(), lower(account."Email"), settings."ActiveProvider", NULL, NULL,
+SELECT gen_random_uuid(), lower(account."Email"), 'Keycloak', NULL, NULL,
        account."DisplayName", account."Role", false, account."RestaurantId", true, now()
 FROM accounts account
-CROSS JOIN authentication_settings settings
-WHERE settings."Id" = 1
 ON CONFLICT ("Provider", "Email") DO UPDATE SET
     "DisplayName" = EXCLUDED."DisplayName",
     "Role" = EXCLUDED."Role",

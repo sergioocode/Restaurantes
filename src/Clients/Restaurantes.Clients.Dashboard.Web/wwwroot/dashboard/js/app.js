@@ -6,7 +6,11 @@
             currency: 'EUR'
         }),
         gatewayOrigin = location.origin,
-        sessionKey = 'restaurantes.dashboard.login';
+        auth = globalThis.RestaurantesAuth.createAuthClient({
+            appPath: '/dashboard/',
+            sessionKey: 'restaurantes.dashboard.login',
+            baseUrl: gatewayOrigin
+        });
     let refreshTimer, realtimeRefreshTimer, access, socket, realtimeGeneration = 0, deadLetterRefreshAt = 0, deadLetterRequestGeneration = 0;
     let dashboardLoadPromise = null, dashboardRefreshPending = false;
     let restaurantNames = new Map();
@@ -14,9 +18,10 @@
     const today = new Date();
     $('date').value = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
 
-    function showLogin(message = '') {
+    function showLogin(message = '', reauthenticate = false) {
+        auth.prepareLoginButton($('loginButton'), reauthenticate);
         $('authLoading').hidden = true;
-        $('loginView').hidden = false;
+        $('loginPanel').hidden = false;
         $('dashboardHeader').hidden = true;
         $('dashboardContent').hidden = true;
         $('loginError').textContent = message;
@@ -25,46 +30,13 @@
 
     function showDashboard() {
         $('authLoading').hidden = true;
-        $('loginView').hidden = true;
+        $('loginPanel').hidden = true;
         $('dashboardHeader').hidden = false;
         $('dashboardContent').hidden = false;
         document.body.classList.remove('login-mode')
     }
 
-    function startLogin(provider) {
-        window.location.assign('/api/identity/auth/start/' + provider + '?returnPath=' + encodeURIComponent('/dashboard/'));
-    }
-    $('loginMicrosoft').onclick = () => startLogin('Microsoft');
-    $('loginGoogle').onclick = () => startLogin('Google');
-
-    async function loadProvider() {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10000);
-        let settings;
-        try {
-            const response = await fetch(gatewayOrigin + '/api/identity/auth/provider', {
-                signal: controller.signal
-            });
-            if (!response.ok) throw new Error('No se pudo consultar el proveedor.');
-            settings = await response.json();
-        } catch (error) {
-            if (controller.signal.aborted) throw new Error('La consulta del proveedor tardó demasiado. Reintenta.');
-            throw error;
-        } finally {
-            clearTimeout(timeout);
-        }
-        $('loginMicrosoft').disabled = settings.activeProvider !== 'Microsoft' || !settings.microsoftConfigured;
-        $('loginGoogle').disabled = settings.activeProvider !== 'Google' || !settings.googleConfigured;
-    }
-
-    async function prepareLogin(message = '') {
-        showLogin(message);
-        try {
-            await loadProvider();
-        } catch (error) {
-            if (!message) $('loginError').textContent = error.message;
-        }
-    }
+    auth.bindLoginButton($('loginButton'));
 
     async function loadOnce() {
         const requestedDate = $('date').value;
@@ -260,13 +232,15 @@
 
     $('logout').onclick = logout;
 
-    async function openDashboard(session) {
+    async function activateSession(session) {
         const dashboardRoles = new Set(['Admin', 'Gerente', 'Contabilidad', 'Marketing']);
         const hasAllRestaurants = (session.allRestaurantsRoles || []).some(role => dashboardRoles.has(role))
             && (session.allRestaurantsPermissions || []).includes('dashboard.read');
         const allowed = new Set((session.restaurants || []).filter(x => dashboardRoles.has(x.role)
             && (x.permissions || []).includes('dashboard.read')).map(x => x.restaurantId.toLowerCase()));
-        if (!hasAllRestaurants && allowed.size === 0) throw new Error('Este perfil no tiene acceso al Dashboard.');
+        if (!hasAllRestaurants && allowed.size === 0) {
+            throw globalThis.RestaurantesAuth.createAccessDeniedError('Este perfil no tiene acceso al Dashboard.');
+        }
         access = session;
         deadLetterRefreshAt = 0;
         showDashboard();
@@ -308,9 +282,8 @@
         clearTimeout(refreshTimer);
         clearTimeout(realtimeRefreshTimer);
         dashboardRefreshPending = false;
-        sessionStorage.removeItem(sessionKey);
         showLogin();
-        void loadProvider().catch(error => { $('loginError').textContent = error.message; });
+        auth.logout();
     }
 
     async function realtime() {
@@ -352,50 +325,22 @@
         }
     }
 
-    (async function bootstrap() {
+    async function initialize() {
         try {
-            const query = new URLSearchParams(window.location.hash.slice(1));
-            const code = query.get('login_code');
-            if (code) {
-                history.replaceState(null, '', window.location.pathname);
-                const response = await fetch(gatewayOrigin + '/api/identity/auth/exchange', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ code })
-                });
-                if (!response.ok) throw new Error('La cuenta no está autorizada.');
-                const session = await response.json();
-                sessionStorage.setItem(sessionKey, JSON.stringify(session));
-                await openDashboard(session);
-                return;
-            }
-            if (query.has('login_error')) {
-                history.replaceState(null, '', window.location.pathname);
-                await prepareLogin('La cuenta no está autorizada o el proveedor rechazó el acceso.');
-                return;
-            }
-            const saved = sessionStorage.getItem(sessionKey);
-            if (!saved) {
-                await prepareLogin();
-                return;
-            }
-            const session = JSON.parse(saved);
-            if (new Date(session.expiresAtUtc) <= new Date()) {
-                sessionStorage.removeItem(sessionKey);
-                await prepareLogin();
-                return;
-            }
-            await openDashboard(session);
+            const { session, message } = await auth.resolveSession();
+            if (session) await activateSession(session);
+            else showLogin(message);
         } catch (error) {
             if (access) {
                 showDashboard();
                 $('state').textContent = error.message;
             } else {
-                sessionStorage.removeItem(sessionKey);
-                await prepareLogin(error.message);
+                auth.clearSession();
+                showLogin(error.message, error.reauthenticate === true);
             }
         }
-    })();
+    }
+    initialize();
 
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {

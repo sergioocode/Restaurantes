@@ -1,5 +1,4 @@
-@page "/"
-@using System.Text.Json
+﻿@page "/"
 @using Restaurantes.Clients.Shared.Operations
 @implements IAsyncDisposable
 @using Syncfusion.Blazor.Navigations
@@ -31,13 +30,8 @@ else if (login is null)
                 <div><p class="eyebrow">RESTAURANTES · ADMINISTRACIÓN</p><h1>Backoffice</h1></div>
             </div>
             <div class="login-providers">
-                <button class="primary full" type="button" @onclick='() => StartLogin("Microsoft")'
-                        disabled="@(providerSettings is null || providerSettings.ActiveProvider != "Microsoft" || !MicrosoftConfigured)">
-                    Iniciar sesión con Microsoft
-                </button>
-                <button class="primary full" type="button" @onclick='() => StartLogin("Google")'
-                        disabled="@(providerSettings is null || providerSettings.ActiveProvider != "Google" || !GoogleConfigured)">
-                    Iniciar sesión con Google
+                <button class="primary full" type="button" @onclick="StartLogin">
+                    Iniciar sesión
                 </button>
             </div>
             @if (!string.IsNullOrWhiteSpace(message))

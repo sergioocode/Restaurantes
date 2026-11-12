@@ -1,5 +1,4 @@
-﻿using System.Text.Json;
-using Microsoft.AspNetCore.Components;
+﻿using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Restaurantes.Clients.Backoffice.Pwa.Components;
 using Restaurantes.Clients.Backoffice.Pwa.Models;
@@ -13,6 +12,7 @@ public partial class Home
         status == "Occupied" ? "Ocupada" : "Disponible";
 
     private const string SessionKey = "restaurantes.backoffice.login";
+    private ClientLoginFlow LoginFlow => new(Nav, Js);
     private const string OrdersReportReadPermission = "orders.report.read";
     private const string ReportsGroup = "group-reports";
     private const string DailyOrdersReport = "daily-orders-report";
@@ -67,7 +67,6 @@ public partial class Home
                 StringComparison.OrdinalIgnoreCase
             )
         );
-    internal ProviderSettingsResponse? providerSettings;
     internal bool CanViewCompanySettings =>
         IsAdmin
         || login?.AllRestaurantsRoles?.Any(role => role is "Gerente" or "Contabilidad") == true
@@ -146,9 +145,6 @@ public partial class Home
 
         return nodes;
     }
-
-    internal bool MicrosoftConfigured => providerSettings?.MicrosoftConfigured == true;
-    internal bool GoogleConfigured => providerSettings?.GoogleConfigured == true;
 
     private static readonly string[] Roles = ["Manager", "Camarero", "Kds"];
 
@@ -401,41 +397,33 @@ public partial class Home
         DiningRealtime.Changed += HandleConfigurationChanged;
         try
         {
-            providerSettings = await Api.ProviderAsync();
-            string? code = QueryValue("login_code");
-            if (!string.IsNullOrWhiteSpace(code))
+            ClientLoginResolution<LoginResponse> authentication = await LoginFlow.ResolveAsync(
+                SessionKey,
+                Api.ExchangeAsync,
+                session => session.ExpiresAtUtc
+            );
+            if (authentication.LoginError)
             {
-                LoginResponse response = await Api.ExchangeAsync(code);
-                await Js.InvokeVoidAsync("history.replaceState", null, "", Nav.BaseUri);
-                await AcceptLogin(response);
-                return;
-            }
-            if (QueryValue("login_error") is not null)
-            {
-                message = "La cuenta no está autorizada o el proveedor rechazó el acceso.";
+                message = ClientLoginFlow.LoginRejectedMessage;
             }
 
-            string? json = await Js.InvokeAsync<string?>("sessionStorage.getItem", SessionKey);
-            if (string.IsNullOrWhiteSpace(json))
-            {
-                return;
-            }
-            login = JsonSerializer.Deserialize<LoginResponse>(json);
-            if (login is null || login.ExpiresAtUtc <= DateTime.UtcNow || !HasBackofficeAccess)
+            if (authentication.SessionExpired)
             {
                 await Logout();
                 return;
             }
-            Api.AccessToken = login.AccessToken;
-            AuthState.SetSession(login);
-            SetModule(IsAdmin ? "products" : "catalog-design");
-            restaurantId =
-                login
-                    .Restaurants.FirstOrDefault(x => x.Permissions.Contains("backoffice.access"))
-                    ?.RestaurantId
-                ?? Guid.Empty;
-            await LoadAllCore();
-            navigationNodes = BuildNavigationNodes();
+
+            if (authentication.Session is null)
+            {
+                return;
+            }
+            login = authentication.Session;
+            if (!authentication.ExchangeCompleted && !HasBackofficeAccess)
+            {
+                await Logout();
+                return;
+            }
+            await AcceptLogin(authentication.Session);
         }
         catch (Exception exception)
         {
@@ -447,27 +435,7 @@ public partial class Home
         }
     }
 
-    private string? QueryValue(string key)
-    {
-        string query = new Uri(Nav.Uri).Fragment.TrimStart('#');
-        foreach (string part in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
-        {
-            string[] pair = part.Split('=', 2);
-            if (pair[0] == key)
-            {
-                return Uri.UnescapeDataString(pair.Length > 1 ? pair[1] : "");
-            }
-        }
-        return null;
-    }
-
-    private void StartLogin(string provider)
-    {
-        Nav.NavigateTo(
-            $"/api/identity/auth/start/{provider}?returnPath=%2Fbackoffice%2F",
-            forceLoad: true
-        );
-    }
+    private void StartLogin() => LoginFlow.StartLogin("/backoffice/");
 
     private async Task AcceptLogin(LoginResponse response)
     {
@@ -485,11 +453,6 @@ public partial class Home
                 .Restaurants.FirstOrDefault(x => x.Permissions.Contains("backoffice.access"))
                 ?.RestaurantId
             ?? Guid.Empty;
-        await Js.InvokeVoidAsync(
-            "sessionStorage.setItem",
-            SessionKey,
-            JsonSerializer.Serialize(login)
-        );
         await LoadAllCore();
         navigationNodes = BuildNavigationNodes();
     }
@@ -499,11 +462,11 @@ public partial class Home
         await TablesRealtime.DisconnectAsync();
         await CatalogRealtime.DisconnectAsync();
         await DiningRealtime.DisconnectAsync();
-        await Js.InvokeVoidAsync("sessionStorage.removeItem", SessionKey);
         Api.AccessToken = null;
         login = null;
         AuthState.SetSession(null);
         message = null;
+        await LoginFlow.LogoutAsync(SessionKey, "/backoffice/");
     }
 
     internal async Task RestaurantChanged(ChangeEventArgs args)

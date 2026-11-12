@@ -82,24 +82,6 @@ namespace Restaurantes.Identity.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Restaurantes.Identity.Domain.AuthenticationSettings", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("ActiveProvider")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("authentication_settings", (string)null);
-                });
-
             modelBuilder.Entity("Restaurantes.Identity.Domain.LoginTicket", b =>
                 {
                     b.Property<string>("CodeHash")
