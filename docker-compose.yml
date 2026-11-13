@@ -90,7 +90,6 @@ services:
     volumes:
       - restaurant-keycloak-data:/opt/keycloak/data
       - ./tools/keycloak/import:/opt/keycloak/data/import:ro
-    restart: unless-stopped
 
   vault:
     image: hashicorp/vault:1.21.4
