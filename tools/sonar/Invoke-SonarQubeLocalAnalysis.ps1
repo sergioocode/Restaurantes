@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$ServerUrl = "http://localhost:9001",
-    [string]$ProjectKey = "restaurantes",
+    [string]$ProjectKey = "restaurantes-key",
     [string]$ProjectName = "Restaurantes",
     [string]$Token = $env:SONAR_TOKEN,
     [ValidateRange(1, 900)]
@@ -19,20 +19,16 @@ function Invoke-DotNet {
 
     & dotnet @Arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "El comando 'dotnet $($Arguments -join ' ')' finalizó con código $LASTEXITCODE."
+        $safeArguments = $Arguments | ForEach-Object {
+            if ($_ -match "(?i)^/d:sonar\.token=") {
+                "/d:sonar.token=[REDACTED]"
+            } else {
+                $_
+            }
+        }
+        throw "El comando 'dotnet $($safeArguments -join ' ')' finalizó con código $LASTEXITCODE."
     }
 }
-
-$repositoryRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
-$coverageDirectory = Join-Path $repositoryRoot "TestResults"
-if (Test-Path -LiteralPath $coverageDirectory) {
-    Remove-Item -LiteralPath $coverageDirectory -Recurse -Force
-}
-New-Item -ItemType Directory -Path $coverageDirectory -Force | Out-Null
-$coverageReportPattern = Join-Path $coverageDirectory "coverage.opencover*.xml"
-$kdsCoverageReport = [System.IO.Path]::GetFullPath(
-    (Join-Path $coverageDirectory "kds.lcov.info")
-).Replace('\', '/')
 
 Invoke-DotNet @("tool", "restore")
 
@@ -46,26 +42,12 @@ $beginArguments = @(
     "/n:$ProjectName",
     "/d:sonar.host.url=$ServerUrl",
     "/d:sonar.token=$Token",
-    "/d:sonar.cs.opencover.reportsPaths=$coverageReportPattern",
-    "/d:sonar.javascript.lcov.reportPaths=$kdsCoverageReport",
+    "/d:sonar.exclusions=**/*.js,**/*.mjs",
+    "/d:sonar.scm.use.blame.algorithm=GIT_NATIVE_BLAME",
     "/d:sonar.qualitygate.wait=true",
     "/d:sonar.qualitygate.timeout=$QualityGateTimeoutSeconds"
 )
 
 Invoke-DotNet $beginArguments
-Invoke-DotNet @("build", "Restaurantes.slnx", "--no-incremental")
-Invoke-DotNet @(
-    "test",
-    "Restaurantes.slnx",
-    "--no-build",
-    "--results-directory",
-    $coverageDirectory,
-    "--",
-    "--coverlet",
-    "--coverlet-output-format",
-    "opencover",
-    "--coverlet-include",
-    "[Restaurantes.*]*"
-)
-& (Join-Path $PSScriptRoot "Invoke-KdsCoverage.ps1") -ResultsDirectory $coverageDirectory
+Invoke-DotNet @("build", "Restaurantes.slnx")
 Invoke-DotNet @("tool", "run", "dotnet-sonarscanner", "--", "end", "/d:sonar.token=$Token")

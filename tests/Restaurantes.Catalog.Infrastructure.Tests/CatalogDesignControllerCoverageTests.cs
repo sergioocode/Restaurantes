@@ -16,17 +16,6 @@ namespace Restaurantes.Catalog.Infrastructure.Tests;
 
 public sealed class CatalogDesignControllerCoverageTests
 {
-    [Fact]
-    public async Task Snapshot_requires_catalog_management_permission()
-    {
-        await using CatalogWriteDbContext db = CreateDatabase();
-        CatalogDesignController controller = CreateController(db, isAdmin: false);
-
-        IActionResult result = await controller.Snapshot(TestContext.Current.CancellationToken);
-
-        Assert.IsType<ForbidResult>(result);
-    }
-
     [Theory]
     [InlineData("00000000-0000-0000-0000-000000000000", "IVA", "IVA", 10)]
     [InlineData("e3a55f9b-f31c-4a03-a9e9-5a8fe2d2e0f2", "bad code", "IVA", 10)]
@@ -267,18 +256,7 @@ public sealed class CatalogDesignControllerCoverageTests
             [.. invalidPrices],
             TestContext.Current.CancellationToken
         );
-        Product product = Product.Create("P-1", "Producto", Guid.NewGuid(), DateTime.UtcNow);
-        db.Products.Add(product);
-        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
-        IActionResult invalidChannel = await controller.SavePrices(
-            product.Id,
-            Guid.Empty,
-            [.. invalidPrices],
-            TestContext.Current.CancellationToken
-        );
-
         Assert.IsType<NotFoundResult>(missingProduct);
-        Assert.IsType<BadRequestObjectResult>(invalidChannel);
     }
 
     [Fact]

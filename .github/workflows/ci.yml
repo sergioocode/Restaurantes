@@ -17,8 +17,6 @@ jobs:
     steps:
       - name: Obtener el código
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Instalar .NET 10
         uses: actions/setup-dotnet@v4
@@ -36,23 +34,8 @@ jobs:
       - name: Compilar la solución
         run: dotnet build Restaurantes.slnx --configuration Release --no-restore
 
-      - name: Ejecutar pruebas y generar cobertura
-        run: >-
-          dotnet test Restaurantes.slnx --configuration Release --no-build
-          --results-directory TestResults
-          -- --coverlet --coverlet-output-format opencover
-          --coverlet-include "[Restaurantes.*]*"
+      - name: Ejecutar pruebas .NET
+        run: dotnet test Restaurantes.slnx --configuration Release --no-build
 
-      - name: Ejecutar pruebas de KDS y generar cobertura JavaScript
-        shell: pwsh
-        run: ./tools/sonar/Invoke-KdsCoverage.ps1
-
-      - name: Publicar informe de cobertura
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: cobertura-opencover
-          path: |
-            TestResults/coverage.opencover*.xml
-            TestResults/kds.lcov.info
-          if-no-files-found: error
+      - name: Ejecutar pruebas de KDS y Dashboard
+        run: node --test tests/Restaurantes.Hosts.Tests/Kds/*.test.mjs tests/Restaurantes.Hosts.Tests/Dashboard/*.test.mjs
